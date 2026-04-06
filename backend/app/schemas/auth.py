@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr
 class RegisterRequest(BaseModel):
     """Datos necesarios para registrarse"""
     email: EmailStr        # Valida que sea un email real
+    username: str         # Nuevo campo para el nombre de usuario
     password: str
     name: str
     surname: str
@@ -10,7 +11,7 @@ class RegisterRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     """Datos para hacer login"""
-    email: EmailStr
+    username: str
     password: str
 
 class TokenResponse(BaseModel):

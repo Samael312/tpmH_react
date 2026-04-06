@@ -1,12 +1,13 @@
-from passlib.context import CryptContext
-
-# bcrypt es el algoritmo estándar para contraseñas
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import bcrypt
 
 def hash_password(password: str) -> str:
-    """Convierte 'mipassword123' en '$2b$12$...' (irreversible)"""
-    return pwd_context.hash(password)
+    """Convierte la contraseña en un hash seguro"""
+    password_bytes = password.encode("utf-8")
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password_bytes, salt).decode("utf-8")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Compara la contraseña introducida con el hash guardado"""
-    return pwd_context.verify(plain_password, hashed_password)
+    password_bytes = plain_password.encode("utf-8")
+    hashed_bytes = hashed_password.encode("utf-8")
+    return bcrypt.checkpw(password_bytes, hashed_bytes)

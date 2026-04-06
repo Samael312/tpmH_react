@@ -16,6 +16,7 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=True)  # Nullable para login con Google
     role = Column(Enum(UserRole), nullable=False, default=UserRole.student)
+    username = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, nullable=False)
     surname = Column(String, nullable=False)
     avatar = Column(String, nullable=True)
