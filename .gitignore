@@ -1,0 +1,241 @@
+# ============================================
+# TPMH_REACT - .gitignore
+# ============================================
+
+# ============================================
+# VARIABLES DE ENTORNO (NUNCA subir al repo)
+# ============================================
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+.env.staging
+*.env
+
+# ============================================
+# PYTHON / BACKEND
+# ============================================
+
+# Entorno virtual
+venv/
+env/
+ENV/
+.venv/
+backend/venv/
+backend/env/
+
+# Cache de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+
+# Distribución / empaquetado
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Alembic (migraciones generadas localmente)
+# OJO: SÍ subir las migraciones reales, solo ignorar temporales
+backend/alembic/versions/__pycache__/
+
+# Logs
+*.log
+logs/
+backend/logs/
+
+# Base de datos local SQLite (respaldo local)
+*.sqlite
+*.sqlite3
+*.db
+backend/db/*.sqlite
+backend/db/*.sqlite3
+
+# Archivos subidos por usuarios (en producción van a Cloudinary)
+backend/uploads/
+uploads/
+
+# ============================================
+# NODE / FRONTEND
+# ============================================
+
+# Dependencias
+node_modules/
+frontend/node_modules/
+.pnp
+.pnp.js
+
+# Build de Next.js
+frontend/.next/
+.next/
+out/
+frontend/out/
+
+# Cache de Next.js
+frontend/.next/cache/
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# ESLint cache
+.eslintcache
+
+# Stylelint cache
+.stylelintcache
+
+# ============================================
+# IDEs Y EDITORES
+# ============================================
+
+# VSCode
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# JetBrains (PyCharm, WebStorm, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim / Neovim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ============================================
+# SISTEMA OPERATIVO
+# ============================================
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.AppleDouble
+.LSOverride
+Icon
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# ============================================
+# SEGURIDAD (CRÍTICO)
+# ============================================
+
+# Credenciales y claves
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+credentials.json
+service-account.json
+google-credentials.json
+firebase-adminsdk*.json
+secrets/
+.secrets/
+
+# JWT secrets
+jwt_secret*
+
+# ============================================
+# SERVICIOS EXTERNOS
+# ============================================
+
+# Stripe
+.stripe/
+
+# Redis (dump local)
+dump.rdb
+
+# Cloudinary
+.cloudinary/
+
+# ============================================
+# TESTING
+# ============================================
+.pytest_cache/
+coverage/
+.coverage
+*.cover
+htmlcov/
+jest-coverage/
+frontend/coverage/
+
+# ============================================
+# DOCKER
+# ============================================
+.docker/
+docker-compose.override.yml
+
+# ============================================
+# MISCELLANEOUS
+# ============================================
+
+# Archivos temporales
+*.tmp
+*.temp
+*.bak
+*.backup
+*.orig
+*.DS_Store
+
+# NiceGUI 
+.nicegui/
+storage-user-*.json
+
+# Carpeta de notas personales del proyecto
+notes/
+TODO.md
+PERSONAL.md
