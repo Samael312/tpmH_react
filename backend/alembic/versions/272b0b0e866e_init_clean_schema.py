@@ -1,8 +1,8 @@
-"""initial tables
+"""init_clean_schema
 
-Revision ID: f3a22c0b34fc
+Revision ID: 272b0b0e866e
 Revises: 
-Create Date: 2026-04-06 12:48:29.048931
+Create Date: 2026-04-07 13:15:16.867108
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = 'f3a22c0b34fc'
+revision: str = '272b0b0e866e'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -26,6 +26,7 @@ def upgrade() -> None:
     sa.Column('email', sa.String(), nullable=False),
     sa.Column('password_hash', sa.String(), nullable=True),
     sa.Column('role', sa.Enum('superadmin', 'teacher', 'student', name='userrole'), nullable=False),
+    sa.Column('username', sa.String(), nullable=False),
     sa.Column('name', sa.String(), nullable=False),
     sa.Column('surname', sa.String(), nullable=False),
     sa.Column('avatar', sa.String(), nullable=True),
@@ -39,21 +40,23 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
     op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
+    op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
     op.create_table('student_profiles',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('user_username', sa.String(), nullable=False),
     sa.Column('timezone', sa.String(), nullable=True),
     sa.Column('goal', sa.String(), nullable=True),
     sa.Column('preferred_payment_methods', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('user_id')
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_student_profiles_id'), 'student_profiles', ['id'], unique=False)
     op.create_table('teacher_profiles',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('user_username', sa.String(), nullable=False),
     sa.Column('bio', sa.String(), nullable=True),
     sa.Column('title', sa.String(), nullable=True),
     sa.Column('timezone', sa.String(), nullable=True),
@@ -68,9 +71,8 @@ def upgrade() -> None:
     sa.Column('stripe_account_id', sa.String(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('user_id')
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_teacher_profiles_id'), 'teacher_profiles', ['id'], unique=False)
     op.create_table('packages',
@@ -82,7 +84,8 @@ def upgrade() -> None:
     sa.Column('is_active', sa.Boolean(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.ForeignKeyConstraint(['teacher_id'], ['teacher_profiles.id'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('name')
     )
     op.create_index(op.f('ix_packages_id'), 'packages', ['id'], unique=False)
     op.create_table('teacher_availability',
@@ -121,8 +124,8 @@ def upgrade() -> None:
     op.create_table('enrollments',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('student_id', sa.Integer(), nullable=False),
-    sa.Column('package_id', sa.Integer(), nullable=False),
     sa.Column('teacher_id', sa.Integer(), nullable=False),
+    sa.Column('package_id', sa.Integer(), nullable=False),
     sa.Column('classes_used', sa.Integer(), nullable=True),
     sa.Column('classes_total', sa.Integer(), nullable=False),
     sa.Column('status', sa.String(), nullable=True),
@@ -195,6 +198,7 @@ def downgrade() -> None:
     op.drop_table('teacher_profiles')
     op.drop_index(op.f('ix_student_profiles_id'), table_name='student_profiles')
     op.drop_table('student_profiles')
+    op.drop_index(op.f('ix_users_username'), table_name='users')
     op.drop_index(op.f('ix_users_id'), table_name='users')
     op.drop_index(op.f('ix_users_email'), table_name='users')
     op.drop_table('users')

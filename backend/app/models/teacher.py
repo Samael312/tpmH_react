@@ -15,7 +15,8 @@ class TeacherProfile(Base):
     __tablename__ = "teacher_profiles"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_username = Column(String, nullable=False)
     bio = Column(String, nullable=True)
     title = Column(String, nullable=True)
     timezone = Column(String, default="UTC")
@@ -32,7 +33,7 @@ class TeacherProfile(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relaciones
-    user = relationship("User", back_populates="teacher_profile")
+    user = relationship("User", back_populates="teacher_profile", foreign_keys="TeacherProfile.user_id")
     packages = relationship("Package", back_populates="teacher")
     availability = relationship("TeacherAvailability", back_populates="teacher")
     availability_exceptions = relationship("TeacherAvailabilityException", back_populates="teacher")

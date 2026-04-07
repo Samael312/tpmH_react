@@ -16,18 +16,24 @@ router = APIRouter()
 
 @router.post("/register", response_model=TokenResponse)
 def register(data: RegisterRequest, db: Session = Depends(get_db)):
-    """Registro con email y contraseña"""
 
     # 1. Verificar que el email no existe
-    existing = db.query(User).filter(User.email == data.email).first()
-    if existing:
+    if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Este email ya está registrado"
         )
 
-    # 2. Crear el usuario
+    # 2. Verificar que el username no existe
+    if db.query(User).filter(User.username == data.username).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este nombre de usuario ya está en uso"
+        )
+
+    # 3. Crear usuario
     user = User(
+        username=data.username,
         email=data.email,
         password_hash=hash_password(data.password),
         name=data.name,
@@ -35,35 +41,39 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
         role=data.role
     )
     db.add(user)
-    db.flush()  # Obtiene el id sin hacer commit todavía
+    db.flush()
 
-    # 3. Crear perfil según el rol
+    # 4. Crear perfil según rol
     if data.role == UserRole.student:
-        db.add(StudentProfile(user_id=user.id))
+        db.add(StudentProfile(user_id=user.id, user_username=user.username))
     elif data.role == UserRole.teacher:
-        db.add(TeacherProfile(user_id=user.id))
+        db.add(TeacherProfile(user_id=user.id, user_username=user.username))
 
     db.commit()
     db.refresh(user)
 
-    # 4. Devolver token
     token = create_access_token(user.id, user.role)
     return TokenResponse(
         access_token=token,
         role=user.role,
-        name=user.name
+        name=user.name,
+        username=user.username
     )
 
 @router.post("/login", response_model=TokenResponse)
 def login(data: LoginRequest, db: Session = Depends(get_db)):
-    """Login con email y contraseña"""
 
-    # 1. Buscar usuario
-    user = db.query(User).filter(User.email == data.email).first()
+    # Buscar por username O por email — el usuario usa lo que prefiera
+    user = (
+        db.query(User)
+        .filter(
+            (User.username == data.login) | (User.email == data.login)
+        )
+        .first()
+    )
 
-    # 2. Verificar credenciales
-    # Importante: el mismo mensaje de error para email y password
-    # Si dices "email no encontrado" le das info a un atacante
+    # Mismo mensaje para usuario no encontrado y contraseña incorrecta
+    # Nunca le digas al atacante cuál de los dos falló
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -80,14 +90,13 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
     return TokenResponse(
         access_token=token,
         role=user.role,
-        name=user.name
+        name=user.name,
+        username=user.username
     )
 
 @router.post("/google", response_model=TokenResponse)
 async def google_login(data: GoogleAuthRequest, db: Session = Depends(get_db)):
-    """Login o registro con Google"""
 
-    # 1. Verificar token con Google
     try:
         google_data = await verify_google_token(data.id_token)
     except ValueError as e:
@@ -96,29 +105,36 @@ async def google_login(data: GoogleAuthRequest, db: Session = Depends(get_db)):
             detail=str(e)
         )
 
-    # 2. Buscar si el usuario ya existe
-    user = db.query(User).filter(
-        User.email == google_data["email"]
-    ).first()
+    user = db.query(User).filter(User.email == google_data["email"]).first()
 
-    # 3. Si no existe lo creamos automáticamente
     if not user:
+        # Generamos un username desde el email automáticamente
+        # ejemplo: samuel.boscan.18@gmail.com -> samuel_boscan_18
+        base_username = google_data["email"].split("@")[0].replace(".", "_")
+
+        # Si ese username ya existe le añadimos un número
+        username = base_username
+        counter = 1
+        while db.query(User).filter(User.username == username).first():
+            username = f"{base_username}_{counter}"
+            counter += 1
+
         user = User(
+            username=username,
             email=google_data["email"],
             name=google_data["name"],
             surname=google_data["surname"],
             avatar=google_data["avatar"],
             google_id=google_data["google_id"],
             is_verified=google_data["is_verified"],
-            role=UserRole.student  # Google siempre registra como estudiante
+            role=UserRole.student
         )
         db.add(user)
         db.flush()
-        db.add(StudentProfile(user_id=user.id))
+        db.add(StudentProfile(user_id=user.id, user_username=user.username))
         db.commit()
         db.refresh(user)
     else:
-        # Si existe actualizamos el google_id por si acaso
         user.google_id = google_data["google_id"]
         db.commit()
 
@@ -126,5 +142,6 @@ async def google_login(data: GoogleAuthRequest, db: Session = Depends(get_db)):
     return TokenResponse(
         access_token=token,
         role=user.role,
-        name=user.name
+        name=user.name,
+        username=user.username
     )

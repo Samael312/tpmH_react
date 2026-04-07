@@ -11,7 +11,7 @@ class RegisterRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     """Datos para hacer login"""
-    username: str
+    login: str
     password: str
 
 class TokenResponse(BaseModel):
@@ -20,6 +20,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     role: str
     name: str
+    username: str
 
 class GoogleAuthRequest(BaseModel):
     """Token que manda Google después del login"""

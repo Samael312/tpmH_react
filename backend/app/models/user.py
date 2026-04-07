@@ -27,5 +27,5 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relaciones
-    teacher_profile = relationship("TeacherProfile", back_populates="user", uselist=False)
-    student_profile = relationship("StudentProfile", back_populates="user", uselist=False)
+    teacher_profile = relationship("TeacherProfile", back_populates="user", uselist=False, foreign_keys="TeacherProfile.user_id")
+    student_profile = relationship("StudentProfile", back_populates="user", uselist=False, foreign_keys="StudentProfile.user_id")

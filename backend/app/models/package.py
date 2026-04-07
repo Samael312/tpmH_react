@@ -8,7 +8,7 @@ class Package(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     teacher_id = Column(Integer, ForeignKey("teacher_profiles.id"), nullable=False)
-    name = Column(String, nullable=False)
+    name = Column(String, nullable=False, unique=True)
     classes_count = Column(Integer, nullable=False)
     price = Column(Float, nullable=False)
     is_active = Column(Boolean, default=True)
@@ -23,8 +23,8 @@ class Enrollment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("student_profiles.id"), nullable=False)
-    package_id = Column(Integer, ForeignKey("packages.id"), nullable=False)
     teacher_id = Column(Integer, ForeignKey("teacher_profiles.id"), nullable=False)
+    package_id = Column(Integer, ForeignKey("packages.id"), nullable=False)
     classes_used = Column(Integer, default=0)
     classes_total = Column(Integer, nullable=False)
     status = Column(String, default="active")  # active, completed, cancelled

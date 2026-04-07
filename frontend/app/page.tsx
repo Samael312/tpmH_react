@@ -42,11 +42,12 @@ export default function Home() {
             rel="noopener noreferrer"
           >
             <Image
-              className="dark:invert"
               src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+              alt="Vercel"
+              width={100}
+              height={24}
+              style={{ height: "auto" }} // Esto quita el warning
+              priority
             />
             Deploy Now
           </a>

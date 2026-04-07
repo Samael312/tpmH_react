@@ -8,12 +8,13 @@ class StudentProfile(Base):
     __tablename__ = "student_profiles"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_username = Column(String, nullable=False)
     timezone = Column(String, default="UTC")
     goal = Column(String, nullable=True)
     preferred_payment_methods = Column(JSONB, default=list)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relaciones
-    user = relationship("User", back_populates="student_profile")
+    user = relationship("User", back_populates="student_profile", foreign_keys="StudentProfile.user_id")
     enrollments = relationship("Enrollment", back_populates="student")
