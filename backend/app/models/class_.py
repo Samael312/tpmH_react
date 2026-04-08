@@ -20,7 +20,13 @@ class Class(Base):
     # Fuente de verdad — UTC siempre
     start_time_utc = Column(DateTime(timezone=True), nullable=False)
     end_time_utc = Column(DateTime(timezone=True), nullable=False)
-    duration = Column(Integer, nullable=False)  # minutos
+    duration_minutes = Column(Integer, nullable=False) 
+    
+    # Si prefieres dejarlo como 'duration' en la DB, añade esto:
+    duration = Column(Integer, nullable=False)
+    @property
+    def duration_minutes(self):
+         return self.duration
 
     # Metadatos de zona para auditoría y logs
     # No se usan para cálculos, solo para mostrar en reportes

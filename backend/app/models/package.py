@@ -35,3 +35,4 @@ class Enrollment(Base):
     package = relationship("Package", back_populates="enrollments")
     classes = relationship("Class", back_populates="enrollment")
     payment = relationship("Payment", back_populates="enrollment", uselist=False)
+    teacher = relationship("TeacherProfile", back_populates="enrollments")
