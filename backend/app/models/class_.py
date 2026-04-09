@@ -5,11 +5,6 @@ from app.db.base import Base
 
 
 class Class(Base):
-    """
-    Clase individual agendada.
-    start_time_utc y end_time_utc son la fuente de verdad.
-    El frontend convierte a zona local para mostrar.
-    """
     __tablename__ = "classes"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -17,29 +12,32 @@ class Class(Base):
     teacher_id = Column(Integer, ForeignKey("teacher_profiles.id"), nullable=False)
     student_id = Column(Integer, ForeignKey("student_profiles.id"), nullable=False)
 
-    # Fuente de verdad — UTC siempre
     start_time_utc = Column(DateTime(timezone=True), nullable=False)
     end_time_utc = Column(DateTime(timezone=True), nullable=False)
-    duration_minutes = Column(Integer, nullable=False) 
-    
-    # Si prefieres dejarlo como 'duration' en la DB, añade esto:
     duration = Column(Integer, nullable=False)
-    @property
-    def duration_minutes(self):
-         return self.duration
 
-    # Metadatos de zona para auditoría y logs
-    # No se usan para cálculos, solo para mostrar en reportes
+    status = Column(String, default="pending")
+    # Estados del flujo:
+    # pending          → slot reservado, esperando comprobante
+    # pending_payment  → comprobante subido, esperando validación del admin
+    # confirmed        → pago validado, clase activa, Meet visible
+    # completed        → clase realizada
+    # cancelled        → cancelada
+    # no_show          → estudiante no asistió
+
+    # Google Meet — solo visible cuando status = confirmed
+    meet_link = Column(String, nullable=True)
+
+    # Metadatos de zona para auditoría
     teacher_timezone = Column(String, nullable=True)
     student_timezone = Column(String, nullable=True)
 
-    status = Column(String, default="pending")
-    # pending → confirmed → completed
-    # pending → cancelled
-    # pending → no_show
-
-    notes = Column(String, nullable=True)  # Notas del profesor sobre la clase
+    notes = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     enrollment = relationship("Enrollment", back_populates="classes")
+
+    @property
+    def duration_minutes(self):
+        return self.duration

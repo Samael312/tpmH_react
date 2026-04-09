@@ -6,6 +6,7 @@ from app.db.base import Base
 
 class UserRole(str, enum.Enum):
     superadmin = "superadmin"
+    teacher_admin = "teacher_admin"
     teacher = "teacher"
     student = "student"
 

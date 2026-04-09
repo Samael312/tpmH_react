@@ -51,7 +51,7 @@ def can_book_slot(
         Class.teacher_id == teacher_id,
         Class.start_time_utc < end_approx,
         Class.end_time_utc > start_time_utc,
-        Class.status.notin_(["cancelled"])
+        Class.status.notin_(["cancelled", "pending"])
     )
     if exclude_class_id:
         query = query.filter(Class.id != exclude_class_id)

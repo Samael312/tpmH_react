@@ -67,3 +67,38 @@ def get_current_superadmin(current_user: User = Depends(get_current_user)) -> Us
             detail="Acceso solo para administradores"
         )
     return current_user
+
+def get_current_staff(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """
+    Permite acceso a superadmin Y teacher_admin.
+    Para endpoints que ambos pueden usar.
+    """
+    if current_user.role not in [
+        UserRole.superadmin,
+        UserRole.teacher_admin
+    ]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso solo para staff"
+        )
+    return current_user
+
+
+def get_current_teacher_or_professor_admin(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """
+    Permite acceso a teacher Y teacher_admin.
+    Para endpoints de gestión de clases propias.
+    """
+    if current_user.role not in [
+        UserRole.teacher,
+        UserRole.teacher_admin
+    ]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso solo para profesores"
+        )
+    return current_user

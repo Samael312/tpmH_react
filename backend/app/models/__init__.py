@@ -10,3 +10,4 @@ from app.models.homework import Homework, HomeworkAssignment
 from app.models.review import Review
 from app.models.student_preferences import StudentSchedulePreference
 from app.models.password_reset import PasswordResetToken
+from app.models.payment_config import PaymentConfig
