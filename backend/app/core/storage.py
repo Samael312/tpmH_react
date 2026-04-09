@@ -21,6 +21,12 @@ ALLOWED_DOCUMENT_TYPES = {
     "application/pdf",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/pptx"
+}
+
+ALLOWED_AUDIO_TYPES = {
+    "audio/mpeg",
+    "audio/mp3",
 }
 
 ALLOWED_IMAGE_TYPES = {
@@ -38,7 +44,8 @@ ALLOWED_VIDEO_TYPES = {
 ALL_ALLOWED_TYPES = (
     ALLOWED_DOCUMENT_TYPES |
     ALLOWED_IMAGE_TYPES |
-    ALLOWED_VIDEO_TYPES
+    ALLOWED_VIDEO_TYPES |
+    ALLOWED_AUDIO_TYPES
 )
 
 # Tamaño máximo: 50MB

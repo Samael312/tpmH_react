@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     CLOUDINARY_CLOUD_NAME: Optional[str] = None
     CLOUDINARY_API_KEY: Optional[str] = None
     CLOUDINARY_API_SECRET: Optional[str] = None
+    TTS_CACHE_FOLDER: str = "tts_cache"
+
 
     # OpenAI
     OPENAI_API_KEY: Optional[str] = None
@@ -25,8 +27,6 @@ class Settings(BaseSettings):
     # Resend
     RESEND_API_KEY: Optional[str] = None
     EMAIL_FROM: str = "tuprofemaria@gmail.com"
-
-
 
     # App
     APP_NAME: str = "TPMH"

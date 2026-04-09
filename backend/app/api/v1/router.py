@@ -3,7 +3,7 @@ from app.api.v1.endpoints import (
     auth, users, teachers,
     availability, classes,
     materials, homework,
-    admin, reviews, chipi
+    admin, reviews, chipi, tts
 )
 
 
@@ -19,3 +19,4 @@ api_router.include_router(homework.router, prefix="/homework", tags=["Tareas"])
 api_router.include_router(admin.router, prefix="/admin", tags=["Superadmin"])
 api_router.include_router(reviews.router,prefix="/reviews",tags=["Reseñas"])
 api_router.include_router(chipi.router, prefix="/chipi", tags=["Chatbot"])
+api_router.include_router(tts.router, prefix="/tts", tags=["Text-to-Speech"])
