@@ -19,8 +19,14 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: Optional[str] = None
     CLOUDINARY_API_SECRET: Optional[str] = None
 
+    # OpenAI
+    OPENAI_API_KEY: Optional[str] = None
+
+    # Resend
     RESEND_API_KEY: Optional[str] = None
     EMAIL_FROM: str = "tuprofemaria@gmail.com"
+
+
 
     # App
     APP_NAME: str = "TPMH"
