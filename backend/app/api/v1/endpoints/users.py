@@ -1,11 +1,16 @@
+from ast import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.base import get_db
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_student, get_current_user
 from app.auth.passwords import hash_password, verify_password
 from app.models.user import User
 from app.models.student import StudentProfile
 from app.schemas.user import UserResponse, UpdateProfileRequest, ChangePasswordRequest
+from app.models.student_preferences import StudentSchedulePreference
+from app.core.timezone import convert_local_time_to_utc_string, validate_timezone
+from app.schemas.preferences import SetPreferencesRequest, PreferenceSlotResponse
 
 router = APIRouter()
 
@@ -135,3 +140,72 @@ def update_student_profile(
     db.refresh(profile)
 
     return {"message": "Perfil actualizado"}
+
+@router.post("/me/preferences", response_model=List[PreferenceSlotResponse])
+def set_schedule_preferences(
+    data: SetPreferencesRequest,
+    current_user: User = Depends(get_current_student),
+    db: Session = Depends(get_db)
+):
+    """
+    El estudiante configura sus horas preferidas.
+    Reemplaza todas las preferencias anteriores.
+    El calendario las usa para resaltar slots en morado.
+    """
+    if not validate_timezone(data.timezone):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Zona horaria inválida: {data.timezone}"
+        )
+
+    student_id = current_user.student_profile.id
+
+    # Borrar preferencias anteriores
+    db.query(StudentSchedulePreference).filter(
+        StudentSchedulePreference.student_id == student_id
+    ).delete()
+
+    # Crear nuevas convirtiendo a UTC
+    new_prefs = []
+    for slot in data.slots:
+        try:
+            start_utc = convert_local_time_to_utc_string(
+                slot.start_time_local, data.timezone
+            )
+            end_utc = convert_local_time_to_utc_string(
+                slot.end_time_local, data.timezone
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
+
+        pref = StudentSchedulePreference(
+            student_id=student_id,
+            day_of_week=slot.day_of_week,
+            start_time_utc=start_utc,
+            end_time_utc=end_utc,
+        )
+        db.add(pref)
+        new_prefs.append(pref)
+
+    db.commit()
+    for pref in new_prefs:
+        db.refresh(pref)
+
+    return new_prefs
+
+
+@router.get("/me/preferences", response_model=List[PreferenceSlotResponse])
+def get_schedule_preferences(
+    current_user: User = Depends(get_current_student),
+    db: Session = Depends(get_db)
+):
+    """Devuelve las preferencias de horario del estudiante"""
+    return db.query(StudentSchedulePreference).filter(
+        StudentSchedulePreference.student_id == current_user.student_profile.id
+    ).order_by(
+        StudentSchedulePreference.day_of_week,
+        StudentSchedulePreference.start_time_utc
+    ).all()

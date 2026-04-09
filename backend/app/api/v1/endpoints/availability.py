@@ -213,6 +213,7 @@ def get_teacher_available_slots(
     2. Aplica excepciones (bloqueos o extras)
     3. Resta las clases ya agendadas
     4. Devuelve slots libres en UTC
+    5. Marca los horarios como preferidos si el estudiante está logueado
     """
 
     # 1. Verificar que el profesor existe y está aprobado
@@ -317,9 +318,29 @@ def get_teacher_available_slots(
     if not free_slots:
         return []
 
-    # 7. Construir respuesta
+    # 7. Obtener preferencias del estudiante si está autenticado
+    student_preferences = []
+    if current_user and current_user.student_profile:
+        from app.models.student_preferences import StudentSchedulePreference
+        prefs = db.query(StudentSchedulePreference).filter(
+            StudentSchedulePreference.student_id == current_user.student_profile.id,
+            StudentSchedulePreference.day_of_week == day_of_week
+        ).all()
+        student_preferences = [
+            (p.start_time_utc, p.end_time_utc)
+            for p in prefs
+        ]
+
+    # Función interna para evaluar si el slot es preferido
+    def is_preferred_slot(slot_utc: datetime, preferences: list) -> bool:
+        slot_time_str = slot_utc.strftime("%H:%M")
+        for start_utc_str, end_utc_str in preferences:
+            if start_utc_str <= slot_time_str < end_utc_str:
+                return True
+        return False
+
+    # 8. Construir respuesta final
     duration_td = timedelta(minutes=duration)
-    now = utc_now()
 
     result = []
     for slot_start in free_slots:
@@ -329,7 +350,8 @@ def get_teacher_available_slots(
             start_time_utc=slot_start,
             end_time_utc=slot_end,
             duration_minutes=duration,
-            is_past=is_slot_in_past(slot_start)
+            is_past=is_slot_in_past(slot_start),
+            is_preferred=is_preferred_slot(slot_start, student_preferences)
         ))
 
     return result

@@ -4,6 +4,13 @@ from app.api.v1.endpoints import (
     availability, classes,
     materials, homework, admin
 )
+from app.api.v1.endpoints import (
+    auth, users, teachers,
+    availability, classes,
+    materials, homework,
+    admin, payments, reviews
+)
+
 
 api_router = APIRouter()
 
@@ -15,3 +22,5 @@ api_router.include_router(classes.router, prefix="/classes", tags=["Clases"])
 api_router.include_router(materials.router, prefix="/materials", tags=["Materiales"])
 api_router.include_router(homework.router, prefix="/homework", tags=["Tareas"])
 api_router.include_router(admin.router, prefix="/admin", tags=["Superadmin"])
+
+api_router.include_router(reviews.router,prefix="/reviews",tags=["Reseñas"])

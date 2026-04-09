@@ -11,8 +11,22 @@ from app.schemas.auth import (
     RegisterRequest, LoginRequest,
     TokenResponse, GoogleAuthRequest
 )
+import secrets
+from datetime import timedelta
+from app.models.password_reset import PasswordResetToken
+from app.core.email import send_password_reset_email
+from app.core.timezone import utc_now
+from pydantic import BaseModel, EmailStr
 
 router = APIRouter()
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
 
 @router.post("/register", response_model=TokenResponse)
 def register(data: RegisterRequest, db: Session = Depends(get_db)):
@@ -145,3 +159,84 @@ async def google_login(data: GoogleAuthRequest, db: Session = Depends(get_db)):
         name=user.name,
         username=user.username
     )
+
+@router.post("/forgot-password")
+def forgot_password(
+    data: ForgotPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Inicia el flujo de recuperación de contraseña.
+    Siempre devuelve 200 aunque el email no exista
+    para no revelar qué emails están registrados.
+    """
+    user = db.query(User).filter(User.email == data.email).first()
+
+    if user:
+        # Invalidar tokens anteriores del mismo usuario
+        db.query(PasswordResetToken).filter(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.is_used == False
+        ).update({"is_used": True})
+
+        # Crear nuevo token seguro
+        token = secrets.token_urlsafe(32)
+        reset_token = PasswordResetToken(
+            user_id=user.id,
+            token=token,
+            expires_at=utc_now() + timedelta(hours=1)
+        )
+        db.add(reset_token)
+        db.commit()
+
+        # Enviar email
+        send_password_reset_email(
+            to_email=user.email,
+            user_name=user.name,
+            reset_token=token,
+        )
+
+    # Siempre el mismo mensaje — no revelamos si el email existe
+    return {
+        "message": "Si ese email está registrado recibirás un enlace en breve"
+    }
+
+
+@router.post("/reset-password")
+def reset_password(
+    data: ResetPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Establece la nueva contraseña usando el token del email.
+    """
+    now = utc_now()
+
+    reset_token = db.query(PasswordResetToken).filter(
+        PasswordResetToken.token == data.token,
+        PasswordResetToken.is_used == False,
+        PasswordResetToken.expires_at > now
+    ).first()
+
+    if not reset_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token inválido o expirado"
+        )
+
+    # Actualizar contraseña
+    user = db.query(User).filter(User.id == reset_token.user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado"
+        )
+
+    user.password_hash = hash_password(data.new_password)
+
+    # Marcar token como usado
+    reset_token.is_used = True
+
+    db.commit()
+
+    return {"message": "Contraseña actualizada correctamente"}
