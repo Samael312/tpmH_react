@@ -15,10 +15,13 @@ logger = logging.getLogger(__name__)
 MIN_BOOKING_HOURS = 1
 
 # Mínimo de horas de antelación para cancelar sin penalización
-MIN_CANCEL_HOURS = 24
+MIN_CANCEL_HOURS = 12
 
-# Mínimo de horas de antelación para reagendar
-MIN_RESCHEDULE_HOURS = 24
+# Mínimo de horas de antelación para reagendar (para estudiantes)
+MIN_RESCHEDULE_HOURS_STUDENT = 12
+
+# Para staff (admin) no aplican restricciones de tiempo para reagendar
+MIN_RESCHEDULE_HOURS_STAFF = 0 
 
 
 # ─── Validaciones ───────────────────────────────────────────────────────────
@@ -102,21 +105,28 @@ def can_cancel_class(
 
 def can_reschedule_class(
     class_: Class,
+    role: str,  # "student", "teacher", "superadmin"
 ) -> tuple[bool, str]:
     """
-    Verifica si una clase puede ser reagendada.
+    Verifica si una clase puede ser reagendada según el rol.
+    - Estudiante: mínimo 12h de antelación
+    - Profesor / Superadmin: sin restricción de tiempo
     """
     now = utc_now()
 
     if class_.status not in ["pending", "confirmed"]:
         return False, f"No se puede reagendar una clase con estado '{class_.status}'"
 
-    time_until_class = class_.start_time_utc - now
-    if time_until_class < timedelta(hours=MIN_RESCHEDULE_HOURS):
-        return False, (
-            f"Solo puedes reagendar con {MIN_RESCHEDULE_HOURS}h de antelación"
-        )
+    if role == "student":
+        time_until_class = class_.start_time_utc - now
+        if time_until_class < timedelta(hours=MIN_RESCHEDULE_HOURS_STUDENT):
+            hours_left = int(time_until_class.total_seconds() / 3600)
+            return False, (
+                f"Solo puedes reagendar con {MIN_RESCHEDULE_HOURS_STUDENT}h "
+                f"de antelación. Quedan {hours_left}h para la clase."
+            )
 
+    # Profesores y superadmin pueden reagendar sin restricción de tiempo
     return True, ""
 
 

@@ -8,6 +8,7 @@ from app.auth.dependencies import (
     get_current_user,
     get_current_teacher,
     get_current_student,
+    get_current_superadmin
 )
 from app.models.user import User
 from app.models.class_ import Class
@@ -194,10 +195,6 @@ def reschedule_class_student(
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    """
-    El estudiante reagenda una clase a un nuevo horario.
-    Solo con 24h de antelación mínima.
-    """
     class_ = db.query(Class).filter(
         Class.id == class_id,
         Class.student_id == current_user.student_profile.id
@@ -209,40 +206,32 @@ def reschedule_class_student(
             detail="Clase no encontrada"
         )
 
-    # Verificar que se puede reagendar
-    can_reschedule, error_msg = can_reschedule_class(class_)
+    # Pasamos el rol para aplicar restricción de 12h
+    can_reschedule, error_msg = can_reschedule_class(class_, role="student")
     if not can_reschedule:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error_msg
         )
 
-    # Verificar que el nuevo slot está disponible
-    duration = int(
-        (class_.end_time_utc - class_.start_time_utc).total_seconds() / 60
-    )
     can_book, error_msg = can_book_slot(
         start_time_utc=data.start_time_utc,
         teacher_id=class_.teacher_id,
         student_id=current_user.student_profile.id,
         db=db,
-        exclude_class_id=class_id  # Excluir la clase actual
+        exclude_class_id=class_id
     )
-
     if not can_book:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=error_msg
         )
 
-    # Actualizar horario
     class_.start_time_utc = data.start_time_utc
     class_.end_time_utc = data.end_time_utc
-    class_.status = "pending"  # Vuelve a pending tras reagendar
-
+    class_.status = "pending"
     db.commit()
     db.refresh(class_)
-
     return class_
 
 
@@ -380,4 +369,112 @@ def add_class_notes(
     db.commit()
     db.refresh(class_)
 
+    return class_
+
+# ─── Reagendamiento Profesor (nuevo) ────────────────────────────────────────
+
+@router.patch(
+    "/teacher/{class_id}/reschedule",
+    response_model=ClassResponse
+)
+def reschedule_class_teacher(
+    class_id: int,
+    data: RescheduleClassRequest,
+    current_user: User = Depends(get_current_teacher),
+    db: Session = Depends(get_db)
+):
+    """
+    El profesor reagenda una clase sin restricción de tiempo.
+    Solo puede reagendar sus propias clases.
+    """
+    class_ = db.query(Class).filter(
+        Class.id == class_id,
+        Class.teacher_id == current_user.teacher_profile.id
+    ).first()
+
+    if not class_:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clase no encontrada"
+        )
+
+    # Sin restricción de tiempo para profesores
+    can_reschedule, error_msg = can_reschedule_class(class_, role="teacher")
+    if not can_reschedule:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg
+        )
+
+    can_book, error_msg = can_book_slot(
+        start_time_utc=data.start_time_utc,
+        teacher_id=class_.teacher_id,
+        student_id=class_.student_id,
+        db=db,
+        exclude_class_id=class_id
+    )
+    if not can_book:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error_msg
+        )
+
+    class_.start_time_utc = data.start_time_utc
+    class_.end_time_utc = data.end_time_utc
+    class_.status = "pending"
+    db.commit()
+    db.refresh(class_)
+    return class_
+
+# ─── ENDPOINTS DEL SUPERADMIN ─────────────────────────────────────────────────
+
+@router.patch(
+    "/admin/{class_id}/reschedule",
+    response_model=ClassResponse
+)
+def reschedule_class_admin(
+    class_id: int,
+    data: RescheduleClassRequest,
+    current_user: User = Depends(get_current_superadmin),
+    db: Session = Depends(get_db)
+):
+    """
+    El superadmin puede reagendar cualquier clase sin restricciones.
+    Útil para resolver conflictos o emergencias.
+    """
+    class_ = db.query(Class).filter(
+        Class.id == class_id
+    ).first()
+
+    if not class_:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clase no encontrada"
+        )
+
+    can_reschedule, error_msg = can_reschedule_class(class_, role="superadmin")
+    if not can_reschedule:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg
+        )
+
+    can_book, error_msg = can_book_slot(
+        start_time_utc=data.start_time_utc,
+        teacher_id=class_.teacher_id,
+        student_id=class_.student_id,
+        db=db,
+        exclude_class_id=class_id
+    )
+    if not can_book:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error_msg
+        )
+
+    class_.start_time_utc = data.start_time_utc
+    class_.end_time_utc = data.end_time_utc
+    class_.status = "pending"
+    db.commit()
+    db.refresh(class_)
     return class_
