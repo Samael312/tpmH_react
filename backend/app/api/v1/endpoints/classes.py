@@ -30,6 +30,11 @@ from app.core.class_logic import (
     can_reschedule_class,
     update_enrollment_counter,
 )
+from app.core.calendar_sync import (
+    sync_class_created,
+    sync_class_updated, 
+    sync_class_cancelled,
+)
 
 router = APIRouter()
 
@@ -101,6 +106,10 @@ def book_class(
     db.add(new_class)
     db.commit()
     db.refresh(new_class)
+    event_id = sync_class_created(new_class, db)
+    if event_id:
+        new_class.google_event_id = event_id
+        db.commit()
     return new_class
 
 
@@ -168,6 +177,7 @@ def cancel_class_student(
 
     class_.status = "cancelled"
     db.commit()
+    sync_class_cancelled(class_.teacher_id, class_.google_event_id, db)
     return {"message": "Clase cancelada"}
 
 
@@ -216,6 +226,7 @@ def reschedule_class_student(
     class_.status = "pending"
     db.commit()
     db.refresh(class_)
+    sync_class_updated(class_, class_.google_event_id, db)
     return class_
 
 
@@ -289,6 +300,10 @@ def book_trial_class(
     db.add(trial_class)
     db.commit()
     db.refresh(trial_class)
+    event_id = sync_class_created(trial_class, db)
+    if event_id:
+        trial_class.google_event_id = event_id
+        db.commit()
     return trial_class
 
 
@@ -394,6 +409,7 @@ def update_class_status(
 
     db.commit()
     db.refresh(class_)
+    sync_class_updated(class_, class_.google_event_id, db)
     return class_
 
 
@@ -442,6 +458,7 @@ def reschedule_class_teacher(
     class_.status = "pending"
     db.commit()
     db.refresh(class_)
+    sync_class_updated(class_, class_.google_event_id, db)
     return class_
 
 
@@ -480,4 +497,5 @@ def reschedule_class_admin(
     class_.status = "pending"
     db.commit()
     db.refresh(class_)
+    sync_class_updated(class_, class_.google_event_id, db)
     return class_

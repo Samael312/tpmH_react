@@ -1,7 +1,35 @@
-from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from app.db.base import Base
 
+class PlatformConfig(Base):
+    """
+    Configuración global de la plataforma.
+    Un solo registro — se actualiza, nunca se crea otro.
+    """
+    __tablename__ = "platform_config"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Single-tenant: ID del profesor featured
+    # None = modo multi-tenant (selección de profesor)
+    # int  = modo single-tenant (profesor fijo)
+    featured_teacher_id = Column(
+        Integer,
+        ForeignKey("teacher_profiles.id"),
+        nullable=True
+    )
+
+    # Nombre de la plataforma (personalizable)
+    platform_name = Column(String, default="TPMH")
+    platform_tagline = Column(String, nullable=True)
+
+    # Modo de la plataforma
+    is_single_tenant = Column(Boolean, default=True)
+    # True  → un solo profesor featured, flujo directo
+    # False → múltiples profesores, flujo con selección
+
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 class PaymentConfig(Base):
     """

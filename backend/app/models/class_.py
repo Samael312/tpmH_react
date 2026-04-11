@@ -36,7 +36,7 @@ class Class(Base):
     start_time_utc = Column(DateTime(timezone=True), nullable=False)
     end_time_utc = Column(DateTime(timezone=True), nullable=False)
     duration = Column(Integer, nullable=False)
-
+    google_event_id = Column(String, nullable=True)  # Para sync con Calendar
     # Estados
     status = Column(String, default="pending")
     # pending          → bloquea slot, esperando comprobante

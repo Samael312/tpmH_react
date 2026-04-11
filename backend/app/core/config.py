@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     # Google OAuth
     GOOGLE_CLIENT_ID: Optional[str] = None
     GOOGLE_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_REDIRECT_URI: Optional[str] = None
 
     # Cloudinary
     CLOUDINARY_CLOUD_NAME: Optional[str] = None
@@ -20,6 +21,8 @@ class Settings(BaseSettings):
     CLOUDINARY_API_SECRET: Optional[str] = None
     TTS_CACHE_FOLDER: str = "tts_cache"
 
+    # Configuración de la app
+    FEATURED_TEACHER_USERNAME: Optional[str] = None
 
     # OpenAI
     OPENAI_API_KEY: Optional[str] = None

@@ -355,3 +355,55 @@ def get_teacher_available_slots(
         ))
 
     return result
+
+@router.get(
+    "/featured-teacher/slots",
+    response_model=List[AvailableSlotResponse]
+)
+def get_featured_teacher_slots(
+    date: str = Query(...),
+    duration: int = Query(60, ge=30, le=180),
+    current_user: Optional[User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Slots disponibles de la profesora featured.
+    Shortcut para el modo single-tenant — el frontend
+    no necesita saber el username de la profesora.
+
+    Internamente llama al mismo endpoint de slots
+    con el username de la profesora featured.
+    """
+    from app.models.payment_config import PlatformConfig
+    from app.core.config import settings
+
+    # 1. Intentar obtener de la BD
+    config = db.query(PlatformConfig).first()
+
+    teacher_username = None
+
+    if config and config.featured_teacher_id:
+        teacher = db.query(TeacherProfile).filter(
+            TeacherProfile.id == config.featured_teacher_id
+        ).first()
+        if teacher:
+            teacher_username = teacher.user_username
+
+    # 2. Fallback a variable de entorno
+    if not teacher_username:
+        teacher_username = settings.FEATURED_TEACHER_USERNAME
+
+    if not teacher_username:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No hay profesora featured configurada"
+        )
+
+    # 3. Reusar el endpoint existente
+    return get_teacher_available_slots(
+        teacher_username=teacher_username,
+        date=date,
+        duration=duration,
+        current_user=current_user,
+        db=db,
+    )

@@ -4,7 +4,7 @@ from app.api.v1.endpoints import (
     availability, classes, packages,
     materials, homework,
     admin, payments, reviews,
-    chipi, tts
+    chipi, tts, calendar
 )
 
 api_router = APIRouter()
@@ -21,3 +21,4 @@ api_router.include_router(reviews.router,prefix="/reviews",tags=["Reseñas"])
 api_router.include_router(chipi.router, prefix="/chipi", tags=["Chatbot"])
 api_router.include_router(tts.router, prefix="/tts", tags=["Text-to-Speech"])
 api_router.include_router(packages.router,prefix="/packages",tags=["Paquetes"])
+api_router.include_router(calendar.router, prefix="/calendar", tags=["Google Calendar"])

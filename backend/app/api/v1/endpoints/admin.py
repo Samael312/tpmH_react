@@ -21,6 +21,8 @@ from app.schemas.admin import (
     UserAdminResponse,
     UpdateUserStatusRequest,
 )
+from app.models.payment_config import PlatformConfig
+
 
 router = APIRouter()
 
@@ -451,3 +453,76 @@ def process_withdrawal(
         "withdrawal_id": withdrawal_id,
         "amount": withdrawal.amount,
     }
+
+@router.get("/platform-config")
+def get_platform_config(db: Session = Depends(get_db)):
+    """
+    Configuración pública de la plataforma.
+    Endpoint público — el frontend lo consulta al cargar.
+    """
+    config = db.query(PlatformConfig).first()
+
+    if not config:
+        config = PlatformConfig()
+        db.add(config)
+        db.commit()
+        db.refresh(config)
+
+    featured_teacher = None
+    if config.featured_teacher_id:
+        teacher = db.query(TeacherProfile).filter(
+            TeacherProfile.id == config.featured_teacher_id
+        ).first()
+        if teacher:
+            featured_teacher = {
+                "username": teacher.user_username,
+                "name": f"{teacher.user.name} {teacher.user.surname}",
+                "title": teacher.title,
+                "bio": teacher.bio,
+                "avatar": teacher.user.avatar,
+                "subjects": teacher.subjects,
+            }
+
+    return {
+        "platform_name": config.platform_name,
+        "platform_tagline": config.platform_tagline,
+        "is_single_tenant": config.is_single_tenant,
+        "featured_teacher": featured_teacher,
+    }
+
+
+@router.patch("/platform-config")
+def update_platform_config(
+    featured_teacher_username: Optional[str] = None,
+    platform_name: Optional[str] = None,
+    platform_tagline: Optional[str] = None,
+    is_single_tenant: Optional[bool] = None,
+    current_user: User = Depends(get_current_superadmin),
+    db: Session = Depends(get_db)
+):
+    """El superadmin configura el modo de la plataforma"""
+    config = db.query(PlatformConfig).first()
+    if not config:
+        config = PlatformConfig()
+        db.add(config)
+
+    if featured_teacher_username:
+        teacher = db.query(TeacherProfile).filter(
+            TeacherProfile.user_username == featured_teacher_username
+        ).first()
+        if not teacher:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Profesor no encontrado"
+            )
+        config.featured_teacher_id = teacher.id
+
+    if platform_name:
+        config.platform_name = platform_name
+    if platform_tagline:
+        config.platform_tagline = platform_tagline
+    if is_single_tenant is not None:
+        config.is_single_tenant = is_single_tenant
+
+    db.commit()
+    return {"message": "Configuración actualizada"}
