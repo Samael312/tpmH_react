@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.db.base import get_db
-from app.auth.dependencies import get_current_teacher_or_professor_admin
+from app.auth.dependencies import get_current_teacher_or_teacher_admin
 from app.models.user import User
 from app.models.google_calendar import GoogleCalendarToken
 from app.core.google_calendar import get_auth_url, exchange_code_for_tokens
@@ -14,7 +14,7 @@ router = APIRouter()
 
 @router.get("/auth-url")
 def get_google_auth_url(
-    current_user: User = Depends(get_current_teacher_or_professor_admin),
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
 ):
     """
     Devuelve la URL para que el profesor conecte su Google Calendar.
@@ -66,7 +66,7 @@ def connect_google_calendar(
     access_token: str,
     refresh_token: str,
     calendar_id: str = "primary",
-    current_user: User = Depends(get_current_teacher_or_professor_admin),
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
     """
@@ -103,7 +103,7 @@ def connect_google_calendar(
 @router.patch("/toggle")
 def toggle_calendar_sync(
     is_active: bool,
-    current_user: User = Depends(get_current_teacher_or_professor_admin),
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
     """
@@ -129,7 +129,7 @@ def toggle_calendar_sync(
 
 @router.delete("/disconnect")
 def disconnect_google_calendar(
-    current_user: User = Depends(get_current_teacher_or_professor_admin),
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
     """El profesor desconecta su Google Calendar y borra los tokens"""
@@ -146,7 +146,7 @@ def disconnect_google_calendar(
 
 @router.get("/status")
 def get_calendar_status(
-    current_user: User = Depends(get_current_teacher_or_professor_admin),
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
     """Estado de la conexión de Google Calendar del profesor"""

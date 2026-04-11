@@ -43,11 +43,10 @@ export default function Home() {
           >
             <Image
               src="/vercel.svg"
-              alt="Vercel"
+              alt="Vercel Logo"
               width={100}
               height={24}
-              style={{ height: "auto" }} // Esto quita el warning
-              priority
+              className="h-6 w-auto" // <-- La clave es agregar w-auto o h-auto
             />
             Deploy Now
           </a>

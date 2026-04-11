@@ -5,7 +5,7 @@ from typing import List, Optional
 from app.db.base import get_db
 from app.auth.dependencies import (
     get_current_student,
-    get_current_teacher_or_professor_admin,
+    get_current_teacher_or_teacher_admin,
     get_current_staff,
 )
 from app.models.user import User
@@ -26,7 +26,7 @@ router = APIRouter()
 @router.post("/", response_model=PackageResponse, status_code=status.HTTP_201_CREATED)
 def create_package(
     data: PackageCreate,
-    current_user: User = Depends(get_current_teacher_or_professor_admin),
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
     """El profesor crea un paquete de clases"""
@@ -47,7 +47,7 @@ def create_package(
 
 @router.get("/my-packages", response_model=List[PackageResponse])
 def get_my_packages(
-    current_user: User = Depends(get_current_teacher_or_professor_admin),
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
     """Paquetes del profesor"""
@@ -61,7 +61,7 @@ def get_my_packages(
 def update_package(
     package_id: int,
     data: PackageCreate,
-    current_user: User = Depends(get_current_teacher_or_professor_admin),
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
     """Actualizar un paquete"""
@@ -87,7 +87,7 @@ def update_package(
 @router.delete("/{package_id}")
 def deactivate_package(
     package_id: int,
-    current_user: User = Depends(get_current_teacher_or_professor_admin),
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
     """Desactivar un paquete — no se borra para conservar enrollments"""

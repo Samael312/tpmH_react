@@ -7,14 +7,14 @@ from app.db.base import get_db
 from app.auth.dependencies import (
     get_current_user,
     get_current_student,
-    get_current_teacher_or_professor_admin,
+    get_current_teacher_or_teacher_admin,
     get_current_staff,
     get_current_superadmin,
 )
 from app.models.user import User
 from app.models.class_ import Class
 from app.models.payment import Payment, TeacherWallet, Withdrawal
-from app.models.enrollment import Enrollment
+from app.models.package import Enrollment
 from app.models.package import Package
 from app.models.teacher import TeacherProfile
 from app.models.payment_config import PaymentConfig
@@ -408,7 +408,7 @@ def get_my_payments_student(
 
 @router.get("/my-wallet", response_model=WalletResponse)
 def get_my_wallet(
-    current_user: User = Depends(get_current_teacher_or_professor_admin),
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
     """Balance de la billetera virtual del profesor"""
@@ -441,7 +441,7 @@ def get_my_wallet(
 )
 def request_withdrawal(
     data: WithdrawalRequest,
-    current_user: User = Depends(get_current_teacher_or_professor_admin),
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
     """El profesor solicita retirar sus ganancias"""

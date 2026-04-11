@@ -34,7 +34,7 @@ class PlatformConfig(Base):
 class PaymentConfig(Base):
     """
     Configuración global de métodos de pago.
-    Solo el superadmin y professor_admin pueden modificarla.
+    Solo el superadmin y teacher_admin pueden modificarla.
     Solo debe existir UN registro — se actualiza, nunca se crea otro.
     """
     __tablename__ = "payment_config"

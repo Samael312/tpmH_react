@@ -86,7 +86,7 @@ def get_current_staff(
     return current_user
 
 
-def get_current_teacher_or_professor_admin(
+def get_current_teacher_or_teacher_admin(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """

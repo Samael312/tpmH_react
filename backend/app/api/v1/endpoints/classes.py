@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from app.db.base import get_db
 from app.auth.dependencies import (
     get_current_user,
-    get_current_teacher_or_professor_admin,
+    get_current_teacher_or_teacher_admin,
     get_current_student,
     get_current_staff,
 )
@@ -316,7 +316,7 @@ def get_my_classes_teacher(
     class_type: Optional[str] = Query(None),
     subject: Optional[str] = Query(None),
     include_history: bool = Query(False),
-    current_user: User = Depends(get_current_teacher_or_professor_admin),
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
     """Clases del profesor con filtros"""
@@ -374,7 +374,7 @@ def get_my_classes_teacher(
 def update_class_status(
     class_id: int,
     data: UpdateClassStatusRequest,
-    current_user: User = Depends(get_current_teacher_or_professor_admin),
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
     """
@@ -417,7 +417,7 @@ def update_class_status(
 def reschedule_class_teacher(
     class_id: int,
     data: RescheduleClassRequest,
-    current_user: User = Depends(get_current_teacher_or_professor_admin),
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
     """El profesor reagenda sin restricción de tiempo"""

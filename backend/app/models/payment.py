@@ -35,7 +35,7 @@ class Payment(Base):
     status = Column(String, default="pending_review")
     # pending_review → under_review → approved → rejected
 
-    # Quién validó el pago (admin o professor_admin)
+    # Quién validó el pago (admin o teacher_admin)
     validated_by = Column(Integer, nullable=True)    # user_id
     validated_at = Column(DateTime(timezone=True), nullable=True)
     rejection_reason = Column(String, nullable=True)
