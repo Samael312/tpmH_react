@@ -21,6 +21,7 @@ class TeacherProfile(Base):
     title = Column(String, nullable=True)
     timezone = Column(String, default="UTC")
     languages = Column(JSONB, default=list)
+    subjects = Column(JSONB, default=list)
     skills = Column(JSONB, default=list)
     certificates = Column(JSONB, default=list)
     gallery = Column(JSONB, default=list)

@@ -3,68 +3,97 @@ from typing import Optional, List
 from datetime import datetime
 
 
+ALLOWED_DURATIONS = [30, 60, 90]
+
+
 class BookClassRequest(BaseModel):
     """
-    El estudiante envía el slot elegido en UTC
-    junto con el enrollment al que pertenece la clase.
+    Reserva de clase regular.
+    Requiere enrollment activo.
     """
     enrollment_id: int
     start_time_utc: datetime
     end_time_utc: datetime
     duration_minutes: int
 
-    @field_validator("end_time_utc")
+    @field_validator("duration_minutes")
     @classmethod
-    def validate_end_after_start(cls, v, info):
-        if "start_time_utc" in info.data and v <= info.data["start_time_utc"]:
-            raise ValueError("end_time_utc debe ser posterior a start_time_utc")
+    def validate_duration(cls, v):
+        if v not in ALLOWED_DURATIONS:
+            raise ValueError(f"Duración inválida. Opciones: {ALLOWED_DURATIONS}")
+        return v
+
+
+class BookTrialRequest(BaseModel):
+    """
+    Reserva de clase de prueba.
+    No requiere enrollment — el staff la ofrece.
+    """
+    teacher_username: str
+    student_id: int          # El staff elige al estudiante
+    start_time_utc: datetime
+    end_time_utc: datetime
+    subject: str
+    duration_minutes: int = 30   # Las trials son 30min por defecto
+
+    @field_validator("duration_minutes")
+    @classmethod
+    def validate_duration(cls, v):
+        if v not in ALLOWED_DURATIONS:
+            raise ValueError(f"Duración inválida. Opciones: {ALLOWED_DURATIONS}")
         return v
 
 
 class RescheduleClassRequest(BaseModel):
-    """Nuevo horario para una clase existente"""
     start_time_utc: datetime
     end_time_utc: datetime
 
 
 class UpdateClassStatusRequest(BaseModel):
-    """Solo el profesor o superadmin pueden cambiar estados"""
     status: str
+    meet_link: Optional[str] = None
+    notes: Optional[str] = None
 
     @field_validator("status")
     @classmethod
     def validate_status(cls, v):
-        allowed = ["pending", "confirmed", "completed", "cancelled", "no_show"]
+        allowed = [
+            "pending", "pending_payment", "confirmed",
+            "completed", "cancelled", "no_show", "rescheduled"
+        ]
         if v not in allowed:
             raise ValueError(f"Estado inválido. Opciones: {allowed}")
         return v
 
 
 class ClassResponse(BaseModel):
-    """
-    Respuesta completa de una clase.
-    El frontend convierte start/end UTC a zona local.
-    """
     id: int
-    enrollment_id: int
+    enrollment_id: Optional[int]
     teacher_id: int
     student_id: int
+    class_type: str
+    subject: Optional[str]
     start_time_utc: datetime
     end_time_utc: datetime
     duration_minutes: int
+    status: str
+    # Meet link solo se incluye si la clase está confirmed
+    meet_link: Optional[str] = None
+    notes: Optional[str]
     teacher_timezone: Optional[str]
     student_timezone: Optional[str]
-    status: str
-    notes: Optional[str]
     created_at: datetime
-    updated_at: Optional[datetime]
 
     class Config:
         from_attributes = True
 
+    def model_post_init(self, __context):
+        # Ocultar meet_link si la clase no está confirmed
+        if self.status not in ["confirmed", "completed"]:
+            self.meet_link = None
+
 
 class ClassListResponse(BaseModel):
-    """Lista de clases con metadata de paginación"""
     classes: List[ClassResponse]
     total: int
     upcoming: int

@@ -6,17 +6,18 @@ from datetime import datetime, timedelta
 from app.db.base import get_db
 from app.auth.dependencies import (
     get_current_user,
-    get_current_teacher,
+    get_current_teacher_or_professor_admin,
     get_current_student,
-    get_current_superadmin
+    get_current_staff,
 )
 from app.models.user import User
-from app.models.class_ import Class
-from app.models.package import Enrollment
+from app.models.class_ import Class, ClassType
+from app.models.package import Enrollment, EnrollmentStatus
 from app.models.student import StudentProfile
 from app.models.teacher import TeacherProfile
 from app.schemas.classes import (
     BookClassRequest,
+    BookTrialRequest,
     RescheduleClassRequest,
     UpdateClassStatusRequest,
     ClassResponse,
@@ -33,7 +34,7 @@ from app.core.class_logic import (
 router = APIRouter()
 
 
-# ─── ENDPOINTS DEL ESTUDIANTE ───────────────────────────────────────────────
+# ─── ESTUDIANTE ──────────────────────────────────────────────────────────────
 
 @router.post(
     "/book",
@@ -46,20 +47,14 @@ def book_class(
     db: Session = Depends(get_db)
 ):
     """
-    El estudiante agenda una clase en un slot disponible.
-
-    Proceso:
-    1. Verifica que el enrollment existe y pertenece al estudiante
-    2. Verifica que quedan clases en el paquete
-    3. Verifica que el slot está disponible
-    4. Crea la clase
+    Reserva una clase regular.
+    El slot queda en 'pending' y BLOQUEA el calendario
+    inmediatamente — nadie más puede reservar ese horario.
     """
-
-    # 1. Verificar enrollment
     enrollment = db.query(Enrollment).filter(
         Enrollment.id == data.enrollment_id,
         Enrollment.student_id == current_user.student_profile.id,
-        Enrollment.status == "active"
+        Enrollment.status == EnrollmentStatus.active
     ).first()
 
     if not enrollment:
@@ -68,14 +63,13 @@ def book_class(
             detail="Enrollment no encontrado o no activo"
         )
 
-    # 2. Verificar que quedan clases
     if enrollment.classes_used >= enrollment.classes_total:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Has agotado todas las clases de este paquete"
+            detail="Has agotado todas las clases de este paquete. "
+                   "Solicita una renovación desde tu dashboard."
         )
 
-    # 3. Verificar disponibilidad del slot
     can_book, error_msg = can_book_slot(
         start_time_utc=data.start_time_utc,
         teacher_id=enrollment.teacher_id,
@@ -89,15 +83,17 @@ def book_class(
             detail=error_msg
         )
 
-    # 4. Crear la clase
     new_class = Class(
         enrollment_id=enrollment.id,
         teacher_id=enrollment.teacher_id,
         student_id=current_user.student_profile.id,
+        class_type=ClassType.regular,
+        subject=enrollment.package.subject,
         start_time_utc=data.start_time_utc,
         end_time_utc=data.end_time_utc,
         duration=data.duration_minutes,
-        teacher_timezone=enrollment.teacher.user.teacher_profile.timezone,
+        teacher_timezone=enrollment.teacher.timezone
+            if hasattr(enrollment.teacher, 'timezone') else None,
         student_timezone=current_user.student_profile.timezone,
         status="pending"
     )
@@ -105,44 +101,35 @@ def book_class(
     db.add(new_class)
     db.commit()
     db.refresh(new_class)
-
     return new_class
 
 
-@router.get(
-    "/my-classes",
-    response_model=ClassListResponse
-)
+@router.get("/my-classes", response_model=ClassListResponse)
 def get_my_classes_student(
     include_history: bool = Query(False),
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    """
-    Devuelve las clases del estudiante.
-    Por defecto solo devuelve próximas clases.
-    Con include_history=true devuelve también el historial.
-    """
+    """Clases del estudiante — próximas e historial"""
     now = utc_now()
     student_id = current_user.student_profile.id
 
-    query = db.query(Class).filter(
-        Class.student_id == student_id
-    )
+    query = db.query(Class).filter(Class.student_id == student_id)
 
     if not include_history:
-        # Solo clases activas o futuras
         query = query.filter(
-            Class.status.in_(["pending", "confirmed"]),
+            Class.status.in_([
+                "pending", "pending_payment", "confirmed"
+            ]),
             Class.start_time_utc >= now
         )
-    
+
     all_classes = query.order_by(Class.start_time_utc).all()
 
-    # Contadores
     upcoming = sum(
         1 for c in all_classes
-        if c.status in ["pending", "confirmed"] and c.start_time_utc >= now
+        if c.status in ["pending", "pending_payment", "confirmed"]
+        and c.start_time_utc >= now
     )
     completed = sum(1 for c in all_classes if c.status == "completed")
 
@@ -160,10 +147,7 @@ def cancel_class_student(
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    """
-    El estudiante cancela una clase.
-    Solo con 24h de antelación mínima.
-    """
+    """Cancelar clase — mínimo 12h de antelación"""
     class_ = db.query(Class).filter(
         Class.id == class_id,
         Class.student_id == current_user.student_profile.id
@@ -184,8 +168,7 @@ def cancel_class_student(
 
     class_.status = "cancelled"
     db.commit()
-
-    return {"message": "Clase cancelada correctamente"}
+    return {"message": "Clase cancelada"}
 
 
 @router.patch("/{class_id}/reschedule", response_model=ClassResponse)
@@ -195,6 +178,7 @@ def reschedule_class_student(
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
+    """Reagendar clase — mínimo 12h de antelación"""
     class_ = db.query(Class).filter(
         Class.id == class_id,
         Class.student_id == current_user.student_profile.id
@@ -206,7 +190,6 @@ def reschedule_class_student(
             detail="Clase no encontrada"
         )
 
-    # Pasamos el rol para aplicar restricción de 12h
     can_reschedule, error_msg = can_reschedule_class(class_, role="student")
     if not can_reschedule:
         raise HTTPException(
@@ -221,6 +204,7 @@ def reschedule_class_student(
         db=db,
         exclude_class_id=class_id
     )
+
     if not can_book:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -235,59 +219,131 @@ def reschedule_class_student(
     return class_
 
 
-# ─── ENDPOINTS DEL PROFESOR ─────────────────────────────────────────────────
+# ─── STAFF — Clase de prueba ─────────────────────────────────────────────────
 
-@router.get(
-    "/teacher/classes",
-    response_model=ClassListResponse
+@router.post(
+    "/trial",
+    response_model=ClassResponse,
+    status_code=status.HTTP_201_CREATED
 )
-def get_my_classes_teacher(
-    date: Optional[str] = Query(None, description="Filtrar por fecha YYYY-MM-DD"),
-    status_filter: Optional[str] = Query(None, description="Filtrar por estado"),
-    include_history: bool = Query(False),
-    current_user: User = Depends(get_current_teacher),
+def book_trial_class(
+    data: BookTrialRequest,
+    current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db)
 ):
     """
-    Devuelve las clases del profesor con filtros opcionales.
+    El staff crea una clase de prueba para un estudiante.
+    Las clases trial:
+    - No requieren enrollment
+    - No consumen clases del paquete
+    - Son de 30min por defecto
+    - El staff decide a quién ofrecerlas
     """
+    teacher = db.query(TeacherProfile).filter(
+        TeacherProfile.user_username == data.teacher_username
+    ).first()
+
+    if not teacher:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profesor no encontrado"
+        )
+
+    student = db.query(StudentProfile).filter(
+        StudentProfile.id == data.student_id
+    ).first()
+
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Estudiante no encontrado"
+        )
+
+    can_book, error_msg = can_book_slot(
+        start_time_utc=data.start_time_utc,
+        teacher_id=teacher.id,
+        student_id=data.student_id,
+        db=db
+    )
+
+    if not can_book:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error_msg
+        )
+
+    trial_class = Class(
+        enrollment_id=None,          # Sin enrollment
+        teacher_id=teacher.id,
+        student_id=data.student_id,
+        class_type=ClassType.trial,
+        subject=data.subject,
+        start_time_utc=data.start_time_utc,
+        end_time_utc=data.end_time_utc,
+        duration=data.duration_minutes,
+        teacher_timezone=teacher.timezone,
+        student_timezone=student.timezone,
+        status="pending"
+    )
+
+    db.add(trial_class)
+    db.commit()
+    db.refresh(trial_class)
+    return trial_class
+
+
+# ─── STAFF / PROFESOR — Gestión ──────────────────────────────────────────────
+
+@router.get("/teacher/classes", response_model=ClassListResponse)
+def get_my_classes_teacher(
+    date: Optional[str] = Query(None),
+    status_filter: Optional[str] = Query(None),
+    class_type: Optional[str] = Query(None),
+    subject: Optional[str] = Query(None),
+    include_history: bool = Query(False),
+    current_user: User = Depends(get_current_teacher_or_professor_admin),
+    db: Session = Depends(get_db)
+):
+    """Clases del profesor con filtros"""
     now = utc_now()
     teacher_id = current_user.teacher_profile.id
 
     query = db.query(Class).filter(Class.teacher_id == teacher_id)
 
-    # Filtro por fecha
     if date:
         try:
-            dt = datetime.strptime(date, "%Y-%m-%d")
-            day_start = dt.replace(tzinfo=UTC)
-            day_end = day_start + timedelta(days=1)
+            dt = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=UTC)
+            day_end = dt + timedelta(days=1)
             query = query.filter(
-                Class.start_time_utc >= day_start,
+                Class.start_time_utc >= dt,
                 Class.start_time_utc < day_end
             )
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Formato de fecha inválido. Usa YYYY-MM-DD"
+                detail="Formato de fecha inválido"
             )
 
-    # Filtro por estado
     if status_filter:
         query = query.filter(Class.status == status_filter)
 
-    # Sin historial por defecto
+    if class_type:
+        query = query.filter(Class.class_type == class_type)
+
+    if subject:
+        query = query.filter(Class.subject == subject)
+
     if not include_history:
         query = query.filter(
-            Class.status.in_(["pending", "confirmed"]),
+            Class.status.in_(["pending", "pending_payment", "confirmed"]),
             Class.start_time_utc >= now
         )
 
     all_classes = query.order_by(Class.start_time_utc).all()
-
     upcoming = sum(
         1 for c in all_classes
-        if c.status in ["pending", "confirmed"] and c.start_time_utc >= now
+        if c.status in ["pending", "pending_payment", "confirmed"]
+        and c.start_time_utc >= now
     )
     completed = sum(1 for c in all_classes if c.status == "completed")
 
@@ -299,19 +355,18 @@ def get_my_classes_teacher(
     )
 
 
-@router.patch(
-    "/{class_id}/status",
-    response_model=ClassResponse
-)
+@router.patch("/{class_id}/status", response_model=ClassResponse)
 def update_class_status(
     class_id: int,
     data: UpdateClassStatusRequest,
-    current_user: User = Depends(get_current_teacher),
+    current_user: User = Depends(get_current_teacher_or_professor_admin),
     db: Session = Depends(get_db)
 ):
     """
     El profesor actualiza el estado de una clase.
-    Al marcar como 'completed' actualiza el contador del enrollment.
+    Al marcar como 'completed':
+    - Se actualiza el contador del enrollment
+    - Solo si es clase regular (trial no cuenta)
     """
     class_ = db.query(Class).filter(
         Class.id == class_id,
@@ -325,68 +380,31 @@ def update_class_status(
         )
 
     old_status = class_.status
-    new_status = data.status
+    class_.status = data.status
 
-    class_.status = new_status
+    if data.notes:
+        class_.notes = data.notes
 
-    # Si pasa a completada incrementamos el contador
-    if new_status == "completed" and old_status != "completed":
-        update_enrollment_counter(class_.enrollment_id, delta=1, db=db)
-
-    # Si se deshace una completada decrementamos
-    if old_status == "completed" and new_status != "completed":
-        update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
+    # Solo las clases regular consumen del paquete
+    if class_.class_type == ClassType.regular:
+        if data.status == "completed" and old_status != "completed":
+            update_enrollment_counter(class_.enrollment_id, delta=1, db=db)
+        elif old_status == "completed" and data.status != "completed":
+            update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
 
     db.commit()
     db.refresh(class_)
-
     return class_
 
 
-@router.patch(
-    "/{class_id}/notes",
-    response_model=ClassResponse
-)
-def add_class_notes(
-    class_id: int,
-    notes: str,
-    current_user: User = Depends(get_current_teacher),
-    db: Session = Depends(get_db)
-):
-    """El profesor añade notas a una clase"""
-    class_ = db.query(Class).filter(
-        Class.id == class_id,
-        Class.teacher_id == current_user.teacher_profile.id
-    ).first()
-
-    if not class_:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Clase no encontrada"
-        )
-
-    class_.notes = notes
-    db.commit()
-    db.refresh(class_)
-
-    return class_
-
-# ─── Reagendamiento Profesor (nuevo) ────────────────────────────────────────
-
-@router.patch(
-    "/teacher/{class_id}/reschedule",
-    response_model=ClassResponse
-)
+@router.patch("/teacher/{class_id}/reschedule", response_model=ClassResponse)
 def reschedule_class_teacher(
     class_id: int,
     data: RescheduleClassRequest,
-    current_user: User = Depends(get_current_teacher),
+    current_user: User = Depends(get_current_teacher_or_professor_admin),
     db: Session = Depends(get_db)
 ):
-    """
-    El profesor reagenda una clase sin restricción de tiempo.
-    Solo puede reagendar sus propias clases.
-    """
+    """El profesor reagenda sin restricción de tiempo"""
     class_ = db.query(Class).filter(
         Class.id == class_id,
         Class.teacher_id == current_user.teacher_profile.id
@@ -398,7 +416,6 @@ def reschedule_class_teacher(
             detail="Clase no encontrada"
         )
 
-    # Sin restricción de tiempo para profesores
     can_reschedule, error_msg = can_reschedule_class(class_, role="teacher")
     if not can_reschedule:
         raise HTTPException(
@@ -413,6 +430,7 @@ def reschedule_class_teacher(
         db=db,
         exclude_class_id=class_id
     )
+
     if not can_book:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -426,37 +444,21 @@ def reschedule_class_teacher(
     db.refresh(class_)
     return class_
 
-# ─── ENDPOINTS DEL SUPERADMIN ─────────────────────────────────────────────────
 
-@router.patch(
-    "/admin/{class_id}/reschedule",
-    response_model=ClassResponse
-)
+@router.patch("/admin/{class_id}/reschedule", response_model=ClassResponse)
 def reschedule_class_admin(
     class_id: int,
     data: RescheduleClassRequest,
-    current_user: User = Depends(get_current_superadmin),
+    current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db)
 ):
-    """
-    El superadmin puede reagendar cualquier clase sin restricciones.
-    Útil para resolver conflictos o emergencias.
-    """
-    class_ = db.query(Class).filter(
-        Class.id == class_id
-    ).first()
+    """El staff reagenda cualquier clase sin restricciones"""
+    class_ = db.query(Class).filter(Class.id == class_id).first()
 
     if not class_:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Clase no encontrada"
-        )
-
-    can_reschedule, error_msg = can_reschedule_class(class_, role="superadmin")
-    if not can_reschedule:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error_msg
         )
 
     can_book, error_msg = can_book_slot(
@@ -466,6 +468,7 @@ def reschedule_class_admin(
         db=db,
         exclude_class_id=class_id
     )
+
     if not can_book:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

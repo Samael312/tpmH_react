@@ -88,3 +88,40 @@ def update_my_teacher_profile(
     db.commit()
     db.refresh(profile)
     return profile
+
+@router.get("/", response_model=List[TeacherPublicResponse])
+def list_approved_teachers(
+    subject: Optional[str] = Query(None, description="Filtrar por materia"),
+    language: Optional[str] = Query(None, description="Filtrar por idioma"),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista profesores aprobados.
+    Filtrable por materia e idioma.
+    Endpoint público.
+    """
+    from app.models.teacher import TeacherStatus
+
+    teachers = db.query(TeacherProfile).filter(
+        TeacherProfile.status == TeacherStatus.approved
+    ).all()
+
+    # Filtrar por materia (JSONB contains)
+    if subject:
+        teachers = [
+            t for t in teachers
+            if t.subjects and subject.lower() in [
+                s.lower() for s in t.subjects
+            ]
+        ]
+
+    # Filtrar por idioma
+    if language:
+        teachers = [
+            t for t in teachers
+            if t.languages and language.lower() in [
+                l.lower() for l in t.languages
+            ]
+        ]
+
+    return teachers

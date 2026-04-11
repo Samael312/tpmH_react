@@ -14,6 +14,7 @@ class TeacherPublicResponse(BaseModel):
     title: Optional[str]
     timezone: Optional[str]
     languages: Optional[List[str]]
+    subjects: Optional[List[str]]
     skills: Optional[List[str]]
     certificates: Optional[List[Dict[str, Any]]]
     gallery: Optional[List[str]]
@@ -40,6 +41,7 @@ class UpdateTeacherProfileRequest(BaseModel):
     bio: Optional[str] = None
     title: Optional[str] = None
     timezone: Optional[str] = None
+    subjects: Optional[List[str]] = None
     languages: Optional[List[str]] = None
     skills: Optional[List[str]] = None
     certificates: Optional[List[Dict[str, Any]]] = None
