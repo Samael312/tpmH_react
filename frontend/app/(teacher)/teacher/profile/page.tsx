@@ -1,14 +1,33 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 import {
   User, Briefcase, Globe, MapPin, Link2,
-  Instagram, Youtube, MessageCircle, Plus,
+  MessageCircle, Plus,
   X, Check, Save, Upload, Award, BookOpen,
   ChevronDown, ExternalLink
 } from "lucide-react";
 import api from "@/lib/api";
-import { useTeacherProfile } from "@/hooks/useTeacherData";
+import { useTeacherProfile, TeacherProfile } from "@/hooks/useTeacherData";
+
+// ─── Inline icon replacements (not in this lucide-react version) ─────────────
+const InstagramIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+    <circle cx="12" cy="12" r="4"/>
+    <circle cx="17.5" cy="6.5" r="0.5" fill="currentColor"/>
+  </svg>
+);
+
+const YoutubeIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+    <path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/>
+    <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="currentColor" stroke="none"/>
+  </svg>
+);
+
+// ─── Extended profile type (photo_url comes from API but isn't in TS type yet) ──
+type TeacherProfileWithPhoto = TeacherProfile & { photo_url?: string | null };
 
 const LANGUAGES  = ["Español","English","Français","Italiano","Português","Deutsch"];
 const SUBJECTS   = ["Inglés","Español","Francés","Italiano","Alemán","Matemáticas","Ciencias"];
@@ -90,7 +109,6 @@ function FreeChipInput({
 
   return (
     <div className="space-y-2">
-      {/* Sugerencias */}
       {suggestions.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {suggestions
@@ -110,7 +128,6 @@ function FreeChipInput({
         </div>
       )}
 
-      {/* Input */}
       <div className="flex gap-2">
         <div className="group relative flex-1">
           <input
@@ -135,7 +152,6 @@ function FreeChipInput({
         </button>
       </div>
 
-      {/* Chips añadidos */}
       {value.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {value.map(w => (
@@ -189,7 +205,9 @@ function Section({
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function TeacherProfilePage() {
-  const { profile, loading, refetch } = useTeacherProfile();
+  const { profile: rawProfile, loading, refetch } = useTeacherProfile();
+  const profile = rawProfile as TeacherProfileWithPhoto | null;
+
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState(false);
   const [error, setError]     = useState("");
@@ -197,25 +215,20 @@ export default function TeacherProfilePage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile]       = useState<File | null>(null);
 
-  // ─ Estado del formulario (se inicializa con los datos del perfil) ─
   const [bio, setBio]           = useState("");
   const [title_, setTitle_]     = useState("");
   const [timezone, setTimezone] = useState("");
   const [languages, setLanguages] = useState<string[]>([]);
   const [subjects, setSubjects]   = useState<string[]>([]);
   const [skills, setSkills]       = useState<string[]>([]);
-  
-  // CORRECCIÓN 1: Faltaba el < antes de definir el tipo del array
   const [certificates, setCertificates] = useState<
     { title: string; year: string }[]
   >([]);
-
   const [socialLinks, setSocialLinks] = useState({
     instagram: "", youtube: "", whatsapp: "", website: "",
   });
   const [initialized, setInitialized] = useState(false);
 
-  // Inicializar formulario cuando cargue el perfil
   if (profile && !initialized) {
     setBio(profile.bio ?? "");
     setTitle_(profile.title ?? "");
@@ -224,9 +237,7 @@ export default function TeacherProfilePage() {
     setSubjects(profile.subjects ?? []);
     setSkills(profile.skills ?? []);
     setCertificates(
-      Array.isArray(profile.certificates)
-        ? profile.certificates
-        : []
+      Array.isArray(profile.certificates) ? profile.certificates : []
     );
     setSocialLinks({
       instagram: profile.social_links?.instagram ?? "",
@@ -247,11 +258,7 @@ export default function TeacherProfilePage() {
   const addCert = () =>
     setCertificates(p => [...p, { title: "", year: "" }]);
 
-  const updateCert = (
-    idx: number,
-    field: "title" | "year",
-    val: string
-  ) =>
+  const updateCert = (idx: number, field: "title" | "year", val: string) =>
     setCertificates(p =>
       p.map((c, i) => i === idx ? { ...c, [field]: val } : c)
     );
@@ -263,7 +270,6 @@ export default function TeacherProfilePage() {
     setSaving(true);
     setError("");
     try {
-      // 1. Si hay nueva foto, subirla primero
       let photoUrl = profile?.photo_url ?? null;
       if (photoFile) {
         const form = new FormData();
@@ -274,7 +280,6 @@ export default function TeacherProfilePage() {
         photoUrl = res.data.url;
       }
 
-      // 2. Guardar perfil
       await api.patch("/teachers/me/profile", {
         bio,
         title: title_,
@@ -308,14 +313,10 @@ export default function TeacherProfilePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 relative overflow-hidden">
-
-      {/* Blobs */}
       <div className="fixed top-[-80px] right-[-80px] w-[500px] h-[500px]
-                      bg-pink-300/20 rounded-full blur-[100px]
-                      pointer-events-none" />
+                      bg-pink-300/20 rounded-full blur-[100px] pointer-events-none" />
       <div className="fixed bottom-[-100px] left-[-100px] w-[400px] h-[400px]
-                      bg-purple-300/15 rounded-full blur-[100px]
-                      pointer-events-none" />
+                      bg-purple-300/15 rounded-full blur-[100px] pointer-events-none" />
 
       <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
 
@@ -331,8 +332,6 @@ export default function TeacherProfilePage() {
             </p>
           </div>
 
-          {/* Vista previa pública */}
-          {/* CORRECCIÓN 2: Faltaba la apertura de la etiqueta <a ...> */}
           {profile && (
             <a
               href={`/teachers/${profile.user_username}`}
@@ -350,22 +349,18 @@ export default function TeacherProfilePage() {
           )}
         </div>
 
-        {/* Error global */}
         {error && (
           <div className="bg-rose-50 border border-rose-100 text-rose-600
                           px-4 py-3 rounded-xl text-xs font-bold
-                          flex items-center gap-2 animate-in fade-in
-                          slide-in-from-top-1">
+                          flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
             <X className="w-4 h-4 flex-shrink-0" />
             {error}
           </div>
         )}
 
-        {/* ─── Foto y datos básicos ─── */}
+        {/* Foto y datos básicos */}
         <Section title="Presentación" icon={<User className="w-5 h-5" />}>
           <div className="flex flex-col sm:flex-row gap-6">
-
-            {/* Foto */}
             <div className="flex flex-col items-center gap-3 flex-shrink-0">
               <div
                 onClick={() => photoRef.current?.click()}
@@ -380,8 +375,7 @@ export default function TeacherProfilePage() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full bg-slate-100 flex items-center
-                                  justify-center">
+                  <div className="w-full h-full bg-slate-100 flex items-center justify-center">
                     <User className="w-10 h-10 text-slate-300" />
                   </div>
                 )}
@@ -398,24 +392,19 @@ export default function TeacherProfilePage() {
                 className="hidden"
                 onChange={handlePhoto}
               />
-              <p className="text-[10px] text-slate-400 text-center font-bold
-                            uppercase tracking-widest">
+              <p className="text-[10px] text-slate-400 text-center font-bold uppercase tracking-widest">
                 Clic para cambiar
               </p>
             </div>
 
-            {/* Título y bio */}
             <div className="flex-1 space-y-4">
               <div className="group">
-                <label className="text-[10px] font-black text-slate-400
-                                  uppercase tracking-widest block mb-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
                   Título profesional
                 </label>
                 <div className="relative">
                   <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2
-                                        w-5 h-5 text-slate-400
-                                        group-focus-within:text-pink-500
-                                        transition-colors" />
+                                        w-5 h-5 text-slate-400 group-focus-within:text-pink-500 transition-colors" />
                   <input
                     value={title_}
                     onChange={e => setTitle_(e.target.value)}
@@ -423,16 +412,14 @@ export default function TeacherProfilePage() {
                     className="w-full bg-slate-50 border-2 border-transparent
                                rounded-xl text-sm font-bold text-slate-800
                                placeholder:text-slate-400 pl-11 pr-4 py-3.5
-                               focus:outline-none focus:bg-white
-                               focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                               transition-all duration-300"
+                               focus:outline-none focus:bg-white focus:border-pink-500
+                               focus:ring-4 focus:ring-pink-50 transition-all duration-300"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-400
-                                  uppercase tracking-widest block mb-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
                   Sobre mí
                 </label>
                 <textarea
@@ -443,9 +430,8 @@ export default function TeacherProfilePage() {
                   className="w-full bg-slate-50 border-2 border-transparent
                              rounded-xl text-sm font-medium text-slate-800
                              placeholder:text-slate-400 px-4 py-3.5
-                             focus:outline-none focus:bg-white
-                             focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                             transition-all duration-300 resize-none"
+                             focus:outline-none focus:bg-white focus:border-pink-500
+                             focus:ring-4 focus:ring-pink-50 transition-all duration-300 resize-none"
                 />
                 <p className="text-xs text-slate-400 text-right mt-1">
                   {bio.length} caracteres
@@ -455,11 +441,10 @@ export default function TeacherProfilePage() {
           </div>
         </Section>
 
-        {/* ─── Zona horaria ─── */}
+        {/* Zona horaria */}
         <Section title="Configuración" icon={<Globe className="w-5 h-5" />}>
           <div>
-            <label className="text-[10px] font-black text-slate-400
-                              uppercase tracking-widest block mb-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
               Zona horaria
             </label>
             <div className="relative max-w-sm">
@@ -471,9 +456,8 @@ export default function TeacherProfilePage() {
                 className="w-full appearance-none bg-slate-50 border-2
                            border-transparent rounded-xl text-sm font-bold
                            text-slate-800 pl-11 pr-10 py-3.5
-                           focus:outline-none focus:bg-white
-                           focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                           transition-all duration-300 cursor-pointer"
+                           focus:outline-none focus:bg-white focus:border-pink-500
+                           focus:ring-4 focus:ring-pink-50 transition-all duration-300 cursor-pointer"
               >
                 <option value="">Seleccionar zona...</option>
                 {TIMEZONES.map(tz => (
@@ -489,38 +473,23 @@ export default function TeacherProfilePage() {
           </div>
         </Section>
 
-        {/* ─── Idiomas y materias ─── */}
+        {/* Idiomas y materias */}
         <Section title="Qué enseñas" icon={<BookOpen className="w-5 h-5" />}>
           <div className="space-y-6">
             <div>
-              <label className="text-[10px] font-black text-slate-400
-                                uppercase tracking-widest block mb-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">
                 Idiomas que enseñas
               </label>
-              <ChipSelector
-                options={LANGUAGES}
-                selected={languages}
-                onChange={setLanguages}
-                color="pink"
-              />
+              <ChipSelector options={LANGUAGES} selected={languages} onChange={setLanguages} color="pink" />
             </div>
-
             <div>
-              <label className="text-[10px] font-black text-slate-400
-                                uppercase tracking-widest block mb-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">
                 Materias / Áreas
               </label>
-              <ChipSelector
-                options={SUBJECTS}
-                selected={subjects}
-                onChange={setSubjects}
-                color="purple"
-              />
+              <ChipSelector options={SUBJECTS} selected={subjects} onChange={setSubjects} color="purple" />
             </div>
-
             <div>
-              <label className="text-[10px] font-black text-slate-400
-                                uppercase tracking-widest block mb-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">
                 Habilidades específicas
               </label>
               <FreeChipInput
@@ -533,13 +502,11 @@ export default function TeacherProfilePage() {
           </div>
         </Section>
 
-        {/* ─── Certificaciones ─── */}
+        {/* Certificaciones */}
         <Section title="Certificaciones" icon={<Award className="w-5 h-5" />}>
           <div className="space-y-3">
             {certificates.map((cert, idx) => (
-              <div key={idx}
-                className="flex gap-3 items-center bg-slate-50
-                           rounded-2xl p-3">
+              <div key={idx} className="flex gap-3 items-center bg-slate-50 rounded-2xl p-3">
                 <div className="flex-1 min-w-0">
                   <input
                     value={cert.title}
@@ -549,8 +516,7 @@ export default function TeacherProfilePage() {
                                rounded-xl text-sm font-bold text-slate-800
                                placeholder:text-slate-400 px-3 py-2.5
                                focus:outline-none focus:border-pink-500
-                               focus:ring-4 focus:ring-pink-50
-                               transition-all duration-300 mb-2"
+                               focus:ring-4 focus:ring-pink-50 transition-all duration-300 mb-2"
                   />
                   <input
                     value={cert.year}
@@ -560,8 +526,7 @@ export default function TeacherProfilePage() {
                                rounded-xl text-sm font-bold text-slate-800
                                placeholder:text-slate-400 px-3 py-2.5
                                focus:outline-none focus:border-pink-500
-                               focus:ring-4 focus:ring-pink-50
-                               transition-all duration-300"
+                               focus:ring-4 focus:ring-pink-50 transition-all duration-300"
                   />
                 </div>
                 <button
@@ -587,62 +552,33 @@ export default function TeacherProfilePage() {
           </div>
         </Section>
 
-        {/* ─── Redes sociales ─── */}
+        {/* Redes sociales */}
         <Section title="Contacto y Redes" icon={<Link2 className="w-5 h-5" />}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
             {[
-              {
-                key: "instagram" as const,
-                label: "Instagram",
-                placeholder: "@tuprofemaria",
-                icon: <Instagram className="w-5 h-5" />,
-              },
-              {
-                key: "youtube" as const,
-                label: "YouTube",
-                placeholder: "https://youtube.com/@canal",
-                icon: <Youtube className="w-5 h-5" />,
-              },
-              {
-                key: "whatsapp" as const,
-                label: "WhatsApp",
-                placeholder: "+58 412 000 0000",
-                icon: <MessageCircle className="w-5 h-5" />,
-              },
-              {
-                key: "website" as const,
-                label: "Sitio web",
-                placeholder: "https://tuweb.com",
-                icon: <Globe className="w-5 h-5" />,
-              },
+              { key: "instagram" as const, label: "Instagram", placeholder: "@tuprofemaria",         icon: <InstagramIcon /> },
+              { key: "youtube"   as const, label: "YouTube",   placeholder: "https://youtube.com/@canal", icon: <YoutubeIcon /> },
+              { key: "whatsapp"  as const, label: "WhatsApp",  placeholder: "+58 412 000 0000",      icon: <MessageCircle className="w-5 h-5" /> },
+              { key: "website"   as const, label: "Sitio web", placeholder: "https://tuweb.com",     icon: <Globe className="w-5 h-5" /> },
             ].map(field => (
               <div key={field.key} className="group">
-                <label className="text-[10px] font-black text-slate-400
-                                  uppercase tracking-widest block mb-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
                   {field.label}
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2
-                                   text-slate-400 group-focus-within:text-pink-500
-                                   transition-colors">
+                                   text-slate-400 group-focus-within:text-pink-500 transition-colors">
                     {field.icon}
                   </span>
                   <input
                     value={socialLinks[field.key]}
-                    onChange={e =>
-                      setSocialLinks(p => ({
-                        ...p,
-                        [field.key]: e.target.value,
-                      }))
-                    }
+                    onChange={e => setSocialLinks(p => ({ ...p, [field.key]: e.target.value }))}
                     placeholder={field.placeholder}
                     className="w-full bg-slate-50 border-2 border-transparent
                                rounded-xl text-sm font-bold text-slate-800
                                placeholder:text-slate-400 pl-11 pr-4 py-3.5
-                               focus:outline-none focus:bg-white
-                               focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                               transition-all duration-300"
+                               focus:outline-none focus:bg-white focus:border-pink-500
+                               focus:ring-4 focus:ring-pink-50 transition-all duration-300"
                   />
                 </div>
               </div>
@@ -650,9 +586,8 @@ export default function TeacherProfilePage() {
           </div>
         </Section>
 
-        {/* ─── Botón guardar fijo ─── */}
-        <div className="sticky bottom-6 flex justify-center
-                        animate-in fade-in duration-500">
+        {/* Botón guardar fijo */}
+        <div className="sticky bottom-6 flex justify-center animate-in fade-in duration-500">
           <button
             onClick={save}
             disabled={saving}
@@ -667,8 +602,7 @@ export default function TeacherProfilePage() {
             `}
           >
             {saving ? (
-              <div className="w-5 h-5 border-2 border-white/40
-                              border-t-white rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
             ) : saved ? (
               <><Check className="w-5 h-5" /> ¡Guardado correctamente!</>
             ) : (
