@@ -9,7 +9,7 @@ from app.auth.dependencies import (
     get_current_student,
     get_current_teacher_or_teacher_admin,
     get_current_staff,
-    get_current_superadmin,
+    get_currtent_user,
 )
 from app.models.user import User
 from app.models.class_ import Class

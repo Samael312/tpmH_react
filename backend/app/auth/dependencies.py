@@ -59,12 +59,12 @@ def get_current_student(current_user: User = Depends(get_current_user)) -> User:
         )
     return current_user
 
-def get_current_superadmin(current_user: User = Depends(get_current_user)) -> User:
-    """Solo permite acceso a superadmins"""
-    if current_user.role != UserRole.superadmin:
+def get_currtent_user(current_user: User = Depends(get_current_user)) -> User:
+    """No se permite acceso a estudiantes."""
+    if current_user.role == UserRole.student:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acceso solo para administradores"
+            detail="Acceso solo para administradores y profesores"
         )
     return current_user
 

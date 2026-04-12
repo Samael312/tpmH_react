@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional  # <-- ¡Añadido Optional aquí!
 from app.db.base import get_db
 from app.auth.dependencies import get_current_user, get_current_teacher
 from app.models.user import User
@@ -13,17 +13,40 @@ from app.schemas.teacher import (
 
 router = APIRouter()
 
-
+# Dejamos solo esta versión de la ruta raíz ("/") que ya maneja los filtros opcionales
 @router.get("/", response_model=List[TeacherPublicResponse])
-def list_approved_teachers(db: Session = Depends(get_db)):
+def list_approved_teachers(
+    subject: Optional[str] = Query(None, description="Filtrar por materia"),
+    language: Optional[str] = Query(None, description="Filtrar por idioma"),
+    db: Session = Depends(get_db)
+):
     """
-    Lista todos los profesores aprobados.
-    Endpoint público — no requiere autenticación.
-    Es lo que verá el estudiante al buscar profesor.
+    Lista profesores aprobados.
+    Filtrable por materia e idioma.
+    Endpoint público.
     """
     teachers = db.query(TeacherProfile).filter(
         TeacherProfile.status == TeacherStatus.approved
     ).all()
+
+    # Filtrar por materia
+    if subject:
+        teachers = [
+            t for t in teachers
+            if t.subjects and subject.lower() in [
+                s.lower() for s in t.subjects
+            ]
+        ]
+
+    # Filtrar por idioma
+    if language:
+        teachers = [
+            t for t in teachers
+            if t.languages and language.lower() in [
+                l.lower() for l in t.languages
+            ]
+        ]
+
     return teachers
 
 
@@ -88,40 +111,3 @@ def update_my_teacher_profile(
     db.commit()
     db.refresh(profile)
     return profile
-
-@router.get("/", response_model=List[TeacherPublicResponse])
-def list_approved_teachers(
-    subject: Optional[str] = Query(None, description="Filtrar por materia"),
-    language: Optional[str] = Query(None, description="Filtrar por idioma"),
-    db: Session = Depends(get_db)
-):
-    """
-    Lista profesores aprobados.
-    Filtrable por materia e idioma.
-    Endpoint público.
-    """
-    from app.models.teacher import TeacherStatus
-
-    teachers = db.query(TeacherProfile).filter(
-        TeacherProfile.status == TeacherStatus.approved
-    ).all()
-
-    # Filtrar por materia (JSONB contains)
-    if subject:
-        teachers = [
-            t for t in teachers
-            if t.subjects and subject.lower() in [
-                s.lower() for s in t.subjects
-            ]
-        ]
-
-    # Filtrar por idioma
-    if language:
-        teachers = [
-            t for t in teachers
-            if t.languages and language.lower() in [
-                l.lower() for l in t.languages
-            ]
-        ]
-
-    return teachers

@@ -39,3 +39,4 @@ class TeacherProfile(Base):
     availability = relationship("TeacherAvailability", back_populates="teacher")
     availability_exceptions = relationship("TeacherAvailabilityException", back_populates="teacher")
     enrollments = relationship("Enrollment", back_populates="teacher")
+    

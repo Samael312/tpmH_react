@@ -5,7 +5,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 
 from app.db.base import get_db
-from app.auth.dependencies import get_current_superadmin
+from app.auth.dependencies import get_currtent_user
 from app.models.user import User, UserRole
 from app.models.teacher import TeacherProfile, TeacherStatus
 from app.models.student import StudentProfile
@@ -31,7 +31,7 @@ router = APIRouter()
 
 @router.get("/stats", response_model=PlatformStatsResponse)
 def get_platform_stats(
-    current_user: User = Depends(get_current_superadmin),
+    current_user: User = Depends(get_currtent_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -141,7 +141,7 @@ def get_platform_stats(
 )
 def list_all_teachers(
     status_filter: Optional[str] = Query(None),
-    current_user: User = Depends(get_current_superadmin),
+    current_user: User = Depends(get_currtent_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -197,7 +197,7 @@ def list_all_teachers(
 def update_teacher_status(
     teacher_id: int,
     data: UpdateTeacherStatusRequest,
-    current_user: User = Depends(get_current_superadmin),
+    current_user: User = Depends(get_currtent_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -249,7 +249,7 @@ def update_teacher_status(
 def update_teacher_commission(
     teacher_id: int,
     data: UpdateCommissionRequest,
-    current_user: User = Depends(get_current_superadmin),
+    current_user: User = Depends(get_currtent_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -296,7 +296,7 @@ def list_all_users(
     search: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    current_user: User = Depends(get_current_superadmin),
+    current_user: User = Depends(get_currtent_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -341,7 +341,7 @@ def list_all_users(
 def update_user_status(
     user_id: int,
     data: UpdateUserStatusRequest,
-    current_user: User = Depends(get_current_superadmin),
+    current_user: User = Depends(get_currtent_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -385,7 +385,7 @@ def update_user_status(
 
 @router.get("/withdrawals/pending")
 def get_pending_withdrawals(
-    current_user: User = Depends(get_current_superadmin),
+    current_user: User = Depends(get_currtent_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -418,7 +418,7 @@ def get_pending_withdrawals(
 @router.patch("/withdrawals/{withdrawal_id}/process")
 def process_withdrawal(
     withdrawal_id: int,
-    current_user: User = Depends(get_current_superadmin),
+    current_user: User = Depends(get_currtent_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -497,7 +497,7 @@ def update_platform_config(
     platform_name: Optional[str] = None,
     platform_tagline: Optional[str] = None,
     is_single_tenant: Optional[bool] = None,
-    current_user: User = Depends(get_current_superadmin),
+    current_user: User = Depends(get_currtent_user),
     db: Session = Depends(get_db)
 ):
     """El superadmin configura el modo de la plataforma"""
