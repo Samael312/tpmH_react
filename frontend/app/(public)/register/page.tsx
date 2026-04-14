@@ -1,251 +1,274 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import {
+  User, Mail, Lock, Eye, EyeOff,
+  ArrowRight, Globe, Target, ChevronDown, Check,
+  BookOpen, GraduationCap
+} from "lucide-react";
 import api from "@/lib/api";
-import { useAuthStore } from "@/store/authStore";
+
+const TIMEZONES = [
+  "America/Caracas","America/Bogota","America/Lima",
+  "America/Mexico_City","America/New_York","America/Los_Angeles",
+  "America/Santiago","America/Buenos_Aires",
+  "Europe/Madrid","Europe/London","UTC",
+];
+
+const GOALS = [
+  "Mantener conversaciones básicas sobre temas cotidianos",
+  "Mejorar la pronunciación y la fluidez al hablar",
+  "Ampliar el vocabulario para situaciones reales",
+  "Prepararse para exámenes oficiales (A1, A2, B1…)",
+  "Ganar confianza al participar en conversaciones",
+  "Poder viajar al extranjero usando solo inglés",
+];
+
+function StepIndicator({ current, total }: { current: number; total: number }) {
+  return (
+    <div className="flex items-center gap-2 mb-8">
+      {Array.from({ length: total }, (_, i) => (
+        <div key={i} className="flex items-center gap-2">
+          {i > 0 && (
+            <div className={`h-px flex-1 w-8 transition-colors duration-300
+              ${i < current ? "bg-pink-400" : "bg-slate-200"}`} />
+          )}
+          <div className={`
+            w-7 h-7 rounded-full flex items-center justify-center
+            text-xs font-black transition-all duration-300
+            ${i + 1 < current
+              ? "bg-emerald-500 text-white shadow-md"
+              : i + 1 === current
+                ? "bg-gradient-to-br from-pink-500 to-rose-400 text-white shadow-md shadow-pink-200"
+                : "bg-slate-100 text-slate-400"
+            }
+          `}>
+            {i + 1 < current ? <Check className="w-3.5 h-3.5" /> : i + 1}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { login } = useAuthStore();
-  
-  const [form, setForm] = useState({
-    email: "",
-    username: "",
-    password: "",
-    name: "",
-    surname: "",
-    role: "student",
-  });
+  const [step, setStep] = useState(1);
 
-  const [error, setError] = useState("");
+  // Step 1
+  const [role, setRole] = useState("student"); // Nuevo estado para el rol
+  const [name, setName] = useState("");
+  const [surname, setSurname] = useState("");
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+
+  // Step 2
+  const [password, setPassword] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [timezone, setTimezone] = useState("");
+  const [goal, setGoal] = useState("");
+
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const step1Valid = name.trim() && surname.trim() &&
+                    username.trim() && email.includes("@") && role;
+
+  const step2Valid = password.length >= 8 &&
+                    password === confirmPw &&
+                    timezone && (role === "teacher" || goal); // Si es profe, goal puede ser opcional o adaptado
+
+  const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!step1Valid) return;
+    setError("");
+    setStep(2);
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!step2Valid) return;
     setLoading(true);
     setError("");
-
     try {
-      const response = await api.post("/auth/register", form);
-      const { access_token, role, name, username } = response.data;
-
-      login(access_token, { username, name, role });
-
-      if (role === "student") router.push("/dashboard");
-      else if (role === "teacher") router.push("/teacher/dashboard");
-
-    } catch (err: any) {
-      setError(err.response?.data?.detail || "Error en el registro. Verifica tus datos.");
+      await api.post("/auth/register", {
+        name,
+        surname,
+        username,
+        email,
+        password,
+        role,
+        timezone,
+        goal: role === "teacher" ? "Impartir clases" : goal,
+      });
+      router.push("/login?registered=1");
+    } catch (e: any) {
+      setError(e.response?.data?.detail || "Error creando la cuenta");
+      if (e.response?.status === 409) setStep(1);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="relative min-h-screen flex items-center justify-center bg-slate-50 py-12 px-4 overflow-hidden selection:bg-pink-500 selection:text-white font-sans">
-      
-      {/* ─── FONDOS DECORATIVOS (Blobs) ─── */}
-      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-pink-300/20 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-rose-300/20 rounded-full blur-[100px] pointer-events-none" />
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
+      <div className="absolute top-[-100px] left-[-80px] w-[450px] h-[450px] bg-rose-300/20 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-80px] right-[-80px] w-[400px] h-[400px] bg-pink-300/20 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* ─── CONTENEDOR PRINCIPAL ─── */}
-      <div className="relative z-10 w-full max-w-lg p-8 sm:p-10 shadow-2xl shadow-slate-200/50 rounded-[2.5rem] bg-white/90 backdrop-blur-xl border border-white animate-fade-in-up">
-        
-        {/* Encabezado */}
-        <div className="w-full flex flex-col items-center mb-8 text-center">
-          <div className="bg-gradient-to-br from-pink-100 to-rose-50 p-4 rounded-2xl mb-4 shadow-inner border border-pink-100/50">
-            <svg className="w-8 h-8 text-pink-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-            </svg>
+      <div className="relative w-full max-w-md animate-in fade-in slide-in-from-bottom-6 duration-500">
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-16 h-16 rounded-[1.25rem] overflow-hidden shadow-xl shadow-pink-200 mb-4">
+            <Image src="/assets/logo.png" alt="Logo" width={64} height={64} className="object-contain w-full h-full" />
           </div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight font-display">
-            Crea tu cuenta
-          </h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">
-            Únete a la comunidad de TuProfeMaria
-          </p>
+          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Crea tu cuenta</h1>
+          <p className="text-slate-500 text-sm mt-1">Únete a nuestra comunidad educativa</p>
         </div>
-        
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          
-          {/* Selector de Rol Moderno */}
-          <div className="space-y-2">
-            <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">
-              ¿Qué buscas en la plataforma?
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setForm({ ...form, role: "student" })}
-                className={`
-                  flex flex-col items-center justify-center py-4 rounded-2xl border-2 transition-all duration-300
-                  ${form.role === 'student' 
-                    ? 'bg-pink-50 border-pink-500 text-pink-600 shadow-sm shadow-pink-100' 
-                    : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}
-                `}
-              >
-                <span className="text-2xl mb-1">🎓</span>
-                <span className="text-sm font-bold">Estudiante</span>
-              </button>
+
+        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-8">
+          <StepIndicator current={step} total={2} />
+
+          {step === 1 && (
+            <form onSubmit={handleNext} className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
               
-              <button
-                type="button"
-                onClick={() => setForm({ ...form, role: "teacher" })}
-                className={`
-                  flex flex-col items-center justify-center py-4 rounded-2xl border-2 transition-all duration-300
-                  ${form.role === 'teacher' 
-                    ? 'bg-emerald-50 border-emerald-500 text-emerald-600 shadow-sm shadow-emerald-100' 
-                    : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}
-                `}
-              >
-                <span className="text-2xl mb-1">👩🏻‍🏫</span>
-                <span className="text-sm font-bold">Profesor</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="w-full h-px bg-slate-100 my-1" />
-
-          {/* Grid: Nombre y Apellido */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="relative group">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <svg className="w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
+              {/* Selector de Rol */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Soy...</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setRole("student")}
+                    className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all duration-300 ${
+                      role === "student" 
+                      ? "border-pink-500 bg-pink-50 text-pink-600 shadow-sm shadow-pink-100" 
+                      : "border-slate-100 bg-slate-50 text-slate-400 hover:border-pink-200"
+                    }`}
+                  >
+                    <BookOpen className="w-5 h-5" />
+                    <span className="text-xs font-bold">Estudiante</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRole("teacher")}
+                    className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all duration-300 ${
+                      role === "teacher" 
+                      ? "border-pink-500 bg-pink-50 text-pink-600 shadow-sm shadow-pink-100" 
+                      : "border-slate-100 bg-slate-50 text-slate-400 hover:border-pink-200"
+                    }`}
+                  >
+                    <GraduationCap className="w-5 h-5" />
+                    <span className="text-xs font-bold">Profesor</span>
+                  </button>
+                </div>
               </div>
-              <input
-                type="text"
-                placeholder="Nombre"
-                required
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full pl-10 pr-4 py-3 bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
-              />
-            </div>
-            
-            <div className="relative group">
-              <input
-                type="text"
-                placeholder="Apellido"
-                required
-                value={form.surname}
-                onChange={(e) => setForm({ ...form, surname: e.target.value })}
-                className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
-              />
-            </div>
-          </div>
 
-          {/* Username */}
-          <div className="relative group">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <span className="text-slate-400 font-bold group-focus-within:text-pink-500 transition-colors">@</span>
-            </div>
-            <input
-              type="text"
-              placeholder="Nombre de usuario"
-              required
-              value={form.username}
-              onChange={(e) => setForm({ ...form, username: e.target.value.toLowerCase().replace(/\s/g, '') })}
-              className="w-full pl-10 pr-4 py-3 bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
-            />
-          </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="group">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Nombre</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors" />
+                    <input value={name} onChange={e => setName(e.target.value)} placeholder="Nombre" className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-9 pr-3 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all" />
+                  </div>
+                </div>
+                <div className="group">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Apellido</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors" />
+                    <input value={surname} onChange={e => setSurname(e.target.value)} placeholder="Apellido" className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-9 pr-3 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all" />
+                  </div>
+                </div>
+              </div>
 
-          {/* Email */}
-          <div className="relative group">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg className="w-5 h-5 text-slate-400 group-focus-within:text-pink-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <input
-              type="email"
-              placeholder="Correo electrónico"
-              required
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-full pl-11 pr-4 py-3 bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
-            />
-          </div>
+              <div className="group">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Nombre de usuario</label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm group-focus-within:text-pink-500">@</span>
+                  <input value={username} onChange={e => setUsername(e.target.value.toLowerCase().replace(/\s/g,""))} placeholder="usuario" className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-9 pr-4 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all" />
+                </div>
+              </div>
 
-          {/* Contraseña */}
-          <div className="relative group">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg className="w-5 h-5 text-slate-400 group-focus-within:text-pink-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            </div>
-            <input
-              type={showPassword ? "text" : "password"}
-              placeholder="Contraseña segura"
-              required
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              className="w-full pl-11 pr-12 py-3 bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
-            />
-            {/* Ojo para contraseña */}
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-pink-600 transition-colors focus:outline-none"
-            >
-              {showPassword ? (
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-              )}
-            </button>
-          </div>
+              <div className="group">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-pink-500 transition-colors" />
+                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-11 pr-4 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all" />
+                </div>
+              </div>
 
-          {error && (
-            <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              {error}
-            </div>
+              <button type="submit" disabled={!step1Valid} className="w-full py-3.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 mt-2">
+                Siguiente <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className={`mt-4 w-full py-3.5 text-sm font-bold text-white rounded-xl transition-all duration-300 flex items-center justify-center gap-2
-              ${loading 
-                ? 'bg-pink-300 cursor-not-allowed' 
-                : 'bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 shadow-lg shadow-pink-200 hover:shadow-pink-300 active:scale-[0.98]'}
-            `}
-          >
-            {loading ? (
-              <>
-                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                <span>Creando cuenta...</span>
-              </>
-            ) : (
-              'Crear mi cuenta'
-            )}
-          </button>
-        </form>
+          {step === 2 && (
+            <form onSubmit={handleRegister} className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+              {/* Sección de Contraseñas (Igual que antes) */}
+              <div className="group">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Contraseña</label>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 8 caracteres" className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-11 pr-11 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 transition-all" />
+                  <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400">{showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
+                </div>
+              </div>
 
-        {/* Footer (Login) */}
-        <p className="text-center text-sm font-medium text-slate-500 mt-8">
-          ¿Ya tienes una cuenta?{" "}
-          <Link href="/login" className="text-pink-500 font-bold hover:text-pink-600 hover:underline underline-offset-4 transition-all">
-            Inicia sesión aquí
-          </Link>
+              <div className="group">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Confirmar</label>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input type={showPw ? "text" : "password"} value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repetir contraseña" className={`w-full bg-slate-50 border-2 rounded-xl text-sm font-bold text-slate-800 pl-11 py-3.5 focus:outline-none transition-all ${confirmPw && confirmPw !== password ? "border-red-300" : "border-transparent focus:border-pink-500"}`} />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Zona horaria</label>
+                  <div className="relative">
+                    <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <select value={timezone} onChange={e => setTimezone(e.target.value)} className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-11 pr-10 py-3.5 focus:border-pink-500 transition-all cursor-pointer">
+                      <option value="">Seleccionar...</option>
+                      {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  </div>
+                </div>
+
+                {/* Solo mostrar objetivo si es estudiante */}
+                {role === "student" && (
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">¿Cuál es tu objetivo?</label>
+                    <div className="relative">
+                      <Target className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <select value={goal} onChange={e => setGoal(e.target.value)} className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-11 pr-10 py-3.5 focus:border-pink-500 transition-all cursor-pointer">
+                        <option value="">Seleccionar...</option>
+                        {GOALS.map(g => <option key={g} value={g}>{g}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {error && <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2"><span>✕</span>{error}</div>}
+
+              <div className="flex gap-3 mt-2">
+                <button type="button" onClick={() => setStep(1)} className="flex-1 py-3.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">Volver</button>
+                <button type="submit" disabled={!step2Valid || loading} className="flex-2 py-3.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 px-6">
+                  {loading ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <>Crear cuenta<ArrowRight className="w-4 h-4" /></>}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+
+        <p className="text-center text-sm text-slate-500 mt-6">
+          ¿Ya tienes cuenta? <Link href="/login" className="font-black text-pink-600 hover:text-pink-700 transition-colors">Inicia sesión</Link>
         </p>
-
       </div>
-    </main>
+    </div>
   );
 }

@@ -95,9 +95,16 @@ export function useStudentClasses(includeHistory = false) {
       const res = await api.get(
         `/classes/my-classes?include_history=${includeHistory}`
       );
-      setClasses(res.data);
-    } catch { }
-    finally { setLoading(false); }
+      
+      // Aseguramos que siempre se guarde un arreglo
+      setClasses(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+      
+    } catch { 
+      // Si la petición falla, aseguramos que el estado vuelva a ser un arreglo vacío
+      setClasses([]);
+    } finally { 
+      setLoading(false); 
+    }
   }, [includeHistory]);
 
   useEffect(() => { fetch(); }, [fetch]);
