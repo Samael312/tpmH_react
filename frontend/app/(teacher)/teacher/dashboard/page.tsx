@@ -6,6 +6,7 @@ import ClassCard from '@/components/teacher/ClassCard'
 import StatCard from '@/components/ui/StatCard'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
+import ChipiWidget from '@/components/chipi/ChipiWidget'
 
 const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
@@ -204,6 +205,7 @@ export default function TeacherDashboard() {
           </div>
         )}
       </div>
+      <ChipiWidget screenName="teacher_home" />   
     </div>
   )
 }

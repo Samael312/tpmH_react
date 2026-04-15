@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useWeeklyAvailability, useTeacherProfile } from '@/hooks/useTeacherData'
 import { Card, Button, Badge, StatCard } from '@/components/ui' // Importación limpia desde el index
 import api from '@/lib/api'
+import ChipiWidget from '@/components/chipi/ChipiWidget'
 
 const DAYS = [
   { value: 0, label: 'Lunes' },
@@ -230,6 +231,7 @@ export default function AvailabilityPage() {
           </Card>
         </section>
       </div>
+      <ChipiWidget screenName="availability" /> 
     </div>
   )
 }

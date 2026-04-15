@@ -10,6 +10,7 @@ import {
   BookOpen, GraduationCap
 } from "lucide-react";
 import api from "@/lib/api";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 const TIMEZONES = [
   "America/Caracas","America/Bogota","America/Lima",
@@ -29,11 +30,11 @@ const GOALS = [
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
   return (
-    <div className="flex items-center gap-2 mb-8">
+    <div className="flex items-center justify-center gap-2 mb-6">
       {Array.from({ length: total }, (_, i) => (
         <div key={i} className="flex items-center gap-2">
           {i > 0 && (
-            <div className={`h-px flex-1 w-8 transition-colors duration-300
+            <div className={`h-px w-6 transition-colors duration-300
               ${i < current ? "bg-pink-400" : "bg-slate-200"}`} />
           )}
           <div className={`
@@ -59,7 +60,7 @@ export default function RegisterPage() {
   const [step, setStep] = useState(1);
 
   // Step 1
-  const [role, setRole] = useState("student"); // Nuevo estado para el rol
+  const [role, setRole] = useState("student");
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
   const [username, setUsername] = useState("");
@@ -75,12 +76,12 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const step1Valid = name.trim() && surname.trim() &&
+  const step1Valid = name.trim() && surname.trim() && 
                     username.trim() && email.includes("@") && role;
 
   const step2Valid = password.length >= 8 &&
                     password === confirmPw &&
-                    timezone && (role === "teacher" || goal); // Si es profe, goal puede ser opcional o adaptado
+                    timezone && (role === "teacher" || goal !== "");
 
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,160 +116,203 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
-      <div className="absolute top-[-100px] left-[-80px] w-[450px] h-[450px] bg-rose-300/20 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-80px] right-[-80px] w-[400px] h-[400px] bg-pink-300/20 rounded-full blur-[100px] pointer-events-none" />
-
-      <div className="relative w-full max-w-md animate-in fade-in slide-in-from-bottom-6 duration-500">
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 rounded-[1.25rem] overflow-hidden shadow-xl shadow-pink-200 mb-4">
-            <Image src="/assets/logo.png" alt="Logo" width={64} height={64} className="object-contain w-full h-full" />
+    <div className="min-h-screen bg-slate-50 flex flex-col relative overflow-x-hidden font-sans">
+      {/* HEADER */}
+      <header className="fixed top-0 w-full z-50 h-16 px-6 bg-white/70 backdrop-blur-md border-b border-white/50 flex items-center shadow-sm">
+        <Link href="/" className="flex items-center gap-2 group">
+          <div className="p-1.5 bg-pink-50 rounded-lg group-hover:bg-pink-100 transition-colors">
+            <GraduationCap className="w-5 h-5 text-pink-600" />
           </div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Crea tu cuenta</h1>
-          <p className="text-slate-500 text-sm mt-1">Únete a nuestra comunidad educativa</p>
-        </div>
+          <span className="text-lg font-black tracking-tight text-slate-800 group-hover:text-pink-600 transition-colors">
+            TuProfeMaria
+          </span>
+        </Link>
+      </header>
 
-        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-8">
-          <StepIndicator current={step} total={2} />
+      {/* BACKGROUND DECORATION */}
+      <div className="absolute top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/20 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-100px] left-[-100px] w-[400px] h-[400px] bg-rose-300/15 rounded-full blur-[100px] pointer-events-none" />
 
-          {step === 1 && (
-            <form onSubmit={handleNext} className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-              
-              {/* Selector de Rol */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Soy...</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setRole("student")}
-                    className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all duration-300 ${
-                      role === "student" 
-                      ? "border-pink-500 bg-pink-50 text-pink-600 shadow-sm shadow-pink-100" 
-                      : "border-slate-100 bg-slate-50 text-slate-400 hover:border-pink-200"
-                    }`}
-                  >
-                    <BookOpen className="w-5 h-5" />
-                    <span className="text-xs font-bold">Estudiante</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole("teacher")}
-                    className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all duration-300 ${
-                      role === "teacher" 
-                      ? "border-pink-500 bg-pink-50 text-pink-600 shadow-sm shadow-pink-100" 
-                      : "border-slate-100 bg-slate-50 text-slate-400 hover:border-pink-200"
-                    }`}
-                  >
-                    <GraduationCap className="w-5 h-5" />
-                    <span className="text-xs font-bold">Profesor</span>
-                  </button>
-                </div>
-              </div>
+      {/* MAIN CONTENT */}
+      {/* pt-20 (padding-top) instead of mt-16 to avoid double scrollbars */}
+      <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-6 pt-20 pb-8 z-10 w-full">
+        <div className="w-full max-w-[26rem] animate-in fade-in slide-in-from-bottom-6 duration-500">
+          
+          <div className="flex flex-col items-center mb-6">
+            <div className="w-14 h-14 rounded-2xl overflow-x-hidden shadow-xl shadow-pink-200/50 mb-3 bg-white p-1">
+              <Image 
+                src="/assets/logo.png" 
+                alt="Logo" 
+                width={56} 
+                height={56} 
+                className="object-contain w-full h-full"
+                priority
+              />
+            </div>
+            <h1 className="text-xl font-black text-slate-800 tracking-tight text-center">Crea tu cuenta</h1>
+            <p className="text-slate-500 text-xs mt-1">Únete a nuestra comunidad educativa</p>
+          </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="group">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Nombre</label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors" />
-                    <input value={name} onChange={e => setName(e.target.value)} placeholder="Nombre" className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-9 pr-3 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all" />
-                  </div>
-                </div>
-                <div className="group">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Apellido</label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors" />
-                    <input value={surname} onChange={e => setSurname(e.target.value)} placeholder="Apellido" className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-9 pr-3 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all" />
-                  </div>
-                </div>
-              </div>
+          <div className="bg-white/90 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/60 p-6">
+            <StepIndicator current={step} total={2} />
 
-              <div className="group">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Nombre de usuario</label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm group-focus-within:text-pink-500">@</span>
-                  <input value={username} onChange={e => setUsername(e.target.value.toLowerCase().replace(/\s/g,""))} placeholder="usuario" className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-9 pr-4 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all" />
-                </div>
-              </div>
-
-              <div className="group">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Email</label>
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-pink-500 transition-colors" />
-                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-11 pr-4 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all" />
-                </div>
-              </div>
-
-              <button type="submit" disabled={!step1Valid} className="w-full py-3.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 mt-2">
-                Siguiente <ArrowRight className="w-4 h-4" />
-              </button>
-            </form>
-          )}
-
-          {step === 2 && (
-            <form onSubmit={handleRegister} className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-              {/* Sección de Contraseñas (Igual que antes) */}
-              <div className="group">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Contraseña</label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 8 caracteres" className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-11 pr-11 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 transition-all" />
-                  <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400">{showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
-                </div>
-              </div>
-
-              <div className="group">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Confirmar</label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input type={showPw ? "text" : "password"} value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repetir contraseña" className={`w-full bg-slate-50 border-2 rounded-xl text-sm font-bold text-slate-800 pl-11 py-3.5 focus:outline-none transition-all ${confirmPw && confirmPw !== password ? "border-red-300" : "border-transparent focus:border-pink-500"}`} />
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Zona horaria</label>
-                  <div className="relative">
-                    <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <select value={timezone} onChange={e => setTimezone(e.target.value)} className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-11 pr-10 py-3.5 focus:border-pink-500 transition-all cursor-pointer">
-                      <option value="">Seleccionar...</option>
-                      {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            {step === 1 ? (
+              <form onSubmit={handleNext} className="space-y-3 animate-in fade-in slide-in-from-right-4 duration-300">
+                {/* ROLE SELECTOR */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">Soy...</label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {[
+                      { id: "student", label: "Estudiante", icon: BookOpen },
+                      { id: "teacher", label: "Profesor", icon: GraduationCap }
+                    ].map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setRole(r.id)}
+                        className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all duration-300 ${
+                          role === r.id 
+                          ? "border-pink-500 bg-pink-50 text-pink-600 shadow-sm" 
+                          : "border-slate-100 bg-slate-50 text-slate-400 hover:border-pink-200"
+                        }`}
+                      >
+                        <r.icon className="w-5 h-5" />
+                        <span className="text-[11px] font-bold">{r.label}</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {/* Solo mostrar objetivo si es estudiante */}
-                {role === "student" && (
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">¿Cuál es tu objetivo?</label>
-                    <div className="relative">
-                      <Target className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                      <select value={goal} onChange={e => setGoal(e.target.value)} className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-11 pr-10 py-3.5 focus:border-pink-500 transition-all cursor-pointer">
-                        <option value="">Seleccionar...</option>
-                        {GOALS.map(g => <option key={g} value={g}>{g}</option>)}
-                      </select>
-                      <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">Nombre</label>
+                    <div className="relative group">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors" />
+                      <input value={name} onChange={e => setName(e.target.value)} placeholder="Ej. Maria" className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-9 pr-3 py-2.5 focus:outline-none focus:bg-white focus:border-pink-500 transition-all" />
                     </div>
                   </div>
-                )}
-              </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">Apellido</label>
+                    <div className="relative group">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors" />
+                      <input value={surname} onChange={e => setSurname(e.target.value)} placeholder="Ej. Farias" className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-9 pr-3 py-2.5 focus:outline-none focus:bg-white focus:border-pink-500 transition-all" />
+                    </div>
+                  </div>
+                </div>
 
-              {error && <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2"><span>✕</span>{error}</div>}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">Usuario</label>
+                  <div className="relative group">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm group-focus-within:text-pink-500">@</span>
+                    <input value={username} onChange={e => setUsername(e.target.value.toLowerCase().replace(/\s/g,""))} placeholder="tu_usuario" className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-9 pr-3 py-2.5 focus:outline-none focus:bg-white focus:border-pink-500 transition-all" />
+                  </div>
+                </div>
 
-              <div className="flex gap-3 mt-2">
-                <button type="button" onClick={() => setStep(1)} className="flex-1 py-3.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">Volver</button>
-                <button type="submit" disabled={!step2Valid || loading} className="flex-2 py-3.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 px-6">
-                  {loading ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <>Crear cuenta<ArrowRight className="w-4 h-4" /></>}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">Email</label>
+                  <div className="relative group">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors" />
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="correo@ejemplo.com" className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-9 pr-3 py-2.5 focus:outline-none focus:bg-white focus:border-pink-500 transition-all" />
+                  </div>
+                </div>
+
+                <button type="submit" disabled={!step1Valid} className="w-full py-3 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 shadow-md shadow-pink-500 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 mt-2">
+                  Siguiente <ArrowRight className="w-4 h-4" />
                 </button>
-              </div>
-            </form>
-          )}
-        </div>
+              </form>
+            ) : (
+              <form onSubmit={handleRegister} className="space-y-3 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">Contraseña</label>
+                  <div className="relative group">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 8 caracteres" className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-9 pr-10 py-2.5 focus:outline-none focus:bg-white focus:border-pink-500 transition-all" />
+                    <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500 transition-colors">
+                      {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
 
-        <p className="text-center text-sm text-slate-500 mt-6">
-          ¿Ya tienes cuenta? <Link href="/login" className="font-black text-pink-600 hover:text-pink-700 transition-colors">Inicia sesión</Link>
-        </p>
-      </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">Confirmar Contraseña</label>
+                  <div className="relative group">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input type={showPw ? "text" : "password"} value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repetir contraseña" className={`w-full bg-slate-50 border-2 rounded-xl text-sm font-bold text-slate-800 pl-9 pr-3 py-2.5 focus:outline-none transition-all ${confirmPw && confirmPw !== password ? "border-red-300" : "border-transparent focus:border-pink-500"}`} />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">Zona horaria</label>
+                    <div className="relative group">
+                      <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <select value={timezone} onChange={e => setTimezone(e.target.value)} className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-9 pr-8 py-2.5 focus:border-pink-500 transition-all cursor-pointer">
+                        <option value="">Seleccionar país/zona...</option>
+                        <option value="America/Caracas">America/Caracas</option>
+                        <option value="America/Bogota">America/Bogota</option>
+                        <option value="America/Lima">America/Lima</option>
+                        <option value="America/Mexico_City">America/Mexico_City</option>
+                        <option value="America/New_York">America/New_York</option>
+                        <option value="America/Los_Angeles">America/Los_Angeles</option>
+                        <option value="America/Santiago">America/Santiago</option>
+                        <option value="America/Buenos_Aires">America/Buenos_Aires</option>
+                        <option value="Europe/Madrid">Europe/Madrid</option>
+                        <option value="Europe/London">Europe/London</option>
+                        <option value="UTC">UTC</option>
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  {role === "student" && (
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">¿Cuál es tu objetivo?</label>
+                      <div className="relative group">
+                        <Target className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <select value={goal} onChange={e => setGoal(e.target.value)} className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-9 pr-8 py-2.5 focus:border-pink-500 transition-all cursor-pointer">
+                          <option value="">Seleccionar objetivo...</option>
+                          <option value="Mantener conversaciones básicas">Conversaciones básicas</option>
+                          <option value="Mejorar pronunciación">Mejorar pronunciación</option>
+                          <option value="Ampliar vocabulario">Ampliar vocabulario</option>
+                          <option value="Prepararse para exámenes">Exámenes oficiales</option>
+                          <option value="Ganar confianza">Ganar confianza</option>
+                          <option value="Viajar al extranjero">Viajar al extranjero</option>
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {error && (
+                  <div className="bg-rose-50 border border-rose-100 text-rose-600 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 animate-shake mt-2">
+                    <span>✕</span>{error}
+                  </div>
+                )}
+
+                <div className="flex gap-2.5 pt-2">
+                  <button type="button" onClick={() => setStep(1)} className="flex-1 py-3 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+                    Volver
+                  </button>
+                  <button type="submit" disabled={!step2Valid || loading} className="flex-[2] py-3 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 shadow-md shadow-pink-500 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                    {loading ? (
+                      <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>Crear cuenta<ArrowRight className="w-4 h-4" /></>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+
+          <p className="text-center text-xs text-slate-500 mt-6">
+            ¿Ya tienes cuenta? <Link href="/login" className="font-black text-pink-600 hover:text-pink-700 transition-colors">Inicia sesión</Link>
+          </p>
+        </div>
+      </main>
+
+      <ChipiWidget screenName="signup" />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { usePendingPayments, useWithdrawals } from '@/hooks/useAdminData'
 import { Card, Badge, Button } from '@/components/ui'
 import api from '@/lib/api'
+import ChipiWidget from '@/components/chipi/ChipiWidget'
 
 const PAYMENT_METHOD_BADGE: Record<string, 'gold' | 'info'> = {
   binance: 'gold',
@@ -345,12 +346,16 @@ export default function PaymentsPage() {
                     </Button>
                   </div>
                 </div>
-
+                
               </div>
             </Card>
+            
           ))}
         </div>
+        
       )}
+      <ChipiWidget screenName="admin_payments" /> 
     </div>
+    
   )
 }

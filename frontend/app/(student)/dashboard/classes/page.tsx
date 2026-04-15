@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useStudentClasses, useAvailableSlots } from "@/hooks/useStudentData";
 import api from "@/lib/api";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 const STATUS_CONFIG: Record<string, {
   label: string;
@@ -677,6 +678,7 @@ export default function MyClassesPage() {
             ))
           )}
         </div>
+        <ChipiWidget screenName="my_classes" />
       </div>
 
       {/* Modals */}

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useStudentMaterials } from "@/hooks/useStudentData";
 import api from "@/lib/api";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 const LEVEL_COLORS: Record<string, string> = {
   A1: "bg-emerald-100 text-emerald-700",
@@ -451,6 +452,7 @@ export default function StudentMaterialsPage() {
           </div>
         )}
       </div>
+      <ChipiWidget screenName="materials" />
 
       {/* Modal vocabulario */}
       {vocabTarget && (

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Mail, ArrowLeft, Check } from "lucide-react";
 import api from "@/lib/api";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail]   = useState("");
@@ -140,6 +141,7 @@ export default function ForgotPasswordPage() {
           Volver al inicio de sesión
         </Link>
       </div>
+      <ChipiWidget screenName="forgot-password" />
     </div>
   );
 }

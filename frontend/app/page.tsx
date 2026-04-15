@@ -9,6 +9,7 @@ import {
   BookOpen, Clock, Users
 } from "lucide-react";
 import { useFeaturedTeacher } from "@/hooks/useStudentData";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 const PACKAGES = [
   {
@@ -286,7 +287,7 @@ export default function LandingPage() {
                            shadow-xl shadow-pink-200 hover:shadow-pink-300
                            active:scale-[0.97] transition-all duration-200
                            text-center">
-                Empezar ahora — Es gratis
+                Empezar ahora
               </Link>
               <button
                 onClick={openWhatsApp}
@@ -305,9 +306,9 @@ export default function LandingPage() {
             <div className="flex items-center gap-6 mt-8
                              justify-center lg:justify-start">
               {[
-                { icon: <Users className="w-4 h-4" />, label: "Estudiantes activos",  value: "50+" },
+                { icon: <Users className="w-4 h-4" />, label: "Estudiantes Satisfechos",  value: "100+" },
                 { icon: <Globe className="w-4 h-4" />, label: "Países",               value: "10+" },
-                { icon: <Clock className="w-4 h-4" />, label: "Horas de clase",        value: "500+" },
+                { icon: <Clock className="w-4 h-4" />, label: "Horas de clase",        value: "800+" },
               ].map(stat => (
                 <div key={stat.label} className="text-center">
                   <p className="text-xl font-black text-slate-800">
@@ -793,6 +794,7 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+      <ChipiWidget screenName="main" /> 
     </div>
   );
 }

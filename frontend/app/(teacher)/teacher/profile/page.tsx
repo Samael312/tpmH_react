@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import { useTeacherProfile, TeacherProfile } from "@/hooks/useTeacherData";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 // ─── Inline icon replacements (not in this lucide-react version) ─────────────
 const InstagramIcon = () => (
@@ -612,6 +613,7 @@ export default function TeacherProfilePage() {
         </div>
 
       </div>
+      <ChipiWidget screenName="teacher_profile" /> {/* Widget de perfil */}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import api from '@/lib/api'
+import ChipiWidget from '@/components/chipi/ChipiWidget'
 
 export default function AdminDashboard() {
   const { stats, loading: statsLoading } = useAdminStats()
@@ -343,12 +344,15 @@ export default function AdminDashboard() {
                       </div>
                     )}
                   </div>
+                  
                 </div>
               </Card>
             ))}
           </div>
         )}
+        <ChipiWidget screenName="admin_home" /> 
       </div>
+      
     </div>
   )
 }

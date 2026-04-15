@@ -6,6 +6,7 @@ import { Calendar, Clock, CreditCard,
          Upload, Check, X, ChevronLeft,
          ChevronRight, AlertCircle, Video } from "lucide-react";
 import api from "@/lib/api";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 const DURATIONS = [
   { value: 30,  label: "30 min" },
@@ -668,6 +669,7 @@ export default function SchedulePage() {
           )}
         </div>
       </div>
+      <ChipiWidget screenName="schedule" />
     </div>
   );
 }

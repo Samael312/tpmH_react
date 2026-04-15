@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useWallet } from '@/hooks/useTeacherData'
 import { Card, Button, Badge, StatCard } from '@/components/ui'
 import api from '@/lib/api'
+import ChipiWidget from '@/components/chipi/ChipiWidget'
 
 const DESTINATION_METHODS = [
   { value: 'paypal',  label: 'PayPal', icon: '🅿️' },
@@ -212,6 +213,7 @@ export default function WalletPage() {
           </div>
         </Card>
       </div>
+      <ChipiWidget screenName="wallet" /> {/* Widget de billetera */}
     </div>
   )
 }

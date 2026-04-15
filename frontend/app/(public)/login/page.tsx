@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { User, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import api from "@/lib/api";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -170,6 +171,7 @@ export default function LoginPage() {
           </p>
         </div>
       </main>
+      <ChipiWidget screenName="login" />
     </div>
   );
 }

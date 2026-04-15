@@ -7,6 +7,7 @@ import {
   Volume2, ChevronDown
 } from "lucide-react";
 import api from "@/lib/api";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 interface Material {
   id: number;
@@ -855,7 +856,7 @@ export default function MaterialsPage() {
           )}
         </div>
       </div>
-
+      <ChipiWidget screenName="materials" /> 
       {/* Modals */}
       {assignTarget && (
         <AssignModal

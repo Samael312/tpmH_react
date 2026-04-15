@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useTeachers } from '@/hooks/useAdminData'
 import { Card, Badge, Button } from '@/components/ui'
 import api from '@/lib/api'
+import ChipiWidget from '@/components/chipi/ChipiWidget'
 
 const STATUS_TABS = [
   { key: undefined,   label: 'Todos' },
@@ -247,13 +248,14 @@ export default function TeachersPage() {
                       </Button>
                     )}
                   </div>
-
+                    <ChipiWidget screenName="admin_teachers" /> 
                 </div>
               </Card>
             ))}
           </div>
         )}
       </div>
+      
     </div>
   )
 }

@@ -8,6 +8,7 @@ import {
   Check
 } from "lucide-react";
 import api from "@/lib/api";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 interface Homework {
   id: number;
@@ -713,7 +714,7 @@ export default function HomeworkPage() {
           </div>
         )}
       </div>
-
+      <ChipiWidget screenName="homework" />   
       {gradeTarget && (
         <GradeModal
           submission={gradeTarget}

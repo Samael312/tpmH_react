@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useStudents } from '@/hooks/useAdminData'
 import { Card, Badge, Button } from '@/components/ui'
 import api from '@/lib/api'
+import ChipiWidget from '@/components/chipi/ChipiWidget'
 
 export default function StudentsPage() {
   const [search, setSearch] = useState('')
@@ -167,6 +168,7 @@ export default function StudentsPage() {
           </div>
         )}
       </Card>
+      <ChipiWidget screenName="admin_students" /> 
     </div>
   )
 }

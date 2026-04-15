@@ -6,6 +6,7 @@ import { useStudentClasses, useEnrollments } from "@/hooks/useStudentData";
 import { Calendar, BookOpen, ClipboardList,
          Clock, CheckCircle, ChevronRight,
          Video, AlertCircle } from "lucide-react";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 const STATUS_CONFIG: Record<string, {
   label: string;
@@ -310,6 +311,7 @@ export default function StudentDashboard() {
         </div>
 
       </div>
+      <ChipiWidget screenName="student_home"/>
     </div>
   );
 }

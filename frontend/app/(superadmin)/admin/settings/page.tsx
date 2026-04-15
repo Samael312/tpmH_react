@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, Button } from '@/components/ui'
 import api from '@/lib/api'
+import ChipiWidget from '@/components/chipi/ChipiWidget'
 
 interface PaymentConfig {
   paypal_enabled: boolean
@@ -324,6 +325,7 @@ export default function SettingsPage() {
           )}
         </Card>
       </div>
+      <ChipiWidget screenName="admin_settings" /> 
     </div>
   )
 }
