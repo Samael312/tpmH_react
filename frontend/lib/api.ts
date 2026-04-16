@@ -1,33 +1,52 @@
 import axios from "axios";
-import Cookies from "js-cookie";
+import { useAuthStore } from "@/store/authStore";
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1",
-  headers: {
-    "Content-Type": "application/json",
-  },
+  baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1",
+  headers: { "Content-Type": "application/json" },
 });
 
-// Interceptor de REQUEST
-// Antes de cada petición añade el token automáticamente
+// ── Request: adjuntar token ──
 api.interceptors.request.use((config) => {
-  const token = Cookies.get("access_token");
+  const token = useAuthStore.getState().token;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-// Interceptor de RESPONSE
-// Si el servidor devuelve 401 (no autorizado) limpia la sesión
+// ── Response: refrescar user en store si el backend devuelve datos actualizados
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      Cookies.remove("access_token");
+  (res) => {
+    // Si el endpoint devuelve un objeto con 'id' y 'username',
+    // asumimos que es el user actual y actualizamos el store
+    const data = res.data;
+    if (
+      data &&
+      typeof data === "object" &&
+      "id" in data &&
+      "username" in data &&
+      "role" in data
+    ) {
+      const store = useAuthStore.getState();
+      const current = store.user;
+      // Solo actualizar si es el mismo usuario
+      if (current && "id" in current && current.id === data.id) {
+        store.user = {
+          ...current,
+          ...data,
+        };
+      }
+    }
+    return res;
+  },
+  (err) => {
+    // 401 → logout
+    if (err.response?.status === 401) {
+      useAuthStore.getState().logout();
       window.location.href = "/login";
     }
-    return Promise.reject(error);
+    return Promise.reject(err);
   }
 );
 

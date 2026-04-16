@@ -2,6 +2,34 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime
 
+class UserBase(BaseModel):
+    username: str
+    name: str
+    surname: str
+    email: EmailStr
+    role: str
+
+class UserResponse(UserBase):
+    id: int
+    timezone: Optional[str]            = "UTC"
+    goal: Optional[str]                = None
+    preferred_payment_methods: Optional[List[str]] = []
+    onboarding_completed: bool         = False
+    avatar_url: Optional[str]          = None
+
+    class Config:
+        from_attributes = True
+
+class UserUpdate(BaseModel):
+    name:    Optional[str]      = None
+    surname: Optional[str]      = None
+    email:   Optional[EmailStr] = None
+    onboarding_completed: Optional[bool] = None
+
+class StudentProfileUpdate(BaseModel):
+    timezone:                   Optional[str]       = None
+    goal:                       Optional[str]       = None
+    preferred_payment_methods:  Optional[List[str]] = None
 
 class UserResponse(BaseModel):
     id: int

@@ -10,6 +10,7 @@ import {
 import api from "@/lib/api";
 import { useTeacherProfile, TeacherProfile } from "@/hooks/useTeacherData";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import CalendarSync from "./CalendarSync";
 
 // ─── Inline icon replacements (not in this lucide-react version) ─────────────
 const InstagramIcon = () => (
@@ -331,6 +332,9 @@ export default function TeacherProfilePage() {
             <p className="text-slate-500 mt-1">
               Así te ven los estudiantes en el marketplace
             </p>
+            <h2 className="text-sm font-bold text-slate-400 mt-0.5">
+              <CalendarSync /> Recuerda mantener tu calendario sincronizado para mostrar tu disponibilidad real a los estudiantes
+            </h2>
           </div>
 
           {profile && (

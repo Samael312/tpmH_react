@@ -91,3 +91,9 @@ class UserAdminResponse(BaseModel):
 class UpdateUserStatusRequest(BaseModel):
     is_active: bool
     reason: Optional[str] = None
+
+class AdminUserUpdate(BaseModel):
+    role:            Optional[str]   = None
+    status:          Optional[str]   = None
+    package_name:    Optional[str]   = None
+    price_per_class: Optional[float] = None
