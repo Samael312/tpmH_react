@@ -18,14 +18,19 @@ app = FastAPI(
     description="API de TPMH - Plataforma de clases particulares",
     version="1.0.0",
     # En producción desactivamos la documentación pública
-    docs_url="/docs" if settings.ENVIRONMENT == "development" else None,
+    docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
     redoc_url="/redoc" if settings.ENVIRONMENT == "development" else None,
 )
+
+origins = [
+    settings.FRONTEND_URL,
+    "http://localhost:3000",
+]
 
 # CORS — permite que el frontend en localhost:3000 hable con el backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

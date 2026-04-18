@@ -1,12 +1,31 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  // En Next.js 16, muévelo fuera de experimental
-  devIndicators: {
-    appIsrStatus: false,
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  output: "standalone",
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+      },
+      {
+        protocol: "https",
+        hostname: "ui-avatars.com",
+      },
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com", // Google avatars
+      },
+    ],
   },
-  // Si sigue fallando como "unrecognized", bórralo por ahora. 
-  // localhost siempre está permitido por defecto.
-  allowedDevOrigins: ['172.29.160.1'], 
+
+  // Variables de entorno públicas disponibles en el cliente
+  env: {
+    NEXT_PUBLIC_API_URL:
+      process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1",
+    NEXT_PUBLIC_FEATURED_TEACHER_USERNAME:
+      process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "Mar12",
+  },
 };
 
 export default nextConfig;

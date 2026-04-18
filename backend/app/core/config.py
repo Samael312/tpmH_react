@@ -1,14 +1,18 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 class Settings(BaseSettings):
+
     # Base de datos
     DATABASE_URL: str
 
     # JWT
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 10080)
 
     # Google OAuth
     GOOGLE_CLIENT_ID: Optional[str] = None

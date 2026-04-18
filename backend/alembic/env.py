@@ -4,6 +4,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 from dotenv import load_dotenv
+from app.core.config import settings
 
 # 1. Importar la Base y todos los modelos
 
@@ -18,7 +19,7 @@ database_url = os.getenv("DATABASE_URL")
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 
-config.set_main_option("sqlalchemy.url", database_url)
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL or database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
