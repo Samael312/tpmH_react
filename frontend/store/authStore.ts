@@ -1,10 +1,18 @@
 import { create } from "zustand";
 import Cookies from "js-cookie";
 
-interface User {
+export interface User {
   username: string;
   name: string;
+  surname: string;
+  email: string;
   role: "superadmin" | "teacher" | "student";
+  // Campos extendidos
+  timezone?: string;
+  goal?: string;
+  preferred_payment_methods?: string[];
+  onboarding_completed?: boolean;
+  avatar_url?: string | null;
 }
 
 interface AuthStore {
@@ -12,19 +20,18 @@ interface AuthStore {
   token: string | null;
   isLoading: boolean;
 
-  // Acciones
   login: (token: string, user: User) => void;
   logout: () => void;
   setLoading: (loading: boolean) => void;
+  setUser: (user: User) => void;
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
-  user: null,
-  token: Cookies.get("access_token") || null,
+  user:      null,
+  token:     Cookies.get("access_token") || null,
   isLoading: true,
 
   login: (token, user) => {
-    // Guarda el token en cookie (expira en 1 día)
     Cookies.set("access_token", token, { expires: 1, secure: true });
     set({ user, token, isLoading: false });
   },
@@ -35,4 +42,6 @@ export const useAuthStore = create<AuthStore>((set) => ({
   },
 
   setLoading: (loading) => set({ isLoading: loading }),
+
+  setUser: (user) => set({ user }),
 }));

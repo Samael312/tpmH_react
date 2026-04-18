@@ -30,9 +30,10 @@ export default function LoginPage() {
 
     try {
       const res = await api.post("/auth/login", form);
-      const { access_token, role, name, username } = res.data;
+      const { access_token, role, name, username, email, surname } = res.data;
 
-      login(access_token, { username, name, role });
+// 2. Pásalos completos a la función login
+      login(access_token, { username, name, role, email, surname });
 
       if (role === "superadmin") {
         router.push("/admin/dashboard");
