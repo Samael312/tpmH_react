@@ -1,168 +1,143 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from app.auth.dependencies import get_db, get_current_teacher
+from app.models import User, CalendarToken
+from app.core.google_calendar import (
+    get_auth_url, exchange_code_for_token,
+    sync_calendar_logic, revoke_token,
+)
+from datetime import datetime
 
-from app.db.base import get_db
-from app.auth.dependencies import get_current_teacher_or_teacher_admin
-from app.models.user import User
-from app.models.google_calendar import GoogleCalendarToken
-from app.core.google_calendar import get_auth_url, exchange_code_for_tokens
-from app.core.config import settings
-
-router = APIRouter()
-
-
-@router.get("/auth-url")
-def get_google_auth_url(
-    current_user: User = Depends(get_current_teacher_or_teacher_admin),
-):
-    """
-    Devuelve la URL para que el profesor conecte su Google Calendar.
-    El frontend redirige al usuario a esta URL.
-    """
-    if not settings.GOOGLE_CLIENT_ID:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Google Calendar no está configurado en este servidor"
-        )
-
-    auth_url = get_auth_url()
-    return {"auth_url": auth_url}
-
-
-@router.get("/callback")
-def google_calendar_callback(
-    code: str = Query(...),
-    db: Session = Depends(get_db),
-):
-    """
-    Google redirige aquí después de que el usuario autoriza.
-    Intercambia el código por tokens y los guarda.
-
-    Nota: Este endpoint no tiene auth JWT porque Google
-    redirige aquí directamente desde el navegador.
-    El estado del usuario viene de la sesión.
-    """
-    try:
-        tokens = exchange_code_for_tokens(code)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Error obteniendo tokens de Google: {str(e)}"
-        )
-
-    # Redirigir al frontend con los tokens para que los envíe
-    # al endpoint de guardado con autenticación JWT
-    frontend_url = (
-        f"{settings.FRONTEND_URL}/settings/calendar"
-        f"?access_token={tokens['access_token']}"
-        f"&refresh_token={tokens.get('refresh_token', '')}"
-    )
-    return RedirectResponse(url=frontend_url)
-
-
-@router.post("/connect")
-def connect_google_calendar(
-    access_token: str,
-    refresh_token: str,
-    calendar_id: str = "primary",
-    current_user: User = Depends(get_current_teacher_or_teacher_admin),
-    db: Session = Depends(get_db)
-):
-    """
-    Guarda los tokens de Google Calendar del profesor.
-    Se llama desde el frontend después del callback.
-    """
-    teacher_id = current_user.teacher_profile.id
-
-    existing = db.query(GoogleCalendarToken).filter(
-        GoogleCalendarToken.teacher_id == teacher_id
-    ).first()
-
-    if existing:
-        # Actualizar tokens existentes
-        existing.access_token = access_token
-        existing.refresh_token = refresh_token
-        existing.calendar_id = calendar_id
-        existing.is_active = True
-    else:
-        # Crear nuevo registro
-        token = GoogleCalendarToken(
-            teacher_id=teacher_id,
-            access_token=access_token,
-            refresh_token=refresh_token,
-            calendar_id=calendar_id,
-            is_active=True,
-        )
-        db.add(token)
-
-    db.commit()
-    return {"message": "Google Calendar conectado correctamente"}
-
-
-@router.patch("/toggle")
-def toggle_calendar_sync(
-    is_active: bool,
-    current_user: User = Depends(get_current_teacher_or_teacher_admin),
-    db: Session = Depends(get_db)
-):
-    """
-    El profesor activa o desactiva la sync sin borrar los tokens.
-    Útil para pausar temporalmente sin reconectar.
-    """
-    token = db.query(GoogleCalendarToken).filter(
-        GoogleCalendarToken.teacher_id == current_user.teacher_profile.id
-    ).first()
-
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No tienes Google Calendar conectado"
-        )
-
-    token.is_active = is_active
-    db.commit()
-
-    state = "activada" if is_active else "desactivada"
-    return {"message": f"Sincronización {state}"}
-
-
-@router.delete("/disconnect")
-def disconnect_google_calendar(
-    current_user: User = Depends(get_current_teacher_or_teacher_admin),
-    db: Session = Depends(get_db)
-):
-    """El profesor desconecta su Google Calendar y borra los tokens"""
-    token = db.query(GoogleCalendarToken).filter(
-        GoogleCalendarToken.teacher_id == current_user.teacher_profile.id
-    ).first()
-
-    if token:
-        db.delete(token)
-        db.commit()
-
-    return {"message": "Google Calendar desconectado"}
+router = APIRouter(prefix="/calendar", tags=["calendar"])
 
 
 @router.get("/status")
-def get_calendar_status(
-    current_user: User = Depends(get_current_teacher_or_teacher_admin),
-    db: Session = Depends(get_db)
+def calendar_status(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_teacher),
 ):
-    """Estado de la conexión de Google Calendar del profesor"""
-    token = db.query(GoogleCalendarToken).filter(
-        GoogleCalendarToken.teacher_id == current_user.teacher_profile.id
-    ).first()
-
-    if not token:
-        return {
-            "connected": False,
-            "is_active": False,
-            "calendar_id": None,
-        }
-
+    """Devuelve el estado de conexión actual del Google Calendar del profesor"""
+    token = (
+        db.query(CalendarToken)
+        .filter(CalendarToken.user_id == current.id)
+        .first()
+    )
     return {
-        "connected": True,
-        "is_active": token.is_active,
-        "calendar_id": token.calendar_id,
+        "connected":    token is not None,
+        "calendar_id":  token.calendar_id if token else None,
+        "last_sync_at": token.last_sync_at.isoformat() if token and token.last_sync_at else None,
+        "sync_enabled": token.sync_enabled if token else False,
     }
+
+
+@router.get("/auth-url")
+def get_google_auth_url(current: User = Depends(get_current_teacher)):
+    """Devuelve la URL a la que el frontend debe redirigir para iniciar sesión con Google"""
+    # Pasamos el ID del usuario como 'state' por seguridad
+    return {"auth_url": get_auth_url(state=str(current.id))}
+
+
+@router.post("/callback")
+def calendar_callback(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_teacher),
+):
+    """El frontend llama a este endpoint pasando el código devuelto por Google"""
+    code = payload.get("code")
+    if not code:
+        raise HTTPException(400, "Código OAuth requerido")
+
+    # Intercambiamos el código por los tokens
+    credentials = exchange_code_for_token(code)
+
+    token = (
+        db.query(CalendarToken)
+        .filter(CalendarToken.user_id == current.id)
+        .first()
+    )
+    
+    if not token:
+        token = CalendarToken(user_id=current.id)
+        db.add(token)
+
+    token.access_token  = credentials["access_token"]
+    token.refresh_token = credentials.get("refresh_token")
+    token.token_expiry  = credentials.get("expiry")
+    token.calendar_id   = current.email
+    token.sync_enabled  = True
+
+    db.commit()
+    return {"ok": True, "message": "Calendario conectado correctamente"}
+
+
+@router.post("/toggle")
+def toggle_sync(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_teacher),
+):
+    """Activa o desactiva la sincronización sin borrar la conexión"""
+    token = (
+        db.query(CalendarToken)
+        .filter(CalendarToken.user_id == current.id)
+        .first()
+    )
+    if not token:
+        raise HTTPException(404, "Calendario no conectado")
+
+    # Si se envía 'enabled', se usa ese valor. Si no, se invierte el actual.
+    token.sync_enabled = payload.get("enabled", not token.sync_enabled)
+    db.commit()
+    return {"sync_enabled": token.sync_enabled}
+
+
+@router.post("/sync")
+def manual_sync(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_teacher),
+):
+    """Fuerza una sincronización manual inmediata"""
+    token = (
+        db.query(CalendarToken)
+        .filter(CalendarToken.user_id == current.id)
+        .first()
+    )
+    if not token:
+        raise HTTPException(404, "Calendario no conectado")
+
+    result = sync_calendar_logic(
+        teacher_id=current.id,
+        calendar_id=token.calendar_id,
+        access_token=token.access_token,
+        refresh_token=token.refresh_token,
+        db=db,
+    )
+
+    token.last_sync_at = datetime.utcnow()
+    db.commit()
+
+    return result
+
+
+@router.post("/disconnect")
+def disconnect_calendar(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_teacher),
+):
+    """Desconecta el calendario, revoca los tokens en Google y borra el registro de la BD"""
+    token = (
+        db.query(CalendarToken)
+        .filter(CalendarToken.user_id == current.id)
+        .first()
+    )
+    if token:
+        try:
+            revoke_token(token.access_token)
+        except Exception:
+            pass # Si falla revocar en Google, igual lo borramos localmente
+        
+        db.delete(token)
+        db.commit()
+        
+    return {"ok": True, "message": "Calendario desconectado"}

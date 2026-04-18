@@ -5,12 +5,15 @@ import { useStudents } from '@/hooks/useAdminData'
 import { Card, Badge, Button } from '@/components/ui'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
+import { useRouter } from 'next/navigation'
+import { Users } from 'lucide-react'
 
 export default function StudentsPage() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [actioning, setActioning] = useState<number | null>(null)
   const { students, loading, total, refetch } = useStudents(debouncedSearch)
+  const router = useRouter()
 
   // Debounce del buscador — espera 400ms antes de buscar
   useEffect(() => {
@@ -73,6 +76,16 @@ export default function StudentsPage() {
             </button>
           )}
         </div>
+        <button
+          onClick={() => router.push("/admin/students/bulk-edit")}
+          className="flex items-center gap-2 px-4 py-2.5 bg-white border-2
+                    border-slate-200 text-slate-700 text-sm font-bold rounded-xl
+                    shadow-sm hover:border-pink-300 hover:bg-pink-50
+                    transition-all duration-200"
+        >
+          <Users className="w-4 h-4" />
+          Edición masiva
+        </button>
       </div>
 
       {/* Tarjeta con Lista/Tabla */}

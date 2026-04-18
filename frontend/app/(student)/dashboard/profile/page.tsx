@@ -1,20 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
-  User, Globe, Target, CreditCard,
-  Lock, Trash2, Check, X, Eye,
-  EyeOff, ChevronDown, AlertCircle, Save
+  User, Mail, Globe, Target, CreditCard,
+  Lock, Trash2, Eye, EyeOff, Check,
+  AlertTriangle, Camera, ChevronDown,
 } from "lucide-react";
-import { useAuthStore } from "@/store/authStore";
-import { useEnrollments } from "@/hooks/useStudentData";
 import api from "@/lib/api";
+import { useAuthStore } from "@/store/authStore";
 
+// ─── Constantes ───────────────────────────────────────────────────────────────
 const TIMEZONES = [
-  "America/Caracas","America/Bogota","America/Lima",
-  "America/Mexico_City","America/New_York","America/Los_Angeles",
-  "America/Santiago","America/Buenos_Aires",
-  "Europe/Madrid","Europe/London","Europe/Paris","UTC",
+  "America/Caracas", "America/Bogota", "America/Lima",
+  "America/Mexico_City", "America/New_York", "America/Los_Angeles",
+  "America/Santiago", "America/Buenos_Aires",
+  "America/Sao_Paulo", "America/Chicago",
+  "Europe/Madrid", "Europe/London", "Europe/Paris",
+  "Asia/Tokyo", "Asia/Dubai", "UTC",
 ];
 
 const GOALS = [
@@ -22,737 +24,623 @@ const GOALS = [
   "Mejorar la pronunciación y la fluidez al hablar",
   "Ampliar el vocabulario para situaciones reales",
   "Comprender mejor audios y vídeos en inglés",
-  "Escribir mensajes y correos sin errores comunes",
-  "Aprender y usar correctamente los tiempos verbales",
   "Prepararse para exámenes oficiales (A1, A2, B1…)",
   "Ganar confianza al participar en conversaciones",
   "Poder viajar al extranjero usando solo inglés",
 ];
 
-const PAYMENT_METHODS = ["Paypal", "Binance", "Zelle"];
+const PAYMENT_METHODS = [
+  { value: "Paypal",  label: "PayPal",        icon: "💳" },
+  { value: "Binance", label: "Binance (USDT)", icon: "🔶" },
+  { value: "Zelle",   label: "Zelle",          icon: "💜" },
+];
 
-// ─── Sección con título ───────────────────────────────────────────────────────
+// ─── Componente de sección ────────────────────────────────────────────────────
 function Section({
   title,
-  icon,
+  subtitle,
   children,
-  accentClass = "bg-pink-50 text-pink-500",
 }: {
   title: string;
-  icon: React.ReactNode;
+  subtitle?: string;
   children: React.ReactNode;
-  accentClass?: string;
 }) {
   return (
-    <div
-      className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white
-                    shadow-2xl shadow-slate-200/50 p-6 sm:p-8"
-    >
-      <div className="flex items-center gap-3 mb-6">
-        <div
-          className={`w-9 h-9 rounded-xl flex items-center justify-center
-                          flex-shrink-0 ${accentClass}`}
-        >
-          {icon}
-        </div>
+    <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border
+                    border-white shadow-lg shadow-slate-100 p-7">
+      <div className="mb-6">
         <h2 className="text-lg font-black text-slate-800 tracking-tight">
           {title}
         </h2>
+        {subtitle && (
+          <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>
+        )}
       </div>
       {children}
     </div>
   );
 }
 
+// ─── Input genérico ───────────────────────────────────────────────────────────
+function Field({
+  label,
+  icon,
+  children,
+}: {
+  label: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="text-[10px] font-black text-slate-400 uppercase
+                        tracking-widest block mb-1.5">
+        {label}
+      </label>
+      <div className="relative group">
+        {icon && (
+          <div className="absolute left-3.5 top-1/2 -translate-y-1/2
+                          text-slate-400 group-focus-within:text-pink-500
+                          transition-colors pointer-events-none">
+            {icon}
+          </div>
+        )}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+const inputCls = (withIcon = true) =>
+  `w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm
+   font-bold text-slate-800 placeholder:text-slate-400
+   ${withIcon ? "pl-11" : "px-4"} pr-4 py-3.5
+   focus:outline-none focus:bg-white focus:border-pink-500
+   focus:ring-4 focus:ring-pink-50 transition-all duration-300`;
+
+// ─── Toast interno ────────────────────────────────────────────────────────────
+function Toast({ msg, type }: { msg: string; type: "success" | "error" }) {
+  return (
+    <div className={`
+      flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold
+      animate-in fade-in slide-in-from-top-2 duration-300
+      ${type === "success"
+        ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+        : "bg-rose-50 text-rose-600 border border-rose-100"
+      }
+    `}>
+      {type === "success"
+        ? <Check className="w-4 h-4 flex-shrink-0" />
+        : <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+      }
+      {msg}
+    </div>
+  );
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function StudentProfilePage() {
-  const { user, setUser } = useAuthStore();
-  const { enrollments }   = useEnrollments();
+  // Auth store sólo tiene username, name, role — nada más
+  const { user, token, login, logout } = useAuthStore();
 
-  // ─ Datos personales ─
-  const [name, setName]         = useState(user?.name ?? "");
-  const [surname, setSurname]   = useState(user?.surname ?? "");
-  const [email, setEmail]       = useState(user?.email ?? "");
-  const [timezone, setTimezone] = useState(user?.timezone ?? "");
-  const [goal, setGoal]         = useState(user?.goal ?? "");
-  const [payMethods, setPayMethods] = useState<string[]>(
-    user?.preferred_payment_methods ?? []
-  );
-  const [savingInfo, setSavingInfo] = useState(false);
-  const [savedInfo, setSavedInfo]   = useState(false);
-  const [infoError, setInfoError]   = useState("");
+  // Perfil completo traído del backend
+  const [profile, setProfile] = useState<any>(null);
 
-  // ─ Cambio de contraseña ─
-  const [currentPw, setCurrentPw]   = useState("");
-  const [newPw, setNewPw]           = useState("");
-  const [confirmPw, setConfirmPw]   = useState("");
-  const [showPw, setShowPw]         = useState(false);
-  const [savingPw, setSavingPw]     = useState(false);
-  const [savedPw, setSavedPw]       = useState(false);
-  const [pwError, setPwError]       = useState("");
+  // ── Datos personales (inicializados en useEffect) ──
+  const [name, setName]       = useState("");
+  const [surname, setSurname] = useState("");
+  const [email, setEmail]     = useState("");
+  const [timezone, setTz]     = useState("UTC");
+  const [goal, setGoal]       = useState("");
+  const [payMethods, setPay]  = useState<string[]>([]);
 
-  // ─ Eliminar cuenta ─
-  const [showDelete, setShowDelete]     = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState("");
-  const [deleting, setDeleting]         = useState(false);
-  const [deleteError, setDeleteError]   = useState("");
+  const [savingInfo, setSavingInfo]     = useState(false);
+  const [infoFeedback, setInfoFeedback] =
+    useState<{ msg: string; type: "success" | "error" } | null>(null);
 
-  const activeEnrollment = enrollments.find((e) => e.status === "active");
+  // ── Contraseña ──
+  const [oldPw, setOldPw]       = useState("");
+  const [newPw, setNewPw]       = useState("");
+  const [confirmPw, setConfirm] = useState("");
+  const [showOld, setShowOld]   = useState(false);
+  const [showNew, setShowNew]   = useState(false);
+  const [savingPw, setSavingPw] = useState(false);
+  const [pwFeedback, setPwFeedback] =
+    useState<{ msg: string; type: "success" | "error" } | null>(null);
 
-  const togglePayMethod = (m: string) =>
-    setPayMethods((p) =>
-      p.includes(m) ? p.filter((x) => x !== m) : [...p, m]
-    );
+  // ── Eliminar cuenta ──
+  const [deleteInput, setDeleteInput]     = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting]           = useState(false);
 
-  // ─── Guardar info personal ───
+  // ── Avatar ──
+  const fileRef                           = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading]         = useState(false);
+  const [avatarUrl, setAvatarUrl]         = useState<string | null>(null);
+
+  // ── Cargar perfil completo desde /users/me ──
+  useEffect(() => {
+    api.get("/users/me").then(res => {
+      const d = res.data;
+      setProfile(d);
+      setName(d.name ?? "");
+      setSurname(d.surname ?? "");
+      setEmail(d.email ?? "");
+      setTz(d.student_profile?.timezone ?? d.timezone ?? "UTC");
+      setGoal(d.student_profile?.goal ?? d.goal ?? "");
+      setPay(d.student_profile?.preferred_payment_methods ??
+             d.preferred_payment_methods ?? []);
+      setAvatarUrl(d.avatar ?? d.avatar_url ?? null);
+    }).catch(() => {});
+  }, []);
+
+  const togglePay = (v: string) =>
+    setPay(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
+
+  // ── Guardar info personal ──
   const saveInfo = async () => {
     setSavingInfo(true);
-    setInfoError("");
+    setInfoFeedback(null);
     try {
-      const res = await api.patch("/users/me/student-profile", {
+      await api.patch("/users/me", { name, surname, email });
+      await api.patch("/users/me/student-profile", {
         timezone,
         goal,
         preferred_payment_methods: payMethods,
       });
-      // También actualizamos nombre si cambió
-      if (name !== user?.name || surname !== user?.surname) {
-        await api.patch("/users/me", { name, surname });
+
+      // Actualizar nombre en el auth store (re-usando el token actual)
+      if (token && user) {
+        login(token, { ...user, name });
       }
-      setSavedInfo(true);
-      setTimeout(() => setSavedInfo(false), 2500);
+
+      setInfoFeedback({ msg: "Perfil actualizado correctamente", type: "success" });
     } catch (e: any) {
-      setInfoError(e.response?.data?.detail || "Error guardando los cambios");
+      setInfoFeedback({
+        msg: e.response?.data?.detail || "Error al guardar",
+        type: "error",
+      });
     } finally {
       setSavingInfo(false);
+      setTimeout(() => setInfoFeedback(null), 4000);
     }
   };
 
-  // ─── Cambiar contraseña ───
-  const changePassword = async () => {
-    setPwError("");
+  // ── Cambiar contraseña ──
+  const savePw = async () => {
     if (newPw !== confirmPw) {
-      setPwError("Las contraseñas no coinciden");
+      setPwFeedback({ msg: "Las contraseñas no coinciden", type: "error" });
       return;
     }
     if (newPw.length < 8) {
-      setPwError("La contraseña debe tener al menos 8 caracteres");
+      setPwFeedback({ msg: "La contraseña debe tener al menos 8 caracteres", type: "error" });
       return;
     }
     setSavingPw(true);
+    setPwFeedback(null);
     try {
       await api.post("/users/me/change-password", {
-        current_password: currentPw,
-        new_password:     newPw,
+        current_password: oldPw,
+        new_password: newPw,
       });
-      setSavedPw(true);
-      setCurrentPw(""); setNewPw(""); setConfirmPw("");
-      setTimeout(() => setSavedPw(false), 2500);
+      setOldPw(""); setNewPw(""); setConfirm("");
+      setPwFeedback({ msg: "Contraseña actualizada", type: "success" });
     } catch (e: any) {
-      setPwError(e.response?.data?.detail || "Error cambiando la contraseña");
+      setPwFeedback({
+        msg: e.response?.data?.detail || "Contraseña actual incorrecta",
+        type: "error",
+      });
     } finally {
       setSavingPw(false);
+      setTimeout(() => setPwFeedback(null), 5000);
     }
   };
 
-  // ─── Eliminar cuenta ───
+  // ── Eliminar cuenta ──
   const deleteAccount = async () => {
-    if (deleteConfirm !== user?.username) {
-      setDeleteError("El usuario no coincide");
-      return;
-    }
+    if (deleteInput !== user?.username) return;
     setDeleting(true);
     try {
       await api.delete("/users/me");
-      useAuthStore.getState().logout();
-      window.location.href = "/login";
-    } catch (e: any) {
-      setDeleteError(e.response?.data?.detail || "Error eliminando la cuenta");
-    } finally {
+      logout();
+      window.location.href = "/";
+    } catch {
       setDeleting(false);
     }
   };
 
+  // ── Subir avatar ──
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("photo", file);
+      const res = await api.patch("/users/me/avatar", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setAvatarUrl(res.data.avatar_url ?? res.data.avatar ?? null);
+    } catch {
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const displayName = `${name} ${surname}`.trim() || user?.name || "";
+  const initials    = `${name[0] ?? ""}${surname[0] ?? ""}`.toUpperCase() ||
+                      (user?.name?.[0] ?? "").toUpperCase();
+
   return (
     <div className="min-h-screen bg-slate-50 relative overflow-hidden">
       {/* Blobs */}
-      <div
-        className="fixed top-[-80px] right-[-80px] w-[500px] h-[500px]
-                      bg-pink-300/20 rounded-full blur-[100px] pointer-events-none"
-      />
-      <div
-        className="fixed bottom-[-80px] left-[-80px] w-[400px] h-[400px]
-                      bg-purple-300/15 rounded-full blur-[100px] pointer-events-none"
-      />
+      <div className="fixed top-[-100px] right-[-100px] w-[500px] h-[500px]
+                      bg-pink-300/20 rounded-full blur-[120px] pointer-events-none" />
+      <div className="fixed bottom-[-80px] left-[-80px] w-[400px] h-[400px]
+                      bg-purple-300/15 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="relative max-w-2xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">
-            Mi Perfil
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Gestiona tu información y preferencias
-          </p>
+      <div className="relative max-w-2xl mx-auto space-y-6
+                      animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+        {/* ─── Cabecera de perfil ─── */}
+        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border
+                        border-white shadow-lg p-7 flex items-center gap-5">
+          {/* Avatar */}
+          <div className="relative flex-shrink-0">
+            <div className="w-16 h-16 rounded-2xl overflow-hidden bg-gradient-to-br
+                            from-pink-400 to-rose-400 flex items-center justify-center
+                            shadow-md shadow-pink-100">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-white font-black text-xl">{initials}</span>
+              )}
+            </div>
+
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="absolute -bottom-1 -right-1 w-7 h-7 bg-white
+                         border-2 border-pink-200 rounded-xl flex items-center
+                         justify-center shadow-sm hover:bg-pink-50 transition-colors"
+            >
+              {uploading ? (
+                <div className="w-3 h-3 border-2 border-pink-200
+                                border-t-pink-500 rounded-full animate-spin" />
+              ) : (
+                <Camera className="w-3 h-3 text-pink-500" />
+              )}
+            </button>
+
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleAvatarChange}
+            />
+          </div>
+
+          <div className="min-w-0">
+            <h1 className="text-2xl font-black text-slate-800 tracking-tight">
+              {displayName}
+            </h1>
+            <p className="text-slate-500 text-sm mt-0.5">@{user?.username}</p>
+            <span className="inline-block mt-2 text-[10px] font-black uppercase
+                             tracking-widest px-3 py-1 rounded-full
+                             bg-pink-50 text-pink-600 border border-pink-100">
+              Estudiante
+            </span>
+          </div>
         </div>
 
-        {/* ─── Banner plan activo ─── */}
-        {activeEnrollment && (
-          <div
-            className="bg-gradient-to-r from-pink-500 to-rose-400 rounded-[2rem]
-                          p-6 text-white relative overflow-hidden shadow-xl
-                          shadow-pink-200 animate-in fade-in duration-500 delay-100"
-          >
-            <div
-              className="absolute top-[-30px] right-[-30px] w-32 h-32
-                            bg-white/10 rounded-full blur-xl"
-            />
-            <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-1">
-              Plan activo
-            </p>
-            <p className="text-2xl font-black">{activeEnrollment.package_name}</p>
-            <div className="flex items-center justify-between mt-3">
-              <p className="text-white/80 text-sm">
-                {activeEnrollment.subject}
-              </p>
-              <p className="text-white font-black">
-                {activeEnrollment.classes_used}
-                <span className="text-white/60 font-bold text-sm">
-                  /{activeEnrollment.classes_total} clases
-                </span>
-              </p>
-            </div>
-            <div className="mt-3 w-full h-1.5 bg-white/30 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-white rounded-full"
-                style={{
-                  width: `${Math.min(
-                    (activeEnrollment.classes_used /
-                      activeEnrollment.classes_total) *
-                      100,
-                    100
-                  )}%`,
-                }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* ─── Info personal ─── */}
+        {/* ─── Información personal ─── */}
         <Section
-          title="Información Personal"
-          icon={<User className="w-5 h-5" />}
+          title="Información personal"
+          subtitle="Actualiza tus datos de contacto y preferencias"
         >
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Nombre */}
-              <div className="group">
-                <label
-                  className="text-[10px] font-black text-slate-400
-                                uppercase tracking-widest block mb-1.5"
-                >
-                  Nombre
-                </label>
-                <div className="relative">
-                  <User
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2
-                                   w-5 h-5 text-slate-400
-                                   group-focus-within:text-pink-500
-                                   transition-colors"
-                  />
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full bg-slate-50 border-2 border-transparent
-                                 rounded-xl text-sm font-bold text-slate-800
-                                 placeholder:text-slate-400 pl-11 pr-4 py-3.5
-                                 focus:outline-none focus:bg-white
-                                 focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                                 transition-all duration-300"
-                  />
-                </div>
-              </div>
-
-              {/* Apellido */}
-              <div className="group">
-                <label
-                  className="text-[10px] font-black text-slate-400
-                                uppercase tracking-widest block mb-1.5"
-                >
-                  Apellido
-                </label>
-                <div className="relative">
-                  <User
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2
-                                   w-5 h-5 text-slate-400
-                                   group-focus-within:text-pink-500
-                                   transition-colors"
-                  />
-                  <input
-                    value={surname}
-                    onChange={(e) => setSurname(e.target.value)}
-                    className="w-full bg-slate-50 border-2 border-transparent
-                                 rounded-xl text-sm font-bold text-slate-800
-                                 placeholder:text-slate-400 pl-11 pr-4 py-3.5
-                                 focus:outline-none focus:bg-white
-                                 focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                                 transition-all duration-300"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Email (readonly) */}
-            <div>
-              <label
-                className="text-[10px] font-black text-slate-400
-                              uppercase tracking-widest block mb-1.5"
-              >
-                Email
-              </label>
-              <div className="relative">
+              <Field label="Nombre" icon={<User className="w-5 h-5" />}>
                 <input
-                  value={email}
-                  readOnly
-                  className="w-full bg-slate-100 border-2 border-transparent
-                               rounded-xl text-sm font-bold text-slate-400
-                               px-4 py-3.5 cursor-not-allowed"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  className={inputCls()}
+                  placeholder="Tu nombre"
                 />
-                <span
-                  className="absolute right-3 top-1/2 -translate-y-1/2
-                                text-[10px] font-black text-slate-400 uppercase
-                                tracking-widest bg-slate-200 px-2 py-1 rounded-lg"
-                >
-                  No editable
-                </span>
-              </div>
+              </Field>
+              <Field label="Apellido" icon={<User className="w-5 h-5" />}>
+                <input
+                  value={surname}
+                  onChange={e => setSurname(e.target.value)}
+                  className={inputCls()}
+                  placeholder="Tu apellido"
+                />
+              </Field>
             </div>
 
-            {/* Zona horaria */}
-            <div>
-              <label
-                className="text-[10px] font-black text-slate-400
-                              uppercase tracking-widest block mb-1.5"
+            <Field label="Correo electrónico" icon={<Mail className="w-5 h-5" />}>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className={inputCls()}
+                placeholder="correo@ejemplo.com"
+              />
+            </Field>
+
+            <Field label="Zona horaria" icon={<Globe className="w-5 h-5" />}>
+              <select
+                value={timezone}
+                onChange={e => setTz(e.target.value)}
+                className={`${inputCls()} appearance-none cursor-pointer pr-10`}
               >
-                Zona horaria
-              </label>
-              <div className="relative">
-                <Globe
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2
-                                 w-5 h-5 text-slate-400 pointer-events-none"
-                />
-                <select
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  className="w-full appearance-none bg-slate-50 border-2
-                               border-transparent rounded-xl text-sm font-bold
-                               text-slate-800 pl-11 pr-10 py-3.5
-                               focus:outline-none focus:bg-white
-                               focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                               transition-all duration-300 cursor-pointer"
-                >
-                  <option value="">Seleccionar...</option>
-                  {TIMEZONES.map((tz) => (
-                    <option key={tz} value={tz}>
-                      {tz}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2
-                                  w-4 h-4 text-slate-400 pointer-events-none"
-                />
-              </div>
-              <p className="text-xs text-slate-400 mt-1.5">
-                Se usa para mostrarte los horarios en tu hora local
-              </p>
-            </div>
+                {TIMEZONES.map(tz => (
+                  <option key={tz} value={tz}>{tz}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2
+                                      w-4 h-4 text-slate-400 pointer-events-none" />
+            </Field>
 
             {/* Objetivo */}
             <div>
-              <label
-                className="text-[10px] font-black text-slate-400
-                              uppercase tracking-widest block mb-1.5"
-              >
+              <label className="text-[10px] font-black text-slate-400 uppercase
+                                tracking-widest block mb-2">
                 Objetivo de aprendizaje
               </label>
-              <div className="relative">
-                <Target
-                  className="absolute left-3.5 top-3.5 w-5 h-5 text-slate-400
-                                 pointer-events-none"
-                />
-                <select
-                  value={goal}
-                  onChange={(e) => setGoal(e.target.value)}
-                  className="w-full appearance-none bg-slate-50 border-2
-                               border-transparent rounded-xl text-sm font-bold
-                               text-slate-800 pl-11 pr-10 py-3.5
-                               focus:outline-none focus:bg-white
-                               focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                               transition-all duration-300 cursor-pointer"
-                >
-                  <option value="">Seleccionar objetivo...</option>
-                  {GOALS.map((g) => (
-                    <option key={g} value={g}>
-                      {g}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2
-                                  w-4 h-4 text-slate-400 pointer-events-none"
-                />
-              </div>
-            </div>
-
-            {/* Métodos de pago */}
-            <div>
-              <label
-                className="text-[10px] font-black text-slate-400
-                              uppercase tracking-widest block mb-3"
-              >
-                Métodos de pago preferidos
-              </label>
-              <div className="flex gap-3 flex-wrap">
-                {PAYMENT_METHODS.map((m) => (
+              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                {GOALS.map(g => (
                   <button
-                    key={m}
-                    onClick={() => togglePayMethod(m)}
+                    key={g}
+                    onClick={() => setGoal(g)}
                     className={`
-                      flex items-center gap-2 px-4 py-2.5 rounded-xl
-                      border-2 text-sm font-bold transition-all duration-200
-                      ${
-                        payMethods.includes(m)
-                          ? "border-pink-400 bg-pink-50 text-pink-600"
-                          : "border-slate-100 bg-white text-slate-500 hover:border-slate-200"
+                      w-full flex items-center gap-3 px-4 py-3 rounded-2xl
+                      border-2 text-left transition-all duration-200
+                      ${goal === g
+                        ? "border-pink-400 bg-pink-50"
+                        : "border-slate-100 bg-white hover:border-slate-200"
                       }
                     `}
                   >
-                    <CreditCard className="w-4 h-4" />
-                    {m}
-                    {payMethods.includes(m) && (
-                      <Check className="w-3.5 h-3.5" />
-                    )}
+                    <div className={`
+                      w-4 h-4 rounded-full border-2 flex-shrink-0
+                      flex items-center justify-center transition-all
+                      ${goal === g ? "border-pink-500 bg-pink-500" : "border-slate-300"}
+                    `}>
+                      {goal === g && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                    </div>
+                    <span className="text-sm font-bold text-slate-700 leading-snug">
+                      {g}
+                    </span>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Error */}
-            {infoError && (
-              <div
-                className="bg-rose-50 border border-rose-100 text-rose-600
-                              px-4 py-3 rounded-xl text-xs font-bold
-                              flex items-center gap-2"
-              >
-                <X className="w-4 h-4 flex-shrink-0" />
-                {infoError}
+            {/* Métodos de pago */}
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase
+                                tracking-widest block mb-2">
+                <CreditCard className="w-3.5 h-3.5 inline mr-1.5" />
+                Métodos de pago preferidos
+              </label>
+              <div className="flex gap-3 flex-wrap">
+                {PAYMENT_METHODS.map(pm => (
+                  <button
+                    key={pm.value}
+                    onClick={() => togglePay(pm.value)}
+                    className={`
+                      flex items-center gap-2 px-4 py-2.5 rounded-xl
+                      border-2 text-sm font-bold transition-all duration-200
+                      ${payMethods.includes(pm.value)
+                        ? "border-pink-400 bg-pink-50 text-pink-700"
+                        : "border-slate-100 bg-white text-slate-600 hover:border-slate-200"
+                      }
+                    `}
+                  >
+                    <span>{pm.icon}</span>
+                    {pm.label}
+                    {payMethods.includes(pm.value) && <Check className="w-3.5 h-3.5" />}
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
 
-            {/* Botón guardar */}
+            {infoFeedback && <Toast msg={infoFeedback.msg} type={infoFeedback.type} />}
+
             <button
               onClick={saveInfo}
               disabled={savingInfo}
-              className={`
-                w-full py-3.5 text-sm font-bold text-white rounded-xl
-                shadow-lg active:scale-[0.98] transition-all duration-300
-                disabled:opacity-50 disabled:cursor-not-allowed
-                flex items-center justify-center gap-2
-                ${
-                  savedInfo
-                    ? "bg-emerald-500 shadow-emerald-200"
-                    : "bg-gradient-to-r from-pink-500 to-rose-400 shadow-pink-200 hover:shadow-pink-300"
-                }
-              `}
+              className="w-full py-3.5 text-sm font-bold text-white rounded-xl
+                         bg-gradient-to-r from-pink-500 to-rose-400
+                         shadow-lg shadow-pink-200 hover:shadow-pink-300
+                         active:scale-[0.98] transition-all duration-300
+                         disabled:opacity-60 disabled:cursor-not-allowed
+                         flex items-center justify-center gap-2"
             >
               {savingInfo ? (
-                <div
-                  className="w-4 h-4 border-2 border-white/40
-                                border-t-white rounded-full animate-spin"
-                />
-              ) : savedInfo ? (
-                <>
-                  <Check className="w-4 h-4" /> ¡Guardado!
-                </>
+                <div className="w-4 h-4 border-2 border-white/40
+                                border-t-white rounded-full animate-spin" />
               ) : (
-                <>
-                  <Save className="w-4 h-4" /> Guardar cambios
-                </>
+                <><Check className="w-4 h-4" /> Guardar cambios</>
               )}
             </button>
           </div>
         </Section>
 
         {/* ─── Cambiar contraseña ─── */}
-        <Section
-          title="Cambiar Contraseña"
-          icon={<Lock className="w-5 h-5" />}
-          accentClass="bg-blue-50 text-blue-500"
-        >
+        <Section title="Seguridad" subtitle="Cambia tu contraseña de acceso">
           <div className="space-y-4">
-            {/* Contraseña actual */}
-            <div className="group">
-              <label
-                className="text-[10px] font-black text-slate-400
-                              uppercase tracking-widest block mb-1.5"
+            <Field label="Contraseña actual" icon={<Lock className="w-5 h-5" />}>
+              <input
+                type={showOld ? "text" : "password"}
+                value={oldPw}
+                onChange={e => setOldPw(e.target.value)}
+                className={inputCls()}
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowOld(p => !p)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2
+                           text-slate-400 hover:text-pink-500 transition-colors"
               >
-                Contraseña actual
-              </label>
-              <div className="relative">
-                <Lock
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2
-                                 w-5 h-5 text-slate-400
-                                 group-focus-within:text-pink-500 transition-colors"
-                />
-                <input
-                  type={showPw ? "text" : "password"}
-                  value={currentPw}
-                  onChange={(e) => setCurrentPw(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-slate-50 border-2 border-transparent
-                               rounded-xl text-sm font-bold text-slate-800
-                               placeholder:text-slate-400 pl-11 pr-11 py-3.5
-                               focus:outline-none focus:bg-white
-                               focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                               transition-all duration-300"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPw((p) => !p)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2
-                               text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  {showPw ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
-            </div>
+                {showOld ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </Field>
 
-            {/* Nueva contraseña */}
-            <div className="group">
-              <label
-                className="text-[10px] font-black text-slate-400
-                              uppercase tracking-widest block mb-1.5"
+            <Field label="Nueva contraseña" icon={<Lock className="w-5 h-5" />}>
+              <input
+                type={showNew ? "text" : "password"}
+                value={newPw}
+                onChange={e => setNewPw(e.target.value)}
+                className={inputCls()}
+                placeholder="Mínimo 8 caracteres"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNew(p => !p)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2
+                           text-slate-400 hover:text-pink-500 transition-colors"
               >
-                Nueva contraseña
-              </label>
-              <div className="relative">
-                <Lock
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2
-                                 w-5 h-5 text-slate-400
-                                 group-focus-within:text-pink-500 transition-colors"
-                />
-                <input
-                  type={showPw ? "text" : "password"}
-                  value={newPw}
-                  onChange={(e) => setNewPw(e.target.value)}
-                  placeholder="Mínimo 8 caracteres"
-                  className="w-full bg-slate-50 border-2 border-transparent
-                               rounded-xl text-sm font-bold text-slate-800
-                               placeholder:text-slate-400 pl-11 pr-4 py-3.5
-                               focus:outline-none focus:bg-white
-                               focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                               transition-all duration-300"
-                />
-              </div>
-            </div>
+                {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </Field>
 
-            {/* Confirmar */}
-            <div className="group">
-              <label
-                className="text-[10px] font-black text-slate-400
-                              uppercase tracking-widest block mb-1.5"
-              >
-                Confirmar nueva contraseña
-              </label>
-              <div className="relative">
-                <Lock
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2
-                                 w-5 h-5 text-slate-400
-                                 group-focus-within:text-pink-500 transition-colors"
-                />
-                <input
-                  type={showPw ? "text" : "password"}
-                  value={confirmPw}
-                  onChange={(e) => setConfirmPw(e.target.value)}
-                  placeholder="Repetir contraseña"
-                  className={`w-full bg-slate-50 border-2 rounded-xl text-sm
-                               font-bold text-slate-800 placeholder:text-slate-400
-                               pl-11 pr-4 py-3.5 focus:outline-none focus:bg-white
-                               focus:ring-4 transition-all duration-300
-                               ${
-                                 confirmPw && confirmPw !== newPw
-                                   ? "border-red-300 focus:border-red-400 focus:ring-red-50"
-                                   : "border-transparent focus:border-pink-500 focus:ring-pink-50"
-                               }`}
-                />
-                {confirmPw && confirmPw === newPw && (
-                  <Check
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2
-                                   w-4 h-4 text-emerald-500"
-                  />
-                )}
-              </div>
-            </div>
+            <Field label="Confirmar nueva contraseña" icon={<Lock className="w-5 h-5" />}>
+              <input
+                type="password"
+                value={confirmPw}
+                onChange={e => setConfirm(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && savePw()}
+                className={`${inputCls()} ${
+                  confirmPw && confirmPw !== newPw
+                    ? "border-rose-300 focus:border-rose-500 focus:ring-rose-50"
+                    : ""
+                }`}
+                placeholder="Repite la nueva contraseña"
+              />
+            </Field>
 
-            {/* Error contraseña */}
-            {pwError && (
-              <div
-                className="bg-rose-50 border border-rose-100 text-rose-600
-                              px-4 py-3 rounded-xl text-xs font-bold
-                              flex items-center gap-2"
-              >
-                <X className="w-4 h-4 flex-shrink-0" />
-                {pwError}
-              </div>
+            {confirmPw.length > 0 && (
+              <p className={`text-xs font-bold flex items-center gap-1.5
+                ${confirmPw === newPw ? "text-emerald-600" : "text-rose-500"}`}>
+                {confirmPw === newPw
+                  ? <><Check className="w-3.5 h-3.5" /> Las contraseñas coinciden</>
+                  : <><AlertTriangle className="w-3.5 h-3.5" /> No coinciden</>
+                }
+              </p>
             )}
 
+            {pwFeedback && <Toast msg={pwFeedback.msg} type={pwFeedback.type} />}
+
             <button
-              onClick={changePassword}
-              disabled={savingPw || !currentPw || !newPw || !confirmPw}
-              className={`
-                w-full py-3.5 text-sm font-bold rounded-xl
-                shadow-lg active:scale-[0.98] transition-all duration-300
-                disabled:opacity-50 disabled:cursor-not-allowed
-                flex items-center justify-center gap-2
-                ${
-                  savedPw
-                    ? "bg-emerald-500 text-white shadow-emerald-200"
-                    : "bg-blue-500 hover:bg-blue-600 text-white shadow-blue-200"
-                }
-              `}
+              onClick={savePw}
+              disabled={savingPw || !oldPw || !newPw || newPw !== confirmPw || newPw.length < 8}
+              className="w-full py-3.5 text-sm font-bold text-white rounded-xl
+                         bg-gradient-to-r from-slate-700 to-slate-800
+                         shadow-lg active:scale-[0.98] transition-all duration-300
+                         disabled:opacity-50 disabled:cursor-not-allowed
+                         flex items-center justify-center gap-2"
             >
               {savingPw ? (
-                <div
-                  className="w-4 h-4 border-2 border-white/40
-                                border-t-white rounded-full animate-spin"
-                />
-              ) : savedPw ? (
-                <>
-                  <Check className="w-4 h-4" /> ¡Contraseña actualizada!
-                </>
+                <div className="w-4 h-4 border-2 border-white/40
+                                border-t-white rounded-full animate-spin" />
               ) : (
-                <>
-                  <Lock className="w-4 h-4" /> Cambiar contraseña
-                </>
+                <><Lock className="w-4 h-4" /> Actualizar contraseña</>
               )}
             </button>
           </div>
         </Section>
 
         {/* ─── Zona de peligro ─── */}
-        <Section
-          title="Zona de Peligro"
-          icon={<Trash2 className="w-5 h-5" />}
-          accentClass="bg-red-50 text-red-500"
-        >
-          {!showDelete ? (
-            <div className="flex items-start gap-4">
-              <div className="flex-1">
-                <p className="text-sm font-bold text-slate-700 mb-1">
-                  Eliminar cuenta
-                </p>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Se borrarán todos tus datos, clases, materiales y tareas.
-                  Esta acción es permanente e irreversible.
+        <Section title="Zona de peligro" subtitle="Acciones irreversibles sobre tu cuenta">
+          {!confirmDelete ? (
+            <div className="bg-rose-50 border-2 border-rose-100 rounded-2xl p-5
+                            flex flex-col sm:flex-row items-start sm:items-center
+                            justify-between gap-4">
+              <div>
+                <p className="text-sm font-black text-rose-700">Eliminar mi cuenta</p>
+                <p className="text-xs text-rose-500 mt-0.5">
+                  Se borrarán todos tus datos, clases y progreso de forma permanente
                 </p>
               </div>
               <button
-                onClick={() => setShowDelete(true)}
-                className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5
-                             bg-red-50 text-red-500 hover:bg-red-100 border-2
-                             border-red-200 text-sm font-bold rounded-xl
-                             transition-colors"
+                onClick={() => setConfirmDelete(true)}
+                className="flex-shrink-0 px-5 py-2.5 bg-rose-500 text-white
+                           text-sm font-bold rounded-xl shadow-md shadow-rose-200
+                           hover:bg-rose-600 active:scale-[0.97]
+                           transition-all duration-200 flex items-center gap-2"
               >
                 <Trash2 className="w-4 h-4" />
-                Eliminar
+                Eliminar cuenta
               </button>
             </div>
           ) : (
             <div className="space-y-4">
-              <div
-                className="bg-red-50 border border-red-100 rounded-xl p-4
-                              flex items-start gap-3"
-              >
-                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-bold text-red-700 mb-1">
-                    ¿Estás completamente seguro?
-                  </p>
-                  <p className="text-xs text-red-600">
-                    Para confirmar, escribe tu nombre de usuario:{" "}
-                    <span className="font-black">{user?.username}</span>
-                  </p>
+              <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-5">
+                <div className="flex items-start gap-3 mb-4">
+                  <AlertTriangle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-black text-rose-700">
+                      ¿Estás absolutamente seguro?
+                    </p>
+                    <p className="text-xs text-rose-500 mt-1 leading-relaxed">
+                      Esta acción no se puede deshacer. Se eliminarán
+                      permanentemente tu cuenta, historial de clases,
+                      materiales y toda información asociada.
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              <div className="group">
+                <p className="text-xs font-bold text-slate-600 mb-2">
+                  Escribe{" "}
+                  <span className="font-black text-rose-600">{user?.username}</span>{" "}
+                  para confirmar:
+                </p>
                 <input
-                  value={deleteConfirm}
-                  onChange={(e) => setDeleteConfirm(e.target.value)}
-                  placeholder={user?.username ?? ""}
-                  className="w-full bg-slate-50 border-2 border-red-200
-                               rounded-xl text-sm font-bold text-slate-800
-                               placeholder:text-slate-400 px-4 py-3.5
-                               focus:outline-none focus:bg-white
-                               focus:border-red-400 focus:ring-4 focus:ring-red-50
-                               transition-all duration-300"
+                  value={deleteInput}
+                  onChange={e => setDeleteInput(e.target.value)}
+                  placeholder={user?.username}
+                  className="w-full bg-white border-2 border-rose-200
+                             rounded-xl text-sm font-bold text-slate-800
+                             placeholder:text-slate-300 px-4 py-3
+                             focus:outline-none focus:border-rose-400
+                             transition-all duration-200"
                 />
               </div>
 
-              {deleteError && (
-                <div
-                  className="bg-rose-50 border border-rose-100 text-rose-600
-                                px-4 py-3 rounded-xl text-xs font-bold
-                                flex items-center gap-2"
-                >
-                  <X className="w-4 h-4 flex-shrink-0" />
-                  {deleteError}
-                </div>
-              )}
-
               <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    setShowDelete(false);
-                    setDeleteConfirm("");
-                    setDeleteError("");
-                  }}
+                  onClick={() => { setConfirmDelete(false); setDeleteInput(""); }}
                   className="flex-1 py-3 text-sm font-bold text-slate-600
-                               bg-slate-100 hover:bg-slate-200 rounded-xl
-                               transition-colors"
+                             bg-slate-100 hover:bg-slate-200 rounded-xl
+                             transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={deleteAccount}
-                  disabled={deleting || deleteConfirm !== user?.username}
+                  disabled={deleteInput !== user?.username || deleting}
                   className="flex-1 py-3 text-sm font-bold text-white
-                               bg-red-500 hover:bg-red-600 rounded-xl
-                               shadow-md shadow-red-100 active:scale-[0.98]
-                               transition-all duration-200 disabled:opacity-50
-                               disabled:cursor-not-allowed flex items-center
-                               justify-center gap-2"
+                             bg-rose-500 hover:bg-rose-600 rounded-xl
+                             shadow-md shadow-rose-200 active:scale-[0.97]
+                             transition-all duration-300
+                             disabled:opacity-40 disabled:cursor-not-allowed
+                             flex items-center justify-center gap-2"
                 >
                   {deleting ? (
-                    <div
-                      className="w-4 h-4 border-2 border-white/40
-                                    border-t-white rounded-full animate-spin"
-                    />
+                    <div className="w-4 h-4 border-2 border-white/40
+                                    border-t-white rounded-full animate-spin" />
                   ) : (
-                    <>
-                      <Trash2 className="w-4 h-4" /> Eliminar para siempre
-                    </>
+                    <><Trash2 className="w-4 h-4" /> Confirmar eliminación</>
                   )}
                 </button>
               </div>
             </div>
           )}
         </Section>
-
       </div>
     </div>
   );

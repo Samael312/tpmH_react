@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime, timedelta
-
+from schemas.admin import AdminUserUpdate
 from app.db.base import get_db
 from app.auth.dependencies import get_currtent_user
 from app.models.user import User, UserRole
@@ -11,7 +12,7 @@ from app.models.teacher import TeacherProfile, TeacherStatus
 from app.models.student import StudentProfile
 from app.models.class_ import Class
 from app.models.payment import Payment, Withdrawal
-from app.models.package import Enrollment
+from app.models.package import Enrollment, Package
 from app.core.timezone import utc_now, UTC
 from app.schemas.admin import (
     PlatformStatsResponse,
@@ -25,6 +26,18 @@ from app.models.payment_config import PlatformConfig
 
 
 router = APIRouter()
+
+
+# ─── DEPENDENCIES ───────────────────────────────────────────────────────────
+
+def require_superadmin(current_user: User = Depends(get_currtent_user)) -> User:
+    """Verifica que el usuario sea superadmin"""
+    if current_user.role != UserRole.superadmin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requieren permisos de superadministrador"
+        )
+    return current_user
 
 
 # ─── MÉTRICAS GLOBALES ───────────────────────────────────────────────────────
@@ -526,3 +539,45 @@ def update_platform_config(
 
     db.commit()
     return {"message": "Configuración actualizada"}
+
+@router.patch("/users/{user_id}")
+def admin_update_user(
+    user_id: int,
+    data: AdminUserUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_superadmin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "Usuario no encontrado")
+
+    if data.role is not None:
+        user.role = data.role
+    if data.status is not None:
+        user.status = data.status
+    if data.package_name is not None:
+        # Cascada: actualizar enrollment activo
+        enrollment = (
+            db.query(Enrollment)
+            .filter(
+                Enrollment.student_id == user_id,
+                Enrollment.status == "active",
+            )
+            .first()
+        )
+        if enrollment:
+            package = (
+                db.query(Package)
+                .filter(Package.name == data.package_name)
+                .first()
+            )
+            if package:
+                enrollment.package_id     = package.id
+                enrollment.classes_total  = package.total_classes
+    if data.price_per_class is not None:
+        user.price_per_class = data.price_per_class
+
+    db.commit()
+    return {"ok": True}
+
+
