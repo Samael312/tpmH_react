@@ -3,6 +3,7 @@ from typing import Optional
 import logging
 
 from app.models.google_calendar import GoogleCalendarToken
+from app.models.user import User
 from app.models.class_ import Class
 from app.models.teacher import TeacherProfile
 from app.core.google_calendar import (

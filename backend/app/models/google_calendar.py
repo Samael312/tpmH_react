@@ -10,9 +10,10 @@ class GoogleCalendarToken(Base):
     Es completamente opcional — si no existe el sistema
     funciona igual sin sincronización.
     """
-    __tablename__ = "google_calendar_tokens"
+    __tablename__ = "google_google_calendar"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
     teacher_id = Column(
         Integer,
         ForeignKey("teacher_profiles.id"),
@@ -34,5 +35,5 @@ class GoogleCalendarToken(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
+    user = relationship("User", back_populates="calendar_tokens")
     teacher = relationship("TeacherProfile", backref="google_calendar_token")

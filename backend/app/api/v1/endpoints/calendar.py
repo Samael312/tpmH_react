@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.auth.dependencies import get_db, get_current_teacher
-from app.models import User, CalendarToken
+from app.models import User, google_calendar as CalendarToken
 from app.core.google_calendar import (
-    get_auth_url, exchange_code_for_token,
+    get_auth_url, exchange_code_for_tokens,
     sync_calendar_logic, revoke_token,
 )
 from datetime import datetime
@@ -49,7 +49,7 @@ def calendar_callback(
         raise HTTPException(400, "Código OAuth requerido")
 
     # Intercambiamos el código por los tokens
-    credentials = exchange_code_for_token(code)
+    credentials = exchange_code_for_tokens(code)
 
     token = (
         db.query(CalendarToken)

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime, timedelta
-from schemas.admin import AdminUserUpdate
+from app.schemas.admin import AdminUserUpdate
 from app.db.base import get_db
 from app.auth.dependencies import get_currtent_user
 from app.models.user import User, UserRole

@@ -4,7 +4,7 @@ from app.db.base import Base
 from datetime import datetime
 
 class CalendarToken(Base):
-    __tablename__ = "calendar_tokens"
+    __tablename__ = "google_calendar"
 
     id            = Column(Integer, primary_key=True, index=True)
     user_id       = Column(Integer, ForeignKey("users.id"), unique=True)

@@ -1,6 +1,7 @@
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
+import requests
 from google_auth_oauthlib.flow import Flow
 from datetime import datetime, timedelta
 from typing import Optional
@@ -180,3 +181,27 @@ def delete_calendar_event(
     except Exception as e:
         logger.error(f"Error eliminando evento: {e}")
         return False
+
+def revoke_token(token: str):
+    """Revoca el token de acceso en los servidores de Google"""
+    try:
+        requests.post(
+            'https://oauth2.googleapis.com/revoke',
+            params={'token': token},
+            headers={'content-type': 'application/x-www-form-urlencoded'}
+        )
+    except Exception as e:
+        logger.error(f"Error revocando token en Google: {e}")
+
+def sync_calendar_logic(teacher_id: int, calendar_id: str, access_token: str, refresh_token: str, db):
+    """
+    Lógica placeholder para sincronizar el calendario.
+    Aquí deberías recorrer las clases del profesor en tu BD y enviarlas a Google.
+    """
+    try:
+        service = get_calendar_service(access_token, refresh_token, None)
+        # Aquí irá tu lógica real de sincronización en el futuro
+        return {"ok": True, "message": "Calendario sincronizado correctamente"}
+    except Exception as e:
+        logger.error(f"Error en sincronización manual: {e}")
+        return {"ok": False, "message": "Error sincronizando calendario"}

@@ -30,4 +30,4 @@ class User(Base):
     # Relaciones
     teacher_profile = relationship("TeacherProfile", back_populates="user", uselist=False, foreign_keys="TeacherProfile.user_id")
     student_profile = relationship("StudentProfile", back_populates="user", uselist=False, foreign_keys="StudentProfile.user_id")
-    calendar_token = relationship("CalendarToken", back_populates="user", uselist=False, foreign_keys="CalendarToken.user_id")
+    calendar_tokens = relationship("GoogleCalendarToken", back_populates="user")
