@@ -18,7 +18,7 @@ export function proxy(request: NextRequest) {
       if (payload.role === "student") return NextResponse.redirect(new URL("/dashboard", request.url));
       if (payload.role === "teacher") return NextResponse.redirect(new URL("/teacher/dashboard", request.url));
       // Aplicamos el || "" para calmar a TypeScript
-      if (["superadmin", "professor_admin"].includes(payload.role || "")) {
+      if (["superadmin", "teacher_admin"].includes(payload.role || "")) {
         return NextResponse.redirect(new URL("/admin/dashboard", request.url));
       }
     }
@@ -38,7 +38,7 @@ export function proxy(request: NextRequest) {
   // 4. Protección Admin (Unificada)
   if (pathname.startsWith("/admin")) {
     // Aplicamos el || "" para calmar a TypeScript
-    if (isExpired || !["superadmin", "professor_admin"].includes(payload?.role || "")) {
+    if (isExpired || !["superadmin", "teacher_admin"].includes(payload?.role || "")) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
   }
@@ -48,7 +48,7 @@ export function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
     const payload = decodeToken(token)
-    if (!['teacher', 'professor_admin'].includes(payload?.role || '')) {
+    if (!['teacher', 'teacher_admin'].includes(payload?.role || '')) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
   }

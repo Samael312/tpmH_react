@@ -41,11 +41,15 @@ api.interceptors.response.use(
     return res;
   },
   (err) => {
-    // 401 → logout
-    if (err.response?.status === 401) {
+    // 👇 SOLUCIÓN: Verificamos si la petición fue al endpoint de login
+    const isLoginEndpoint = err.config?.url?.includes("/auth/login");
+
+    // 401 → logout (SOLO si no estamos intentando iniciar sesión)
+    if (err.response?.status === 401 && !isLoginEndpoint) {
       useAuthStore.getState().logout();
       window.location.href = "/login";
     }
+    
     return Promise.reject(err);
   }
 );

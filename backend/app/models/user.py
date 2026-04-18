@@ -26,6 +26,7 @@ class User(Base):
     google_id = Column(String, nullable=True, unique=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    onboarding_completed = Column(Boolean, default=False)
 
     # Relaciones
     teacher_profile = relationship("TeacherProfile", back_populates="user", uselist=False, foreign_keys="TeacherProfile.user_id")

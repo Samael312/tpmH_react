@@ -3,15 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Mail, ArrowLeft, Check } from "lucide-react";
+import { Mail, ArrowLeft, Check, User } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail]   = useState("");
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sent, setSent]       = useState(false);
-  const [error, setError]     = useState("");
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,7 +22,7 @@ export default function ForgotPasswordPage() {
       await api.post("/auth/forgot-password", { email });
       setSent(true);
     } catch {
-      // Siempre mostramos éxito (anti-enumeración)
+      // Anti-enumeración: siempre mostrar éxito
       setSent(true);
     } finally {
       setLoading(false);
@@ -73,11 +73,25 @@ export default function ForgotPasswordPage() {
               </h2>
               <p className="text-sm text-slate-500 leading-relaxed">
                 Si existe una cuenta con ese email, recibirás las
-                instrucciones en breve.
+                instrucciones en breve. Revisa también la carpeta de spam.
               </p>
+              <Link
+                href="/login"
+                className="mt-6 text-sm font-bold text-pink-600 hover:text-pink-700 transition-colors"
+              >
+                Volver al inicio de sesión
+              </Link>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Info box */}
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-start gap-2">
+                <User className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs font-bold text-blue-700">
+                  Introduce el email con el que te registraste y te enviaremos un enlace de recuperación.
+                </p>
+              </div>
+
               <div className="group">
                 <label className="text-[10px] font-black text-slate-400
                                   uppercase tracking-widest block mb-1.5">
@@ -126,7 +140,7 @@ export default function ForgotPasswordPage() {
                   <div className="w-4 h-4 border-2 border-white/40
                                   border-t-white rounded-full animate-spin" />
                 ) : (
-                  "Enviar enlace"
+                  "Enviar enlace de recuperación"
                 )}
               </button>
             </form>
