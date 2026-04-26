@@ -18,7 +18,7 @@ export default function TeacherLayout({
   const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
-    if (user && !['teacher', 'professor_admin'].includes(user.role)) {
+    if (user && !['teacher', 'teacher_admin'].includes(user.role)) {
       router.push('/login')
     }
   }, [user])
