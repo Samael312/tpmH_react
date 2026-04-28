@@ -14,6 +14,8 @@ class StudentProfile(Base):
     goal = Column(String, nullable=True)
     preferred_payment_methods = Column(JSONB, default=list)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    profile_photo_url = Column(String, nullable=True)
+    profile_photo_public_id = Column(String, nullable=True)
 
     # Relaciones
     user = relationship("User", back_populates="student_profile", foreign_keys="StudentProfile.user_id")

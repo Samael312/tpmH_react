@@ -32,6 +32,8 @@ class TeacherProfile(Base):
     stripe_account_id = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    profile_photo_url = Column(String, nullable=True)
+    profile_photo_public_id = Column(String, nullable=True)
 
     # Relaciones
     user = relationship("User", back_populates="teacher_profile", foreign_keys="TeacherProfile.user_id")

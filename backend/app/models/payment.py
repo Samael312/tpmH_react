@@ -1,3 +1,4 @@
+# models/payment.py
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -42,7 +43,7 @@ class Payment(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    enrollment = relationship("Enrollment", backref="payments")
+    enrollment = relationship("Enrollment", back_populates="payment")
 
 
 class TeacherWallet(Base):
