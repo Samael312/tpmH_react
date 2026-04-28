@@ -33,12 +33,21 @@ export default function TeacherDashboard() {
     date: tab === 'upcoming' ? selectedDate : undefined,
     includeHistory: tab === 'history',
   })
+  
   const { wallet } = useWallet()
 
-  const todayClasses = classes.filter(c => {
+  // 🛡️ PROTECCIÓN 1: Asegurarnos de que classes sea un array siempre
+  const safeClasses = Array.isArray(classes) ? classes : [];
+
+  const todayClasses = safeClasses.filter(c => {
+    if (!c?.start_time_utc) return false;
     const d = new Date(c.start_time_utc).toISOString().split('T')[0]
     return d === today.toISOString().split('T')[0]
   })
+
+  // 🛡️ PROTECCIÓN 2: Valores por defecto seguros para el wallet
+  const availableBalance = wallet?.available_balance || 0;
+  const totalEarned = wallet?.total_earned || 0;
 
   return (
     <div className="space-y-8 animate-fade-up bg-white min-h-screen p-6 rounded-3xl">
@@ -56,11 +65,10 @@ export default function TeacherDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4
-                      animate-fade-up animate-fade-up-delay-1">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-up animate-fade-up-delay-1">
         <StatCard
           label="Próximas"
-          value={stats.upcoming}
+          value={stats?.upcoming || 0}
           icon={
             <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-pink-500">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"/>
@@ -69,7 +77,7 @@ export default function TeacherDashboard() {
         />
         <StatCard
           label="Completadas"
-          value={stats.completed}
+          value={stats?.completed || 0}
           changeType="up"
           icon={
             <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-rose-500">
@@ -79,7 +87,7 @@ export default function TeacherDashboard() {
         />
         <StatCard
           label="Balance"
-          value={`$${wallet?.available_balance.toFixed(2) || '0.00'}`}
+          value={`$${Number(availableBalance).toFixed(2)}`}
           changeType="up"
           icon={
             <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-pink-500">
@@ -90,7 +98,7 @@ export default function TeacherDashboard() {
         />
         <StatCard
           label="Total ganado"
-          value={`$${wallet?.total_earned.toFixed(2) || '0.00'}`}
+          value={`$${Number(totalEarned).toFixed(2)}`}
           icon={
             <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-rose-400">
               <path fillRule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11 4a1 1 0 10-2 0v4a1 1 0 102 0V7zm-3 1a1 1 0 10-2 0v3a1 1 0 102 0V8zM8 9a1 1 0 00-2 0v2a1 1 0 102 0V9z" clipRule="evenodd"/>
@@ -145,8 +153,7 @@ export default function TeacherDashboard() {
       {/* Tabs y lista */}
       <div className="animate-fade-up animate-fade-up-delay-3">
         <div className="flex items-center justify-between mb-6">
-          <div className="flex gap-1 bg-slate-100/80 border border-slate-200/60
-                          rounded-xl p-1.5 shadow-inner">
+          <div className="flex gap-1 bg-slate-100/80 border border-slate-200/60 rounded-xl p-1.5 shadow-inner">
             {[
               { key: 'upcoming', label: 'Próximas' },
               { key: 'history',  label: 'Historial' },
@@ -180,12 +187,10 @@ export default function TeacherDashboard() {
         {loading ? (
           <div className="space-y-4">
             {[1, 2, 3].map(i => (
-              <div key={i}
-                   className="bg-slate-50 border border-pink-50 rounded-2xl
-                              h-28 animate-pulse shadow-sm" />
+              <div key={i} className="bg-slate-50 border border-pink-50 rounded-2xl h-28 animate-pulse shadow-sm" />
             ))}
           </div>
-        ) : classes.length === 0 ? (
+        ) : safeClasses.length === 0 ? (
           <Card className="py-20 text-center bg-slate-50/50 border-dashed border-2 border-slate-200 rounded-3xl shadow-none">
             <div className="text-5xl mb-4 drop-shadow-sm">
               {tab === 'upcoming' ? '🌸' : '📋'}
@@ -199,7 +204,7 @@ export default function TeacherDashboard() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {classes.map(c => (
+            {safeClasses.map(c => (
               <ClassCard key={c.id} class_={c} onUpdate={refetch} />
             ))}
           </div>

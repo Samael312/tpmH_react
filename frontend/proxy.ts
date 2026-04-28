@@ -16,11 +16,13 @@ export function proxy(request: NextRequest) {
   if (authRoutes.includes(pathname)) {
     if (!isExpired && payload) {
       if (payload.role === "student") return NextResponse.redirect(new URL("/dashboard", request.url));
-      if (payload.role === "teacher") return NextResponse.redirect(new URL("/teacher/dashboard", request.url));
-      // Aplicamos el || "" para calmar a TypeScript
-      if (["superadmin", "teacher_admin"].includes(payload.role || "")) {
-        return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+      
+      // Teacher normal va a su dashboard
+      if (["teacher", "teacher_admin"].includes(payload.role || "")) { 
+        return NextResponse.redirect(new URL("/teacher/dashboard", request.url));
       }
+      // Superadmin y Teacher_Admin van al panel de admin inicial
+      if (payload.role === "superadmin") return NextResponse.redirect(new URL("/admin/dashboard", request.url));
     }
     return NextResponse.next();
   }
@@ -30,26 +32,19 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // 3. Protección Profesores
-  if (pathname.startsWith("/teacher") && (isExpired || payload?.role !== "teacher")) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
-
-  // 4. Protección Admin (Unificada)
-  if (pathname.startsWith("/admin")) {
-    // Aplicamos el || "" para calmar a TypeScript
-    if (isExpired || !["superadmin", "teacher_admin"].includes(payload?.role || "")) {
+  // 3. Protección Profesores (¡CORREGIDO!)
+  if (pathname.startsWith("/teacher")) {
+    // Aquí permitimos tanto a teacher como a teacher_admin
+    if (isExpired || !["teacher", "teacher_admin"].includes(payload?.role || "")) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
   }
 
-  if (pathname.startsWith('/teacher')) {
-    if (!token || isTokenExpired(token)) {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
-    const payload = decodeToken(token)
-    if (!['teacher', 'teacher_admin'].includes(payload?.role || '')) {
-      return NextResponse.redirect(new URL('/login', request.url))
+  // 4. Protección Admin
+  if (pathname.startsWith("/admin")) {
+    // Aquí permitimos tanto a superadmin como a teacher_admin
+    if (isExpired || !["superadmin", "teacher_admin"].includes(payload?.role || "")) {
+      return NextResponse.redirect(new URL("/login", request.url));
     }
   }
 

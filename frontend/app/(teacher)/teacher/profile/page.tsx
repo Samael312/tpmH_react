@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   User, Briefcase, Globe, MapPin, Link2,
   MessageCircle, Plus,
@@ -12,7 +12,7 @@ import { useTeacherProfile, TeacherProfile } from "@/hooks/useTeacherData";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import CalendarSync from "./CalendarSync";
 
-// ─── Inline icon replacements (not in this lucide-react version) ─────────────
+// ─── Inline icon replacements ─────────────
 const InstagramIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
     <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
@@ -28,7 +28,7 @@ const YoutubeIcon = () => (
   </svg>
 );
 
-// ─── Extended profile type (photo_url comes from API but isn't in TS type yet) ──
+// ─── Extended profile type ──
 type TeacherProfileWithPhoto = TeacherProfile & { photo_url?: string | null };
 
 const LANGUAGES  = ["Español","English","Français","Italiano","Português","Deutsch"];
@@ -231,24 +231,27 @@ export default function TeacherProfilePage() {
   });
   const [initialized, setInitialized] = useState(false);
 
-  if (profile && !initialized) {
-    setBio(profile.bio ?? "");
-    setTitle_(profile.title ?? "");
-    setTimezone(profile.timezone ?? "");
-    setLanguages(profile.languages ?? []);
-    setSubjects(profile.subjects ?? []);
-    setSkills(profile.skills ?? []);
-    setCertificates(
-      Array.isArray(profile.certificates) ? profile.certificates : []
-    );
-    setSocialLinks({
-      instagram: profile.social_links?.instagram ?? "",
-      youtube:   profile.social_links?.youtube ?? "",
-      whatsapp:  profile.social_links?.whatsapp ?? "",
-      website:   profile.social_links?.website ?? "",
-    });
-    setInitialized(true);
-  }
+  // 🧠 SOLUCIÓN 1: Mover la inicialización a un useEffect
+  useEffect(() => {
+    if (profile && !initialized) {
+      setBio(profile.bio ?? "");
+      setTitle_(profile.title ?? "");
+      setTimezone(profile.timezone ?? "");
+      setLanguages(profile.languages ?? []);
+      setSubjects(profile.subjects ?? []);
+      setSkills(profile.skills ?? []);
+      setCertificates(
+        Array.isArray(profile.certificates) ? profile.certificates : []
+      );
+      setSocialLinks({
+        instagram: profile.social_links?.instagram ?? "",
+        youtube:   profile.social_links?.youtube ?? "",
+        whatsapp:  profile.social_links?.whatsapp ?? "",
+        website:   profile.social_links?.website ?? "",
+      });
+      setInitialized(true);
+    }
+  }, [profile, initialized]);
 
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -332,9 +335,6 @@ export default function TeacherProfilePage() {
             <p className="text-slate-500 mt-1">
               Así te ven los estudiantes en el marketplace
             </p>
-            <h2 className="text-sm font-bold text-slate-400 mt-0.5">
-              <CalendarSync /> Recuerda mantener tu calendario sincronizado para mostrar tu disponibilidad real a los estudiantes
-            </h2>
           </div>
 
           {profile && (
@@ -362,6 +362,11 @@ export default function TeacherProfilePage() {
             {error}
           </div>
         )}
+
+        {/* 🧠 SOLUCIÓN 2: Extraer la sincronización del calendario a un bloque destacado */}
+        <div className="animate-in fade-in slide-in-from-bottom-5 duration-700">
+          <CalendarSync />
+        </div>
 
         {/* Foto y datos básicos */}
         <Section title="Presentación" icon={<User className="w-5 h-5" />}>
@@ -617,7 +622,7 @@ export default function TeacherProfilePage() {
         </div>
 
       </div>
-      <ChipiWidget screenName="teacher_profile" /> {/* Widget de perfil */}
+      <ChipiWidget screenName="teacher_profile" />
     </div>
   );
 }

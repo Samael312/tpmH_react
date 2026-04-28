@@ -1,23 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react"; // 👈 Importamos useEffect
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { 
-  LayoutDashboard, 
-  Users, 
-  GraduationCap, 
-  Calendar, 
-  Settings, 
-  LogOut, 
-  MonitorPlay,
-  UserCircle,
-  ClipboardEdit,
-  CreditCard, 
-  Book,
-  BarChart,
-  ChevronLeft
+  LayoutDashboard, Users, GraduationCap, Calendar, Settings, LogOut, 
+  MonitorPlay, UserCircle, ClipboardEdit, CreditCard, Book, BarChart, ChevronLeft
 } from "lucide-react";
 
 export default function DashboardSidebar() {
@@ -25,6 +14,18 @@ export default function DashboardSidebar() {
   const { user, logout } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
   
+  // 👇 1. ESTADO PARA EVITAR EL ERROR DE NEXT.JS
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // 👇 2. MIENTRAS CARGA, MOSTRAMOS UNA BARRA VACÍA (Evita el crasheo)
+  if (!isMounted) {
+    return <aside className="w-64 bg-white border-r border-pink-100 min-h-screen shadow-xl shadow-pink-500/5 flex-shrink-0 z-50 transition-all"></aside>;
+  }
+
   const role = user?.role || "";
 
   // 🧠 Lógica de permisos
