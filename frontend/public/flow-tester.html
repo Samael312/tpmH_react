@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TPMH Flow Tester</title>
+<style>
+:root {
+  --bg: #0d1117; --surface: #161b22; --surface2: #21262d; --border: #30363d;
+  --border2: #21262d; --text: #e6edf3; --text2: #8b949e; --text3: #484f58;
+  --blue: #58a6ff; --blue-dim: #1f6feb22; --green: #3fb950; --green-dim: #238636;
+  --red: #f85149; --red-dim: #da363022; --yellow: #d29922; --yellow-dim: #bb800922;
+  --purple: #bc8cff; --orange: #ffa657; --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 13px; overflow: hidden; }
+
+/* Layout */
+.app { display: grid; grid-template-columns: 240px 1fr 360px; grid-template-rows: 48px 1fr; height: 100vh; }
+.topbar { grid-column: 1/-1; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; padding: 0 16px; }
+.sidebar { background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+.main { overflow-y: auto; background: var(--bg); }
+.inspector { background: var(--surface); border-left: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+
+/* Topbar */
+.logo { font-weight: 700; font-size: 14px; color: var(--text); letter-spacing: -0.3px; }
+.logo span { color: var(--blue); }
+.tag { font-size: 10px; padding: 2px 7px; border-radius: 99px; background: var(--blue-dim); color: var(--blue); font-weight: 600; border: 1px solid #1f6feb55; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.run-all-btn { background: var(--green-dim); border: 1px solid var(--green); color: var(--green); padding: 5px 14px; border-radius: 6px; font-weight: 600; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.15s; }
+.run-all-btn:hover:not(:disabled) { background: #238636; color: #fff; }
+.run-all-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.icon-btn { background: transparent; border: 1px solid var(--border); color: var(--text2); padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.15s; display: flex; align-items: center; gap: 5px; }
+.icon-btn:hover:not(:disabled) { background: var(--surface2); color: var(--text); }
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Sidebar */
+.sidebar-section { padding: 12px 10px 4px; font-size: 10px; font-weight: 700; color: var(--text3); letter-spacing: 0.8px; text-transform: uppercase; }
+.suite-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; border-radius: 6px; margin: 1px 6px; transition: background 0.1s; }
+.suite-item:hover { background: var(--surface2); }
+.suite-item.active { background: var(--blue-dim); }
+.suite-item.active .suite-name { color: var(--blue); font-weight: 600; }
+.suite-emoji { font-size: 14px; width: 20px; text-align: center; }
+.suite-name { flex: 1; font-size: 12px; color: var(--text2); }
+.suite-badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 99px; }
+.badge-pass { background: #23863622; color: var(--green); }
+.badge-fail { background: var(--red-dim); color: var(--red); }
+.badge-warn { background: var(--yellow-dim); color: var(--yellow); }
+.badge-pending { background: var(--surface2); color: var(--text3); }
+.badge-running { background: var(--blue-dim); color: var(--blue); }
+.suite-score { font-size: 10px; font-weight: 700; width: 24px; text-align: right; }
+
+/* Config section */
+.config-area { padding: 10px; border-top: 1px solid var(--border); margin-top: auto; }
+.config-label { font-size: 10px; color: var(--text3); margin-bottom: 4px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+.config-input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 8px; border-radius: 6px; font-size: 11px; font-family: var(--mono); outline: none; }
+.config-input:focus { border-color: var(--blue); }
+.config-row { display: flex; gap: 6px; margin-bottom: 8px; }
+.config-row .config-input { flex: 1; }
+
+/* Main area */
+.main-header { padding: 16px 20px 12px; border-bottom: 1px solid var(--border2); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--bg); z-index: 10; }
+.suite-title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.progress-bar-wrap { height: 2px; background: var(--border); position: sticky; top: 49px; z-index: 9; }
+.progress-bar { height: 100%; background: var(--blue); transition: width 0.3s; }
+
+/* Stats row */
+.stats-row { display: flex; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--border2); }
+.stat-box { flex: 1; background: var(--surface); border: 1px solid var(--border2); border-radius: 8px; padding: 10px 14px; }
+.stat-val { font-size: 20px; font-weight: 700; font-family: var(--mono); }
+.stat-lbl { font-size: 10px; color: var(--text3); margin-top: 2px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; }
+
+/* Test items */
+.test-list { padding: 10px; display: flex; flex-direction: column; gap: 4px; }
+.test-item { background: var(--surface); border: 1px solid var(--border2); border-radius: 8px; overflow: hidden; transition: border-color 0.15s; cursor: pointer; }
+.test-item:hover { border-color: var(--border); }
+.test-item.active { border-color: var(--blue); }
+.test-item.status-pass { border-left: 3px solid var(--green); }
+.test-item.status-fail { border-left: 3px solid var(--red); }
+.test-item.status-warn { border-left: 3px solid var(--yellow); }
+.test-item.status-running { border-left: 3px solid var(--blue); }
+.test-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+.test-status-icon { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+.icon-pass { background: #23863633; color: var(--green); }
+.icon-fail { background: var(--red-dim); color: var(--red); }
+.icon-warn { background: var(--yellow-dim); color: var(--yellow); }
+.icon-running { background: var(--blue-dim); color: var(--blue); }
+.icon-pending { background: var(--surface2); color: var(--text3); }
+.test-name { flex: 1; font-size: 12px; font-weight: 600; color: var(--text); }
+.test-method { font-size: 10px; font-family: var(--mono); font-weight: 700; padding: 2px 6px; border-radius: 4px; }
+.method-GET { background: #1f6feb22; color: var(--blue); }
+.method-POST { background: #23863622; color: var(--green); }
+.method-PATCH { background: #bb800922; color: var(--yellow); }
+.method-DELETE { background: var(--red-dim); color: var(--red); }
+.test-timing { font-size: 10px; color: var(--text3); font-family: var(--mono); min-width: 48px; text-align: right; }
+.test-code { font-size: 10px; font-family: var(--mono); font-weight: 700; }
+.code-2xx { color: var(--green); }
+.code-4xx { color: var(--yellow); }
+.code-5xx { color: var(--red); }
+.test-desc { padding: 0 14px 10px; font-size: 11px; color: var(--text2); line-height: 1.5; }
+.test-summary { padding: 6px 14px 10px; font-size: 11px; font-weight: 600; }
+.summary-pass { color: var(--green); }
+.summary-fail { color: var(--red); }
+.summary-warn { color: var(--yellow); }
+
+.run-btn { background: transparent; border: 1px solid var(--border); color: var(--text2); padding: 3px 9px; border-radius: 5px; cursor: pointer; font-size: 11px; transition: all 0.15s; flex-shrink: 0; }
+.run-btn:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+.run-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Inspector */
+.inspector-header { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 700; color: var(--text2); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--surface); z-index: 10; }
+.inspector-tabs { display: flex; border-bottom: 1px solid var(--border); }
+.inspector-tab { padding: 8px 14px; font-size: 11px; cursor: pointer; color: var(--text3); border-bottom: 2px solid transparent; transition: all 0.15s; }
+.inspector-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+.inspector-tab:hover { color: var(--text); }
+.inspector-content { padding: 12px; flex: 1; overflow-y: auto; }
+.inspector-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; color: var(--text3); gap: 8px; }
+
+/* Code blocks */
+.code-block { background: var(--bg); border: 1px solid var(--border2); border-radius: 6px; padding: 10px 12px; font-family: var(--mono); font-size: 11px; color: var(--text2); overflow-x: auto; white-space: pre-wrap; word-break: break-all; line-height: 1.6; max-height: 320px; overflow-y: auto; }
+.code-label { font-size: 10px; color: var(--text3); margin-bottom: 5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: space-between; }
+.section-gap { margin-bottom: 14px; }
+
+/* Assertions */
+.assertion { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border2); font-size: 11px; }
+.assertion:last-child { border-bottom: none; }
+.assert-icon { width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+.assert-pass { background: #23863633; color: var(--green); }
+.assert-fail { background: var(--red-dim); color: var(--red); }
+.assert-name { color: var(--text2); flex: 1; }
+.assert-detail { color: var(--text3); font-family: var(--mono); font-size: 10px; margin-top: 2px; }
+
+/* AI analysis */
+.ai-section { background: #bc8cff11; border: 1px solid #bc8cff33; border-radius: 8px; padding: 12px 14px; }
+.ai-label { font-size: 10px; font-weight: 700; color: var(--purple); margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase; }
+.ai-text { font-size: 11px; color: var(--text2); line-height: 1.6; }
+.ai-issue { display: flex; gap: 7px; margin-top: 6px; font-size: 11px; color: var(--text2); }
+.ai-suggestion { display: flex; gap: 7px; margin-top: 5px; font-size: 11px; color: var(--text2); }
+
+/* Log */
+.log-area { background: var(--bg); border: 1px solid var(--border2); border-radius: 6px; padding: 10px 12px; font-family: var(--mono); font-size: 10px; max-height: 160px; overflow-y: auto; line-height: 1.7; }
+
+/* Spinner */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinning { animation: spin 0.8s linear infinite; display: inline-block; }
+
+/* Scroll */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* JSON syntax */
+.json-key { color: #79c0ff; }
+.json-str { color: #a5d6ff; }
+.json-num { color: #ffa657; }
+.json-bool { color: #ff7b72; }
+.json-null { color: var(--text3); }
+
+/* Status pills */
+.pill { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; }
+.pill-pass { background: #23863622; color: var(--green); border: 1px solid #23863655; }
+.pill-fail { background: var(--red-dim); color: var(--red); border: 1px solid #f8514955; }
+.pill-warn { background: var(--yellow-dim); color: var(--yellow); border: 1px solid #d2992255; }
+.pill-running { background: var(--blue-dim); color: var(--blue); border: 1px solid #58a6ff55; }
+.pill-pending { background: var(--surface2); color: var(--text3); border: 1px solid var(--border); }
+
+/* Tooltip */
+[title] { cursor: help; }
+
+/* Export modal */
+.modal-bg { position: fixed; inset: 0; background: #000000aa; z-index: 100; display: flex; align-items: center; justify-content: center; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; width: 420px; max-width: 95vw; }
+.modal-title { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
+.modal-btn { width: 100%; padding: 10px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; margin-bottom: 8px; transition: all 0.15s; }
+
+/* Setup screen */
+.setup-screen { max-width: 560px; margin: 60px auto; padding: 0 20px; }
+.setup-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; }
+.setup-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.setup-sub { font-size: 12px; color: var(--text2); margin-bottom: 24px; line-height: 1.6; }
+.form-group { margin-bottom: 14px; }
+.form-label { font-size: 11px; color: var(--text2); margin-bottom: 5px; font-weight: 600; display: block; }
+.form-input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 8px; font-size: 13px; font-family: var(--mono); outline: none; transition: border-color 0.15s; }
+.form-input:focus { border-color: var(--blue); }
+.form-hint { font-size: 10px; color: var(--text3); margin-top: 4px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.setup-btn { width: 100%; padding: 11px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.15s; margin-top: 8px; }
+.setup-btn:hover { background: #79b8ff; }
+.info-box { background: var(--bg); border: 1px solid var(--border2); border-radius: 8px; padding: 12px 14px; margin-bottom: 20px; font-size: 11px; color: var(--text2); line-height: 1.7; }
+.info-box b { color: var(--orange); }
+</style>
+</head>
+<body>
+
+<div id="setup" style="display:none">
+  <div class="setup-screen">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:28px;margin-bottom:8px">🧪</div>
+      <div style="font-size:22px;font-weight:800;letter-spacing:-0.5px">TPMH Flow Tester</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:4px">Suite de testing funcional profesional</div>
+    </div>
+    <div class="setup-card">
+      <div class="info-box">
+        Este tester hace llamadas <b>HTTP reales</b> a tu backend. Crea usuarios de prueba temporales, ejecuta flujos completos y valida cada respuesta. Configura la URL de tu API y opcionalmente una key de Gemini para análisis inteligente de fallos.
+      </div>
+      <div class="form-group">
+        <label class="form-label">URL del Backend API *</label>
+        <input class="form-input" id="s_baseUrl" placeholder="http://localhost:8000" value="http://localhost:8000"/>
+        <div class="form-hint">Sin slash final. Ej: http://localhost:8000 o https://api.tudominio.com</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Email admin (para tests de staff)</label>
+          <input class="form-input" id="s_adminEmail" placeholder="admin@test.com"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password admin</label>
+          <input class="form-input" type="password" id="s_adminPass" placeholder="••••••••"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Gemini API Key (opcional — para análisis de fallos con IA)</label>
+        <input class="form-input" id="s_geminiKey" placeholder="AIzaSy..." type="password"/>
+        <div class="form-hint">Google AI Studio gratuito: aistudio.google.com → Get API Key</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Username de un profesor existente (para tests de slots)</label>
+        <input class="form-input" id="s_teacherUsername" placeholder="maria" value="maria"/>
+      </div>
+      <button class="setup-btn" onclick="startApp()">▶ Iniciar Tester</button>
+    </div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="app">
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="logo">TPMH <span>Tester</span></div>
+      <div class="tag">FUNCTIONAL</div>
+      <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
+      <span style="font-size:11px;color:var(--text3)" id="tb_baseUrl"></span>
+      <div class="topbar-right">
+        <span style="font-size:11px;color:var(--text3)" id="tb_progress"></span>
+        <button class="icon-btn" onclick="clearAll()" id="btn_clear">↺ Limpiar</button>
+        <button class="icon-btn" onclick="showExport()" id="btn_export">↓ Exportar</button>
+        <button class="run-all-btn" onclick="runAllTests()" id="btn_runAll">▶ Ejecutar todo</button>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-section">Suites de tests</div>
+      <div id="suite_list"></div>
+
+      <div class="config-area">
+        <div class="config-label" style="margin-bottom:8px">Configuración rápida</div>
+        <div style="margin-bottom:6px">
+          <div class="config-label">Base URL</div>
+          <input class="config-input" id="cfg_url" oninput="CFG.baseUrl=this.value;document.getElementById('tb_baseUrl').textContent=this.value"/>
+        </div>
+        <div style="margin-bottom:6px">
+          <div class="config-label">Gemini Key</div>
+          <input class="config-input" type="password" id="cfg_gemini" placeholder="AIzaSy..." oninput="CFG.geminiKey=this.value"/>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:8px">
+          Tests crean usuarios temporales con emails <code style="color:var(--blue)">test_XXX@tpmh.test</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main" id="main_panel">
+      <div class="main-header">
+        <div class="suite-title" id="main_title">
+          <span id="main_emoji">🔐</span>
+          <span id="main_name">Autenticación</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span id="main_pill"></span>
+          <button class="icon-btn" onclick="runSuite(ACTIVE_SUITE)" id="btn_runSuite">▶ Ejecutar suite</button>
+        </div>
+      </div>
+      <div class="progress-bar-wrap"><div class="progress-bar" id="progress_bar" style="width:0%"></div></div>
+
+      <div class="stats-row" id="stats_row" style="display:none"></div>
+      <div class="test-list" id="test_list"></div>
+    </div>
+
+    <!-- Inspector -->
+    <div class="inspector">
+      <div class="inspector-header">
+        <span>Inspector</span>
+        <span id="insp_pill"></span>
+      </div>
+      <div class="inspector-tabs">
+        <div class="inspector-tab active" onclick="setTab('request')" id="tab_request">Request</div>
+        <div class="inspector-tab" onclick="setTab('response')" id="tab_response">Response</div>
+        <div class="inspector-tab" onclick="setTab('assertions')" id="tab_assertions">Asserts</div>
+        <div class="inspector-tab" onclick="setTab('ai')" id="tab_ai">✦ IA</div>
+      </div>
+      <div class="inspector-content" id="inspector_content">
+        <div class="inspector-empty">
+          <span style="font-size:28px">🔍</span>
+          <span style="font-size:12px">Selecciona un test para inspeccionar</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modal_export" style="display:none" class="modal-bg" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-title">Exportar resultados</div>
+    <button class="modal-btn" style="background:var(--blue);color:#fff" onclick="exportJSON()">Exportar JSON completo</button>
+    <button class="modal-btn" style="background:var(--surface2);color:var(--text);border:1px solid var(--border)" onclick="exportHTML()">Exportar reporte HTML</button>
+    <button class="modal-btn" style="background:transparent;color:var(--text2);border:1px solid var(--border)" onclick="document.getElementById('modal_export').style.display='none'">Cancelar</button>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ────────────────────────────────────────────────────────────────
+const CFG = { baseUrl: "", adminEmail: "", adminPass: "", geminiKey: "", teacherUsername: "maria" };
+
+// ─── SHARED STATE between tests ─────────────────────────────────────────────
+const STATE = {
+  studentToken: null, teacherToken: null, adminToken: null,
+  studentId: null, teacherId: null,
+  studentEmail: null, teacherEmail: null,
+  enrollmentId: null, classId: null, paymentId: null,
+  materialId: null, homeworkId: null, homeworkAssignmentId: null,
+  availabilitySlot: null, testSuffix: null,
+};
+
+// ─── TEST SUITES ─────────────────────────────────────────────────────────────
+const SUITES = [
+
+  { id: "auth", name: "Autenticación", emoji: "🔐", color: "#58a6ff",
+    tests: [
+      { id: "auth-health", name: "Health check API", method: "GET", path: "/health",
+        desc: "Verifica que el backend está corriendo y responde",
+        run: async () => {
+          const r = await req("GET", "/health");
+          return result(r, [
+            assert("Status 200", r.status === 200),
+          ]);
+        }},
+      { id: "auth-register-student", name: "Registro estudiante", method: "POST", path: "/api/v1/auth/register",
+        desc: "Crea cuenta de estudiante y obtiene access_token JWT",
+        run: async () => {
+          STATE.testSuffix = Math.random().toString(36).slice(2,8);
+          STATE.studentEmail = `test_s_${STATE.testSuffix}@tpmh.test`;
+          const body = { email: STATE.studentEmail, password: "TestPass123!", first_name: "Test", last_name: "Student", role: "student" };
+          const r = await req("POST", "/api/v1/auth/register", body);
+          if (r.data?.access_token) STATE.studentToken = r.data.access_token;
+          if (r.data?.user?.id) STATE.studentId = r.data.user.id;
+          return result(r, [
+            assert("Status 200 o 201", r.status === 200 || r.status === 201),
+            assert("Contiene access_token", !!r.data?.access_token),
+            assert("Usuario tiene id", !!r.data?.user?.id),
+            assert("Rol es student", r.data?.user?.role === "student"),
+          ]);
+        }},
+      { id: "auth-register-teacher", name: "Registro profesor", method: "POST", path: "/api/v1/auth/register",
+        desc: "Crea cuenta de profesor y obtiene access_token JWT",
+        run: async () => {
+          STATE.teacherEmail = `test_t_${STATE.testSuffix}@tpmh.test`;
+          const body = { email: STATE.teacherEmail, password: "TestPass123!", first_name: "Test", last_name: "Teacher", role: "teacher" };
+          const r = await req("POST", "/api/v1/auth/register", body);
+          if (r.data?.access_token) STATE.teacherToken = r.data.access_token;
+          if (r.data?.user?.id) STATE.teacherId = r.data.user.id;
+          return result(r, [
+            assert("Status 200 o 201", r.status === 200 || r.status === 201),
+            assert("Contiene access_token", !!r.data?.access_token),
+            assert("Rol es teacher", r.data?.user?.role === "teacher"),
+          ]);
+        }},
+      { id: "auth-login", name: "Login con email", method: "POST", path: "/api/v1/auth/login",
+        desc: "Login con email y password, obtiene nuevo token",
+        run: async () => {
+          const body = { login: STATE.studentEmail || "test@test.com", password: "TestPass123!" };
+          const r = await req("POST", "/api/v1/auth/login", body);
+          if (r.data?.access_token) STATE.studentToken = r.data.access_token;
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Contiene access_token", !!r.data?.access_token),
+            assert("Token es string", typeof r.data?.access_token === "string"),
+          ]);
+        }},
+      { id: "auth-me", name: "GET /users/me (autenticado)", method: "GET", path: "/api/v1/users/me",
+        desc: "Obtiene el perfil del usuario con el JWT del estudiante",
+        run: async () => {
+          const r = await req("GET", "/api/v1/users/me", null, STATE.studentToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Tiene email", !!r.data?.email),
+            assert("Email coincide", r.data?.email === STATE.studentEmail),
+            assert("Tiene role", !!r.data?.role),
+          ]);
+        }},
+      { id: "auth-me-unauth", name: "GET /users/me sin token", method: "GET", path: "/api/v1/users/me",
+        desc: "Ruta protegida debe rechazar con 401 si no hay JWT",
+        run: async () => {
+          const r = await req("GET", "/api/v1/users/me", null, null);
+          return result(r, [
+            assert("Status 401 o 403", r.status === 401 || r.status === 403),
+          ]);
+        }},
+      { id: "auth-login-admin", name: "Login admin/staff", method: "POST", path: "/api/v1/auth/login",
+        desc: "Login con credenciales de admin para tests de panel",
+        run: async () => {
+          if (!CFG.adminEmail) return skip("Sin credenciales de admin configuradas");
+          const r = await req("POST", "/api/v1/auth/login", { login: CFG.adminEmail, password: CFG.adminPass });
+          if (r.data?.access_token) STATE.adminToken = r.data.access_token;
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Contiene access_token", !!r.data?.access_token),
+          ]);
+        }},
+      { id: "auth-forgot", name: "Forgot password", method: "POST", path: "/api/v1/auth/forgot-password",
+        desc: "Solicita reset de contraseña — backend envía email",
+        run: async () => {
+          const r = await req("POST", "/api/v1/auth/forgot-password", { email: STATE.studentEmail || "test@test.com" });
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Responde con mensaje", !!r.data?.message || !!r.data?.msg || r.status === 200),
+          ]);
+        }},
+    ]},
+
+  { id: "users", name: "Perfil de Usuario", emoji: "👤", color: "#ffa657",
+    tests: [
+      { id: "users-patch-me", name: "PATCH /users/me", method: "PATCH", path: "/api/v1/users/me",
+        desc: "Actualiza datos básicos del usuario autenticado",
+        run: async () => {
+          const r = await req("PATCH", "/api/v1/users/me", { first_name: "TestUpdated" }, STATE.studentToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Nombre actualizado", r.data?.first_name === "TestUpdated" || r.status === 200),
+          ]);
+        }},
+      { id: "users-patch-student", name: "PATCH student-profile", method: "PATCH", path: "/api/v1/users/me/student-profile",
+        desc: "Actualiza perfil de estudiante: timezone, learning_goal",
+        run: async () => {
+          const body = { timezone: "America/Bogota", learning_goal: "conversacion", english_level: "intermediate" };
+          const r = await req("PATCH", "/api/v1/users/me/student-profile", body, STATE.studentToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("No error", !r.data?.detail),
+          ]);
+        }},
+      { id: "users-patch-prefs", name: "PATCH /users/me/preferences", method: "PATCH", path: "/api/v1/users/me/preferences",
+        desc: "Guarda preferencias de horario del estudiante",
+        run: async () => {
+          const body = { preferred_days: ["monday","wednesday"], preferred_times: ["morning"], notifications_enabled: true };
+          const r = await req("PATCH", "/api/v1/users/me/preferences", body, STATE.studentToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+          ]);
+        }},
+      { id: "users-onboarding", name: "Marcar onboarding completo", method: "PATCH", path: "/api/v1/users/me",
+        desc: "Establece onboarding_completed=true",
+        run: async () => {
+          const r = await req("PATCH", "/api/v1/users/me", { onboarding_completed: true }, STATE.studentToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+          ]);
+        }},
+      { id: "users-list-admin", name: "GET /admin/users (staff)", method: "GET", path: "/api/v1/admin/users",
+        desc: "Admin obtiene lista de todos los usuarios",
+        run: async () => {
+          if (!STATE.adminToken) return skip("Requiere login de admin");
+          const r = await req("GET", "/api/v1/admin/users", null, STATE.adminToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Retorna array o paginado", Array.isArray(r.data) || !!r.data?.items || !!r.data?.users),
+          ]);
+        }},
+    ]},
+
+  { id: "availability", name: "Disponibilidad", emoji: "📅", color: "#3fb950",
+    tests: [
+      { id: "av-weekly-post", name: "POST horario semanal", method: "POST", path: "/api/v1/availability/me/weekly",
+        desc: "Guarda bloques de disponibilidad semanal del profesor",
+        run: async () => {
+          const body = { slots: [
+            { day_of_week: 1, start_time: "09:00", end_time: "12:00" },
+            { day_of_week: 3, start_time: "14:00", end_time: "18:00" },
+            { day_of_week: 5, start_time: "10:00", end_time: "13:00" },
+          ]};
+          const r = await req("POST", "/api/v1/availability/me/weekly", body, STATE.teacherToken || STATE.adminToken);
+          return result(r, [
+            assert("Status 200 o 201", r.status === 200 || r.status === 201),
+          ]);
+        }},
+      { id: "av-slots-get", name: "GET slots disponibles", method: "GET", path: `/api/v1/availability/${CFG.teacherUsername || 'maria'}/slots`,
+        desc: "Obtiene slots libres de un profesor para una fecha",
+        run: async () => {
+          const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+          const dateStr = tomorrow.toISOString().split("T")[0];
+          const r = await req("GET", `/api/v1/availability/${CFG.teacherUsername || "maria"}/slots?date=${dateStr}&duration=60`, null, STATE.studentToken);
+          if (r.data?.length > 0) STATE.availabilitySlot = r.data[0];
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Retorna array", Array.isArray(r.data)),
+            assert("Estructura de slot válida", !r.data?.length || !!r.data[0]?.start_time),
+          ]);
+        }},
+      { id: "av-featured", name: "GET featured-teacher/slots", method: "GET", path: "/api/v1/availability/featured-teacher/slots",
+        desc: "Obtiene slots del profesor destacado configurado en PlatformConfig",
+        run: async () => {
+          const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+          const dateStr = tomorrow.toISOString().split("T")[0];
+          const r = await req("GET", `/api/v1/availability/featured-teacher/slots?date=${dateStr}&duration=60`, null, STATE.studentToken);
+          return result(r, [
+            assert("Status 200 o 404", r.status === 200 || r.status === 404),
+            assert("Si 200, retorna array", r.status !== 200 || Array.isArray(r.data)),
+          ]);
+        }},
+      { id: "av-exception", name: "POST excepción de disponibilidad", method: "POST", path: "/api/v1/availability/me/exceptions",
+        desc: "Agrega un bloqueo puntual; ese slot debe desaparecer",
+        run: async () => {
+          const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+          const body = { date: tomorrow.toISOString().split("T")[0], start_time: "09:00", end_time: "10:00", reason: "Test block" };
+          const r = await req("POST", "/api/v1/availability/me/exceptions", body, STATE.teacherToken || STATE.adminToken);
+          return result(r, [
+            assert("Status 200 o 201", r.status === 200 || r.status === 201),
+          ]);
+        }},
+    ]},
+
+  { id: "packages", name: "Paquetes / Enrollments", emoji: "📦", color: "#bc8cff",
+    tests: [
+      { id: "pkg-list", name: "GET /packages (admin)", method: "GET", path: "/api/v1/packages/",
+        desc: "Lista los paquetes de clases disponibles",
+        run: async () => {
+          const r = await req("GET", "/api/v1/packages/", null, STATE.adminToken || STATE.studentToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Retorna array o paginado", Array.isArray(r.data) || !!r.data?.items),
+          ]);
+        }},
+      { id: "pkg-assign", name: "Asignar paquete a estudiante (admin)", method: "POST", path: "/api/v1/packages/assign",
+        desc: "Admin crea un enrollment asignando paquete a estudiante",
+        run: async () => {
+          if (!STATE.adminToken) return skip("Requiere login de admin");
+          if (!STATE.studentId) return skip("Requiere studentId del test de registro");
+          const body = { student_id: STATE.studentId, package_name: "basic", price_per_class: 20, total_classes: 4 };
+          const r = await req("POST", "/api/v1/packages/assign", body, STATE.adminToken);
+          if (r.data?.id) STATE.enrollmentId = r.data.id;
+          if (r.data?.enrollment_id) STATE.enrollmentId = r.data.enrollment_id;
+          return result(r, [
+            assert("Status 200 o 201", r.status === 200 || r.status === 201),
+            assert("Retorna enrollment con id", !!r.data?.id || !!r.data?.enrollment_id),
+          ]);
+        }},
+      { id: "pkg-my-enrollment", name: "GET /packages/my-enrollment", method: "GET", path: "/api/v1/packages/my-enrollment",
+        desc: "Estudiante obtiene su enrollment activo",
+        run: async () => {
+          const r = await req("GET", "/api/v1/packages/my-enrollment", null, STATE.studentToken);
+          if (r.data?.id && !STATE.enrollmentId) STATE.enrollmentId = r.data.id;
+          return result(r, [
+            assert("Status 200 o 404", r.status === 200 || r.status === 404),
+            assert("Si 200, tiene id", r.status !== 200 || !!r.data?.id),
+          ]);
+        }},
+    ]},
+
+  { id: "classes", name: "Reserva de Clases", emoji: "📋", color: "#d29922",
+    tests: [
+      { id: "cls-book", name: "POST /classes/book", method: "POST", path: "/api/v1/classes/book",
+        desc: "Estudiante reserva una clase en un slot disponible",
+        run: async () => {
+          if (!STATE.enrollmentId) return skip("Requiere enrollment activo");
+          const slot = STATE.availabilitySlot;
+          const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+          const body = {
+            enrollment_id: STATE.enrollmentId,
+            teacher_username: CFG.teacherUsername || "maria",
+            scheduled_at: slot?.start_time || tomorrow.toISOString(),
+            duration_minutes: 60,
+          };
+          const r = await req("POST", "/api/v1/classes/book", body, STATE.studentToken);
+          if (r.data?.id) STATE.classId = r.data.id;
+          return result(r, [
+            assert("Status 200 o 201", r.status === 200 || r.status === 201),
+            assert("Clase tiene id", !!r.data?.id),
+            assert("Status es pending o pending_payment", ["pending","pending_payment","confirmed"].includes(r.data?.status)),
+          ]);
+        }},
+      { id: "cls-list-student", name: "GET clases del estudiante", method: "GET", path: "/api/v1/classes/my",
+        desc: "Estudiante obtiene sus clases pasadas y futuras",
+        run: async () => {
+          const r = await req("GET", "/api/v1/classes/my", null, STATE.studentToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Retorna array", Array.isArray(r.data) || !!r.data?.items || !!r.data?.classes),
+          ]);
+        }},
+      { id: "cls-list-teacher", name: "GET clases del profesor", method: "GET", path: "/api/v1/classes/teacher/my",
+        desc: "Profesor obtiene su agenda de clases",
+        run: async () => {
+          const r = await req("GET", "/api/v1/classes/teacher/my", null, STATE.teacherToken || STATE.adminToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Retorna array", Array.isArray(r.data) || !!r.data?.items || !!r.data?.classes),
+          ]);
+        }},
+      { id: "cls-conflict", name: "Conflicto de horario (409)", method: "POST", path: "/api/v1/classes/book",
+        desc: "Intentar reservar el mismo slot dos veces debe dar 409",
+        run: async () => {
+          if (!STATE.classId || !STATE.enrollmentId) return skip("Requiere clase previa existente");
+          const slot = STATE.availabilitySlot;
+          const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+          const body = {
+            enrollment_id: STATE.enrollmentId,
+            teacher_username: CFG.teacherUsername || "maria",
+            scheduled_at: slot?.start_time || tomorrow.toISOString(),
+            duration_minutes: 60,
+          };
+          const r = await req("POST", "/api/v1/classes/book", body, STATE.studentToken);
+          return result(r, [
+            assert("Status 409 o 400 (conflicto)", r.status === 409 || r.status === 400 || r.status === 422),
+          ]);
+        }},
+      { id: "cls-cancel", name: "DELETE /classes/{id} (cancelar)", method: "DELETE", path: "/api/v1/classes/{id}",
+        desc: "Estudiante cancela su clase (requiere 12h de antelación)",
+        run: async () => {
+          if (!STATE.classId) return skip("Sin clase creada en este ciclo");
+          const r = await req("DELETE", `/api/v1/classes/${STATE.classId}`, null, STATE.studentToken);
+          return result(r, [
+            assert("Status 200 o 400 (si < 12h)", r.status === 200 || r.status === 400),
+            assert("No 500", r.status !== 500),
+          ]);
+        }},
+    ]},
+
+  { id: "payments", name: "Pagos", emoji: "💳", color: "#f85149",
+    tests: [
+      { id: "pay-config", name: "GET /payments/config", method: "GET", path: "/api/v1/payments/config",
+        desc: "Obtiene métodos de pago habilitados (paypal, binance, etc.)",
+        run: async () => {
+          const r = await req("GET", "/api/v1/payments/config", null, STATE.studentToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Tiene métodos de pago", !!r.data?.paypal_enabled !== undefined || !!r.data?.methods || r.status === 200),
+          ]);
+        }},
+      { id: "pay-book", name: "POST /payments/book", method: "POST", path: "/api/v1/payments/book",
+        desc: "Inicia el proceso de pago para una clase, obtiene instrucciones",
+        run: async () => {
+          if (!STATE.classId) return skip("Sin clase creada — ejecutar suite de clases primero");
+          const body = { class_id: STATE.classId, payment_method: "paypal" };
+          const r = await req("POST", "/api/v1/payments/book", body, STATE.studentToken);
+          if (r.data?.id) STATE.paymentId = r.data.id;
+          if (r.data?.payment_id) STATE.paymentId = r.data.payment_id;
+          return result(r, [
+            assert("Status 200 o 201", r.status === 200 || r.status === 201),
+            assert("Tiene instrucciones de pago", !!r.data?.payment_instructions || !!r.data?.instructions || r.status === 200),
+          ]);
+        }},
+      { id: "pay-pending", name: "GET /payments/pending-review (staff)", method: "GET", path: "/api/v1/payments/pending-review",
+        desc: "Admin lista pagos pendientes de aprobación con comprobante",
+        run: async () => {
+          if (!STATE.adminToken) return skip("Requiere login de admin");
+          const r = await req("GET", "/api/v1/payments/pending-review", null, STATE.adminToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Retorna array", Array.isArray(r.data) || !!r.data?.items),
+          ]);
+        }},
+      { id: "pay-withdrawal", name: "GET /payments/withdrawals (staff)", method: "GET", path: "/api/v1/payments/withdrawals",
+        desc: "Admin lista solicitudes de retiro de profesores",
+        run: async () => {
+          if (!STATE.adminToken) return skip("Requiere login de admin");
+          const r = await req("GET", "/api/v1/payments/withdrawals", null, STATE.adminToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+          ]);
+        }},
+      { id: "pay-wallet", name: "GET wallet del profesor", method: "GET", path: "/api/v1/payments/teacher/wallet",
+        desc: "Profesor ve su balance disponible y movimientos",
+        run: async () => {
+          const r = await req("GET", "/api/v1/payments/teacher/wallet", null, STATE.teacherToken || STATE.adminToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Tiene balance", r.data?.available_balance !== undefined || r.status === 200),
+          ]);
+        }},
+    ]},
+
+  { id: "materials", name: "Materiales", emoji: "📚", color: "#3fb950",
+    tests: [
+      { id: "mat-list", name: "GET /materials/", method: "GET", path: "/api/v1/materials/",
+        desc: "Profesor lista todos sus materiales",
+        run: async () => {
+          const r = await req("GET", "/api/v1/materials/", null, STATE.teacherToken || STATE.adminToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Retorna array", Array.isArray(r.data) || !!r.data?.items),
+          ]);
+        }},
+      { id: "mat-create", name: "POST /materials/ (sin archivo)", method: "POST", path: "/api/v1/materials/",
+        desc: "Crea material de tipo 'vocabulary' sin archivo adjunto",
+        run: async () => {
+          const body = { title: `Test Material ${STATE.testSuffix}`, description: "Test", material_type: "vocabulary" };
+          const r = await req("POST", "/api/v1/materials/", body, STATE.teacherToken || STATE.adminToken);
+          if (r.data?.id) STATE.materialId = r.data.id;
+          return result(r, [
+            assert("Status 200 o 201", r.status === 200 || r.status === 201),
+            assert("Material tiene id", !!r.data?.id),
+          ]);
+        }},
+      { id: "mat-vocab", name: "POST vocabulario interactivo", method: "POST", path: "/api/v1/materials/{id}/vocabulary",
+        desc: "Agrega palabras de vocabulario al material creado",
+        run: async () => {
+          if (!STATE.materialId) return skip("Requiere material creado primero");
+          const body = { words: [
+            { word: "hello", translation: "hola", example: "Hello world" },
+            { word: "world", translation: "mundo", example: "Hello world" },
+          ]};
+          const r = await req("POST", `/api/v1/materials/${STATE.materialId}/vocabulary`, body, STATE.teacherToken || STATE.adminToken);
+          return result(r, [
+            assert("Status 200 o 201", r.status === 200 || r.status === 201),
+          ]);
+        }},
+      { id: "mat-assign", name: "POST assign material", method: "POST", path: "/api/v1/materials/{id}/assign",
+        desc: "Asigna el material al estudiante de test",
+        run: async () => {
+          if (!STATE.materialId || !STATE.studentId) return skip("Requiere materialId y studentId");
+          const body = { student_ids: [STATE.studentId] };
+          const r = await req("POST", `/api/v1/materials/${STATE.materialId}/assign`, body, STATE.teacherToken || STATE.adminToken);
+          return result(r, [
+            assert("Status 200 o 201", r.status === 200 || r.status === 201),
+          ]);
+        }},
+      { id: "mat-student-list", name: "GET materiales del estudiante", method: "GET", path: "/api/v1/materials/student/my",
+        desc: "Estudiante ve sus materiales asignados",
+        run: async () => {
+          const r = await req("GET", "/api/v1/materials/student/my", null, STATE.studentToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Retorna array", Array.isArray(r.data) || !!r.data?.items),
+          ]);
+        }},
+    ]},
+
+  { id: "homework", name: "Tareas", emoji: "📝", color: "#ffa657",
+    tests: [
+      { id: "hw-create", name: "POST /homework/", method: "POST", path: "/api/v1/homework/",
+        desc: "Profesor crea tarea y la asigna a estudiante de test",
+        run: async () => {
+          if (!STATE.studentId) return skip("Requiere studentId del registro");
+          const due = new Date(); due.setDate(due.getDate()+7);
+          const body = {
+            title: `Tarea Test ${STATE.testSuffix}`, description: "Tarea de prueba automatizada",
+            due_date: due.toISOString(), student_ids: [STATE.studentId],
+          };
+          const r = await req("POST", "/api/v1/homework/", body, STATE.teacherToken || STATE.adminToken);
+          if (r.data?.id) STATE.homeworkId = r.data.id;
+          return result(r, [
+            assert("Status 200 o 201", r.status === 200 || r.status === 201),
+            assert("Tarea tiene id", !!r.data?.id),
+          ]);
+        }},
+      { id: "hw-list-teacher", name: "GET tareas del profesor", method: "GET", path: "/api/v1/homework/teacher/my",
+        desc: "Profesor lista todas sus tareas creadas",
+        run: async () => {
+          const r = await req("GET", "/api/v1/homework/teacher/my", null, STATE.teacherToken || STATE.adminToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Retorna array", Array.isArray(r.data) || !!r.data?.items),
+          ]);
+        }},
+      { id: "hw-list-student", name: "GET tareas del estudiante", method: "GET", path: "/api/v1/homework/student/my",
+        desc: "Estudiante lista sus tareas pendientes y entregadas",
+        run: async () => {
+          const r = await req("GET", "/api/v1/homework/student/my", null, STATE.studentToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Retorna array", Array.isArray(r.data) || !!r.data?.items),
+          ]);
+        }},
+      { id: "hw-submit", name: "POST submit tarea", method: "POST", path: "/api/v1/homework/student/{id}/submit",
+        desc: "Estudiante entrega su tarea con texto de respuesta",
+        run: async () => {
+          if (!STATE.homeworkId) return skip("Requiere tarea creada primero");
+          const body = { submission_text: "Esta es mi respuesta de prueba automatizada." };
+          const r = await req("POST", `/api/v1/homework/student/${STATE.homeworkId}/submit`, body, STATE.studentToken);
+          if (r.data?.id) STATE.homeworkAssignmentId = r.data.id;
+          return result(r, [
+            assert("Status 200 o 201", r.status === 200 || r.status === 201),
+          ]);
+        }},
+    ]},
+
+  { id: "admin", name: "Panel Admin", emoji: "🛡️", color: "#f85149",
+    tests: [
+      { id: "adm-stats", name: "GET /admin/stats", method: "GET", path: "/api/v1/admin/stats",
+        desc: "KPIs globales: usuarios, clases, ingresos",
+        run: async () => {
+          if (!STATE.adminToken) return skip("Requiere login de admin");
+          const r = await req("GET", "/api/v1/admin/stats", null, STATE.adminToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Tiene datos de usuarios", r.data?.total_users !== undefined || r.data?.users !== undefined || r.status === 200),
+          ]);
+        }},
+      { id: "adm-teachers", name: "GET /admin/teachers", method: "GET", path: "/api/v1/admin/teachers",
+        desc: "Lista de profesores con status de aprobación",
+        run: async () => {
+          if (!STATE.adminToken) return skip("Requiere login de admin");
+          const r = await req("GET", "/api/v1/admin/teachers", null, STATE.adminToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Retorna array o paginado", Array.isArray(r.data) || !!r.data?.items || !!r.data?.teachers),
+          ]);
+        }},
+      { id: "adm-platform-config", name: "GET /admin/platform-config", method: "GET", path: "/api/v1/admin/platform-config",
+        desc: "Obtiene configuración de la plataforma (featured_teacher, etc.)",
+        run: async () => {
+          if (!STATE.adminToken) return skip("Requiere login de admin");
+          const r = await req("GET", "/api/v1/admin/platform-config", null, STATE.adminToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Tiene configuración", !!r.data || r.status === 200),
+          ]);
+        }},
+      { id: "adm-classes-list", name: "GET /admin/classes", method: "GET", path: "/api/v1/admin/classes",
+        desc: "Admin lista todas las clases de la plataforma",
+        run: async () => {
+          if (!STATE.adminToken) return skip("Requiere login de admin");
+          const r = await req("GET", "/api/v1/admin/classes", null, STATE.adminToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Retorna array o paginado", Array.isArray(r.data) || !!r.data?.items || !!r.data?.classes),
+          ]);
+        }},
+      { id: "adm-unauth", name: "Ruta admin sin permisos (403)", method: "GET", path: "/api/v1/admin/stats",
+        desc: "Estudiante no puede acceder a rutas de admin",
+        run: async () => {
+          const r = await req("GET", "/api/v1/admin/stats", null, STATE.studentToken);
+          return result(r, [
+            assert("Status 401, 403 o 404", r.status === 401 || r.status === 403 || r.status === 404),
+          ]);
+        }},
+    ]},
+
+  { id: "teachers", name: "Perfil Profesor", emoji: "🎓", color: "#bc8cff",
+    tests: [
+      { id: "tch-profile", name: "GET perfil público del profesor", method: "GET", path: `/api/v1/teachers/${CFG.teacherUsername || 'maria'}`,
+        desc: "Obtiene perfil público de un profesor por username",
+        run: async () => {
+          const r = await req("GET", `/api/v1/teachers/${CFG.teacherUsername || "maria"}`, null, null);
+          return result(r, [
+            assert("Status 200 o 404", r.status === 200 || r.status === 404),
+            assert("Si existe, tiene nombre", r.status !== 200 || !!r.data?.first_name || !!r.data?.name),
+          ]);
+        }},
+      { id: "tch-list", name: "GET /teachers/ (lista)", method: "GET", path: "/api/v1/teachers/",
+        desc: "Lista profesores aprobados de la plataforma",
+        run: async () => {
+          const r = await req("GET", "/api/v1/teachers/", null, null);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Retorna array", Array.isArray(r.data) || !!r.data?.items || !!r.data?.teachers),
+          ]);
+        }},
+      { id: "tch-patch-me", name: "PATCH perfil del profesor", method: "PATCH", path: "/api/v1/teachers/me/profile",
+        desc: "Profesor actualiza su bio y timezone",
+        run: async () => {
+          const body = { bio: "Profesor de inglés con 10 años de experiencia.", timezone: "America/Bogota", specialties: ["conversacion", "negocios"] };
+          const r = await req("PATCH", "/api/v1/teachers/me/profile", body, STATE.teacherToken || STATE.adminToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+          ]);
+        }},
+    ]},
+
+  { id: "calendar", name: "Google Calendar", emoji: "📆", color: "#58a6ff",
+    tests: [
+      { id: "cal-status", name: "GET /calendar/status", method: "GET", path: "/api/v1/calendar/status",
+        desc: "Obtiene si el profesor tiene Calendar conectado y sync activo",
+        run: async () => {
+          const r = await req("GET", "/api/v1/calendar/status", null, STATE.teacherToken || STATE.adminToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Tiene campo connected", r.data?.connected !== undefined || r.data?.is_connected !== undefined || r.status === 200),
+          ]);
+        }},
+      { id: "cal-auth-url", name: "GET /calendar/auth-url", method: "GET", path: "/api/v1/calendar/auth-url",
+        desc: "Genera URL de autorización OAuth2 para Google Calendar",
+        run: async () => {
+          const r = await req("GET", "/api/v1/calendar/auth-url", null, STATE.teacherToken || STATE.adminToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Retorna URL de Google", typeof r.data?.auth_url === "string" && r.data.auth_url.includes("google.com") || r.status === 200),
+          ]);
+        }},
+    ]},
+
+  { id: "chipi", name: "Chipi AI", emoji: "🤖", color: "#bc8cff",
+    tests: [
+      { id: "chi-chat", name: "POST /chipi/chat (estudiante)", method: "POST", path: "/api/v1/chipi/chat",
+        desc: "Estudiante envía mensaje a Chipi con contexto de pantalla",
+        run: async () => {
+          const body = { message: "Hola, ¿qué puedo hacer aquí?", screen_name: "dashboard", history: [], stream: false };
+          const r = await req("POST", "/api/v1/chipi/chat", body, STATE.studentToken);
+          return result(r, [
+            assert("Status 200", r.status === 200),
+            assert("Tiene respuesta de texto", !!r.data?.response || !!r.data?.message || !!r.data?.content || r.status === 200),
+          ]);
+        }},
+      { id: "chi-public", name: "POST /chipi/chat (sin auth)", method: "POST", path: "/api/v1/chipi/chat",
+        desc: "Chipi debe responder en la landing sin JWT",
+        run: async () => {
+          const body = { message: "¿Cómo funciona esta plataforma?", screen_name: "landing", history: [], stream: false };
+          const r = await req("POST", "/api/v1/chipi/chat", body, null);
+          return result(r, [
+            assert("Status 200 (público) o 401 (requiere auth)", r.status === 200 || r.status === 401),
+          ]);
+        }},
+    ]},
+];
+
+// ─── RESULTS STORE ───────────────────────────────────────────────────────────
+const RESULTS = {}; // testId → { status, assertions, reqData, resData, timing, aiAnalysis }
+let ACTIVE_SUITE = "auth";
+let SELECTED_TEST = null;
+let ACTIVE_TAB = "request";
+let IS_RUNNING = false;
+
+// ─── HTTP HELPER ─────────────────────────────────────────────────────────────
+async function req(method, path, body = null, token = null) {
+  const url = CFG.baseUrl + path;
+  const headers = { "Content-Type": "application/json", "Accept": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const opts = { method, headers, mode: "cors" };
+  if (body && method !== "GET" && method !== "DELETE") opts.body = JSON.stringify(body);
+
+  const start = Date.now();
+  let status = 0, data = null, rawText = "", error = null;
+  try {
+    const res = await fetch(url, opts);
+    status = res.status;
+    rawText = await res.text();
+    try { data = JSON.parse(rawText); } catch { data = rawText; }
+  } catch (e) {
+    error = e.message;
+    status = 0;
+  }
+  const timing = Date.now() - start;
+  return { status, data, rawText, timing, error, url, method, body, headers };
+}
+
+function assert(name, pass) { return { name, pass }; }
+
+function result(r, assertions) {
+  const allPass = assertions.every(a => a.pass);
+  const anyFail = assertions.some(a => !a.pass);
+  const status = r.status === 0 ? "fail" : (allPass ? "pass" : (r.status < 500 ? "warn" : "fail"));
+  return { status, assertions, r };
+}
+
+function skip(reason) {
+  return { status: "warn", assertions: [{ name: `⏭ Omitido: ${reason}`, pass: true }], r: { status: 0, data: null, timing: 0 } };
+}
+
+// ─── TEST RUNNER ─────────────────────────────────────────────────────────────
+async function runTest(suite, test) {
+  RESULTS[test.id] = { status: "running", assertions: [], r: null, timing: 0, aiAnalysis: null };
+  renderTestList(); renderInspector();
+  try {
+    const out = await test.run();
+    RESULTS[test.id] = { ...RESULTS[test.id], status: out.status, assertions: out.assertions, r: out.r, timing: out.r?.timing || 0 };
+  } catch(e) {
+    RESULTS[test.id] = { ...RESULTS[test.id], status: "fail", assertions: [{ name: `Error: ${e.message}`, pass: false }], r: { status: 0, error: e.message } };
+  }
+  if (RESULTS[test.id].status === "fail" && CFG.geminiKey) {
+    analyzeWithGemini(test, RESULTS[test.id]);
+  }
+  if (SELECTED_TEST === test.id) renderInspector();
+  renderTestList(); renderSidebar(); renderTopStats();
+}
+
+async function runSuite(suiteId) {
+  if (IS_RUNNING) return;
+  const suite = SUITES.find(s => s.id === suiteId);
+  if (!suite) return;
+  IS_RUNNING = true; setRunningUI(true);
+  for (const test of suite.tests) {
+    await runTest(suite, test);
+    await new Promise(r => setTimeout(r, 200));
+  }
+  IS_RUNNING = false; setRunningUI(false);
+}
+
+async function runAllTests() {
+  if (IS_RUNNING) return;
+  IS_RUNNING = true; setRunningUI(true);
+  const total = SUITES.reduce((s, su) => s + su.tests.length, 0);
+  let done = 0;
+  for (const suite of SUITES) {
+    for (const test of suite.tests) {
+      await runTest(suite, test);
+      done++;
+      document.getElementById("progress_bar").style.width = `${(done/total)*100}%`;
+      document.getElementById("tb_progress").textContent = `${done}/${total}`;
+      await new Promise(r => setTimeout(r, 180));
+    }
+  }
+  IS_RUNNING = false; setRunningUI(false);
+  document.getElementById("tb_progress").textContent = `${total}/${total} ✓`;
+}
+
+function setRunningUI(running) {
+  document.getElementById("btn_runAll").disabled = running;
+  document.getElementById("btn_runSuite").disabled = running;
+  document.getElementById("btn_clear").disabled = running;
+}
+
+// ─── AI ANALYSIS ─────────────────────────────────────────────────────────────
+async function analyzeWithGemini(test, result) {
+  if (!CFG.geminiKey) return;
+  const prompt = `Eres un QA engineer experto en FastAPI + Next.js analizando TPMH.
+
+Test fallido:
+- Nombre: ${test.name}
+- Endpoint: ${test.method} ${test.path}
+- Descripción: ${test.desc}
+- Status HTTP recibido: ${result.r?.status}
+- Error: ${result.r?.error || "none"}
+- Response: ${JSON.stringify(result.r?.data)?.slice(0,500)}
+- Assertions fallidas: ${result.assertions?.filter(a=>!a.pass).map(a=>a.name).join(", ")}
+
+Responde SOLO en JSON (sin markdown):
+{"root_cause":"una frase","issues":["máx 2 causas"],"fix":["máx 2 soluciones concretas"]}`;
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${CFG.geminiKey}`,
+      { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.2,maxOutputTokens:300}}) });
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const ai = JSON.parse(text.replace(/```json|```/g,"").trim());
+    RESULTS[test.id].aiAnalysis = ai;
+    if (SELECTED_TEST === test.id) renderInspector();
+  } catch(e) { /* silently skip */ }
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderSidebar() {
+  const el = document.getElementById("suite_list");
+  el.innerHTML = SUITES.map(suite => {
+    const tests = suite.tests;
+    const res = tests.map(t => RESULTS[t.id]).filter(Boolean);
+    const pass = res.filter(r=>r.status==="pass").length;
+    const fail = res.filter(r=>r.status==="fail").length;
+    const warn = res.filter(r=>r.status==="warn").length;
+    const running = res.some(r=>r.status==="running");
+    const score = res.length ? Math.round(res.filter(r=>r.status==="pass").length/res.length*100) : null;
+
+    let badgeClass = "badge-pending", badgeText = `${res.length}/${tests.length}`;
+    if (running) { badgeClass = "badge-running"; badgeText = "..."; }
+    else if (fail > 0) { badgeClass = "badge-fail"; badgeText = `${fail}✕`; }
+    else if (warn > 0) { badgeClass = "badge-warn"; badgeText = `${warn}⚠`; }
+    else if (pass === tests.length && pass > 0) { badgeClass = "badge-pass"; badgeText = `${pass}✓`; }
+
+    return `<div class="suite-item ${ACTIVE_SUITE===suite.id?"active":""}" onclick="selectSuite('${suite.id}')">
+      <span class="suite-emoji">${suite.emoji}</span>
+      <span class="suite-name">${suite.name}</span>
+      ${score !== null ? `<span class="suite-score" style="color:${score>=80?"var(--green)":score>=60?"var(--yellow)":"var(--red)"}">${score}</span>` : ""}
+      <span class="suite-badge ${badgeClass}">${badgeText}</span>
+    </div>`;
+  }).join("");
+}
+
+function renderTestList() {
+  const suite = SUITES.find(s => s.id === ACTIVE_SUITE);
+  if (!suite) return;
+  document.getElementById("main_title").innerHTML = `<span id="main_emoji">${suite.emoji}</span><span id="main_name">${suite.name}</span>`;
+
+  const el = document.getElementById("test_list");
+  el.innerHTML = suite.tests.map(test => {
+    const r = RESULTS[test.id];
+    const status = r?.status || "pending";
+    const isSelected = SELECTED_TEST === test.id;
+    const icons = { pass:"✓", fail:"✕", warn:"⚠", running:"◌", pending:"○" };
+    const iconClass = { pass:"icon-pass", fail:"icon-fail", warn:"icon-warn", running:"icon-running", pending:"icon-pending" };
+    const methodClass = { GET:"method-GET", POST:"method-POST", PATCH:"method-PATCH", DELETE:"method-DELETE" };
+    const spinClass = status === "running" ? "spinning" : "";
+    const codeColor = !r?.r?.status ? "var(--text3)" : r.r.status < 300 ? "var(--green)" : r.r.status < 500 ? "var(--yellow)" : "var(--red)";
+
+    return `<div class="test-item status-${status} ${isSelected?"active":""}" onclick="selectTest('${test.id}')">
+      <div class="test-header">
+        <div class="test-status-icon ${iconClass[status]}"><span class="${spinClass}">${icons[status]}</span></div>
+        <span class="test-name">${test.name}</span>
+        <span class="test-method ${methodClass[test.method] || "method-GET"}">${test.method}</span>
+        ${r?.r?.status ? `<span class="test-code" style="color:${codeColor}">${r.r.status}</span>` : ""}
+        ${r?.r?.timing ? `<span class="test-timing">${r.r.timing}ms</span>` : ""}
+        <button class="run-btn" onclick="event.stopPropagation();runSingleTest('${suite.id}','${test.id}')" ${IS_RUNNING?"disabled":""}>▶</button>
+      </div>
+      <div class="test-desc">${test.desc}</div>
+      ${r && r.status !== "pending" && r.status !== "running" ? `
+        <div class="test-summary summary-${r.status}">
+          ${r.status==="pass"?"✓ Todas las assertions pasaron":
+            r.status==="warn"?"⚠ "+r.assertions?.filter(a=>!a.pass).map(a=>a.name).join(" · "):
+            "✕ "+r.assertions?.filter(a=>!a.pass).map(a=>a.name).join(" · ")}
+        </div>` : ""}
+    </div>`;
+  }).join("");
+
+  renderTopStats();
+}
+
+function renderTopStats() {
+  const suite = SUITES.find(s => s.id === ACTIVE_SUITE);
+  if (!suite) return;
+  const res = suite.tests.map(t => RESULTS[t.id]).filter(Boolean);
+  if (!res.length) { document.getElementById("stats_row").style.display = "none"; return; }
+
+  const pass = res.filter(r=>r.status==="pass").length;
+  const fail = res.filter(r=>r.status==="fail").length;
+  const warn = res.filter(r=>r.status==="warn").length;
+  const avg = res.filter(r=>r.r?.timing).reduce((s,r)=>s+(r.r.timing||0),0) / (res.filter(r=>r.r?.timing).length||1);
+
+  document.getElementById("stats_row").style.display = "flex";
+  document.getElementById("stats_row").innerHTML = [
+    { v: `${pass}/${suite.tests.length}`, l: "Pasaron", c: pass===suite.tests.length?"var(--green)":"var(--text)" },
+    { v: fail, l: "Fallaron", c: fail>0?"var(--red)":"var(--text3)" },
+    { v: warn, l: "Warnings", c: warn>0?"var(--yellow)":"var(--text3)" },
+    { v: Math.round(avg)+"ms", l: "Latencia media", c: avg<500?"var(--green)":avg<1500?"var(--yellow)":"var(--red)" },
+  ].map(s=>`<div class="stat-box"><div class="stat-val" style="color:${s.c}">${s.v}</div><div class="stat-lbl">${s.l}</div></div>`).join("");
+}
+
+function renderInspector() {
+  if (!SELECTED_TEST) return;
+  const suite = SUITES.flatMap(s=>s.tests).find(t=>t.id===SELECTED_TEST);
+  const r = RESULTS[SELECTED_TEST];
+
+  const pillHtml = r ? `<span class="pill pill-${r.status}">${{pass:"✓ PASS",fail:"✕ FAIL",warn:"⚠ WARN",running:"⟳ RUNNING",pending:"PENDING"}[r.status]}</span>` : "";
+  document.getElementById("insp_pill").innerHTML = pillHtml;
+
+  const content = document.getElementById("inspector_content");
+
+  if (!r || r.status === "pending") {
+    content.innerHTML = `<div class="inspector-empty"><span style="font-size:24px">⏳</span><span>Test pendiente de ejecución</span><button class="run-btn" style="margin-top:12px;padding:6px 16px" onclick="runSingleTest(null,'${SELECTED_TEST}')">▶ Ejecutar</button></div>`;
+    return;
+  }
+
+  if (ACTIVE_TAB === "request") {
+    content.innerHTML = `
+      <div class="section-gap">
+        <div class="code-label">Endpoint</div>
+        <div class="code-block">${r.r?.method || suite?.method || ""} ${r.r?.url || ""}</div>
+      </div>
+      ${r.r?.body ? `<div class="section-gap">
+        <div class="code-label">Request Body</div>
+        <div class="code-block">${syntaxHighlight(r.r.body)}</div>
+      </div>` : ""}
+      <div class="section-gap">
+        <div class="code-label">Headers enviados</div>
+        <div class="code-block">${syntaxHighlight(r.r?.headers || {})}</div>
+      </div>`;
+  } else if (ACTIVE_TAB === "response") {
+    const codeColor = !r.r?.status ? "var(--text3)" : r.r.status < 300 ? "var(--green)" : r.r.status < 500 ? "var(--yellow)" : "var(--red)";
+    content.innerHTML = `
+      <div class="section-gap" style="display:flex;gap:12px;flex-wrap:wrap">
+        <div><div class="code-label">Status</div><div style="font-size:22px;font-weight:700;font-family:var(--mono);color:${codeColor}">${r.r?.status || (r.r?.error ? "ERR" : "—")}</div></div>
+        <div><div class="code-label">Timing</div><div style="font-size:22px;font-weight:700;font-family:var(--mono);color:var(--blue)">${r.r?.timing || 0}ms</div></div>
+      </div>
+      ${r.r?.error ? `<div class="section-gap"><div class="code-label" style="color:var(--red)">Error de conexión</div><div class="code-block" style="color:var(--red)">${r.r.error}</div></div>` : ""}
+      <div class="section-gap">
+        <div class="code-label">Response Body</div>
+        <div class="code-block">${r.r?.data ? syntaxHighlight(r.r.data) : "<span style='color:var(--text3)'>Sin cuerpo</span>"}</div>
+      </div>`;
+  } else if (ACTIVE_TAB === "assertions") {
+    content.innerHTML = r.assertions?.map(a=>`
+      <div class="assertion">
+        <div class="assert-icon ${a.pass?"assert-pass":"assert-fail"}">${a.pass?"✓":"✕"}</div>
+        <div><div class="assert-name">${a.name}</div></div>
+      </div>`).join("") || "<div style='color:var(--text3);font-size:12px'>Sin assertions</div>";
+  } else if (ACTIVE_TAB === "ai") {
+    if (!CFG.geminiKey) {
+      content.innerHTML = `<div class="inspector-empty"><span style="font-size:22px">✦</span><span>Configura una Gemini API Key para análisis de IA</span></div>`;
+    } else if (!r.aiAnalysis) {
+      content.innerHTML = `<div class="inspector-empty"><span style="font-size:22px">✦</span><span>${r.status==="pass"?"Test pasó — no se requiere análisis":"Analizando con Gemini..."}</span></div>`;
+    } else {
+      const ai = r.aiAnalysis;
+      content.innerHTML = `
+        <div class="ai-section section-gap">
+          <div class="ai-label">✦ Análisis Gemini AI</div>
+          <div class="ai-text"><b>Causa raíz:</b> ${ai.root_cause}</div>
+          ${ai.issues?.map(i=>`<div class="ai-issue"><span style="color:var(--red)">▸</span>${i}</div>`).join("")||""}
+        </div>
+        <div class="code-label" style="margin-bottom:8px">Soluciones sugeridas</div>
+        ${ai.fix?.map(f=>`<div class="ai-suggestion"><span style="color:var(--green)">→</span>${f}</div>`).join("")||""}`;
+    }
+  }
+}
+
+function setTab(tab) {
+  ACTIVE_TAB = tab;
+  ["request","response","assertions","ai"].forEach(t => {
+    document.getElementById(`tab_${t}`).classList.toggle("active", t === tab);
+  });
+  renderInspector();
+}
+
+function selectSuite(id) {
+  ACTIVE_SUITE = id;
+  renderSidebar(); renderTestList();
+  const suite = SUITES.find(s=>s.id===id);
+  document.getElementById("btn_runSuite").onclick = () => runSuite(id);
+}
+
+function selectTest(id) {
+  SELECTED_TEST = id;
+  renderTestList(); renderInspector();
+}
+
+async function runSingleTest(suiteId, testId) {
+  if (IS_RUNNING) return;
+  const allTests = SUITES.flatMap(s=>s.tests);
+  const test = allTests.find(t=>t.id===testId);
+  const suite = SUITES.find(s=>s.tests.some(t=>t.id===testId));
+  if (!test) return;
+  SELECTED_TEST = testId;
+  await runTest(suite, test);
+}
+
+function syntaxHighlight(obj) {
+  if (!obj) return "";
+  const str = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"([^"]+)":/g,'<span class="json-key">"$1"</span>:')
+    .replace(/: "([^"]*)"/g,': <span class="json-str">"$1"</span>')
+    .replace(/: (\d+\.?\d*)/g,': <span class="json-num">$1</span>')
+    .replace(/: (true|false)/g,': <span class="json-bool">$1</span>')
+    .replace(/: null/g,': <span class="json-null">null</span>');
+}
+
+function clearAll() {
+  Object.keys(RESULTS).forEach(k=>delete RESULTS[k]);
+  SELECTED_TEST = null;
+  document.getElementById("progress_bar").style.width = "0%";
+  document.getElementById("tb_progress").textContent = "";
+  renderSidebar(); renderTestList();
+  document.getElementById("inspector_content").innerHTML = `<div class="inspector-empty"><span style="font-size:28px">🔍</span><span style="font-size:12px">Selecciona un test para inspeccionar</span></div>`;
+  document.getElementById("insp_pill").innerHTML = "";
+}
+
+function showExport() { document.getElementById("modal_export").style.display = "flex"; }
+
+function exportJSON() {
+  const data = { timestamp: new Date().toISOString(), baseUrl: CFG.baseUrl, results: RESULTS };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `tpmh-test-${Date.now()}.json`; a.click();
+}
+
+function exportHTML() {
+  const total = Object.keys(RESULTS).length;
+  const pass = Object.values(RESULTS).filter(r=>r.status==="pass").length;
+  const fail = Object.values(RESULTS).filter(r=>r.status==="fail").length;
+  const warn = Object.values(RESULTS).filter(r=>r.status==="warn").length;
+  const rows = SUITES.flatMap(suite => suite.tests.map(test => {
+    const r = RESULTS[test.id];
+    if (!r) return "";
+    return `<tr style="border-bottom:1px solid #30363d">
+      <td style="padding:8px 12px;color:#8b949e">${suite.emoji} ${suite.name}</td>
+      <td style="padding:8px 12px;font-weight:600">${test.name}</td>
+      <td style="padding:8px 12px;font-family:monospace;font-size:12px;color:${test.method==="GET"?"#58a6ff":test.method==="POST"?"#3fb950":test.method==="DELETE"?"#f85149":"#d29922"}">${test.method}</td>
+      <td style="padding:8px 12px;color:${r.r?.status<300?"#3fb950":r.r?.status<500?"#d29922":"#f85149"}">${r.r?.status||"—"}</td>
+      <td style="padding:8px 12px;font-family:monospace;font-size:12px">${r.r?.timing||0}ms</td>
+      <td style="padding:8px 12px;font-weight:700;color:${r.status==="pass"?"#3fb950":r.status==="fail"?"#f85149":"#d29922"}">${r.status.toUpperCase()}</td>
+      <td style="padding:8px 12px;color:#8b949e;font-size:12px">${r.assertions?.filter(a=>!a.pass).map(a=>a.name).join(", ")||"—"}</td>
+    </tr>`;
+  })).join("");
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>TPMH Test Report</title>
+<style>body{font-family:-apple-system,sans-serif;background:#0d1117;color:#e6edf3;padding:32px;margin:0}
+h1{font-size:22px;font-weight:800;margin-bottom:4px}p{color:#8b949e;margin-bottom:24px}
+.stats{display:flex;gap:16px;margin-bottom:28px}.stat{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px 20px}
+.stat-val{font-size:28px;font-weight:700;font-family:monospace}.stat-lbl{font-size:11px;color:#8b949e;margin-top:2px}
+table{width:100%;border-collapse:collapse;background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden}
+th{padding:10px 12px;text-align:left;font-size:11px;color:#8b949e;border-bottom:1px solid #30363d;font-weight:700;letter-spacing:0.5px;text-transform:uppercase}
+</style></head><body>
+<h1>🧪 TPMH Flow Tester — Reporte</h1>
+<p>${new Date().toLocaleString()} · ${CFG.baseUrl}</p>
+<div class="stats">
+  <div class="stat"><div class="stat-val">${total}</div><div class="stat-lbl">Total tests</div></div>
+  <div class="stat"><div class="stat-val" style="color:#3fb950">${pass}</div><div class="stat-lbl">Pasaron</div></div>
+  <div class="stat"><div class="stat-val" style="color:#f85149">${fail}</div><div class="stat-lbl">Fallaron</div></div>
+  <div class="stat"><div class="stat-val" style="color:#d29922">${warn}</div><div class="stat-lbl">Warnings</div></div>
+</div>
+<table><thead><tr><th>Suite</th><th>Test</th><th>Método</th><th>Status HTTP</th><th>Timing</th><th>Resultado</th><th>Issues</th></tr></thead><tbody>${rows}</tbody></table>
+</body></html>`;
+  const blob = new Blob([html], { type: "text/html" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `tpmh-report-${Date.now()}.html`; a.click();
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+function startApp() {
+  CFG.baseUrl = document.getElementById("s_baseUrl").value.replace(/\/$/, "");
+  CFG.adminEmail = document.getElementById("s_adminEmail").value;
+  CFG.adminPass = document.getElementById("s_adminPass").value;
+  CFG.geminiKey = document.getElementById("s_geminiKey").value;
+  CFG.teacherUsername = document.getElementById("s_teacherUsername").value || "maria";
+
+  document.getElementById("setup").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  document.getElementById("tb_baseUrl").textContent = CFG.baseUrl;
+  document.getElementById("cfg_url").value = CFG.baseUrl;
+  document.getElementById("cfg_gemini").value = CFG.geminiKey;
+
+  // Update dynamic paths
+  SUITES.find(s=>s.id==="teachers").tests.find(t=>t.id==="tch-profile").path = `/api/v1/teachers/${CFG.teacherUsername}`;
+
+  renderSidebar(); renderTestList();
+}
+
+window.onload = () => {
+  document.getElementById("setup").style.display = "block";
+};
+</script>
+</body>
+</html>

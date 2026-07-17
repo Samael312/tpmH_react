@@ -6,7 +6,8 @@ import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { 
   LayoutDashboard, Users, GraduationCap, Calendar, Settings, LogOut, 
-  MonitorPlay, UserCircle, ClipboardEdit, CreditCard, Book, BarChart, ChevronLeft
+  MonitorPlay, UserCircle, ClipboardEdit, CreditCard, Book, BarChart, ChevronLeft, Check,
+  CheckCheck
 } from "lucide-react";
 
 export default function DashboardSidebar() {
@@ -111,6 +112,7 @@ export default function DashboardSidebar() {
               <NavItem href="/admin/students" icon={<GraduationCap size={20} />} label="Estudiantes" active={isActive("/admin/students")} collapsed={collapsed} />
               <NavItem href="/admin/payments" icon={<CreditCard size={20} />} label="Pagos y Facturas" active={isActive("/admin/payments")} collapsed={collapsed} />
               <NavItem href="/admin/settings" icon={<Settings size={20} />} label="Configuración" active={isActive("/admin/settings")} collapsed={collapsed} />
+              <NavItem href="/admin/flow-tester" icon={<CheckCheck size={20} />} label="Flow Tester" active={isActive("/admin/flow-tester")} collapsed={collapsed} /> 
             </nav>
           </div>
         )}
