@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAvailableSlots } from "@/hooks/useStudentData";
+import { useAvailableSlots, useEnrollments } from "@/hooks/useStudentData";
 import { Calendar, Clock, CreditCard,
          Upload, Check, X, ChevronLeft,
          ChevronRight, AlertCircle, Video } from "lucide-react";
@@ -18,6 +18,18 @@ const PAYMENT_METHODS = [
   { value: "paypal",  label: "PayPal" },
   { value: "zelle",   label: "Zelle" },
 ];
+
+// ─── Helper: normaliza errores de la API (string o array de Pydantic) ────────
+function extractErrorMessage(e: any, fallback: string): string {
+  const detail = e?.response?.data?.detail;
+  if (Array.isArray(detail)) {
+    return detail.map((d: any) => d?.msg ?? JSON.stringify(d)).join(", ");
+  }
+  if (typeof detail === "string") {
+    return detail;
+  }
+  return fallback;
+}
 
 // ─── Mini calendario ──────────────────────────────────────────────────────────
 function MiniCalendar({
@@ -248,12 +260,14 @@ function StepPayment({
   date,
   slot,
   duration,
+  enrollmentId,
   onBack,
   onSuccess,
 }: {
   date: string;
   slot: any;
   duration: number;
+  enrollmentId?: number;
   onBack: () => void;
   onSuccess: () => void;
 }) {
@@ -273,23 +287,30 @@ function StepPayment({
 
   // Paso 2a: Reservar slot (crea la clase en estado pending)
   const bookSlot = async () => {
+    if (!enrollmentId) {
+      setError("No se encontró un paquete activo para reservar esta clase.");
+      return;
+    }
     setBooking(true);
     setError("");
     try {
       const res = await api.post("/payments/book", {
+        enrollment_id: enrollmentId,
         start_time_utc: slot.start_time_utc,
         end_time_utc:   slot.end_time_utc,
         duration_minutes: duration,
-        payment_method: method,
       });
       setClassId(res.data.class_id);
       setPayInfo({
-        amount:          res.data.amount,
-        instructions:    res.data.payment_instructions,
-        payment_address: res.data.payment_address,
+        amount:          res.data.payment_instructions?.amount ?? res.data.amount,
+        instructions:    res.data.payment_instructions?.whatsapp_number ?? res.data.payment_instructions ?? "",
+        payment_address:
+          method === "binance"
+            ? res.data.payment_instructions?.binance_address
+            : res.data.payment_instructions?.paypal_email,
       });
     } catch (e: any) {
-      setError(e.response?.data?.detail || "Error reservando el horario");
+      setError(extractErrorMessage(e, "Error reservando el horario"));
     } finally {
       setBooking(false);
     }
@@ -312,7 +333,7 @@ function StepPayment({
       setDone(true);
       setTimeout(onSuccess, 2000);
     } catch (e: any) {
-      setError(e.response?.data?.detail || "Error enviando comprobante");
+      setError(extractErrorMessage(e, "Error enviando comprobante"));
     } finally {
       setSubmitting(false);
     }
@@ -456,14 +477,14 @@ function StepPayment({
               Instrucciones de pago
             </p>
             <p className="text-2xl font-black text-amber-700 mb-2">
-              ${payInfo.amount.toFixed(2)}
+              ${payInfo.amount?.toFixed ? payInfo.amount.toFixed(2) : payInfo.amount}
             </p>
             <p className="text-sm text-amber-700 font-bold mb-1">
               Enviar a:
             </p>
             <p className="text-xs font-mono bg-amber-100 px-3 py-2 rounded-xl
                           text-amber-800 break-all">
-              {payInfo.payment_address}
+              {payInfo.payment_address || "Contacta al staff para los datos de pago"}
             </p>
             {payInfo.instructions && (
               <p className="text-xs text-amber-600 mt-2">
@@ -570,6 +591,9 @@ export default function SchedulePage() {
   const [selectedSlot, setSelectedSlot]   = useState<any>(null);
   const [selectedDuration, setSelectedDuration] = useState(60);
 
+  const { enrollments } = useEnrollments();
+  const activeEnrollment = enrollments.find(e => e.status === "active");
+
   const handleSlotSelect = (
     date: string, slot: any, duration: number
   ) => {
@@ -654,6 +678,17 @@ export default function SchedulePage() {
           </div>
         </div>
 
+        {/* Alerta de falta de paquete activo */}
+        {step === "payment" && !activeEnrollment && (
+          <div className="bg-rose-50 border border-rose-100 text-rose-600
+                          px-4 py-3 rounded-xl text-xs font-bold
+                          flex items-center gap-2 max-w-lg mx-auto">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            No tienes un paquete activo. Contacta al staff para adquirir uno
+            antes de reservar una clase.
+          </div>
+        )}
+
         {/* Contenido según paso */}
         <div className="animate-in fade-in duration-300">
           {step === "select" ? (
@@ -663,6 +698,7 @@ export default function SchedulePage() {
               date={selectedDate}
               slot={selectedSlot}
               duration={selectedDuration}
+              enrollmentId={activeEnrollment?.id}
               onBack={() => setStep("select")}
               onSuccess={() => setStep("select")}
             />
