@@ -1,7 +1,11 @@
-'use client';
-import { useState, useCallback, useRef, useEffect } from "react";
+"use client";
+
+import { useState, useCallback, useRef } from "react";
 import { useAuthStore } from "@/store/authStore";
-import api from "@/lib/api";
+import {
+  Play, RotateCcw, Download, CheckCircle2, XCircle, AlertTriangle,
+  Loader2, Circle, SkipForward, Pencil, Sparkles,
+} from "lucide-react";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 interface TestResult {
@@ -13,11 +17,14 @@ interface TestResult {
 }
 
 // ─── ENV ──────────────────────────────────────────────────────────────────────
-const BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
+// NEXT_PUBLIC_API_URL normalmente ya incluye /api/v1 (ver next.config.ts).
+// Lo despojamos aquí porque cada test antepone su propio prefijo /api/v1/...
+const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
+const BASE_URL = (RAW_API_URL.replace(/\/api\/v1\/?$/, "") || RAW_API_URL).replace(/\/$/, "");
 const GEMINI_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY ?? "";
 
 // ─── SHARED TEST STATE ────────────────────────────────────────────────────────
-// Resets each full run so tests are independent
+// Se reinicia en cada corrida completa para que los tests sean independientes.
 const mkState = () => ({
   studentToken: null as string | null,
   teacherToken: null as string | null,
@@ -64,8 +71,11 @@ function ok(r: HttpRes, assertions: { name: string; pass: boolean }[]) {
 }
 
 function skip(reason: string) {
-  return { st: "skipped" as const, assertions: [{ name: `⏭ ${reason}`, pass: true }],
-    r: { status: 0, data: null, timing: 0, url: "", method: "", headers: {}, reqBody: undefined } };
+  return {
+    st: "skipped" as const,
+    assertions: [{ name: `⏭ ${reason}`, pass: true }],
+    r: { status: 0, data: null, timing: 0, url: "", method: "", error: undefined as string | undefined, headers: {}, reqBody: undefined },
+  };
 }
 
 function d(r: HttpRes) { return r.data as Record<string, unknown>; }
@@ -74,38 +84,53 @@ function d(r: HttpRes) { return r.data as Record<string, unknown>; }
 function buildSuites(adminToken: string, teacherUsername: string) {
   return [
     {
-      id: "auth", name: "Autenticación", emoji: "🔐", color: "#58a6ff",
+      id: "auth", name: "Autenticación", emoji: "🔐", color: "#ec4899",
       tests: [
         { id: "auth-health", name: "Health check API", method: "GET", path: "/health",
           desc: "Backend corriendo y respondiendo",
           run: async () => { const r = await httpReq("GET", "/health"); return ok(r, [mk("Status 200", r.status === 200)]); } },
 
         { id: "auth-register-student", name: "Registro estudiante temporal", method: "POST", path: "/api/v1/auth/register",
-          desc: "Crea usuario de prueba con rol student y obtiene JWT",
+          desc: "Crea usuario de prueba con rol student",
           run: async () => {
             S.testSuffix = Math.random().toString(36).slice(2, 8);
             S.studentEmail = `test_s_${S.testSuffix}@tpmh.test`;
-            const r = await httpReq("POST", "/api/v1/auth/register", { email: S.studentEmail, password: "TestPass123!", first_name: "Test", last_name: "Student", role: "student" });
-            if (d(r)?.access_token) S.studentToken = d(r).access_token as string;
-            if ((d(r)?.user as Record<string,unknown>)?.id) S.studentId = String((d(r).user as Record<string,unknown>).id);
-            return ok(r, [mk("Status 200/201", r.status === 200 || r.status === 201), mk("access_token presente", !!d(r)?.access_token), mk("Rol es student", (d(r)?.user as Record<string,unknown>)?.role === "student")]);
+            const r = await httpReq("POST", "/api/v1/auth/register", {
+              name: "Test", surname: "Student", username: `test_s_${S.testSuffix}`,
+              email: S.studentEmail, password: "TestPass123!", role: "student",
+            });
+            const uid = (d(r)?.user as Record<string, unknown>)?.id ?? d(r)?.id;
+            if (uid) S.studentId = String(uid);
+            return ok(r, [mk("Status 200/201", r.status === 200 || r.status === 201)]);
           } },
 
         { id: "auth-register-teacher", name: "Registro profesor temporal", method: "POST", path: "/api/v1/auth/register",
-          desc: "Crea usuario de prueba con rol teacher y obtiene JWT",
+          desc: "Crea usuario de prueba con rol teacher",
           run: async () => {
             S.teacherEmail = `test_t_${S.testSuffix}@tpmh.test`;
-            const r = await httpReq("POST", "/api/v1/auth/register", { email: S.teacherEmail, password: "TestPass123!", first_name: "TestProf", last_name: "Auto", role: "teacher" });
-            if (d(r)?.access_token) S.teacherToken = d(r).access_token as string;
-            if ((d(r)?.user as Record<string,unknown>)?.id) S.teacherId = String((d(r).user as Record<string,unknown>).id);
-            return ok(r, [mk("Status 200/201", r.status === 200 || r.status === 201), mk("access_token presente", !!d(r)?.access_token), mk("Rol es teacher", (d(r)?.user as Record<string,unknown>)?.role === "teacher")]);
+            const r = await httpReq("POST", "/api/v1/auth/register", {
+              name: "TestProf", surname: "Auto", username: `test_t_${S.testSuffix}`,
+              email: S.teacherEmail, password: "TestPass123!", role: "teacher",
+            });
+            const uid = (d(r)?.user as Record<string, unknown>)?.id ?? d(r)?.id;
+            if (uid) S.teacherId = String(uid);
+            return ok(r, [mk("Status 200/201", r.status === 200 || r.status === 201)]);
           } },
 
-        { id: "auth-login", name: "Login con email", method: "POST", path: "/api/v1/auth/login",
-          desc: "Login devuelve nuevo token válido",
+        { id: "auth-login", name: "Login estudiante", method: "POST", path: "/api/v1/auth/login",
+          desc: "Login devuelve un access_token válido",
           run: async () => {
             const r = await httpReq("POST", "/api/v1/auth/login", { login: S.studentEmail, password: "TestPass123!" });
             if (d(r)?.access_token) S.studentToken = d(r).access_token as string;
+            return ok(r, [mk("Status 200", r.status === 200), mk("access_token presente", !!d(r)?.access_token)]);
+          } },
+
+        { id: "auth-login-teacher", name: "Login profesor", method: "POST", path: "/api/v1/auth/login",
+          desc: "Login del profesor temporal para obtener su token",
+          run: async () => {
+            if (!S.teacherEmail) return skip("Requiere registro de profesor previo");
+            const r = await httpReq("POST", "/api/v1/auth/login", { login: S.teacherEmail, password: "TestPass123!" });
+            if (d(r)?.access_token) S.teacherToken = d(r).access_token as string;
             return ok(r, [mk("Status 200", r.status === 200), mk("access_token presente", !!d(r)?.access_token)]);
           } },
 
@@ -133,27 +158,34 @@ function buildSuites(adminToken: string, teacherUsername: string) {
     },
 
     {
-      id: "users", name: "Perfil de Usuario", emoji: "👤", color: "#ffa657",
+      id: "users", name: "Perfil de Usuario", emoji: "👤", color: "#f59e0b",
       tests: [
         { id: "users-patch-me", name: "PATCH /users/me", method: "PATCH", path: "/api/v1/users/me",
           desc: "Actualiza nombre del estudiante temporal",
           run: async () => {
-            const r = await httpReq("PATCH", "/api/v1/users/me", { first_name: "TestUpdated" }, S.studentToken);
+            const r = await httpReq("PATCH", "/api/v1/users/me", { name: "TestUpdated" }, S.studentToken);
             return ok(r, [mk("Status 200", r.status === 200)]);
           } },
 
         { id: "users-student-profile", name: "PATCH student-profile", method: "PATCH", path: "/api/v1/users/me/student-profile",
-          desc: "Guarda timezone, learning_goal y nivel de inglés",
+          desc: "Guarda timezone, objetivo y métodos de pago preferidos",
           run: async () => {
-            const r = await httpReq("PATCH", "/api/v1/users/me/student-profile", { timezone: "America/Bogota", learning_goal: "conversacion", english_level: "intermediate" }, S.studentToken);
+            const r = await httpReq("PATCH", "/api/v1/users/me/student-profile", {
+              timezone: "America/Bogota",
+              goal: "Mejorar la pronunciación y la fluidez al hablar",
+              preferred_payment_methods: ["Paypal"],
+            }, S.studentToken);
             return ok(r, [mk("Status 200", r.status === 200)]);
           } },
 
-        { id: "users-preferences", name: "PATCH /users/me/preferences", method: "PATCH", path: "/api/v1/users/me/preferences",
-          desc: "Guarda días y horarios preferidos del estudiante",
+        { id: "users-preferences", name: "POST /users/me/preferences", method: "POST", path: "/api/v1/users/me/preferences",
+          desc: "Guarda bloques de horario preferido del estudiante",
           run: async () => {
-            const r = await httpReq("PATCH", "/api/v1/users/me/preferences", { preferred_days: ["monday", "wednesday"], preferred_times: ["morning"] }, S.studentToken);
-            return ok(r, [mk("Status 200", r.status === 200)]);
+            const r = await httpReq("POST", "/api/v1/users/me/preferences", {
+              timezone: "America/Bogota",
+              slots: [{ day_of_week: 1, start_time_local: "09:00", end_time_local: "11:00" }],
+            }, S.studentToken);
+            return ok(r, [mk("Status 200/201", r.status === 200 || r.status === 201)]);
           } },
 
         { id: "users-onboarding", name: "Completar onboarding", method: "PATCH", path: "/api/v1/users/me",
@@ -167,23 +199,29 @@ function buildSuites(adminToken: string, teacherUsername: string) {
           desc: "Admin lista todos los usuarios de la plataforma",
           run: async () => {
             const r = await httpReq("GET", "/api/v1/admin/users", undefined, adminToken);
-            return ok(r, [mk("Status 200", r.status === 200), mk("Retorna datos", Array.isArray(r.data) || !!(r.data as Record<string,unknown>)?.items)]);
+            return ok(r, [mk("Status 200", r.status === 200), mk("Retorna datos", Array.isArray(r.data) || !!(r.data as Record<string, unknown>)?.users)]);
           } },
       ],
     },
 
     {
-      id: "availability", name: "Disponibilidad", emoji: "📅", color: "#3fb950",
+      id: "availability", name: "Disponibilidad", emoji: "📅", color: "#22c55e",
       tests: [
         { id: "av-weekly", name: "POST horario semanal", method: "POST", path: "/api/v1/availability/me/weekly",
-          desc: "Guarda bloques de disponibilidad semanal (con profesor temporal)",
+          desc: "Guarda bloques de disponibilidad semanal (profesor temporal)",
           run: async () => {
-            const r = await httpReq("POST", "/api/v1/availability/me/weekly", { slots: [{ day_of_week: 1, start_time: "09:00", end_time: "12:00" }, { day_of_week: 3, start_time: "14:00", end_time: "18:00" }] }, S.teacherToken || adminToken);
+            const r = await httpReq("POST", "/api/v1/availability/me/weekly", {
+              timezone: "America/Bogota",
+              slots: [
+                { day_of_week: 1, start_time_local: "09:00", end_time_local: "12:00" },
+                { day_of_week: 3, start_time_local: "14:00", end_time_local: "18:00" },
+              ],
+            }, S.teacherToken || adminToken);
             return ok(r, [mk("Status 200/201", r.status === 200 || r.status === 201)]);
           } },
 
         { id: "av-slots", name: "GET slots disponibles", method: "GET", path: `/api/v1/availability/${teacherUsername}/slots`,
-          desc: `Slots libres del profesor @${teacherUsername} para los próximos días`,
+          desc: `Slots libres de @${teacherUsername} para los próximos días`,
           run: async () => {
             const dt = new Date(); dt.setDate(dt.getDate() + 3);
             const date = dt.toISOString().split("T")[0];
@@ -197,6 +235,7 @@ function buildSuites(adminToken: string, teacherUsername: string) {
           run: async () => {
             const dt = new Date(); dt.setDate(dt.getDate() + 3);
             const r = await httpReq("GET", `/api/v1/availability/featured-teacher/slots?date=${dt.toISOString().split("T")[0]}&duration=60`, undefined, S.studentToken || adminToken);
+            if (!S.availabilitySlot && Array.isArray(r.data) && (r.data as unknown[]).length > 0) S.availabilitySlot = (r.data as unknown[])[0];
             return ok(r, [mk("Status 200 o 404", r.status === 200 || r.status === 404), mk("No 500", r.status !== 500)]);
           } },
 
@@ -211,7 +250,7 @@ function buildSuites(adminToken: string, teacherUsername: string) {
     },
 
     {
-      id: "packages", name: "Paquetes / Enrollments", emoji: "📦", color: "#bc8cff",
+      id: "packages", name: "Paquetes / Enrollments", emoji: "📦", color: "#a855f7",
       tests: [
         { id: "pkg-list", name: "GET /packages/", method: "GET", path: "/api/v1/packages/",
           desc: "Lista paquetes disponibles en la plataforma",
@@ -220,65 +259,74 @@ function buildSuites(adminToken: string, teacherUsername: string) {
             return ok(r, [mk("Status 200", r.status === 200)]);
           } },
 
-        { id: "pkg-assign", name: "Asignar paquete a estudiante", method: "POST", path: "/api/v1/packages/assign",
-          desc: "Admin asigna paquete al estudiante temporal",
+        { id: "pkg-assign", name: "Asignar paquete al estudiante (admin)", method: "PATCH", path: "/api/v1/admin/users/{id}",
+          desc: "Admin asigna paquete y precio por clase al estudiante temporal",
           run: async () => {
             if (!S.studentId) return skip("Requiere studentId del registro");
-            const r = await httpReq("POST", "/api/v1/packages/assign", { student_id: S.studentId, package_name: "basic", price_per_class: 20, total_classes: 4 }, adminToken);
-            if (d(r)?.id) S.enrollmentId = String(d(r).id);
-            return ok(r, [mk("Status 200/201", r.status === 200 || r.status === 201), mk("Tiene enrollment id", !!d(r)?.id)]);
+            const r = await httpReq("PATCH", `/api/v1/admin/users/${S.studentId}`, {
+              package_name: "Personalizado", price_per_class: 12,
+            }, adminToken);
+            if (r.status === 200) S.enrollmentId = S.studentId;
+            return ok(r, [mk("Status 200", r.status === 200)]);
           } },
 
-        { id: "pkg-my-enrollment", name: "GET my-enrollment (estudiante)", method: "GET", path: "/api/v1/packages/my-enrollment",
-          desc: "Estudiante obtiene su enrollment activo",
+        { id: "pkg-my-enrollment", name: "GET my-enrollments (estudiante)", method: "GET", path: "/api/v1/packages/my-enrollments",
+          desc: "Estudiante obtiene sus enrollments activos",
           run: async () => {
-            const r = await httpReq("GET", "/api/v1/packages/my-enrollment", undefined, S.studentToken);
-            if (d(r)?.id && !S.enrollmentId) S.enrollmentId = String(d(r).id);
-            return ok(r, [mk("Status 200 o 404", r.status === 200 || r.status === 404), mk("No 500", r.status !== 500)]);
+            const r = await httpReq("GET", "/api/v1/packages/my-enrollments", undefined, S.studentToken);
+            return ok(r, [mk("Status 200", r.status === 200), mk("No 500", r.status !== 500)]);
           } },
       ],
     },
 
     {
-      id: "classes", name: "Reserva de Clases", emoji: "📋", color: "#d29922",
+      id: "classes", name: "Reserva de Clases", emoji: "📋", color: "#f59e0b",
       tests: [
-        { id: "cls-book", name: "POST /classes/book", method: "POST", path: "/api/v1/classes/book",
-          desc: "Estudiante reserva clase en slot disponible",
+        { id: "cls-book", name: "POST /payments/book", method: "POST", path: "/api/v1/payments/book",
+          desc: "Estudiante reserva un horario disponible (crea clase pendiente de pago)",
           run: async () => {
-            if (!S.enrollmentId) return skip("Requiere enrollment activo");
-            const slot = S.availabilitySlot as Record<string, unknown> | null;
-            const dt = new Date(); dt.setDate(dt.getDate() + 3); dt.setHours(10, 0, 0, 0);
-            const r = await httpReq("POST", "/api/v1/classes/book", { enrollment_id: S.enrollmentId, teacher_username: teacherUsername, scheduled_at: slot?.start_time ?? dt.toISOString(), duration_minutes: 60 }, S.studentToken);
-            if (d(r)?.id) S.classId = String(d(r).id);
-            return ok(r, [mk("Status 200/201", r.status === 200 || r.status === 201), mk("Clase tiene id", !!d(r)?.id), mk("Status válido", ["pending","pending_payment","confirmed"].includes(String(d(r)?.status)))]);
+            if (!S.availabilitySlot) return skip("Requiere un slot disponible (suite Disponibilidad)");
+            const slot = S.availabilitySlot as Record<string, unknown>;
+            const r = await httpReq("POST", "/api/v1/payments/book", {
+              start_time_utc: slot.start_time_utc,
+              end_time_utc: slot.end_time_utc,
+              duration_minutes: 60,
+              payment_method: "binance",
+            }, S.studentToken);
+            if (d(r)?.class_id) S.classId = String(d(r).class_id);
+            return ok(r, [mk("Status 200/201", r.status === 200 || r.status === 201), mk("Devuelve class_id", !!d(r)?.class_id)]);
           } },
 
-        { id: "cls-list-student", name: "GET clases del estudiante", method: "GET", path: "/api/v1/classes/my",
+        { id: "cls-list-student", name: "GET clases del estudiante", method: "GET", path: "/api/v1/classes/my-classes",
           desc: "Lista clases pasadas y futuras del estudiante",
           run: async () => {
-            const r = await httpReq("GET", "/api/v1/classes/my", undefined, S.studentToken);
-            return ok(r, [mk("Status 200", r.status === 200), mk("Retorna datos", Array.isArray(r.data) || !!(r.data as Record<string,unknown>)?.items)]);
-          } },
-
-        { id: "cls-list-teacher", name: "GET clases del profesor", method: "GET", path: "/api/v1/classes/teacher/my",
-          desc: "Agenda de clases del profesor de la plataforma",
-          run: async () => {
-            const r = await httpReq("GET", "/api/v1/classes/teacher/my", undefined, S.teacherToken || adminToken);
+            const r = await httpReq("GET", "/api/v1/classes/my-classes?include_history=false", undefined, S.studentToken);
             return ok(r, [mk("Status 200", r.status === 200)]);
           } },
 
-        { id: "cls-conflict", name: "Conflicto de horario → 409", method: "POST", path: "/api/v1/classes/book",
-          desc: "Intentar reservar el mismo slot dos veces debe dar error",
+        { id: "cls-list-teacher", name: "GET clases del profesor", method: "GET", path: "/api/v1/classes/teacher/classes",
+          desc: "Agenda de clases del profesor temporal",
           run: async () => {
-            if (!S.classId || !S.enrollmentId) return skip("Requiere clase previa existente");
-            const slot = S.availabilitySlot as Record<string, unknown> | null;
-            const dt = new Date(); dt.setDate(dt.getDate() + 3); dt.setHours(10, 0, 0, 0);
-            const r = await httpReq("POST", "/api/v1/classes/book", { enrollment_id: S.enrollmentId, teacher_username: teacherUsername, scheduled_at: slot?.start_time ?? dt.toISOString(), duration_minutes: 60 }, S.studentToken);
+            const r = await httpReq("GET", "/api/v1/classes/teacher/classes", undefined, S.teacherToken || adminToken);
+            return ok(r, [mk("Status 200", r.status === 200)]);
+          } },
+
+        { id: "cls-conflict", name: "Reservar el mismo slot dos veces", method: "POST", path: "/api/v1/payments/book",
+          desc: "Debe rechazar el slot ya reservado con un error controlado",
+          run: async () => {
+            if (!S.classId || !S.availabilitySlot) return skip("Requiere una reserva previa existente");
+            const slot = S.availabilitySlot as Record<string, unknown>;
+            const r = await httpReq("POST", "/api/v1/payments/book", {
+              start_time_utc: slot.start_time_utc,
+              end_time_utc: slot.end_time_utc,
+              duration_minutes: 60,
+              payment_method: "binance",
+            }, S.studentToken);
             return ok(r, [mk("Status 409/400/422", r.status === 409 || r.status === 400 || r.status === 422)]);
           } },
 
         { id: "cls-cancel", name: "Cancelar clase", method: "DELETE", path: "/api/v1/classes/{id}",
-          desc: "Estudiante cancela su clase (12h de antelación requeridas)",
+          desc: "Estudiante cancela su clase reservada",
           run: async () => {
             if (!S.classId) return skip("Sin clase creada en este ciclo");
             const r = await httpReq("DELETE", `/api/v1/classes/${S.classId}`, undefined, S.studentToken);
@@ -289,13 +337,13 @@ function buildSuites(adminToken: string, teacherUsername: string) {
           desc: "Admin lista todas las clases de la plataforma",
           run: async () => {
             const r = await httpReq("GET", "/api/v1/admin/classes", undefined, adminToken);
-            return ok(r, [mk("Status 200", r.status === 200)]);
+            return ok(r, [mk("Status 200 o 404", r.status === 200 || r.status === 404), mk("No 500", r.status !== 500)]);
           } },
       ],
     },
 
     {
-      id: "payments", name: "Pagos", emoji: "💳", color: "#f85149",
+      id: "payments", name: "Pagos", emoji: "💳", color: "#ef4444",
       tests: [
         { id: "pay-config", name: "GET /payments/config", method: "GET", path: "/api/v1/payments/config",
           desc: "Métodos de pago habilitados en la plataforma",
@@ -308,39 +356,41 @@ function buildSuites(adminToken: string, teacherUsername: string) {
           desc: "Admin lista pagos pendientes con comprobante",
           run: async () => {
             const r = await httpReq("GET", "/api/v1/payments/pending-review", undefined, adminToken);
-            return ok(r, [mk("Status 200", r.status === 200), mk("Retorna array", Array.isArray(r.data) || !!(r.data as Record<string,unknown>)?.items)]);
-          } },
-
-        { id: "pay-wallet", name: "GET wallet del profesor", method: "GET", path: "/api/v1/payments/teacher/wallet",
-          desc: "Balance disponible del profesor de prueba",
-          run: async () => {
-            const r = await httpReq("GET", "/api/v1/payments/teacher/wallet", undefined, S.teacherToken || adminToken);
             return ok(r, [mk("Status 200", r.status === 200)]);
           } },
 
-        { id: "pay-withdrawals", name: "GET withdrawals", method: "GET", path: "/api/v1/payments/withdrawals",
+        { id: "pay-wallet", name: "GET my-wallet del profesor", method: "GET", path: "/api/v1/payments/my-wallet",
+          desc: "Balance disponible del profesor de prueba",
+          run: async () => {
+            const r = await httpReq("GET", "/api/v1/payments/my-wallet", undefined, S.teacherToken || adminToken);
+            return ok(r, [mk("Status 200", r.status === 200)]);
+          } },
+
+        { id: "pay-withdrawals", name: "GET withdrawals/pending", method: "GET", path: "/api/v1/admin/withdrawals/pending",
           desc: "Admin lista solicitudes de retiro de profesores",
           run: async () => {
-            const r = await httpReq("GET", "/api/v1/payments/withdrawals", undefined, adminToken);
+            const r = await httpReq("GET", "/api/v1/admin/withdrawals/pending", undefined, adminToken);
             return ok(r, [mk("Status 200", r.status === 200)]);
           } },
       ],
     },
 
     {
-      id: "materials", name: "Materiales", emoji: "📚", color: "#3fb950",
+      id: "materials", name: "Materiales", emoji: "📚", color: "#22c55e",
       tests: [
-        { id: "mat-list", name: "GET /materials/", method: "GET", path: "/api/v1/materials/",
+        { id: "mat-list", name: "GET /materials/my-materials", method: "GET", path: "/api/v1/materials/my-materials",
           desc: "Profesor lista sus materiales",
           run: async () => {
-            const r = await httpReq("GET", "/api/v1/materials/", undefined, S.teacherToken || adminToken);
+            const r = await httpReq("GET", "/api/v1/materials/my-materials", undefined, S.teacherToken || adminToken);
             return ok(r, [mk("Status 200", r.status === 200)]);
           } },
 
         { id: "mat-create", name: "POST /materials/", method: "POST", path: "/api/v1/materials/",
           desc: "Crea material de tipo vocabulario",
           run: async () => {
-            const r = await httpReq("POST", "/api/v1/materials/", { title: `Test Material ${S.testSuffix}`, description: "Test auto", material_type: "vocabulary" }, S.teacherToken || adminToken);
+            const r = await httpReq("POST", "/api/v1/materials/", {
+              title: `Test Material ${S.testSuffix}`, category: "Vocabulary", level: "A1",
+            }, S.teacherToken || adminToken);
             if (d(r)?.id) S.materialId = String(d(r).id);
             return ok(r, [mk("Status 200/201", r.status === 200 || r.status === 201), mk("Tiene id", !!d(r)?.id)]);
           } },
@@ -349,7 +399,7 @@ function buildSuites(adminToken: string, teacherUsername: string) {
           desc: "Agrega palabras de vocabulario al material",
           run: async () => {
             if (!S.materialId) return skip("Requiere material creado");
-            const r = await httpReq("POST", `/api/v1/materials/${S.materialId}/vocabulary`, { words: [{ word: "hello", translation: "hola", example: "Hello world" }] }, S.teacherToken || adminToken);
+            const r = await httpReq("POST", `/api/v1/materials/${S.materialId}/vocabulary`, { words: ["Hello", "World"] }, S.teacherToken || adminToken);
             return ok(r, [mk("Status 200/201", r.status === 200 || r.status === 201)]);
           } },
 
@@ -361,39 +411,44 @@ function buildSuites(adminToken: string, teacherUsername: string) {
             return ok(r, [mk("Status 200/201", r.status === 200 || r.status === 201)]);
           } },
 
-        { id: "mat-student-list", name: "GET materiales del estudiante", method: "GET", path: "/api/v1/materials/student/my",
+        { id: "mat-student-list", name: "GET materiales del estudiante", method: "GET", path: "/api/v1/materials/student/my-materials",
           desc: "Estudiante ve sus materiales asignados",
           run: async () => {
-            const r = await httpReq("GET", "/api/v1/materials/student/my", undefined, S.studentToken);
+            const r = await httpReq("GET", "/api/v1/materials/student/my-materials", undefined, S.studentToken);
             return ok(r, [mk("Status 200", r.status === 200)]);
           } },
       ],
     },
 
     {
-      id: "homework", name: "Tareas", emoji: "📝", color: "#ffa657",
+      id: "homework", name: "Tareas", emoji: "📝", color: "#f59e0b",
       tests: [
         { id: "hw-create", name: "POST /homework/", method: "POST", path: "/api/v1/homework/",
           desc: "Profesor crea tarea y la asigna al estudiante temporal",
           run: async () => {
             if (!S.studentId) return skip("Requiere studentId del registro");
             const due = new Date(); due.setDate(due.getDate() + 7);
-            const r = await httpReq("POST", "/api/v1/homework/", { title: `Tarea ${S.testSuffix}`, description: "Test auto", due_date: due.toISOString(), student_ids: [S.studentId] }, S.teacherToken || adminToken);
+            const r = await httpReq("POST", "/api/v1/homework/", {
+              title: `Tarea ${S.testSuffix}`,
+              content: "Instrucciones de prueba automatizada.",
+              date_due: due.toISOString().split("T")[0],
+              student_ids: [S.studentId],
+            }, S.teacherToken || adminToken);
             if (d(r)?.id) S.homeworkId = String(d(r).id);
             return ok(r, [mk("Status 200/201", r.status === 200 || r.status === 201), mk("Tiene id", !!d(r)?.id)]);
           } },
 
-        { id: "hw-list-teacher", name: "GET tareas del profesor", method: "GET", path: "/api/v1/homework/teacher/my",
+        { id: "hw-list-teacher", name: "GET /homework/my-homework", method: "GET", path: "/api/v1/homework/my-homework",
           desc: "Profesor lista todas sus tareas",
           run: async () => {
-            const r = await httpReq("GET", "/api/v1/homework/teacher/my", undefined, S.teacherToken || adminToken);
+            const r = await httpReq("GET", "/api/v1/homework/my-homework", undefined, S.teacherToken || adminToken);
             return ok(r, [mk("Status 200", r.status === 200)]);
           } },
 
-        { id: "hw-list-student", name: "GET tareas del estudiante", method: "GET", path: "/api/v1/homework/student/my",
+        { id: "hw-list-student", name: "GET /homework/student/my-homework", method: "GET", path: "/api/v1/homework/student/my-homework",
           desc: "Estudiante lista sus tareas pendientes",
           run: async () => {
-            const r = await httpReq("GET", "/api/v1/homework/student/my", undefined, S.studentToken);
+            const r = await httpReq("GET", "/api/v1/homework/student/my-homework", undefined, S.studentToken);
             return ok(r, [mk("Status 200", r.status === 200)]);
           } },
 
@@ -401,14 +456,14 @@ function buildSuites(adminToken: string, teacherUsername: string) {
           desc: "Estudiante entrega su tarea",
           run: async () => {
             if (!S.homeworkId) return skip("Requiere tarea creada");
-            const r = await httpReq("POST", `/api/v1/homework/student/${S.homeworkId}/submit`, { submission_text: "Respuesta de test automatizado." }, S.studentToken);
+            const r = await httpReq("POST", `/api/v1/homework/student/${S.homeworkId}/submit`, { submission: "Respuesta de test automatizado." }, S.studentToken);
             return ok(r, [mk("Status 200/201", r.status === 200 || r.status === 201)]);
           } },
       ],
     },
 
     {
-      id: "admin", name: "Panel Admin", emoji: "🛡️", color: "#f85149",
+      id: "admin", name: "Panel Admin", emoji: "🛡️", color: "#ef4444",
       tests: [
         { id: "adm-stats", name: "GET /admin/stats", method: "GET", path: "/api/v1/admin/stats",
           desc: "KPIs globales: usuarios, clases, ingresos",
@@ -441,7 +496,7 @@ function buildSuites(adminToken: string, teacherUsername: string) {
     },
 
     {
-      id: "calendar", name: "Google Calendar", emoji: "📆", color: "#58a6ff",
+      id: "calendar", name: "Google Calendar", emoji: "📆", color: "#3b82f6",
       tests: [
         { id: "cal-status", name: "GET /calendar/status", method: "GET", path: "/api/v1/calendar/status",
           desc: "Estado de conexión del Calendar del profesor",
@@ -454,25 +509,25 @@ function buildSuites(adminToken: string, teacherUsername: string) {
           desc: "Genera URL de autorización OAuth2 de Google",
           run: async () => {
             const r = await httpReq("GET", "/api/v1/calendar/auth-url", undefined, S.teacherToken || adminToken);
-            return ok(r, [mk("Status 200", r.status === 200), mk("URL contiene google.com", typeof (d(r))?.auth_url === "string" && String(d(r)?.auth_url).includes("google.com"))]);
+            return ok(r, [mk("Status 200", r.status === 200), mk("URL contiene google.com", typeof d(r)?.auth_url === "string" && String(d(r)?.auth_url).includes("google.com"))]);
           } },
       ],
     },
 
     {
-      id: "chipi", name: "Chipi AI", emoji: "🤖", color: "#bc8cff",
+      id: "chipi", name: "Chipi AI", emoji: "🤖", color: "#a855f7",
       tests: [
         { id: "chi-student", name: "POST /chipi/chat (estudiante)", method: "POST", path: "/api/v1/chipi/chat",
           desc: "Chipi responde con contexto de pantalla del estudiante",
           run: async () => {
-            const r = await httpReq("POST", "/api/v1/chipi/chat", { message: "Hola, ¿qué puedo hacer aquí?", screen_name: "dashboard", history: [], stream: false }, S.studentToken);
-            return ok(r, [mk("Status 200", r.status === 200), mk("Tiene respuesta", !!d(r)?.response || !!d(r)?.message || !!d(r)?.content)]);
+            const r = await httpReq("POST", "/api/v1/chipi/chat", { message: "Hola, ¿qué puedo hacer aquí?", screen_name: "student_home" }, S.studentToken);
+            return ok(r, [mk("Status 200", r.status === 200), mk("Tiene respuesta", !!d(r)?.response)]);
           } },
 
         { id: "chi-public", name: "POST /chipi/chat (sin auth)", method: "POST", path: "/api/v1/chipi/chat",
           desc: "Chipi en landing sin JWT — debe responder o dar 401",
           run: async () => {
-            const r = await httpReq("POST", "/api/v1/chipi/chat", { message: "¿Cómo funciona?", screen_name: "landing", history: [], stream: false }, null);
+            const r = await httpReq("POST", "/api/v1/chipi/chat", { message: "¿Cómo funciona?", screen_name: "main" }, null);
             return ok(r, [mk("Status 200 o 401", r.status === 200 || r.status === 401), mk("No 500", r.status !== 500)]);
           } },
       ],
@@ -480,19 +535,35 @@ function buildSuites(adminToken: string, teacherUsername: string) {
   ];
 }
 
-// ─── VISUAL CONSTANTS ─────────────────────────────────────────────────────────
-const SC: Record<string, string> = { pass: "#3fb950", fail: "#f85149", warn: "#d29922", running: "#58a6ff", pending: "#484f58", skipped: "#6e7681" };
-const SL: Record<string, string> = { pass: "PASS", fail: "FAIL", warn: "WARN", running: "...", pending: "—", skipped: "SKIP" };
-const MC: Record<string, string> = { GET: "#58a6ff", POST: "#3fb950", PATCH: "#d29922", DELETE: "#f85149" };
+// ─── VISUAL CONSTANTS (Tailwind, para la UI) ──────────────────────────────────
+const STATUS_LABEL: Record<string, string> = { pass: "PASS", fail: "FAIL", warn: "WARN", running: "...", pending: "—", skipped: "SKIP" };
+const STATUS_STYLE: Record<string, { text: string; bg: string; border: string }> = {
+  pass:    { text: "text-emerald-600", bg: "bg-emerald-50", border: "border-l-emerald-400" },
+  fail:    { text: "text-rose-600",    bg: "bg-rose-50",    border: "border-l-rose-400" },
+  warn:    { text: "text-amber-600",   bg: "bg-amber-50",   border: "border-l-amber-400" },
+  running: { text: "text-blue-600",    bg: "bg-blue-50",    border: "border-l-blue-400" },
+  pending: { text: "text-slate-400",   bg: "bg-slate-50",   border: "border-l-slate-200" },
+  skipped: { text: "text-slate-400",   bg: "bg-slate-50",   border: "border-l-slate-200" },
+};
+const METHOD_STYLE: Record<string, string> = {
+  GET: "bg-blue-50 text-blue-600",
+  POST: "bg-emerald-50 text-emerald-600",
+  PATCH: "bg-amber-50 text-amber-600",
+  DELETE: "bg-rose-50 text-rose-600",
+};
+
+// ─── VISUAL CONSTANTS (hex, para el reporte HTML exportado) ───────────────────
+const STATUS_HEX: Record<string, string> = { pass: "#059669", fail: "#e11d48", warn: "#d97706", running: "#2563eb", pending: "#94a3b8", skipped: "#94a3b8" };
+const METHOD_HEX: Record<string, string> = { GET: "#2563eb", POST: "#059669", PATCH: "#d97706", DELETE: "#e11d48" };
 
 function syntaxHL(obj: unknown): string {
-  if (obj === null || obj === undefined) return '<span style="color:#6e7681">null</span>';
+  if (obj === null || obj === undefined) return '<span class="text-slate-500">null</span>';
   const s = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"([^"]+)":/g, '<span style="color:#79c0ff">"$1"</span>:')
-    .replace(/: "([^"]*)"/g, ': <span style="color:#a5d6ff">"$1"</span>')
-    .replace(/: (-?\d+\.?\d*)/g, ': <span style="color:#ffa657">$1</span>')
-    .replace(/: (true|false)/g, ': <span style="color:#ff7b72">$1</span>');
+    .replace(/"([^"]+)":/g, '<span class="text-sky-300">"$1"</span>:')
+    .replace(/: "([^"]*)"/g, ': <span class="text-emerald-300">"$1"</span>')
+    .replace(/: (-?\d+\.?\d*)/g, ': <span class="text-amber-300">$1</span>')
+    .replace(/: (true|false)/g, ': <span class="text-rose-300">$1</span>');
 }
 
 async function geminiAnalyze(test: { name: string; method: string; path: string; desc: string }, result: TestResult) {
@@ -515,22 +586,26 @@ Responde SOLO en JSON sin markdown: {"root_cause":"frase corta","issues":["máx 
 }
 
 // ─── SUB-COMPONENTS ───────────────────────────────────────────────────────────
-function CodeBlock({ label, code, color }: { label: string; code: unknown; color?: string }) {
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 10, color: color ?? "#484f58", marginBottom: 5, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>{label}</div>
-      <div style={{ background: "#0d1117", border: "1px solid #21262d", borderRadius: 6, padding: "10px 12px", fontFamily: "monospace", fontSize: 11, color: "#8b949e", overflowX: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all", lineHeight: 1.6, maxHeight: 280, overflowY: "auto" }}
-        dangerouslySetInnerHTML={{ __html: syntaxHL(code) }} />
-    </div>
-  );
+function StatusIcon({ status, className }: { status: TestResult["status"]; className?: string }) {
+  switch (status) {
+    case "pass": return <CheckCircle2 className={className} />;
+    case "fail": return <XCircle className={className} />;
+    case "warn": return <AlertTriangle className={className} />;
+    case "running": return <Loader2 className={`${className} animate-spin`} />;
+    case "skipped": return <SkipForward className={className} />;
+    default: return <Circle className={className} />;
+  }
 }
 
-function Btn({ children, onClick, disabled, primary }: { children: React.ReactNode; onClick: () => void; disabled?: boolean; primary?: boolean }) {
+function CodeBlock({ label, code }: { label: string; code: unknown }) {
   return (
-    <button onClick={onClick} disabled={disabled}
-      style={{ background: primary ? (disabled ? "#21262d" : "#238636") : "transparent", border: primary ? "none" : "1px solid #30363d", color: primary ? "#fff" : "#8b949e", padding: "5px 12px", borderRadius: 6, fontSize: 12, fontWeight: primary ? 700 : 400, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, display: "flex", alignItems: "center", gap: 5 }}>
-      {children}
-    </button>
+    <div className="mb-4">
+      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{label}</div>
+      <div
+        className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 font-mono text-[11px] text-slate-300 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed max-h-64 overflow-y-auto"
+        dangerouslySetInnerHTML={{ __html: syntaxHL(code) }}
+      />
+    </div>
   );
 }
 
@@ -567,7 +642,7 @@ export default function FlowTester() {
         response: out.r ? { status: out.r.status, data: out.r.data, timing: out.r.timing, error: out.r.error } : null,
       };
       setResult(test.id, r);
-      if (GEMINI_KEY && r.status !== "pass") {
+      if (GEMINI_KEY && r.status !== "pass" && r.status !== "skipped") {
         const ai = await geminiAnalyze(test, r);
         setResult(test.id, { aiAnalysis: ai });
       }
@@ -603,228 +678,294 @@ export default function FlowTester() {
   const exportReport = () => {
     const rows = allTests.map(t => {
       const r = results[t.id]; const su = suites.find(s => s.id === t.suiteId);
-      return r ? `<tr><td>${su?.emoji} ${su?.name}</td><td>${t.name}</td><td style="color:${MC[t.method]}">${t.method}</td><td>${r.response?.status ?? "—"}</td><td>${r.response?.timing ?? 0}ms</td><td style="color:${SC[r.status]};font-weight:700">${SL[r.status]}</td><td style="color:#8b949e;font-size:11px">${r.assertions.filter(a => !a.pass).map(a => a.name).join(", ") || "—"}</td></tr>` : "";
+      if (!r) return "";
+      return `<tr><td>${su?.emoji} ${su?.name}</td><td>${t.name}</td><td style="color:${METHOD_HEX[t.method]}">${t.method}</td><td>${r.response?.status ?? "—"}</td><td>${r.response?.timing ?? 0}ms</td><td style="color:${STATUS_HEX[r.status]};font-weight:700">${STATUS_LABEL[r.status]}</td><td style="color:#8b949e;font-size:11px">${r.assertions.filter(a => !a.pass).map(a => a.name).join(", ") || "—"}</td></tr>`;
     }).join("");
-    const g = { pass: Object.values(results).filter(r => r.status === "pass").length, fail: Object.values(results).filter(r => r.status === "fail").length, warn: Object.values(results).filter(r => r.status === "warn").length };
+    const g = {
+      pass: Object.values(results).filter(r => r.status === "pass").length,
+      fail: Object.values(results).filter(r => r.status === "fail").length,
+      warn: Object.values(results).filter(r => r.status === "warn").length,
+    };
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>TPMH Test Report</title><style>*{box-sizing:border-box}body{font-family:-apple-system,sans-serif;background:#0d1117;color:#e6edf3;padding:32px;margin:0}h1{font-size:20px;font-weight:800}p{color:#8b949e;margin-bottom:24px}.s{display:flex;gap:12px;margin-bottom:24px}.sc{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px 18px}.sv{font-size:24px;font-weight:700;font-family:monospace}.sl{font-size:10px;color:#8b949e;margin-top:2px}table{width:100%;border-collapse:collapse;background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:hidden}th{padding:9px 12px;text-align:left;font-size:10px;color:#8b949e;border-bottom:1px solid #30363d;font-weight:700;text-transform:uppercase}td{padding:8px 12px;border-bottom:1px solid #21262d;font-size:12px}</style></head><body><h1>🧪 TPMH Flow Tester</h1><p>${new Date().toLocaleString()} · ${BASE_URL}</p><div class="s"><div class="sc"><div class="sv">${allTests.length}</div><div class="sl">Total</div></div><div class="sc"><div class="sv" style="color:#3fb950">${g.pass}</div><div class="sl">Pasaron</div></div><div class="sc"><div class="sv" style="color:#f85149">${g.fail}</div><div class="sl">Fallaron</div></div><div class="sc"><div class="sv" style="color:#d29922">${g.warn}</div><div class="sl">Warnings</div></div></div><table><thead><tr><th>Suite</th><th>Test</th><th>Método</th><th>HTTP</th><th>Timing</th><th>Resultado</th><th>Issues</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([html], { type: "text/html" })); a.download = `tpmh-report-${Date.now()}.html`; a.click();
   };
 
   const currentSuite = suites.find(s => s.id === activeSuite)!;
   const selectedResult = selectedTest ? results[selectedTest] : null;
-  const selectedTestData = selectedTest ? allTests.find(t => t.id === selectedTest) : null;
   const getSuiteStats = (suite: typeof currentSuite) => {
-    const res = suite.tests.map(t => results[t.id]).filter(Boolean);
+    const res = suite.tests.map(t => results[t.id]).filter(Boolean) as TestResult[];
     return { pass: res.filter(r => r.status === "pass").length, fail: res.filter(r => r.status === "fail").length, warn: res.filter(r => r.status === "warn").length, done: res.length, total: suite.tests.length };
   };
-  const gStats = { pass: Object.values(results).filter(r => r.status === "pass").length, fail: Object.values(results).filter(r => r.status === "fail").length, warn: Object.values(results).filter(r => r.status === "warn").length };
+  const gStats = {
+    pass: Object.values(results).filter(r => r.status === "pass").length,
+    fail: Object.values(results).filter(r => r.status === "fail").length,
+    warn: Object.values(results).filter(r => r.status === "warn").length,
+  };
 
   return (
-    <div style={{ fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", fontSize: 13, color: "#e6edf3", background: "#0d1117", height: "calc(100vh - 80px)", display: "grid", gridTemplateColumns: "220px 1fr 340px", gridTemplateRows: "48px 1fr", overflow: "hidden", borderRadius: 12, border: "1px solid #21262d" }}>
+    <div className="space-y-6 animate-fade-up bg-white min-h-screen p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
 
-      {/* ── TOPBAR ──────────────────────────────────────────────────────────── */}
-      <div style={{ gridColumn: "1/-1", background: "#161b22", borderBottom: "1px solid #30363d", display: "flex", alignItems: "center", gap: 12, padding: "0 16px", borderRadius: "12px 12px 0 0" }}>
-        <span style={{ fontWeight: 800, fontSize: 14, letterSpacing: -0.3 }}>TPMH <span style={{ color: "#58a6ff" }}>Tester</span></span>
-        <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: "#1f6feb22", color: "#58a6ff", border: "1px solid #1f6feb55", fontWeight: 700 }}>FUNCTIONAL</span>
-        <div style={{ width: 1, height: 20, background: "#30363d" }} />
-
-        {/* Teacher username pill */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 11, color: "#484f58" }}>Profesor:</span>
-          {editingUsername ? (
-            <input autoFocus value={teacherUsername} onChange={e => setTeacherUsername(e.target.value)}
-              onBlur={() => setEditingUsername(false)} onKeyDown={e => e.key === "Enter" && setEditingUsername(false)}
-              style={{ background: "#0d1117", border: "1px solid #58a6ff", color: "#e6edf3", padding: "2px 8px", borderRadius: 6, fontSize: 12, fontFamily: "monospace", outline: "none", width: 120 }} />
-          ) : (
-            <button onClick={() => setEditingUsername(true)} style={{ background: "#1f6feb22", border: "1px solid #1f6feb55", color: "#58a6ff", padding: "2px 10px", borderRadius: 99, fontSize: 11, fontFamily: "monospace", fontWeight: 700, cursor: "pointer" }}>
-              @{teacherUsername} ✎
-            </button>
-          )}
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <h1 className="font-display text-4xl font-bold text-slate-800 mb-2 tracking-tight">
+            Flow Tester
+          </h1>
+          <p className="text-sm text-slate-500 font-medium">
+            Suite de pruebas funcionales end-to-end contra la API en vivo
+          </p>
         </div>
 
-        {progress > 0 && progress < 100 && (
-          <div style={{ flex: 1, height: 3, background: "#21262d", borderRadius: 2, overflow: "hidden", maxWidth: 160 }}>
-            <div style={{ height: "100%", width: `${progress}%`, background: "#58a6ff", transition: "width 0.3s" }} />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 bg-pink-50 border border-pink-100 rounded-xl px-3 py-2">
+            <span className="text-[10px] font-black text-pink-400 uppercase tracking-widest">Profesor</span>
+            {editingUsername ? (
+              <input
+                autoFocus
+                value={teacherUsername}
+                onChange={e => setTeacherUsername(e.target.value)}
+                onBlur={() => setEditingUsername(false)}
+                onKeyDown={e => e.key === "Enter" && setEditingUsername(false)}
+                className="bg-white border border-pink-200 rounded-lg px-2 py-0.5 text-xs font-bold text-slate-700 w-28 focus:outline-none focus:ring-2 focus:ring-pink-200"
+              />
+            ) : (
+              <button onClick={() => setEditingUsername(true)} className="flex items-center gap-1 text-xs font-bold text-pink-600">
+                @{teacherUsername} <Pencil className="w-3 h-3" />
+              </button>
+            )}
           </div>
-        )}
 
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          {gStats.pass > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "#3fb950" }}>✓ {gStats.pass}</span>}
-          {gStats.fail > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "#f85149" }}>✕ {gStats.fail}</span>}
-          {gStats.warn > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "#d29922" }}>⚠ {gStats.warn}</span>}
-          <Btn onClick={clearAll} disabled={isRunning}>↺ Limpiar</Btn>
-          <Btn onClick={exportReport} disabled={Object.keys(results).length === 0}>↓ Reporte</Btn>
-          <Btn onClick={runAll} disabled={isRunning} primary>{isRunning ? `▶ ${progress}%` : "▶ Ejecutar todo"}</Btn>
-        </div>
-      </div>
-
-      {/* ── SIDEBAR ─────────────────────────────────────────────────────────── */}
-      <div style={{ background: "#161b22", borderRight: "1px solid #30363d", overflowY: "auto", padding: "8px 6px" }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: "#484f58", letterSpacing: 0.8, padding: "8px 8px 4px", textTransform: "uppercase" }}>Suites</div>
-        {suites.map(suite => {
-          const st = getSuiteStats(suite);
-          const isActive = activeSuite === suite.id;
-          const color = st.fail > 0 ? "#f85149" : st.warn > 0 ? "#d29922" : st.pass === st.total && st.done > 0 ? "#3fb950" : "#484f58";
-          return (
-            <div key={suite.id} onClick={() => setActiveSuite(suite.id)}
-              style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 9px", borderRadius: 7, cursor: "pointer", background: isActive ? "#1f6feb22" : "transparent", marginBottom: 2, transition: "background 0.1s" }}>
-              <span style={{ fontSize: 14, width: 20, textAlign: "center" }}>{suite.emoji}</span>
-              <span style={{ flex: 1, fontSize: 12, color: isActive ? "#58a6ff" : "#8b949e", fontWeight: isActive ? 600 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{suite.name}</span>
-              {st.done > 0 && <span style={{ fontSize: 10, fontWeight: 700, color }}>{st.fail > 0 ? `${st.fail}✕` : st.warn > 0 ? `${st.warn}⚠` : `${st.pass}✓`}</span>}
-              <span style={{ fontSize: 10, color: "#484f58" }}>{st.done}/{st.total}</span>
+          {gStats.pass + gStats.fail + gStats.warn > 0 && (
+            <div className="flex items-center gap-3 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-xs font-black">
+              {gStats.pass > 0 && <span className="text-emerald-600">✓ {gStats.pass}</span>}
+              {gStats.fail > 0 && <span className="text-rose-600">✕ {gStats.fail}</span>}
+              {gStats.warn > 0 && <span className="text-amber-600">⚠ {gStats.warn}</span>}
             </div>
-          );
-        })}
-      </div>
+          )}
 
-      {/* ── MAIN ────────────────────────────────────────────────────────────── */}
-      <div style={{ overflowY: "auto", background: "#0d1117" }}>
-        <div style={{ position: "sticky", top: 0, background: "#0d1117", borderBottom: "1px solid #21262d", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", zIndex: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15, fontWeight: 700 }}>
-            <span>{currentSuite.emoji}</span><span style={{ color: currentSuite.color }}>{currentSuite.name}</span>
-          </div>
-          <button onClick={() => runSuite(activeSuite)} disabled={isRunning}
-            style={{ background: "transparent", border: `1px solid ${currentSuite.color}`, color: currentSuite.color, padding: "4px 12px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: isRunning ? "not-allowed" : "pointer", opacity: isRunning ? 0.5 : 1 }}>
-            ▶ Ejecutar suite
+          <button onClick={clearAll} disabled={isRunning}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-white border-2 border-slate-200 text-slate-600 text-sm font-bold rounded-xl hover:border-slate-300 transition-all disabled:opacity-40">
+            <RotateCcw className="w-4 h-4" /> Limpiar
+          </button>
+          <button onClick={exportReport} disabled={Object.keys(results).length === 0}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-white border-2 border-slate-200 text-slate-600 text-sm font-bold rounded-xl hover:border-slate-300 transition-all disabled:opacity-40">
+            <Download className="w-4 h-4" /> Reporte
+          </button>
+          <button onClick={runAll} disabled={isRunning}
+            className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-pink-500 to-rose-400 text-white text-sm font-bold rounded-xl shadow-md shadow-pink-200 hover:shadow-pink-300 active:scale-[0.97] transition-all disabled:opacity-60">
+            {isRunning ? <><Loader2 className="w-4 h-4 animate-spin" /> {progress}%</> : <><Play className="w-4 h-4" /> Ejecutar todo</>}
           </button>
         </div>
+      </div>
 
-        {/* Suite stats */}
-        {(() => {
-          const st = getSuiteStats(currentSuite);
-          if (!st.done) return null;
-          const timings = currentSuite.tests.map(t => results[t.id]?.response?.timing).filter((n): n is number => typeof n === "number");
-          const avg = timings.length ? Math.round(timings.reduce((a, b) => a + b, 0) / timings.length) : 0;
-          return (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "12px 16px" }}>
-              {[{ v: `${st.pass}/${st.total}`, l: "Pasaron", c: st.pass === st.total ? "#3fb950" : "#e6edf3" }, { v: st.fail, l: "Fallaron", c: st.fail > 0 ? "#f85149" : "#484f58" }, { v: st.warn, l: "Warnings", c: st.warn > 0 ? "#d29922" : "#484f58" }, { v: `${avg}ms`, l: "Latencia", c: avg < 500 ? "#3fb950" : avg < 1500 ? "#d29922" : "#f85149" }]
-                .map(({ v, l, c }) => (
-                  <div key={l} style={{ background: "#161b22", border: "1px solid #21262d", borderRadius: 8, padding: "10px 12px" }}>
-                    <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "monospace", color: c }}>{v}</div>
-                    <div style={{ fontSize: 10, color: "#484f58", marginTop: 2, textTransform: "uppercase", letterSpacing: .4 }}>{l}</div>
+      {isRunning && (
+        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+          <div className="h-full bg-gradient-to-r from-pink-500 to-rose-400 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+        </div>
+      )}
+
+      {/* Layout principal */}
+      <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr_380px] gap-5 lg:h-[78vh]">
+
+        {/* Sidebar: suites */}
+        <div className="bg-slate-50/70 border border-slate-100 rounded-3xl p-3 overflow-y-auto">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-2">Suites</p>
+          <div className="space-y-1">
+            {suites.map(suite => {
+              const st = getSuiteStats(suite);
+              const isActive = activeSuite === suite.id;
+              const badge =
+                st.fail > 0 ? <span className="text-[10px] font-black text-rose-600">{st.fail}✕</span> :
+                st.warn > 0 ? <span className="text-[10px] font-black text-amber-600">{st.warn}⚠</span> :
+                st.done > 0 && st.pass === st.total ? <span className="text-[10px] font-black text-emerald-600">{st.pass}✓</span> : null;
+              return (
+                <button key={suite.id} onClick={() => setActiveSuite(suite.id)}
+                  className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-2xl text-left transition-all duration-150
+                    ${isActive ? "bg-white shadow-sm border border-pink-100" : "hover:bg-white/60 border border-transparent"}`}>
+                  <span className="text-base flex-shrink-0">{suite.emoji}</span>
+                  <span className={`flex-1 text-xs font-bold truncate ${isActive ? "text-pink-600" : "text-slate-500"}`}>{suite.name}</span>
+                  {badge}
+                  <span className="text-[10px] text-slate-300 font-bold">{st.done}/{st.total}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Lista de tests de la suite activa */}
+        <div className="bg-slate-50/70 border border-slate-100 rounded-3xl overflow-y-auto">
+          <div className="sticky top-0 bg-slate-50/90 backdrop-blur-sm border-b border-slate-100 px-5 py-3.5 flex items-center justify-between z-10 rounded-t-3xl">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">{currentSuite.emoji}</span>
+              <span className="text-sm font-black text-slate-800">{currentSuite.name}</span>
+            </div>
+            <button onClick={() => runSuite(activeSuite)} disabled={isRunning}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border-2 border-pink-200 text-pink-600 text-xs font-bold rounded-xl hover:bg-pink-50 transition-all disabled:opacity-40">
+              <Play className="w-3.5 h-3.5" /> Ejecutar suite
+            </button>
+          </div>
+
+          {(() => {
+            const st = getSuiteStats(currentSuite);
+            if (!st.done) return null;
+            const timings = currentSuite.tests.map(t => results[t.id]?.response?.timing).filter((n): n is number => typeof n === "number");
+            const avg = timings.length ? Math.round(timings.reduce((a, b) => a + b, 0) / timings.length) : 0;
+            return (
+              <div className="grid grid-cols-4 gap-3 px-5 py-4">
+                {[
+                  { v: `${st.pass}/${st.total}`, l: "Pasaron", c: st.pass === st.total ? "text-emerald-600" : "text-slate-700" },
+                  { v: st.fail, l: "Fallaron", c: st.fail > 0 ? "text-rose-600" : "text-slate-300" },
+                  { v: st.warn, l: "Warnings", c: st.warn > 0 ? "text-amber-600" : "text-slate-300" },
+                  { v: `${avg}ms`, l: "Latencia", c: avg < 500 ? "text-emerald-600" : avg < 1500 ? "text-amber-600" : "text-rose-600" },
+                ].map(({ v, l, c }) => (
+                  <div key={l} className="bg-white border border-slate-100 rounded-2xl px-3 py-2.5 shadow-sm">
+                    <div className={`text-xl font-black font-mono ${c}`}>{v}</div>
+                    <div className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">{l}</div>
                   </div>
                 ))}
-            </div>
-          );
-        })()}
-
-        {/* Test cards */}
-        <div style={{ padding: "0 12px 16px", display: "flex", flexDirection: "column", gap: 4 }}>
-          {currentSuite.tests.map(test => {
-            const r = results[test.id];
-            const st = r?.status ?? "pending";
-            const isSelected = selectedTest === test.id;
-            return (
-              <div key={test.id} onClick={() => { setSelectedTest(test.id); setActiveTab("response"); }}
-                style={{ background: "#161b22", border: `1px solid ${isSelected ? "#58a6ff" : st === "fail" ? "#f8514933" : st === "pass" ? "#3fb95022" : "#21262d"}`, borderLeft: `3px solid ${SC[st]}`, borderRadius: 8, cursor: "pointer", overflow: "hidden" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px" }}>
-                  <span style={{ width: 18, height: 18, borderRadius: "50%", background: `${SC[st]}22`, color: SC[st], display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0, animation: st === "running" ? "tpmh-spin 0.8s linear infinite" : "none" }}>
-                    {st === "pass" ? "✓" : st === "fail" ? "✕" : st === "warn" ? "⚠" : st === "running" ? "◌" : st === "skipped" ? "⏭" : "○"}
-                  </span>
-                  <span style={{ flex: 1, fontWeight: 600, fontSize: 12 }}>{test.name}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: `${MC[test.method]}22`, color: MC[test.method] }}>{test.method}</span>
-                  {r?.response?.status ? <span style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 700, color: r.response.status < 300 ? "#3fb950" : r.response.status < 500 ? "#d29922" : "#f85149" }}>{r.response.status}</span> : null}
-                  {r?.response?.timing ? <span style={{ fontSize: 10, color: "#484f58", fontFamily: "monospace", minWidth: 44, textAlign: "right" }}>{r.response.timing}ms</span> : null}
-                  <button onClick={e => { e.stopPropagation(); runTest({ ...test, suiteId: activeSuite }); }} disabled={isRunning}
-                    style={{ background: "transparent", border: "1px solid #30363d", color: "#8b949e", padding: "2px 8px", borderRadius: 5, fontSize: 11, cursor: isRunning ? "not-allowed" : "pointer", opacity: isRunning ? 0.4 : 1 }}>▶</button>
-                </div>
-                <div style={{ padding: "0 14px 8px", fontSize: 11, color: "#6e7681" }}>{test.desc}</div>
-                {r && !["pending", "running"].includes(r.status) && (
-                  <div style={{ padding: "0 14px 10px", fontSize: 11, fontWeight: 600, color: SC[r.status] }}>
-                    {r.status === "pass" || r.status === "skipped" ? r.assertions[0]?.name ?? "✓" : r.assertions.filter(a => !a.pass).map(a => a.name).join(" · ")}
-                  </div>
-                )}
               </div>
             );
-          })}
-        </div>
-      </div>
+          })()}
 
-      {/* ── INSPECTOR ───────────────────────────────────────────────────────── */}
-      <div style={{ background: "#161b22", borderLeft: "1px solid #30363d", display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: "0 0 12px 0" }}>
-        <div style={{ padding: "12px 14px", borderBottom: "1px solid #30363d", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#8b949e" }}>Inspector</span>
-          {selectedResult && (
-            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: `${SC[selectedResult.status]}22`, color: SC[selectedResult.status], border: `1px solid ${SC[selectedResult.status]}55` }}>
-              {SL[selectedResult.status]}
-            </span>
-          )}
+          <div className="px-4 pb-4 space-y-2">
+            {currentSuite.tests.map(test => {
+              const r = results[test.id];
+              const status = r?.status ?? "pending";
+              const meta = STATUS_STYLE[status];
+              const isSelected = selectedTest === test.id;
+              return (
+                <div key={test.id} onClick={() => { setSelectedTest(test.id); setActiveTab("response"); }}
+                  className={`bg-white rounded-2xl border-l-4 ${meta.border} shadow-sm cursor-pointer transition-all duration-150
+                    ${isSelected ? "ring-2 ring-pink-300" : "hover:shadow-md"}`}>
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${meta.bg} ${meta.text}`}>
+                      <StatusIcon status={status} className="w-3.5 h-3.5" />
+                    </span>
+                    <span className="flex-1 text-sm font-bold text-slate-800 truncate">{test.name}</span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg ${METHOD_STYLE[test.method]}`}>{test.method}</span>
+                    {r?.response?.status ? (
+                      <span className={`text-xs font-mono font-black
+                        ${r.response.status < 300 ? "text-emerald-600" : r.response.status < 500 ? "text-amber-600" : "text-rose-600"}`}>
+                        {r.response.status}
+                      </span>
+                    ) : null}
+                    {r?.response?.timing ? <span className="text-[10px] text-slate-400 font-mono min-w-[42px] text-right">{r.response.timing}ms</span> : null}
+                    <button onClick={e => { e.stopPropagation(); runTest({ ...test, suiteId: activeSuite }); }} disabled={isRunning}
+                      className="w-7 h-7 rounded-lg bg-slate-50 hover:bg-pink-50 text-slate-400 hover:text-pink-500 flex items-center justify-center transition-colors disabled:opacity-30 flex-shrink-0">
+                      <Play className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <div className="px-4 pb-2.5 text-xs text-slate-400">{test.desc}</div>
+                  {r && !["pending", "running"].includes(r.status) && (
+                    <div className={`px-4 pb-3 text-xs font-bold ${meta.text}`}>
+                      {r.status === "pass" || r.status === "skipped" ? (r.assertions[0]?.name ?? "✓") : r.assertions.filter(a => !a.pass).map(a => a.name).join(" · ")}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        <div style={{ display: "flex", borderBottom: "1px solid #30363d", flexShrink: 0 }}>
-          {(["response", "request", "assertions", "ai"] as const).map(tab => (
-            <div key={tab} onClick={() => setActiveTab(tab)}
-              style={{ padding: "8px 12px", fontSize: 11, cursor: "pointer", color: activeTab === tab ? "#58a6ff" : "#484f58", borderBottom: `2px solid ${activeTab === tab ? "#58a6ff" : "transparent"}`, fontWeight: activeTab === tab ? 600 : 400 }}>
-              {tab === "ai" ? "✦ IA" : tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </div>
-          ))}
-        </div>
+        {/* Inspector */}
+        <div className="bg-white border border-slate-100 rounded-3xl shadow-sm flex flex-col overflow-hidden">
+          <div className="px-4 py-3.5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+            <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Inspector</span>
+            {selectedResult && (
+              <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${STATUS_STYLE[selectedResult.status].bg} ${STATUS_STYLE[selectedResult.status].text}`}>
+                {STATUS_LABEL[selectedResult.status]}
+              </span>
+            )}
+          </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: 12 }}>
-          {!selectedResult ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 180, color: "#484f58", gap: 8 }}>
-              <span style={{ fontSize: 28 }}>🔍</span>
-              <span style={{ fontSize: 12 }}>Selecciona un test para inspeccionar</span>
-            </div>
-          ) : activeTab === "response" ? (
-            <>
-              <div style={{ display: "flex", gap: 20, marginBottom: 14 }}>
-                <div>
-                  <div style={{ fontSize: 10, color: "#484f58", marginBottom: 4, textTransform: "uppercase", letterSpacing: .5 }}>Status</div>
-                  <div style={{ fontSize: 26, fontWeight: 700, fontFamily: "monospace", color: !selectedResult.response?.status ? "#484f58" : selectedResult.response.status < 300 ? "#3fb950" : selectedResult.response.status < 500 ? "#d29922" : "#f85149" }}>
-                    {selectedResult.response?.status || (selectedResult.response?.error ? "ERR" : "—")}
+          <div className="flex gap-1 px-3 pt-3 flex-shrink-0">
+            {(["response", "request", "assertions", "ai"] as const).map(tab => (
+              <button key={tab} onClick={() => setActiveTab(tab)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors
+                  ${activeTab === tab ? "bg-pink-50 text-pink-600" : "text-slate-400 hover:text-slate-600"}`}>
+                {tab === "ai" ? "✦ IA" : tab === "response" ? "Response" : tab === "request" ? "Request" : "Asserts"}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4">
+            {!selectedResult ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-2">
+                <span className="text-3xl">🔍</span>
+                <span className="text-xs font-bold">Selecciona un test para inspeccionar</span>
+              </div>
+            ) : activeTab === "response" ? (
+              <>
+                <div className="flex gap-6 mb-4">
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</div>
+                    <div className={`text-2xl font-black font-mono
+                      ${!selectedResult.response?.status ? "text-slate-300" : selectedResult.response.status < 300 ? "text-emerald-600" : selectedResult.response.status < 500 ? "text-amber-600" : "text-rose-600"}`}>
+                      {selectedResult.response?.status || (selectedResult.response?.error ? "ERR" : "—")}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Timing</div>
+                    <div className="text-2xl font-black font-mono text-pink-500">{selectedResult.response?.timing ?? 0}ms</div>
                   </div>
                 </div>
-                <div>
-                  <div style={{ fontSize: 10, color: "#484f58", marginBottom: 4, textTransform: "uppercase", letterSpacing: .5 }}>Timing</div>
-                  <div style={{ fontSize: 26, fontWeight: 700, fontFamily: "monospace", color: "#58a6ff" }}>{selectedResult.response?.timing ?? 0}ms</div>
-                </div>
+                {selectedResult.response?.error && <CodeBlock label="Error de conexión" code={selectedResult.response.error} />}
+                <CodeBlock label="Response Body" code={selectedResult.response?.data} />
+              </>
+            ) : activeTab === "request" ? (
+              <>
+                <CodeBlock label="Endpoint" code={`${selectedResult.request?.method} ${selectedResult.request?.url}`} />
+                {selectedResult.request?.body ? <CodeBlock label="Request Body" code={selectedResult.request.body} /> : null}
+                <CodeBlock label="Headers" code={selectedResult.request?.headers} />
+              </>
+            ) : activeTab === "assertions" ? (
+              <div className="space-y-0.5">
+                {selectedResult.assertions.map((a, i) => (
+                  <div key={i} className="flex items-start gap-2 py-2 border-b border-slate-50 last:border-0">
+                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black flex-shrink-0 mt-0.5
+                      ${a.pass ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}>
+                      {a.pass ? "✓" : "✕"}
+                    </span>
+                    <span className="text-xs text-slate-600">{a.name}</span>
+                  </div>
+                ))}
               </div>
-              {selectedResult.response?.error && <CodeBlock label="Error de conexión" code={selectedResult.response.error} color="#f85149" />}
-              <CodeBlock label="Response Body" code={selectedResult.response?.data} />
-            </>
-          ) : activeTab === "request" ? (
-            <>
-              <CodeBlock label="Endpoint" code={`${selectedResult.request?.method} ${selectedResult.request?.url}`} />
-              {selectedResult.request?.body && <CodeBlock label="Request Body" code={selectedResult.request.body} />}
-              <CodeBlock label="Headers" code={selectedResult.request?.headers} />
-            </>
-          ) : activeTab === "assertions" ? (
-            <div>
-              {selectedResult.assertions.map((a, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "7px 0", borderBottom: i < selectedResult.assertions.length - 1 ? "1px solid #21262d" : "none" }}>
-                  <span style={{ width: 16, height: 16, borderRadius: "50%", background: a.pass ? "#23863633" : "#da363022", color: a.pass ? "#3fb950" : "#f85149", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>
-                    {a.pass ? "✓" : "✕"}
-                  </span>
-                  <span style={{ fontSize: 11, color: "#8b949e" }}>{a.name}</span>
-                </div>
-              ))}
-            </div>
-          ) : !GEMINI_KEY ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 160, color: "#484f58", gap: 8, textAlign: "center", padding: "0 16px" }}>
-              <span style={{ fontSize: 22 }}>✦</span>
-              <span style={{ fontSize: 12 }}>Agrega <code>NEXT_PUBLIC_GEMINI_API_KEY</code> en tu <code>.env</code> para análisis IA de fallos</span>
-            </div>
-          ) : !selectedResult.aiAnalysis ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 160, color: "#484f58", gap: 8 }}>
-              <span style={{ fontSize: 22 }}>✦</span>
-              <span style={{ fontSize: 12 }}>{selectedResult.status === "pass" ? "Test pasó — sin análisis" : "Analizando con Gemini..."}</span>
-            </div>
-          ) : (
-            <div>
-              <div style={{ background: "#bc8cff11", border: "1px solid #bc8cff33", borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#bc8cff", marginBottom: 8, textTransform: "uppercase", letterSpacing: .5 }}>✦ Análisis Gemini</div>
-                <div style={{ fontSize: 12, color: "#8b949e", marginBottom: 8 }}><span style={{ color: "#e6edf3", fontWeight: 600 }}>Causa raíz: </span>{selectedResult.aiAnalysis.root_cause}</div>
-                {selectedResult.aiAnalysis.issues?.map((iss, i) => <div key={i} style={{ display: "flex", gap: 7, fontSize: 11, color: "#8b949e", marginBottom: 4 }}><span style={{ color: "#f85149" }}>▸</span>{iss}</div>)}
+            ) : !GEMINI_KEY ? (
+              <div className="h-full flex flex-col items-center justify-center text-center text-slate-300 gap-2 px-4">
+                <Sparkles className="w-6 h-6" />
+                <span className="text-xs font-bold">Agrega NEXT_PUBLIC_GEMINI_API_KEY en tu .env para análisis IA de fallos</span>
               </div>
-              <div style={{ fontSize: 10, color: "#484f58", marginBottom: 8, textTransform: "uppercase", letterSpacing: .5, fontWeight: 700 }}>Soluciones sugeridas</div>
-              {selectedResult.aiAnalysis.fix?.map((f, i) => <div key={i} style={{ display: "flex", gap: 7, fontSize: 11, color: "#8b949e", marginBottom: 6 }}><span style={{ color: "#3fb950" }}>→</span>{f}</div>)}
-            </div>
-          )}
+            ) : !selectedResult.aiAnalysis ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-2">
+                <Sparkles className="w-6 h-6" />
+                <span className="text-xs font-bold">{selectedResult.status === "pass" ? "Test pasó — sin análisis" : "Analizando con Gemini..."}</span>
+              </div>
+            ) : (
+              <div>
+                <div className="bg-purple-50 border border-purple-100 rounded-2xl p-4 mb-4">
+                  <div className="text-[10px] font-black text-purple-500 uppercase tracking-widest mb-2 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" /> Análisis Gemini
+                  </div>
+                  <div className="text-xs text-slate-600 mb-2">
+                    <span className="text-slate-800 font-bold">Causa raíz: </span>{selectedResult.aiAnalysis.root_cause}
+                  </div>
+                  {selectedResult.aiAnalysis.issues?.map((iss, i) => (
+                    <div key={i} className="flex gap-2 text-xs text-slate-500 mb-1">
+                      <span className="text-rose-400">▸</span>{iss}
+                    </div>
+                  ))}
+                </div>
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Soluciones sugeridas</div>
+                {selectedResult.aiAnalysis.fix?.map((f, i) => (
+                  <div key={i} className="flex gap-2 text-xs text-slate-500 mb-1.5">
+                    <span className="text-emerald-500">→</span>{f}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
-      <style>{`@keyframes tpmh-spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }

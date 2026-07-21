@@ -25,6 +25,7 @@ const nextConfig: NextConfig = {
       process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1",
     NEXT_PUBLIC_FEATURED_TEACHER_USERNAME:
       process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "Mar12",
+    NEXT_PUBLIC_GEMINI_API_KEY: process.env.NEXT_PUBLIC_GEMINI_API_KEY ?? "",
   },
 };
 
