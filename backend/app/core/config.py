@@ -39,9 +39,9 @@ class Settings(BaseSettings):
 
     # App
     APP_NAME: str = "TPMH"
-    FRONTEND_URL: str = "http://localhost:3000"
-    BACKEND_URL: str = "http://localhost:8000"
-    ENVIRONMENT: str = "development"
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8000")
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
 
     class Config:
         env_file = ".env"
