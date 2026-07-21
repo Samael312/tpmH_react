@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "@/lib/api";
-
+  
 export interface StudentClass {
   id: number;
   class_type: "trial" | "regular";
@@ -99,7 +99,8 @@ export function useStudentClasses(includeHistory = false) {
       // Aseguramos que siempre se guarde un arreglo
       setClasses(Array.isArray(res.data) ? res.data : (res.data?.data || []));
       
-    } catch { 
+    } catch (error) { 
+      console.error("Error fetching student classes:", error);
       // Si la petición falla, aseguramos que el estado vuelva a ser un arreglo vacío
       setClasses([]);
     } finally { 
@@ -115,17 +116,24 @@ export function useStudentClasses(includeHistory = false) {
 export function useAvailableSlots(date: string, duration: number) {
   const [slots, setSlots]     = useState<AvailableSlot[]>([]);
   const [loading, setLoading] = useState(false);
-
+  
   const fetch = useCallback(async () => {
     if (!date) return;
     setLoading(true);
     try {
+      // CORRECCIÓN: Agregado "const" para declarar la variable
+      const featured_teacher = process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "mar12"; 
+      
       const res = await api.get(
-        `/availability/featured-teacher/slots?date=${date}&duration=${duration}`
+        `/availability/${featured_teacher}/slots?date=${date}&duration=${duration}`
       );
       setSlots(res.data);
-    } catch { }
-    finally { setLoading(false); }
+    } catch (error) { 
+      console.error("Error fetching available slots:", error);
+      setSlots([]);
+    } finally { 
+      setLoading(false); 
+    }
   }, [date, duration]);
 
   useEffect(() => { fetch(); }, [fetch]);
@@ -142,8 +150,12 @@ export function useEnrollments() {
       setLoading(true);
       const res = await api.get("/packages/my-enrollments");
       setEnrollments(res.data);
-    } catch { }
-    finally { setLoading(false); }
+    } catch (error) { 
+      console.error("Error fetching enrollments:", error);
+      setEnrollments([]);
+    } finally { 
+      setLoading(false); 
+    }
   }, []);
 
   useEffect(() => { fetch(); }, [fetch]);
@@ -160,8 +172,12 @@ export function useStudentMaterials() {
       setLoading(true);
       const res = await api.get("/materials/student/my-materials");
       setMaterials(res.data);
-    } catch { }
-    finally { setLoading(false); }
+    } catch (error) { 
+      console.error("Error fetching materials:", error);
+      setMaterials([]);
+    } finally { 
+      setLoading(false); 
+    }
   }, []);
 
   useEffect(() => { fetch(); }, [fetch]);
@@ -178,8 +194,12 @@ export function useStudentHomework() {
       setLoading(true);
       const res = await api.get("/homework/student/my-homework");
       setHomeworks(res.data);
-    } catch { }
-    finally { setLoading(false); }
+    } catch (error) { 
+      console.error("Error fetching homework:", error);
+      setHomeworks([]);
+    } finally { 
+      setLoading(false); 
+    }
   }, []);
 
   useEffect(() => { fetch(); }, [fetch]);
@@ -195,15 +215,22 @@ export function useFeaturedTeacher() {
   const fetch = useCallback(async () => {
     try {
       setLoading(true);
-      const username = process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME;
+      // CORRECCIÓN: Agregado fallback en caso de que la variable de entorno falle
+      const username = process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "mar12";
+      
       const [tRes, rRes] = await Promise.all([
         api.get(`/teachers/${username}`),
         api.get(`/reviews/${username}`),
       ]);
       setTeacher(tRes.data);
       setReviews(rRes.data);
-    } catch { }
-    finally { setLoading(false); }
+    } catch (error) { 
+      console.error("Error fetching teacher profile:", error);
+      setTeacher(null);
+      setReviews([]);
+    } finally { 
+      setLoading(false); 
+    }
   }, []);
 
   useEffect(() => { fetch(); }, [fetch]);

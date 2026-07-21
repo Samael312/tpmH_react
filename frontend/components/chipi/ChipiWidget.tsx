@@ -203,8 +203,9 @@ export default function ChipiWidget({ screenName }: ChipiWidgetProps) {
 
     try {
       const res = await api.post("/chipi/chat", {
-        message:     text,
-        screen_name: screen,
+        message: text,
+        screen: screen,   // backend schema field is "screen", not "screen_name"
+        stream: false,    // backend defaults to true (SSE); this widget expects plain JSON
       });
 
       setMessages(p =>

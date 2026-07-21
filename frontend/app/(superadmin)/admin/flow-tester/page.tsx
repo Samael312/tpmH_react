@@ -6,6 +6,7 @@ import {
   Play, RotateCcw, Download, CheckCircle2, XCircle, AlertTriangle,
   Loader2, Circle, SkipForward, Pencil, Sparkles,
 } from "lucide-react";
+import api from "@/lib/api";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 interface TestResult {
@@ -21,7 +22,8 @@ interface TestResult {
 // Lo despojamos aquí porque cada test antepone su propio prefijo /api/v1/...
 const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 const BASE_URL = (RAW_API_URL.replace(/\/api\/v1\/?$/, "") || RAW_API_URL).replace(/\/$/, "");
-const GEMINI_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY ?? "";
+const GEMINI_KEY = process.env.GEMINI_API_KEY ?? "";
+const featured_teacher = process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "mar12";  // Fallback a "mar12" si no está definido
 
 // ─── SHARED TEST STATE ────────────────────────────────────────────────────────
 // Se reinicia en cada corrida completa para que los tests sean independientes.
@@ -230,11 +232,11 @@ function buildSuites(adminToken: string, teacherUsername: string) {
             return ok(r, [mk("Status 200", r.status === 200), mk("Retorna array", Array.isArray(r.data)), mk("No 500", r.status !== 500)]);
           } },
 
-        { id: "av-featured", name: "GET featured-teacher/slots", method: "GET", path: "/api/v1/availability/featured-teacher/slots",
+        { id: "av-featured", name: "GET featured-teacher/slots", method: "GET", path: `/api/v1/availability/${featured_teacher}/slots`,
           desc: "Slots del profesor destacado en PlatformConfig",
           run: async () => {
             const dt = new Date(); dt.setDate(dt.getDate() + 3);
-            const r = await httpReq("GET", `/api/v1/availability/featured-teacher/slots?date=${dt.toISOString().split("T")[0]}&duration=60`, undefined, S.studentToken || adminToken);
+            const r = await httpReq("GET", `/api/v1/availability/${featured_teacher}/slots?date=${dt.toISOString().split("T")[0]}&duration=60`, undefined, S.studentToken || adminToken);
             if (!S.availabilitySlot && Array.isArray(r.data) && (r.data as unknown[]).length > 0) S.availabilitySlot = (r.data as unknown[])[0];
             return ok(r, [mk("Status 200 o 404", r.status === 200 || r.status === 404), mk("No 500", r.status !== 500)]);
           } },
@@ -566,23 +568,26 @@ function syntaxHL(obj: unknown): string {
     .replace(/: (true|false)/g, ': <span class="text-rose-300">$1</span>');
 }
 
-async function geminiAnalyze(test: { name: string; method: string; path: string; desc: string }, result: TestResult) {
-  if (!GEMINI_KEY || result.status === "pass" || result.status === "skipped") return null;
-  const prompt = `QA engineer experto en FastAPI + Next.js. Test fallido en TPMH.
-Test: ${test.name} | ${test.method} ${test.path}
-HTTP: ${result.response?.status ?? 0} | Error: ${result.response?.error ?? "none"}
-Response: ${JSON.stringify(result.response?.data)?.slice(0, 400)}
-Assertions fallidas: ${result.assertions.filter(a => !a.pass).map(a => a.name).join(", ")}
-Responde SOLO en JSON sin markdown: {"root_cause":"frase corta","issues":["máx 2"],"fix":["máx 2 soluciones"]}`;
+async function geminiAnalyze(
+  test: { name: string; method: string; path: string; desc: string },
+  result: TestResult
+) {
+  if (result.status === "pass" || result.status === "skipped") return null;
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 256 } }),
+    const res = await api.post("/ai-tools/analyze-test-failure", {
+      test_name: test.name,
+      method: test.method,
+      path: test.path,
+      description: test.desc,
+      http_status: result.response?.status,
+      error: result.response?.error,
+      response_data: JSON.stringify(result.response?.data)?.slice(0, 500),
+      failed_assertions: result.assertions.filter(a => !a.pass).map(a => a.name),
     });
-    const data = await res.json();
-    const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-    return JSON.parse(text.replace(/```json|```/g, "").trim());
-  } catch { return null; }
+    return res.data; // { root_cause, issues, fix }
+  } catch {
+    return null;
+  }
 }
 
 // ─── SUB-COMPONENTS ───────────────────────────────────────────────────────────
@@ -929,11 +934,6 @@ export default function FlowTester() {
                     <span className="text-xs text-slate-600">{a.name}</span>
                   </div>
                 ))}
-              </div>
-            ) : !GEMINI_KEY ? (
-              <div className="h-full flex flex-col items-center justify-center text-center text-slate-300 gap-2 px-4">
-                <Sparkles className="w-6 h-6" />
-                <span className="text-xs font-bold">Agrega NEXT_PUBLIC_GEMINI_API_KEY en tu .env para análisis IA de fallos</span>
               </div>
             ) : !selectedResult.aiAnalysis ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-2">

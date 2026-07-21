@@ -35,6 +35,7 @@ def _get_optional_user(
 async def chat_with_chipi(
     data: ChipiRequest,
     db: Session = Depends(get_db),
+    no_user: Optional[User] = Depends(_get_optional_user),
     current_user: Optional[User] = Depends(get_current_user),
 ):
     """

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-
+import os
 from app.db.base import get_db
 from app.auth.dependencies import get_current_user, get_current_teacher
 from app.models.user import User
@@ -355,6 +355,8 @@ def get_teacher_available_slots(
         ))
 
     return result
+
+featured_teacher = os.getenv("FEATURED_TEACHER_USERNAME", "mar12")  # Fallback a "mar12" si no está definido
 
 @router.get(
     "/featured-teacher/slots",
