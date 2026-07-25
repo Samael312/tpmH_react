@@ -304,3 +304,49 @@ def activate_renewal(
         "classes_total": new_enrollment.classes_total,
         "renewal_count": new_enrollment.renewal_count,
     }
+
+@router.post("/select-initial")
+def select_initial_package(
+    package_id: int,
+    current_user: User = Depends(get_current_student),
+    db: Session = Depends(get_db)
+):
+    """
+    El estudiante elige su primer paquete, solo permitido justo
+    después de completar la clase de prueba (stage == needs_package).
+    """
+    from app.core.class_logic import get_student_booking_stage
+
+    student_id = current_user.student_profile.id
+    stage = get_student_booking_stage(student_id, db)
+
+    if stage != "needs_package":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Solo puedes elegir tu paquete inicial después de completar la clase de prueba."
+        )
+
+    package = db.query(Package).filter(
+        Package.id == package_id,
+        Package.is_active == True
+    ).first()
+    if not package:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Paquete no encontrado")
+
+    enrollment = Enrollment(
+        student_id=student_id,
+        package_id=package.id,
+        teacher_id=package.teacher_id,
+        classes_used=0,
+        classes_total=package.classes_count,
+        status=EnrollmentStatus.active,
+    )
+    db.add(enrollment)
+    db.commit()
+    db.refresh(enrollment)
+
+    return {
+        "message": "Paquete activado. Ya puedes agendar tus clases.",
+        "enrollment_id": enrollment.id,
+        "classes_total": enrollment.classes_total,
+    }

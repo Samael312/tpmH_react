@@ -35,7 +35,7 @@ class BookAndPayRequest(BaseModel):
     Paso 1: El estudiante reserva un slot.
     No necesita pagar todavía — el slot queda en 'pending'.
     """
-    enrollment_id: int
+    enrollment_id: Optional[int] = None  
     start_time_utc: datetime
     end_time_utc: datetime
     duration_minutes: int

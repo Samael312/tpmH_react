@@ -21,6 +21,7 @@ class User(Base):
     name = Column(String, nullable=False)
     surname = Column(String, nullable=False)
     avatar = Column(String, nullable=True)
+    phone_number = Column(String, nullable=True, unique=True) 
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
     google_id = Column(String, nullable=True, unique=True)

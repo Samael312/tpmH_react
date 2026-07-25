@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from app.models.class_ import Class
-from app.models.package import Enrollment
+from app.models.class_ import Class, ClassType
+from app.models.package import Enrollment, EnrollmentStatus
 from app.models.student import StudentProfile
 from app.models.teacher import TeacherProfile
 from app.core.timezone import utc_now, UTC
@@ -154,3 +154,33 @@ def update_enrollment_counter(
             enrollment.status = "active"
 
         db.commit()
+
+def get_student_booking_stage(student_id: int, db: Session) -> str:
+    """
+    Determina la etapa de reserva del estudiante:
+    - "needs_trial": nunca tuvo ninguna clase -> debe reservar su prueba (30min, sin paquete)
+    - "trial_in_progress": ya reservó la prueba pero aún no se completó
+    - "needs_package": completó la prueba pero no tiene paquete activo
+    - "ready": puede reservar contra su paquete activo
+    """
+    has_any_class = db.query(Class).filter(
+        Class.student_id == student_id
+    ).first() is not None
+
+    if not has_any_class:
+        return "needs_trial"
+
+    trial_pending = db.query(Class).filter(
+        Class.student_id == student_id,
+        Class.class_type == ClassType.trial,
+        Class.status.in_(["pending", "pending_payment", "confirmed"])
+    ).first()
+    if trial_pending:
+        return "trial_in_progress"
+
+    active_enrollment = db.query(Enrollment).filter(
+        Enrollment.student_id == student_id,
+        Enrollment.status == EnrollmentStatus.active
+    ).first()
+
+    return "ready" if active_enrollment else "needs_package"

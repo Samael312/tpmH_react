@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { useStudentClasses, useEnrollments } from "@/hooks/useStudentData";
+import api from "@/lib/api";
 import { Calendar, BookOpen, ClipboardList,
          Clock, CheckCircle, ChevronRight,
-         Video, AlertCircle } from "lucide-react";
+         Video, AlertCircle, Sparkles, Hourglass,
+         Package as PackageIcon } from "lucide-react";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+
+type BookingStage = "loading" | "needs_trial" | "trial_in_progress" | "needs_package" | "ready";
 
 const STATUS_CONFIG: Record<string, {
   label: string;
@@ -68,35 +73,20 @@ function UpcomingClassCard({ cls }: { cls: any }) {
             {cls.subject ?? "Inglés General"}
           </p>
         </div>
-
-        {/* Meet link */}
-        {cls.meet_link && cls.status === "confirmed" && (
-            <a
-            href={cls.meet_link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5
-                       bg-emerald-500 text-white text-xs font-bold rounded-xl
-                       hover:bg-emerald-600 shadow-md shadow-emerald-100
-                       transition-all duration-200"
-          >
-            <Video className="w-3.5 h-3.5" />
-            Entrar
-          </a>
-        )}
       </div>
     </div>
   );
 }
 
 function QuickAction({
-  href, icon, label, description, color,
+  href, icon, label, description, color, disabled = false,
 }: {
   href: string;
   icon: React.ReactNode;
   label: string;
   description: string;
   color: "pink" | "purple" | "blue" | "emerald";
+  disabled?: boolean;
 }) {
   const colors = {
     pink:    { bg: "bg-pink-50",    icon: "bg-pink-100 text-pink-600",    border: "border-t-pink-500",    btn: "text-pink-600 hover:bg-pink-100" },
@@ -106,14 +96,10 @@ function QuickAction({
   };
   const c = colors[color];
 
-  return (
-    <Link href={href}
-      className={`group bg-white/80 backdrop-blur-xl rounded-2xl border
-                  border-white shadow-lg border-t-4 ${c.border}
-                  p-6 flex flex-col items-center text-center
-                  hover:shadow-xl hover:-translate-y-1 transition-all duration-300`}>
+  const content = (
+    <>
       <div className={`w-14 h-14 rounded-2xl ${c.icon} flex items-center
-                       justify-center mb-4 group-hover:scale-110
+                       justify-center mb-4 ${!disabled && "group-hover:scale-110"}
                        transition-transform duration-300`}>
         {icon}
       </div>
@@ -123,10 +109,34 @@ function QuickAction({
       </p>
       <span className={`inline-flex items-center gap-1 text-xs font-bold
                         bg-transparent ${c.btn} px-4 py-2 rounded-full
-                        border-2 border-current transition-colors`}>
-        Ir
-        <ChevronRight className="w-3 h-3" />
+                        border-2 border-current transition-colors
+                        ${disabled && "opacity-50"}`}>
+        {disabled ? "Bloqueado" : "Ir"}
+        {!disabled && <ChevronRight className="w-3 h-3" />}
       </span>
+    </>
+  );
+
+  if (disabled) {
+    return (
+      <div
+        className={`group bg-white/80 backdrop-blur-xl rounded-2xl border
+                    border-white shadow-lg border-t-4 ${c.border}
+                    p-6 flex flex-col items-center text-center opacity-60
+                    cursor-not-allowed`}
+      >
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Link href={href}
+      className={`group bg-white/80 backdrop-blur-xl rounded-2xl border
+                  border-white shadow-lg border-t-4 ${c.border}
+                  p-6 flex flex-col items-center text-center
+                  hover:shadow-xl hover:-translate-y-1 transition-all duration-300`}>
+      {content}
     </Link>
   );
 }
@@ -135,6 +145,14 @@ export default function StudentDashboard() {
   const { user }       = useAuthStore();
   const { classes: classesData, loading: classesLoading } = useStudentClasses();
   const { enrollments } = useEnrollments();
+
+  const [stage, setStage] = useState<BookingStage>("loading");
+
+  useEffect(() => {
+    api.get("/payments/booking-status")
+      .then(res => setStage(res.data.stage))
+      .catch(() => setStage("ready")); // fallback conservador
+  }, []);
 
   // The hook may return the raw API response { classes: [], total, ... } or the array directly
   const classList: any[] = Array.isArray(classesData)
@@ -173,8 +191,120 @@ export default function StudentDashboard() {
           </p>
         </div>
 
-        {/* ─── Banner plan activo ─── */}
-        {activeEnrollment && (
+        {/* ─── Banner según etapa de reserva ─── */}
+        {stage === "needs_trial" && (
+          <div className="bg-gradient-to-r from-purple-500 to-pink-500
+                          rounded-[2rem] p-6 sm:p-8 text-white relative
+                          overflow-hidden shadow-xl shadow-purple-200
+                          animate-in fade-in slide-in-from-bottom-4
+                          duration-500 delay-100">
+            <div className="absolute top-[-40px] right-[-40px] w-48 h-48
+                            bg-white/10 rounded-full blur-2xl" />
+            <div className="relative flex flex-col sm:flex-row items-start
+                            sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center
+                                justify-center flex-shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest
+                                text-white/70 mb-1">
+                    ¡Bienvenido!
+                  </p>
+                  <h2 className="text-xl font-black">
+                    Tu primera clase es gratis
+                  </h2>
+                  <p className="text-white/80 text-sm mt-1">
+                    Reserva tu clase de prueba de 30 minutos sin compromiso
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/dashboard/schedule"
+                className="flex-shrink-0 inline-flex items-center gap-2 px-5 py-3
+                           bg-white text-purple-600 text-sm font-bold rounded-xl
+                           shadow-md hover:shadow-lg active:scale-[0.98]
+                           transition-all duration-200"
+              >
+                <Calendar className="w-4 h-4" />
+                Reservar prueba
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {stage === "trial_in_progress" && (
+          <div className="bg-amber-50 border border-amber-100 rounded-[2rem]
+                          p-6 sm:p-8 relative overflow-hidden
+                          animate-in fade-in slide-in-from-bottom-4
+                          duration-500 delay-100">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center
+                              justify-center flex-shrink-0">
+                <Hourglass className="w-5 h-5 text-amber-500" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest
+                              text-amber-500 mb-1">
+                  Clase de prueba pendiente
+                </p>
+                <h2 className="text-lg font-black text-amber-800">
+                  Tu prueba está reservada
+                </h2>
+                <p className="text-amber-700 text-sm mt-1">
+                  El staff la confirmará pronto. Una vez completada podrás
+                  elegir tu paquete y seguir agendando.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {stage === "needs_package" && (
+          <div className="bg-gradient-to-r from-emerald-500 to-teal-400
+                          rounded-[2rem] p-6 sm:p-8 text-white relative
+                          overflow-hidden shadow-xl shadow-emerald-200
+                          animate-in fade-in slide-in-from-bottom-4
+                          duration-500 delay-100">
+            <div className="absolute top-[-40px] right-[-40px] w-48 h-48
+                            bg-white/10 rounded-full blur-2xl" />
+            <div className="relative flex flex-col sm:flex-row items-start
+                            sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center
+                                justify-center flex-shrink-0">
+                  <CheckCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest
+                                text-white/70 mb-1">
+                    ¡Prueba completada!
+                  </p>
+                  <h2 className="text-xl font-black">
+                    Elige tu paquete de clases
+                  </h2>
+                  <p className="text-white/80 text-sm mt-1">
+                    Selecciona el plan que mejor se adapte a tu ritmo
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/dashboard/schedule"
+                className="flex-shrink-0 inline-flex items-center gap-2 px-5 py-3
+                           bg-white text-emerald-600 text-sm font-bold rounded-xl
+                           shadow-md hover:shadow-lg active:scale-[0.98]
+                           transition-all duration-200"
+              >
+                <PackageIcon className="w-4 h-4" />
+                Elegir paquete
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Banner plan activo (solo cuando ya está en flujo normal) ─── */}
+        {stage === "ready" && activeEnrollment && (
           <div className="bg-gradient-to-r from-pink-500 to-rose-400
                           rounded-[2rem] p-6 sm:p-8 text-white relative
                           overflow-hidden shadow-xl shadow-pink-200
@@ -251,17 +381,22 @@ export default function StudentDashboard() {
                             border border-white shadow-lg p-8 text-center">
               <Calendar className="w-10 h-10 text-slate-200 mx-auto mb-3" />
               <p className="text-slate-500 font-bold mb-4">
-                No tienes clases próximas
+                {stage === "trial_in_progress"
+                  ? "Tu clase de prueba aparecerá aquí"
+                  : "No tienes clases próximas"
+                }
               </p>
-              <Link href="/dashboard/schedule"
-                className="inline-flex items-center gap-2 px-5 py-2.5
-                           bg-gradient-to-r from-pink-500 to-rose-400
-                           text-white text-sm font-bold rounded-xl
-                           shadow-md shadow-pink-100 hover:shadow-pink-200
-                           transition-all duration-200">
-                <Calendar className="w-4 h-4" />
-                Agendar primera clase
-              </Link>
+              {(stage === "needs_trial" || stage === "ready") && (
+                <Link href="/dashboard/schedule"
+                  className="inline-flex items-center gap-2 px-5 py-2.5
+                             bg-gradient-to-r from-pink-500 to-rose-400
+                             text-white text-sm font-bold rounded-xl
+                             shadow-md shadow-pink-100 hover:shadow-pink-200
+                             transition-all duration-200">
+                  <Calendar className="w-4 h-4" />
+                  {stage === "needs_trial" ? "Agendar clase de prueba" : "Agendar primera clase"}
+                </Link>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -282,9 +417,18 @@ export default function StudentDashboard() {
             <QuickAction
               href="/dashboard/schedule"
               color="pink"
-              label="Agendar clase"
-              description="Reserva tu próxima sesión"
+              label={stage === "needs_trial" ? "Agendar prueba" : "Agendar clase"}
+              description={
+                stage === "needs_trial"
+                  ? "Reserva tu clase gratuita de 30 min"
+                  : stage === "trial_in_progress"
+                    ? "Completa tu prueba primero"
+                    : stage === "needs_package"
+                      ? "Elige tu paquete para continuar"
+                      : "Reserva tu próxima sesión"
+              }
               icon={<Calendar className="w-7 h-7" />}
+              disabled={stage === "trial_in_progress"}
             />
             <QuickAction
               href="/dashboard/materials"

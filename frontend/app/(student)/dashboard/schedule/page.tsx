@@ -1,22 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAvailableSlots, useEnrollments } from "@/hooks/useStudentData";
-import { Calendar, Clock, CreditCard,
-         Upload, Check, X, ChevronLeft,
-         ChevronRight, AlertCircle, Video } from "lucide-react";
+import {
+  Calendar, Clock, CreditCard,
+  Upload, Check, X, ChevronLeft,
+  ChevronRight, AlertCircle, Video,
+  Sparkles, Package as PackageIcon, Hourglass,
+} from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 
+type BookingStage = "loading" | "needs_trial" | "trial_in_progress" | "needs_package" | "ready";
+
 const DURATIONS = [
-  { value: 30,  label: "30 min" },
-  { value: 60,  label: "1 hora" },
+  { value: 30, label: "30 min" },
+  { value: 60, label: "1 hora" },
 ];
 
 const PAYMENT_METHODS = [
   { value: "binance", label: "Binance (USDT)" },
-  { value: "paypal",  label: "PayPal" },
-  { value: "zelle",   label: "Zelle" },
+  { value: "paypal", label: "PayPal" },
+  { value: "zelle", label: "Zelle" },
 ];
 
 // ─── Helper: normaliza errores de la API (string o array de Pydantic) ────────
@@ -40,17 +45,17 @@ function MiniCalendar({
   onChange: (v: string) => void;
 }) {
   const today = new Date();
-  const [year, setYear]   = useState(today.getFullYear());
+  const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
 
-  const MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
-                  "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-  const DAYS   = ["L","M","X","J","V","S","D"];
+  const MONTHS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  const DAYS = ["L", "M", "X", "J", "V", "S", "D"];
 
-  const firstDay   = new Date(year, month, 1).getDay();
-  const offset     = (firstDay + 6) % 7;
+  const firstDay = new Date(year, month, 1).getDay();
+  const offset = (firstDay + 6) % 7;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells       = Array.from(
+  const cells = Array.from(
     { length: offset + daysInMonth },
     (_, i) => (i < offset ? null : i - offset + 1)
   );
@@ -67,7 +72,6 @@ function MiniCalendar({
   return (
     <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
                     border border-white shadow-2xl shadow-slate-200/50 p-6">
-      {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <button onClick={prev}
           className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200
@@ -84,7 +88,6 @@ function MiniCalendar({
         </button>
       </div>
 
-      {/* Días de la semana */}
       <div className="grid grid-cols-7 mb-2">
         {DAYS.map(d => (
           <div key={d} className="text-center text-[10px] font-black
@@ -94,14 +97,13 @@ function MiniCalendar({
         ))}
       </div>
 
-      {/* Celdas */}
       <div className="grid grid-cols-7 gap-1">
         {cells.map((day, i) => {
           if (!day) return <div key={i} />;
           const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
           const isSelected = dateStr === value;
-          const isPast     = new Date(dateStr) < new Date(today.toDateString());
-          const isToday    = dateStr === today.toISOString().split("T")[0];
+          const isPast = new Date(dateStr) < new Date(today.toDateString());
+          const isToday = dateStr === today.toISOString().split("T")[0];
 
           return (
             <button
@@ -130,14 +132,16 @@ function MiniCalendar({
   );
 }
 
-// ─── Paso 1: Seleccionar slot ─────────────────────────────────────────────────
+// ─── Paso: Seleccionar slot (usado tanto para prueba como para clase regular) ─
 function StepSelectSlot({
   onSelect,
+  isTrial = false,
 }: {
   onSelect: (date: string, slot: any, duration: number) => void;
+  isTrial?: boolean;
 }) {
-  const [date, setDate]         = useState("");
-  const [duration, setDuration] = useState(60);
+  const [date, setDate] = useState("");
+  const [duration, setDuration] = useState(isTrial ? 30 : 60);
 
   const { slots, loading } = useAvailableSlots(date, duration);
 
@@ -153,30 +157,43 @@ function StepSelectSlot({
       <div className="space-y-5">
         <MiniCalendar value={date} onChange={setDate} />
 
-        {/* Duración */}
-        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
-                        border border-white shadow-xl shadow-slate-200/50 p-6">
-          <p className="text-[10px] font-black text-slate-400 uppercase
-                        tracking-widest mb-3">
-            Duración de la clase
-          </p>
-          <div className="flex gap-3">
-            {DURATIONS.map(d => (
-              <button
-                key={d.value}
-                onClick={() => setDuration(d.value)}
-                className={`flex-1 py-3 rounded-xl text-sm font-bold
-                  border-2 transition-all duration-200
-                  ${duration === d.value
-                    ? "border-pink-400 bg-pink-50 text-pink-600"
-                    : "border-transparent bg-slate-100 text-slate-500 hover:border-slate-200"
-                  }`}
-              >
-                {d.label}
-              </button>
-            ))}
+        {/* Duración — fija en 30min para la clase de prueba */}
+        {!isTrial && (
+          <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
+                          border border-white shadow-xl shadow-slate-200/50 p-6">
+            <p className="text-[10px] font-black text-slate-400 uppercase
+                          tracking-widest mb-3">
+              Duración de la clase
+            </p>
+            <div className="flex gap-3">
+              {DURATIONS.map(d => (
+                <button
+                  key={d.value}
+                  onClick={() => setDuration(d.value)}
+                  className={`flex-1 py-3 rounded-xl text-sm font-bold
+                    border-2 transition-all duration-200
+                    ${duration === d.value
+                      ? "border-pink-400 bg-pink-50 text-pink-600"
+                      : "border-transparent bg-slate-100 text-slate-500 hover:border-slate-200"
+                    }`}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
+
+        {isTrial && (
+          <div className="bg-purple-50 border border-purple-100 rounded-2xl p-5
+                          flex gap-3 items-start">
+            <Sparkles className="w-5 h-5 text-purple-400 flex-shrink-0 mt-0.5" />
+            <p className="text-sm font-bold text-purple-700 leading-relaxed">
+              Tu primera clase es una prueba gratuita de 30 minutos. Una vez
+              completada, podrás elegir tu paquete de clases regulares.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Columna derecha: slots disponibles */}
@@ -255,7 +272,136 @@ function StepSelectSlot({
   );
 }
 
-// ─── Paso 2: Confirmar y pagar ────────────────────────────────────────────────
+// ─── Paso: Confirmar clase de prueba (sin pago, reserva directa) ─────────────
+function StepConfirmTrial({
+  date,
+  slot,
+  onBack,
+  onBooked,
+}: {
+  date: string;
+  slot: any;
+  onBack: () => void;
+  onBooked: () => void;
+}) {
+  const [booking, setBooking] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+
+  const fmtDate = new Date(date + "T00:00:00").toLocaleDateString("es", {
+    weekday: "long", day: "numeric", month: "long",
+  });
+  const fmtTime = new Date(slot.start_time_utc).toLocaleTimeString("es", {
+    hour: "2-digit", minute: "2-digit",
+  });
+
+  const confirmTrial = async () => {
+    setBooking(true);
+    setError("");
+    try {
+      await api.post("/payments/book", {
+        start_time_utc: slot.start_time_utc,
+        end_time_utc: slot.end_time_utc,
+        duration_minutes: 30,
+      });
+      setDone(true);
+      setTimeout(onBooked, 2000);
+    } catch (e: any) {
+      setError(extractErrorMessage(e, "Error reservando la clase de prueba"));
+    } finally {
+      setBooking(false);
+    }
+  };
+
+  return (
+    <div className="max-w-lg mx-auto space-y-5">
+      <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-[2rem]
+                      p-6 text-white relative overflow-hidden shadow-xl
+                      shadow-purple-200">
+        <div className="absolute top-[-30px] right-[-30px] w-32 h-32
+                        bg-white/10 rounded-full blur-xl" />
+        <p className="text-[10px] font-black uppercase tracking-widest
+                      text-white/70 mb-2 flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5" /> Clase de prueba gratuita
+        </p>
+        <p className="text-2xl font-black capitalize">{fmtDate}</p>
+        <div className="flex items-center gap-3 mt-2 flex-wrap">
+          <span className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5
+                           rounded-full text-sm font-bold">
+            <Clock className="w-3.5 h-3.5" />
+            {fmtTime}
+          </span>
+          <span className="bg-white/20 px-3 py-1.5 rounded-full text-sm font-bold">
+            30 min
+          </span>
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-rose-50 border border-rose-100 text-rose-600
+                        px-4 py-3 rounded-xl text-xs font-bold
+                        flex items-center gap-2">
+          <X className="w-4 h-4 flex-shrink-0" />
+          {error}
+        </div>
+      )}
+
+      {done ? (
+        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
+                        border border-white shadow-2xl p-10 text-center">
+          <div className="w-16 h-16 bg-emerald-100 rounded-full
+                          flex items-center justify-center mx-auto mb-4">
+            <Check className="w-8 h-8 text-emerald-600" />
+          </div>
+          <h3 className="text-xl font-black text-slate-800 mb-2">
+            ¡Prueba reservada!
+          </h3>
+          <p className="text-slate-500 text-sm">
+            El staff confirmará tu clase de prueba pronto
+          </p>
+        </div>
+      ) : (
+        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
+                        border border-white shadow-2xl shadow-slate-200/50 p-6
+                        space-y-4">
+          <p className="text-sm text-slate-500 leading-relaxed">
+            Esta clase de prueba es completamente gratuita y no requiere pago.
+            Solo confirma el horario para reservarla.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={onBack}
+              className="flex-1 py-3.5 text-sm font-bold text-slate-600
+                         bg-slate-100 hover:bg-slate-200 rounded-xl
+                         transition-colors"
+            >
+              Volver
+            </button>
+            <button
+              onClick={confirmTrial}
+              disabled={booking}
+              className="flex-1 py-3.5 text-sm font-bold text-white rounded-xl
+                         bg-gradient-to-r from-purple-500 to-pink-500
+                         hover:from-purple-600 hover:to-pink-600
+                         shadow-lg shadow-purple-200 active:scale-[0.98]
+                         transition-all duration-300 disabled:opacity-50
+                         flex items-center justify-center gap-2"
+            >
+              {booking ? (
+                <div className="w-4 h-4 border-2 border-white/40
+                                border-t-white rounded-full animate-spin" />
+              ) : (
+                <><Sparkles className="w-4 h-4" /> Confirmar clase de prueba</>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Paso: Confirmar y pagar (clase regular contra un paquete) ───────────────
 function StepPayment({
   date,
   slot,
@@ -271,8 +417,8 @@ function StepPayment({
   onBack: () => void;
   onSuccess: () => void;
 }) {
-  const [method, setMethod]   = useState("binance");
-  const [txId, setTxId]       = useState("");
+  const [method, setMethod] = useState("binance");
+  const [txId, setTxId] = useState("");
   const [receipt, setReceipt] = useState<File | null>(null);
   const [booking, setBooking] = useState(false);
   const [classId, setClassId] = useState<number | null>(null);
@@ -282,10 +428,9 @@ function StepPayment({
     payment_address: string;
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [done, setDone]             = useState(false);
-  const [error, setError]           = useState("");
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
 
-  // Paso 2a: Reservar slot (crea la clase en estado pending)
   const bookSlot = async () => {
     if (!enrollmentId) {
       setError("No se encontró un paquete activo para reservar esta clase.");
@@ -297,13 +442,13 @@ function StepPayment({
       const res = await api.post("/payments/book", {
         enrollment_id: enrollmentId,
         start_time_utc: slot.start_time_utc,
-        end_time_utc:   slot.end_time_utc,
+        end_time_utc: slot.end_time_utc,
         duration_minutes: duration,
       });
       setClassId(res.data.class_id);
       setPayInfo({
-        amount:          res.data.payment_instructions?.amount ?? res.data.amount,
-        instructions:    res.data.payment_instructions?.whatsapp_number ?? res.data.payment_instructions ?? "",
+        amount: res.data.payment_instructions?.amount ?? res.data.amount,
+        instructions: res.data.payment_instructions?.whatsapp_number ?? res.data.payment_instructions ?? "",
         payment_address:
           method === "binance"
             ? res.data.payment_instructions?.binance_address
@@ -316,17 +461,16 @@ function StepPayment({
     }
   };
 
-  // Paso 2b: Subir comprobante
   const submitReceipt = async () => {
     if (!classId || !receipt) return;
     setSubmitting(true);
     setError("");
     try {
       const form = new FormData();
-      form.append("class_id",      String(classId));
+      form.append("class_id", String(classId));
       form.append("payment_method", method);
       form.append("transaction_id", txId);
-      form.append("receipt",        receipt);
+      form.append("receipt", receipt);
       await api.post("/payments/submit-receipt", form, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -349,7 +493,6 @@ function StepPayment({
   return (
     <div className="max-w-lg mx-auto space-y-5">
 
-      {/* Resumen de la clase */}
       <div className="bg-gradient-to-r from-pink-500 to-rose-400 rounded-[2rem]
                       p-6 text-white relative overflow-hidden shadow-xl
                       shadow-pink-200">
@@ -372,7 +515,6 @@ function StepPayment({
         </div>
       </div>
 
-      {/* Error */}
       {error && (
         <div className="bg-rose-50 border border-rose-100 text-rose-600
                         px-4 py-3 rounded-xl text-xs font-bold
@@ -383,7 +525,6 @@ function StepPayment({
       )}
 
       {done ? (
-        /* Éxito */
         <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
                         border border-white shadow-2xl p-10 text-center">
           <div className="w-16 h-16 bg-emerald-100 rounded-full
@@ -398,7 +539,6 @@ function StepPayment({
           </p>
         </div>
       ) : !payInfo ? (
-        /* Selección de método */
         <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
                         border border-white shadow-2xl shadow-slate-200/50 p-6
                         space-y-5">
@@ -465,12 +605,10 @@ function StepPayment({
           </div>
         </div>
       ) : (
-        /* Instrucciones de pago + subir comprobante */
         <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
                         border border-white shadow-2xl shadow-slate-200/50 p-6
                         space-y-5">
 
-          {/* Instrucciones */}
           <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
             <p className="text-[10px] font-black text-amber-600 uppercase
                           tracking-widest mb-2">
@@ -493,7 +631,6 @@ function StepPayment({
             )}
           </div>
 
-          {/* TX ID */}
           <div className="group">
             <label className="text-[10px] font-black text-slate-400
                               uppercase tracking-widest block mb-1.5">
@@ -512,7 +649,6 @@ function StepPayment({
             />
           </div>
 
-          {/* Upload comprobante */}
           <div>
             <label className="text-[10px] font-black text-slate-400
                               uppercase tracking-widest block mb-1.5">
@@ -584,15 +720,157 @@ function StepPayment({
   );
 }
 
+// ─── Pantalla: prueba pendiente de completar ─────────────────────────────────
+function TrialInProgressScreen() {
+  return (
+    <div className="max-w-lg mx-auto">
+      <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
+                      border border-white shadow-2xl shadow-slate-200/50
+                      p-10 text-center">
+        <div className="w-16 h-16 bg-amber-100 rounded-full
+                        flex items-center justify-center mx-auto mb-4">
+          <Hourglass className="w-8 h-8 text-amber-500" />
+        </div>
+        <h3 className="text-xl font-black text-slate-800 mb-2">
+          Tienes una clase de prueba pendiente
+        </h3>
+        <p className="text-slate-500 text-sm leading-relaxed">
+          Ya reservaste tu clase de prueba gratuita. Una vez que se complete,
+          podrás elegir tu paquete y agendar más clases.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Pantalla: elegir paquete inicial ────────────────────────────────────────
+function NeedsPackageScreen({ onSelected }: { onSelected: () => void }) {
+  const [packages, setPackages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selecting, setSelecting] = useState<number | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const username = process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "mar12";
+    api.get(`/packages/teacher/${username}`)
+      .then(res => setPackages(res.data))
+      .catch(() => setPackages([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const choose = async (packageId: number) => {
+    setSelecting(packageId);
+    setError("");
+    try {
+      await api.post(`/packages/select-initial?package_id=${packageId}`);
+      onSelected();
+    } catch (e: any) {
+      setError(extractErrorMessage(e, "Error seleccionando el paquete"));
+    } finally {
+      setSelecting(null);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-6">
+      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5
+                      flex gap-3 items-start">
+        <Check className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+        <p className="text-sm font-bold text-emerald-700 leading-relaxed">
+          ¡Completaste tu clase de prueba! Elige un paquete para seguir
+          agendando tus próximas clases.
+        </p>
+      </div>
+
+      {error && (
+        <div className="bg-rose-50 border border-rose-100 text-rose-600
+                        px-4 py-3 rounded-xl text-xs font-bold
+                        flex items-center gap-2">
+          <X className="w-4 h-4 flex-shrink-0" />
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {[1, 2].map(i => (
+            <div key={i} className="h-40 bg-white rounded-2xl animate-pulse" />
+          ))}
+        </div>
+      ) : packages.length === 0 ? (
+        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
+                        border border-white shadow-lg py-16 text-center">
+          <PackageIcon className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+          <p className="text-slate-500 font-bold">
+            No hay paquetes disponibles. Contacta al staff.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {packages.map(pkg => (
+            <div
+              key={pkg.id}
+              className="bg-white/80 backdrop-blur-xl rounded-[1.75rem]
+                        border border-white shadow-xl shadow-slate-200/50
+                        p-6 flex flex-col hover:-translate-y-1 hover:shadow-2xl
+                        transition-all duration-300"
+            >
+              <div className="w-10 h-10 bg-pink-50 rounded-xl flex items-center
+                              justify-center mb-4">
+                <PackageIcon className="w-5 h-5 text-pink-500" />
+              </div>
+              <h3 className="text-lg font-black text-slate-800 mb-1">
+                {pkg.name}
+              </h3>
+              <p className="text-xs text-slate-400 font-bold mb-4">
+                {pkg.subject} · {pkg.classes_count} clases · {pkg.duration_minutes} min c/u
+              </p>
+              <p className="text-2xl font-black text-pink-600 mb-5">
+                ${pkg.price?.toFixed ? pkg.price.toFixed(2) : pkg.price}
+              </p>
+              <button
+                onClick={() => choose(pkg.id)}
+                disabled={selecting !== null}
+                className="mt-auto w-full py-3 text-sm font-bold text-white
+                           rounded-xl bg-gradient-to-r from-pink-500 to-rose-400
+                           hover:from-pink-600 hover:to-rose-500
+                           shadow-md shadow-pink-200 active:scale-[0.98]
+                           transition-all duration-300 disabled:opacity-50
+                           flex items-center justify-center gap-2"
+              >
+                {selecting === pkg.id ? (
+                  <div className="w-4 h-4 border-2 border-white/40
+                                  border-t-white rounded-full animate-spin" />
+                ) : (
+                  "Elegir este paquete"
+                )}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function SchedulePage() {
+  const [stage, setStage] = useState<BookingStage>("loading");
   const [step, setStep] = useState<"select" | "payment">("select");
-  const [selectedDate, setSelectedDate]   = useState("");
-  const [selectedSlot, setSelectedSlot]   = useState<any>(null);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedSlot, setSelectedSlot] = useState<any>(null);
   const [selectedDuration, setSelectedDuration] = useState(60);
 
-  const { enrollments } = useEnrollments();
+  const { enrollments, refetch: refetchEnrollments } = useEnrollments();
   const activeEnrollment = enrollments.find(e => e.status === "active");
+
+  const loadStage = () => {
+    api.get("/payments/booking-status")
+      .then(res => setStage(res.data.stage))
+      .catch(() => setStage("ready")); // fallback conservador: no bloquear al usuario
+  };
+
+  useEffect(() => { loadStage(); }, []);
 
   const handleSlotSelect = (
     date: string, slot: any, duration: number
@@ -601,6 +879,12 @@ export default function SchedulePage() {
     setSelectedSlot(slot);
     setSelectedDuration(duration);
     setStep("payment");
+  };
+
+  const resetToSelect = () => {
+    setStep("select");
+    setSelectedDate("");
+    setSelectedSlot(null);
   };
 
   return (
@@ -619,9 +903,9 @@ export default function SchedulePage() {
         {/* Header */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex items-center gap-4">
-            {step === "payment" && (
+            {step === "payment" && stage === "ready" && (
               <button
-                onClick={() => setStep("select")}
+                onClick={resetToSelect}
                 className="w-10 h-10 rounded-xl bg-white border border-slate-200
                            flex items-center justify-center shadow-sm
                            hover:border-pink-300 transition-colors"
@@ -631,55 +915,64 @@ export default function SchedulePage() {
             )}
             <div>
               <h1 className="text-3xl font-black text-slate-800 tracking-tight">
-                {step === "select" ? "Agendar Clase" : "Confirmar Reserva"}
+                {stage === "needs_trial" && step === "select" && "Reserva tu clase de prueba"}
+                {stage === "needs_trial" && step === "payment" && "Confirmar clase de prueba"}
+                {stage === "trial_in_progress" && "Clase de prueba pendiente"}
+                {stage === "needs_package" && "Elige tu paquete"}
+                {stage === "ready" && step === "select" && "Agendar Clase"}
+                {stage === "ready" && step === "payment" && "Confirmar Reserva"}
+                {stage === "loading" && "Cargando..."}
               </h1>
               <p className="text-slate-500 mt-1">
-                {step === "select"
-                  ? "Selecciona fecha y horario disponible"
-                  : "Completa el pago para confirmar tu clase"
-                }
+                {stage === "needs_trial" && "Tu primera clase es gratuita, sin compromiso"}
+                {stage === "trial_in_progress" && "El staff confirmará tu clase pronto"}
+                {stage === "needs_package" && "Selecciona el paquete que mejor se adapte a ti"}
+                {stage === "ready" && step === "select" && "Selecciona fecha y horario disponible"}
+                {stage === "ready" && step === "payment" && "Completa el pago para confirmar tu clase"}
               </p>
             </div>
           </div>
 
-          {/* Steps indicator */}
-          <div className="flex items-center gap-3 mt-4">
-            {[
-              { n: 1, label: "Seleccionar horario" },
-              { n: 2, label: "Confirmar y pagar" },
-            ].map((s, i) => (
-              <div key={s.n} className="flex items-center gap-3">
-                {i > 0 && (
-                  <div className={`h-px w-8 transition-colors
-                    ${step === "payment" ? "bg-pink-300" : "bg-slate-200"}`} />
-                )}
-                <div className="flex items-center gap-2">
-                  <div className={`w-7 h-7 rounded-full flex items-center
-                    justify-center text-xs font-black transition-all duration-300
-                    ${(step === "select" && s.n === 1) ||
-                      (step === "payment" && s.n <= 2)
-                      ? "bg-gradient-to-br from-pink-500 to-rose-400 text-white shadow-md"
-                      : "bg-slate-200 text-slate-500"
-                    }`}>
-                    {s.n}
+          {/* Steps indicator — solo aplica al flujo regular con pago */}
+          {stage === "ready" && (
+            <div className="flex items-center gap-3 mt-4">
+              {[
+                { n: 1, label: "Seleccionar horario" },
+                { n: 2, label: "Confirmar y pagar" },
+              ].map((s, i) => (
+                <div key={s.n} className="flex items-center gap-3">
+                  {i > 0 && (
+                    <div className={`h-px w-8 transition-colors
+                      ${step === "payment" ? "bg-pink-300" : "bg-slate-200"}`} />
+                  )}
+                  <div className="flex items-center gap-2">
+                    <div className={`w-7 h-7 rounded-full flex items-center
+                      justify-center text-xs font-black transition-all duration-300
+                      ${(step === "select" && s.n === 1) ||
+                        (step === "payment" && s.n <= 2)
+                        ? "bg-gradient-to-br from-pink-500 to-rose-400 text-white shadow-md"
+                        : "bg-slate-200 text-slate-500"
+                      }`}>
+                      {s.n}
+                    </div>
+                    <span className={`text-xs font-bold hidden sm:block
+                      transition-colors
+                      ${(step === "select" && s.n === 1) ||
+                        (step === "payment" && s.n === 2)
+                        ? "text-pink-600"
+                        : "text-slate-400"
+                      }`}>
+                      {s.label}
+                    </span>
                   </div>
-                  <span className={`text-xs font-bold hidden sm:block
-                    transition-colors
-                    ${(step === "select" && s.n === 1) ||
-                      (step === "payment" && s.n === 2)
-                      ? "text-pink-600"
-                      : "text-slate-400"
-                    }`}>
-                    {s.label}
-                  </span>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Alerta de falta de paquete activo */}
-        {step === "payment" && !activeEnrollment && (
+        {/* Alerta de falta de paquete activo (solo aplica en ready) */}
+        {stage === "ready" && step === "payment" && !activeEnrollment && (
           <div className="bg-rose-50 border border-rose-100 text-rose-600
                           px-4 py-3 rounded-xl text-xs font-bold
                           flex items-center gap-2 max-w-lg mx-auto">
@@ -689,18 +982,52 @@ export default function SchedulePage() {
           </div>
         )}
 
-        {/* Contenido según paso */}
+        {/* Contenido según etapa */}
         <div className="animate-in fade-in duration-300">
-          {step === "select" ? (
+
+          {stage === "loading" && (
+            <div className="flex justify-center py-24">
+              <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500
+                              rounded-full animate-spin" />
+            </div>
+          )}
+
+          {stage === "needs_trial" && step === "select" && (
+            <StepSelectSlot onSelect={handleSlotSelect} isTrial />
+          )}
+
+          {stage === "needs_trial" && step === "payment" && (
+            <StepConfirmTrial
+              date={selectedDate}
+              slot={selectedSlot}
+              onBack={resetToSelect}
+              onBooked={loadStage}
+            />
+          )}
+
+          {stage === "trial_in_progress" && <TrialInProgressScreen />}
+
+          {stage === "needs_package" && (
+            <NeedsPackageScreen
+              onSelected={() => {
+                loadStage();
+                refetchEnrollments();
+              }}
+            />
+          )}
+
+          {stage === "ready" && step === "select" && (
             <StepSelectSlot onSelect={handleSlotSelect} />
-          ) : (
+          )}
+
+          {stage === "ready" && step === "payment" && (
             <StepPayment
               date={selectedDate}
               slot={selectedSlot}
               duration={selectedDuration}
               enrollmentId={activeEnrollment?.id}
-              onBack={() => setStep("select")}
-              onSuccess={() => setStep("select")}
+              onBack={resetToSelect}
+              onSuccess={resetToSelect}
             />
           )}
         </div>

@@ -7,6 +7,7 @@ class UserBase(BaseModel):
     username: str
     name: str
     surname: str
+    phone_number: str
     email: EmailStr
     role: str
 
@@ -33,6 +34,7 @@ class StudentProfileResponse(BaseModel):
     user_id: int
     timezone: Optional[str] = None
     goal: Optional[str] = None
+    phone_number: Optional[str] = None
     preferred_payment_methods: Optional[List[str]] = []
     created_at: datetime
 
@@ -44,12 +46,14 @@ class StudentProfileResponse(BaseModel):
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     surname: Optional[str] = None
+    phone_number: Optional[str] = None
     email: Optional[EmailStr] = None
     onboarding_completed: Optional[bool] = None
 
 class StudentProfileUpdate(BaseModel):
     timezone: Optional[str] = None
     goal: Optional[str] = None
+    phone_number: Optional[str] = None
     preferred_payment_methods: Optional[List[str]] = None
 
 class UpdateProfileRequest(BaseModel):
@@ -62,6 +66,7 @@ class UpdateProfileRequest(BaseModel):
     name: Optional[str] = None
     surname: Optional[str] = None
     avatar: Optional[str] = None
+    phone_number: Optional[str] = None
     timezone: Optional[str] = None
     onboarding_completed: Optional[bool] = None
 

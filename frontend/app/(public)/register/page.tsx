@@ -11,6 +11,42 @@ import {
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 
+const COUNTRIES = [
+  { code: "DE", dial: "+49", flag: "🇩🇪", name: "Alemania" },
+  { code: "AR", dial: "+54", flag: "🇦🇷", name: "Argentina" },
+  { code: "AU", dial: "+61", flag: "🇦🇺", name: "Australia" },
+  { code: "BO", dial: "+591", flag: "🇧🇴", name: "Bolivia" },
+  { code: "BR", dial: "+55", flag: "🇧🇷", name: "Brasil" },
+  { code: "CA", dial: "+1", flag: "🇨🇦", name: "Canadá" },
+  { code: "CL", dial: "+56", flag: "🇨🇱", name: "Chile" },
+  { code: "CN", dial: "+86", flag: "🇨🇳", name: "China" },
+  { code: "CO", dial: "+57", flag: "🇨🇴", name: "Colombia" },
+  { code: "CR", dial: "+506", flag: "🇨🇷", name: "Costa Rica" },
+  { code: "CU", dial: "+53", flag: "🇨🇺", name: "Cuba" },
+  { code: "EC", dial: "+593", flag: "🇪🇨", name: "Ecuador" },
+  { code: "SV", dial: "+503", flag: "🇸🇻", name: "El Salvador" },
+  { code: "ES", dial: "+34", flag: "🇪🇸", name: "España" },
+  { code: "US", dial: "+1", flag: "🇺🇸", name: "Estados Unidos" },
+  { code: "FR", dial: "+33", flag: "🇫🇷", name: "Francia" },
+  { code: "GT", dial: "+502", flag: "🇬🇹", name: "Guatemala" },
+  { code: "HN", dial: "+504", flag: "🇭🇳", name: "Honduras" },
+  { code: "IN", dial: "+91", flag: "🇮🇳", name: "India" },
+  { code: "IT", dial: "+39", flag: "🇮🇹", name: "Italia" },
+  { code: "JP", dial: "+81", flag: "🇯🇵", name: "Japón" },
+  { code: "MX", dial: "+52", flag: "🇲🇽", name: "México" },
+  { code: "NI", dial: "+505", flag: "🇳🇮", name: "Nicaragua" },
+  { code: "PA", dial: "+507", flag: "🇵🇦", name: "Panamá" },
+  { code: "PY", dial: "+595", flag: "🇵🇾", name: "Paraguay" },
+  { code: "PE", dial: "+51", flag: "🇵🇪", name: "Perú" },
+  { code: "PT", dial: "+351", flag: "🇵🇹", name: "Portugal" },
+  { code: "PR", dial: "+1-787", flag: "🇵🇷", name: "Puerto Rico" },
+  { code: "GB", dial: "+44", flag: "🇬🇧", name: "Reino Unido" },
+  { code: "DO", dial: "+1-809", flag: "🇩🇴", name: "Rep. Dominicana" },
+  { code: "RU", dial: "+7", flag: "🇷🇺", name: "Rusia" },
+  { code: "UY", dial: "+598", flag: "🇺🇾", name: "Uruguay" },
+  { code: "VE", dial: "+58", flag: "🇻🇪", name: "Venezuela" },
+];
+
 function StepIndicator({ current, total }: { current: number; total: number }) {
   return (
     <div className="flex items-center justify-center gap-2 mb-6">
@@ -50,6 +86,8 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
 
   // Step 2
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [countryCode, setCountryCode] = useState('+58'); 
   const [password, setPassword] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -58,7 +96,7 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  // Touched state para marcar campos en rojo
+  // Touched state
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const markTouched = (field: string) =>
@@ -73,11 +111,11 @@ export default function RegisterPage() {
   const step1Valid = name.trim() && surname.trim() &&
     username.trim() && email.includes("@") && role;
 
-  const step2Valid = password.length >= 8 && password === confirmPw;
+  // AHORA phoneNumber es requerido en la validación
+  const step2Valid = password.length >= 8 && password === confirmPw && phoneNumber.trim().length > 0;
 
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
-    // Mark all step1 fields as touched to show errors
     setTouched({ name: true, surname: true, username: true, email: true });
     if (!step1Valid) return;
     setError("");
@@ -86,14 +124,21 @@ export default function RegisterPage() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Marcamos phoneNumber como tocado por si intentan enviar vacío
+    setTouched(prev => ({ ...prev, phoneNumber: true }));
     if (!step2Valid) return;
+    
     setLoading(true);
     setError("");
+    
+    const fullPhoneNumber = `${countryCode} ${phoneNumber.trim()}`;
+
     try {
       await api.post("/auth/register", {
         name,
         surname,
         username,
+        phoneNumber: fullPhoneNumber,
         email,
         password,
         role,
@@ -125,7 +170,6 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col relative overflow-x-hidden font-sans">
-      {/* HEADER */}
       <header className="fixed top-0 w-full z-50 h-16 px-6 bg-white/70 backdrop-blur-md border-b border-white/50 flex items-center shadow-sm">
         <Link href="/" className="flex items-center gap-2 group">
           <div className="p-1.5 bg-pink-50 rounded-lg group-hover:bg-pink-100 transition-colors">
@@ -161,7 +205,6 @@ export default function RegisterPage() {
           <div className="bg-white/90 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/60 p-6">
             <StepIndicator current={step} total={2} />
 
-            {/* Toast de éxito */}
             {success && (
               <div className="mb-4 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
                 <Check className="w-4 h-4" />
@@ -282,6 +325,59 @@ export default function RegisterPage() {
               </form>
             ) : (
               <form onSubmit={handleRegister} className="space-y-3 animate-in fade-in slide-in-from-right-4 duration-300">
+                
+                {/* CAMPO DE TELÉFONO OBLIGATORIO Y CON ESTADO DE ERROR */}
+                <div className="space-y-1.5">
+                  <label 
+                    htmlFor="phone-input" 
+                    className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1"
+                  >
+                    Número de teléfono
+                  </label>
+                  
+                  <div className={`relative flex items-center bg-slate-50 hover:bg-slate-100 border-2 rounded-xl transition-all overflow-hidden ${
+                    fieldError("phoneNumber", phoneNumber)
+                      ? "border-red-400 focus-within:bg-white focus-within:border-red-500 focus-within:ring-4 focus-within:ring-red-50"
+                      : "border-transparent focus-within:bg-white focus-within:border-pink-500 focus-within:ring-4 focus-within:ring-pink-50"
+                  }`}>
+                    
+                    <div className="relative flex items-center border-r-2 border-slate-200 transition-colors w-[110px] shrink-0">
+                      <select
+                        value={countryCode}
+                        onChange={e => setCountryCode(e.target.value)}
+                        className="appearance-none bg-transparent pl-3 pr-8 py-2.5 w-full text-sm font-bold text-slate-700 cursor-pointer focus:outline-none z-10"
+                        aria-label="Código de país"
+                      >
+                        {COUNTRIES.map(country => (
+                          <option key={country.code} value={country.dial}>
+                            {country.flag} {country.dial}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="absolute right-2 text-slate-400 pointer-events-none">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    <input
+                      id="phone-input"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel-national"
+                      value={phoneNumber}
+                      onChange={e => setPhoneNumber(e.target.value.replace(/[^0-9\s-]/g, ''))}
+                      onBlur={() => markTouched("phoneNumber")} // Escucha cuando el usuario sale del input
+                      placeholder="412 123 4567"
+                      className="flex-1 bg-transparent w-full text-sm font-bold text-slate-800 px-3 py-2.5 placeholder:text-slate-400 placeholder:font-medium focus:outline-none"
+                    />
+                  </div>
+                  {fieldError("phoneNumber", phoneNumber) && (
+                    <p className="text-[10px] text-red-500 font-bold px-1">Campo requerido</p>
+                  )}
+                </div>
+
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">Contraseña</label>
                   <div className="relative group">
