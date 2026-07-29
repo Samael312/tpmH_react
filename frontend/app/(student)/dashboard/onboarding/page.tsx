@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
@@ -11,26 +11,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
-
-// ─── Constantes ───────────────────────────────────────────────────────────────
-const TIMEZONES = [
-  { value: "America/Caracas",      flag: "🇻🇪", label: "Caracas" },
-  { value: "America/Bogota",       flag: "🇨🇴", label: "Bogotá" },
-  { value: "America/Lima",         flag: "🇵🇪", label: "Lima" },
-  { value: "America/Mexico_City",  flag: "🇲🇽", label: "Ciudad de México" },
-  { value: "America/New_York",     flag: "🇺🇸", label: "Nueva York" },
-  { value: "America/Los_Angeles",  flag: "🇺🇸", label: "Los Ángeles" },
-  { value: "America/Santiago",     flag: "🇨🇱", label: "Santiago" },
-  { value: "America/Buenos_Aires", flag: "🇦🇷", label: "Buenos Aires" },
-  { value: "America/Sao_Paulo",    flag: "🇧🇷", label: "São Paulo" },
-  { value: "America/Chicago",      flag: "🇺🇸", label: "Chicago" },
-  { value: "Europe/Madrid",        flag: "🇪🇸", label: "Madrid" },
-  { value: "Europe/London",        flag: "🇬🇧", label: "Londres" },
-  { value: "Europe/Paris",         flag: "🇫🇷", label: "París" },
-  { value: "Asia/Tokyo",           flag: "🇯🇵", label: "Tokio" },
-  { value: "Asia/Dubai",           flag: "🇦🇪", label: "Dubái" },
-  { value: "UTC",                  flag: "🌐", label: "UTC" },
-];
+import { TIMEZONE_OPTIONS as TIMEZONES, TIMEZONE_TO_COUNTRY, DEFAULT_COUNTRY } from "@/lib/timezones";
 
 const GOALS = [
   { text: "Conversaciones cotidianas", desc: "Hablar de temas del día a día", icon: "🗣️" },
@@ -55,6 +36,11 @@ interface ScheduleBlock {
   end_time_local: string;
 }
 
+interface CountryInfo {
+  flag: string;
+  dialCode: string;
+}
+
 // ─── Panel Lateral de Progreso ────────────────────────────────────────────────
 function SidebarProgress({ step, name }: { step: number; name: string }) {
   const steps = [
@@ -66,7 +52,6 @@ function SidebarProgress({ step, name }: { step: number; name: string }) {
 
   return (
     <div className="hidden lg:flex w-1/3 max-w-sm bg-slate-900 p-10 flex-col justify-between relative overflow-hidden">
-      {/* Elementos decorativos */}
       <div className="absolute top-[-10%] left-[-10%] w-64 h-64 bg-pink-500/20 blur-[80px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-64 h-64 bg-rose-500/20 blur-[80px] rounded-full pointer-events-none" />
 
@@ -152,6 +137,8 @@ function StepWelcome({ name, onNext }: { name: string; onNext: () => void }) {
 interface StepPreferencesProps {
   timezone: string;
   setTimezone: (tz: string) => void;
+  country: CountryInfo;
+  setCountry: (country: CountryInfo) => void;
   goal: string;
   setGoal: (goal: string) => void;
   phone: string;
@@ -161,11 +148,33 @@ interface StepPreferencesProps {
 }
 
 function StepPreferences({
-  timezone, setTimezone, goal, setGoal,
+  timezone, setTimezone,
+  country, setCountry,
+  goal, setGoal,
   phone, setPhone,
   onNext, onBack,
 }: StepPreferencesProps) {
-  const valid = timezone && goal;
+  // El teléfono es obligatorio junto a la zona horaria y el objetivo
+  const valid = Boolean(timezone && goal && phone.trim());
+
+  // Lista única de códigos de países disponibles para seleccionar
+  const COUNTRY_OPTIONS = useMemo(() => {
+    const map = new Map<string, CountryInfo>();
+    Object.values(TIMEZONE_TO_COUNTRY).forEach((c) => {
+      if (c?.dialCode) map.set(c.dialCode, c);
+    });
+    if (DEFAULT_COUNTRY?.dialCode) {
+      map.set(DEFAULT_COUNTRY.dialCode, DEFAULT_COUNTRY);
+    }
+    return Array.from(map.values());
+  }, []);
+
+  // Al cambiar la zona horaria, se actualiza la zona y se asigna el país por defecto correspondiente
+  const handleTimezoneChange = (newTz: string) => {
+    setTimezone(newTz);
+    const defaultCty = TIMEZONE_TO_COUNTRY[newTz] ?? DEFAULT_COUNTRY;
+    setCountry(defaultCty);
+  };
 
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-300 w-full max-w-3xl mx-auto space-y-8">
@@ -174,41 +183,74 @@ function StepPreferences({
         <p className="text-slate-500 text-lg mt-2">Cuéntanos sobre ti para personalizar tu experiencia.</p>
       </div>
 
-      <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
-        <label className="text-xs font-black text-slate-400 uppercase tracking-widest block">Tu zona horaria</label>
-        <div className="relative max-w-md">
-          <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
-          <select
-            value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
-            className="w-full appearance-none bg-slate-50 border-2 border-slate-100 rounded-xl text-base font-bold text-slate-800 pl-12 pr-10 py-4 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300 cursor-pointer"
-          >
-            <option value="">Seleccionar zona horaria...</option>
-            {TIMEZONES.map((tz) => (
-              <option key={tz.value} value={tz.value}>
-                {tz.flag} {tz.label} — {tz.value}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+      <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-5">
+        <div>
+          <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">Tu zona horaria *</label>
+          <div className="relative max-w-md">
+            <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+            <select
+              value={timezone}
+              onChange={(e) => handleTimezoneChange(e.target.value)}
+              className="w-full appearance-none bg-slate-50 border-2 border-slate-100 rounded-xl text-base font-bold text-slate-800 pl-12 pr-10 py-4 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300 cursor-pointer"
+            >
+              <option value="">Seleccionar zona horaria...</option>
+              {TIMEZONES.map((tz) => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.flag} {tz.label} — {tz.value}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+          </div>
         </div>
 
-        <label className="text-xs font-black text-slate-400 uppercase tracking-widest block pt-2">
-          Número de teléfono (opcional)
-        </label>
-        <div className="relative max-w-md">
-          <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+58 412 000 0000"
-            className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl text-base font-bold text-slate-800 placeholder:text-slate-400 px-4 py-4 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
-          />
+        <div>
+          <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">
+            Número de teléfono *
+          </label>
+          <div className="flex gap-2 max-w-md">
+            {/* Selector editable de Código de País (por defecto se ajusta según la zona horaria) */}
+            <div className="relative w-32 flex-shrink-0">
+              <div className="w-full h-full bg-slate-50 border-2 border-slate-100 rounded-xl px-3 py-4 flex items-center justify-between pointer-events-none font-bold text-slate-800">
+                <span className="text-xl leading-none">{country.flag}</span>
+                <span className="text-sm font-black text-slate-600">{country.dialCode}</span>
+                <ChevronDown className="w-4 h-4 text-slate-400" />
+              </div>
+              <select
+                value={country.dialCode}
+                onChange={(e) => {
+                  const selected = COUNTRY_OPTIONS.find((c) => c.dialCode === e.target.value);
+                  if (selected) setCountry(selected);
+                }}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                title="Seleccionar código de país"
+              >
+                {COUNTRY_OPTIONS.map((c, idx) => (
+                  <option key={idx} value={c.dialCode}>
+                    {c.flag} {c.dialCode}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Input de número telefónico */}
+            <input
+              type="tel"
+              required
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="412 000 0000"
+              className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-xl text-base font-bold text-slate-800 placeholder:text-slate-400 px-4 py-4 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
+            />
+          </div>
+          <p className="text-[11px] text-slate-400 font-medium pl-1 mt-1.5">
+            El código telefónico se auto-selecciona con tu zona horaria, pero puedes cambiarlo si usas otra línea.
+          </p>
         </div>
       </div>
 
       <div>
-        <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-4">¿Cuál es tu objetivo principal?</label>
+        <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-4">¿Cuál es tu objetivo principal? *</label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {GOALS.map((g) => (
             <button
@@ -339,7 +381,6 @@ function StepSchedule({ blocks, setBlocks, onNext, onBack }: StepScheduleProps) 
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-        
         <div className="lg:col-span-3 bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col">
           <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Días de la semana</p>
           
@@ -540,14 +581,19 @@ export default function OnboardingPage() {
   const [timezone, setTimezone] = useState(
     typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC"
   );
+
+  // Estado del país/código telefónico seleccionado (por defecto asignado según zona horaria)
+  const [country, setCountry] = useState<CountryInfo>(
+    () => TIMEZONE_TO_COUNTRY[timezone] ?? DEFAULT_COUNTRY
+  );
+
+  const [phone, setPhone] = useState(""); 
   const [goal, setGoal] = useState("");
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
   const [payMethods, setPayMethods] = useState<string[]>([]);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
-  const [phone, setPhone] = useState(""); 
 
   const name = user?.name ?? "Estudiante";
 
@@ -558,7 +604,11 @@ export default function OnboardingPage() {
     setSaving(true);
     setError("");
     try {
-      await api.patch("/users/me", { phone_number: phone || undefined });
+      const dialCode = country.dialCode || DEFAULT_COUNTRY.dialCode;
+      const fullPhone = `${dialCode} ${phone.trim()}`.trim();
+
+      // Guardar el número de teléfono
+      await api.patch("/users/me", { phone_number: fullPhone });
       
       // 1. Guardar perfil del estudiante
       await api.patch("/users/me/student-profile", {
@@ -623,7 +673,20 @@ export default function OnboardingPage() {
 
         <div className="w-full flex justify-center">
           {step === 1 && <StepWelcome name={name} onNext={next} />}
-          {step === 2 && <StepPreferences timezone={timezone} setTimezone={setTimezone} goal={goal} setGoal={setGoal} onNext={next} onBack={back} phone={phone} setPhone={setPhone} />}
+          {step === 2 && (
+            <StepPreferences
+              timezone={timezone}
+              setTimezone={setTimezone}
+              country={country}
+              setCountry={setCountry}
+              goal={goal}
+              setGoal={setGoal}
+              phone={phone}
+              setPhone={setPhone}
+              onNext={next}
+              onBack={back}
+            />
+          )}
           {step === 3 && <StepSchedule blocks={blocks} setBlocks={setBlocks} onNext={next} onBack={back} />}
           {step === 4 && <StepPaymentMethods selected={payMethods} setSelected={setPayMethods} onNext={finish} onBack={back} saving={saving} />}
           
