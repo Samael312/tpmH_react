@@ -7,7 +7,7 @@ import {
   Clock, Check, ChevronRight, ChevronLeft,
   Globe, Target, CreditCard, CalendarDays,
   Sparkles, ChevronDown, X, Trash2,
-  BookOpen, Rocket
+  BookOpen, Rocket, Camera, User
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -39,6 +39,29 @@ interface ScheduleBlock {
 interface CountryInfo {
   flag: string;
   dialCode: string;
+}
+
+// ─── Función Auxiliar para Convertir Errores de API (FastAPI / Pydantic) ────
+function parseApiError(detail: any): string {
+  if (typeof detail === "string") return detail;
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === "object" && item !== null && item.msg) {
+          const field = Array.isArray(item.loc) ? item.loc[item.loc.length - 1] : "";
+          return field ? `${field}: ${item.msg}` : item.msg;
+        }
+        return JSON.stringify(item);
+      })
+      .join(" | ");
+  }
+
+  if (detail && typeof detail === "object") {
+    return detail.msg || JSON.stringify(detail);
+  }
+
+  return "Error guardando la configuración. Inténtalo de nuevo.";
 }
 
 // ─── Panel Lateral de Progreso ────────────────────────────────────────────────
@@ -133,7 +156,7 @@ function StepWelcome({ name, onNext }: { name: string; onNext: () => void }) {
   );
 }
 
-// ─── Paso 2: Zona horaria y objetivo ──────────────────────────────────────────
+// ─── Paso 2: Zona horaria, foto de perfil y objetivo ─────────────────────────
 interface StepPreferencesProps {
   timezone: string;
   setTimezone: (tz: string) => void;
@@ -143,6 +166,9 @@ interface StepPreferencesProps {
   setGoal: (goal: string) => void;
   phone: string;
   setPhone: (phone: string) => void;
+  avatarPreview: string | null;
+  onAvatarChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onRemoveAvatar: () => void;
   onNext: () => void;
   onBack: () => void;
 }
@@ -152,12 +178,13 @@ function StepPreferences({
   country, setCountry,
   goal, setGoal,
   phone, setPhone,
+  avatarPreview,
+  onAvatarChange,
+  onRemoveAvatar,
   onNext, onBack,
 }: StepPreferencesProps) {
-  // El teléfono es obligatorio junto a la zona horaria y el objetivo
   const valid = Boolean(timezone && goal && phone.trim());
 
-  // Lista única de códigos de países disponibles para seleccionar
   const COUNTRY_OPTIONS = useMemo(() => {
     const map = new Map<string, CountryInfo>();
     Object.values(TIMEZONE_TO_COUNTRY).forEach((c) => {
@@ -169,7 +196,6 @@ function StepPreferences({
     return Array.from(map.values());
   }, []);
 
-  // Al cambiar la zona horaria, se actualiza la zona y se asigna el país por defecto correspondiente
   const handleTimezoneChange = (newTz: string) => {
     setTimezone(newTz);
     const defaultCty = TIMEZONE_TO_COUNTRY[newTz] ?? DEFAULT_COUNTRY;
@@ -181,6 +207,47 @@ function StepPreferences({
       <div>
         <h2 className="text-4xl font-black text-slate-800 tracking-tight">Tus preferencias</h2>
         <p className="text-slate-500 text-lg mt-2">Cuéntanos sobre ti para personalizar tu experiencia.</p>
+      </div>
+
+      {/* ─── Foto de Perfil (Opcional) ─── */}
+      <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col sm:flex-row items-center gap-6">
+        <div className="relative flex-shrink-0">
+          <div className="w-24 h-24 rounded-full overflow-hidden bg-slate-100 border-2 border-slate-200 flex items-center justify-center relative shadow-inner">
+            {avatarPreview ? (
+              <Image src={avatarPreview} alt="Foto de perfil" fill className="object-cover" />
+            ) : (
+              <User className="w-10 h-10 text-slate-400" />
+            )}
+          </div>
+          <label className="absolute bottom-0 right-0 bg-pink-500 hover:bg-pink-600 text-white p-2.5 rounded-full shadow-lg cursor-pointer transition-transform hover:scale-110 flex items-center justify-center">
+            <Camera className="w-4 h-4" />
+            <input
+              type="file"
+              accept="image/*"
+              onChange={onAvatarChange}
+              className="hidden"
+            />
+          </label>
+        </div>
+
+        <div className="text-center sm:text-left flex-1">
+          <div className="flex items-center justify-center sm:justify-start gap-2">
+            <span className="font-bold text-slate-800 text-base">Foto de perfil</span>
+            <span className="text-xs font-semibold bg-slate-100 text-slate-500 px-2.5 py-0.5 rounded-full">Opcional</span>
+          </div>
+          <p className="text-xs text-slate-400 mt-1">
+            Sube una foto clara para que tus profesores puedan reconocerte fácilmente.
+          </p>
+          {avatarPreview && (
+            <button
+              type="button"
+              onClick={onRemoveAvatar}
+              className="mt-3 text-xs font-bold text-rose-500 hover:text-rose-600 flex items-center gap-1 mx-auto sm:mx-0 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Quitar foto
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-5">
@@ -209,7 +276,6 @@ function StepPreferences({
             Número de teléfono *
           </label>
           <div className="flex gap-2 max-w-md">
-            {/* Selector editable de Código de País (por defecto se ajusta según la zona horaria) */}
             <div className="relative w-32 flex-shrink-0">
               <div className="w-full h-full bg-slate-50 border-2 border-slate-100 rounded-xl px-3 py-4 flex items-center justify-between pointer-events-none font-bold text-slate-800">
                 <span className="text-xl leading-none">{country.flag}</span>
@@ -233,7 +299,6 @@ function StepPreferences({
               </select>
             </div>
 
-            {/* Input de número telefónico */}
             <input
               type="tel"
               required
@@ -582,7 +647,6 @@ export default function OnboardingPage() {
     typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC"
   );
 
-  // Estado del país/código telefónico seleccionado (por defecto asignado según zona horaria)
   const [country, setCountry] = useState<CountryInfo>(
     () => TIMEZONE_TO_COUNTRY[timezone] ?? DEFAULT_COUNTRY
   );
@@ -592,6 +656,9 @@ export default function OnboardingPage() {
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
   const [payMethods, setPayMethods] = useState<string[]>([]);
 
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -600,6 +667,19 @@ export default function OnboardingPage() {
   const next = () => setStep((p) => Math.min(p + 1, TOTAL_STEPS));
   const back = () => setStep((p) => Math.max(p - 1, 1));
 
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAvatarFile(file);
+      setAvatarPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatarFile(null);
+    setAvatarPreview(null);
+  };
+
   const finish = async () => {
     setSaving(true);
     setError("");
@@ -607,17 +687,27 @@ export default function OnboardingPage() {
       const dialCode = country.dialCode || DEFAULT_COUNTRY.dialCode;
       const fullPhone = `${dialCode} ${phone.trim()}`.trim();
 
-      // Guardar el número de teléfono
+      // 1. Guardar teléfono
       await api.patch("/users/me", { phone_number: fullPhone });
       
-      // 1. Guardar perfil del estudiante
+      // 2. Guardar foto de perfil si fue seleccionada
+      if (avatarFile) {
+        const formData = new FormData();
+        formData.append("file", avatarFile); // <-- Cambiado de "avatar" a "file"
+
+        await api.patch("/users/me/avatar", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      }
+
+      // 3. Guardar perfil del estudiante
       await api.patch("/users/me/student-profile", {
         timezone,
         goal,
         preferred_payment_methods: payMethods,
       });
 
-      // 2. Guardar bloques de horario si existen
+      // 4. Guardar bloques de horario
       if (blocks.length > 0) {
         await api.post("/users/me/preferences", {
           timezone,
@@ -625,10 +715,10 @@ export default function OnboardingPage() {
         });
       }
 
-      // 3. Marcar onboarding completado
+      // 5. Marcar onboarding completado
       await api.patch("/users/me", { onboarding_completed: true });
 
-      // 4. Actualizar el store local
+      // 6. Actualizar store local
       if (user) {
         setUser({
           ...user,
@@ -639,14 +729,15 @@ export default function OnboardingPage() {
         });
       }
 
-      // 5. Ir al paso de éxito
+      // 7. Avanzar a pantalla de éxito
       next();
 
-      // 6. Redirigir al dashboard tras 3s
+      // 8. Redirigir al dashboard tras 3 segundos
       setTimeout(() => router.push("/dashboard"), 3000);
 
     } catch (e: any) {
-      setError(e.response?.data?.detail || "Error guardando la configuración. Inténtalo de nuevo.");
+      const errorDetail = e.response?.data?.detail;
+      setError(parseApiError(errorDetail));
     } finally {
       setSaving(false);
     }
@@ -654,13 +745,11 @@ export default function OnboardingPage() {
 
   return (
     <div className="flex min-h-screen bg-slate-50 font-sans">
-      {/* Panel lateral visible en pantallas grandes */}
       <SidebarProgress step={step} name={name} />
 
-      {/* Contenido principal aprovechando el resto de la pantalla */}
       <div className="flex-1 flex flex-col justify-center px-6 py-12 md:px-12 overflow-y-auto relative">
         
-        {/* Error global */}
+        {/* Banner de error seguro contra objetos React */}
         {error && (
           <div className="absolute top-6 right-6 left-6 md:left-auto max-w-sm bg-rose-50 border border-rose-200 text-rose-700 px-5 py-4 rounded-2xl text-sm font-bold flex items-start gap-3 shadow-lg z-50 animate-in slide-in-from-top-5">
             <X className="w-5 h-5 flex-shrink-0 mt-0.5" />
@@ -683,6 +772,9 @@ export default function OnboardingPage() {
               setGoal={setGoal}
               phone={phone}
               setPhone={setPhone}
+              avatarPreview={avatarPreview}
+              onAvatarChange={handleAvatarChange}
+              onRemoveAvatar={handleRemoveAvatar}
               onNext={next}
               onBack={back}
             />
@@ -706,7 +798,6 @@ export default function OnboardingPage() {
           )}
         </div>
 
-        {/* Indicador de pasos para móvil */}
         {step < 5 && (
           <div className="lg:hidden mt-12 text-center">
             <p className="text-xs font-black text-slate-400 uppercase tracking-widest">

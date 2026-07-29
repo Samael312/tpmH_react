@@ -15,13 +15,13 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
-    password_hash = Column(String, nullable=True)  # Nullable para login con Google
+    password_hash = Column(String, nullable=True)
     role = Column(Enum(UserRole), nullable=False, default=UserRole.student)
     username = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, nullable=False)
     surname = Column(String, nullable=False)
     avatar = Column(String, nullable=True)
-    phone_number = Column(String, nullable=True, unique=True) 
+    phone_number = Column(String, nullable=True, unique=True) # <-- FUENTE ÚNICA DE VERDAD
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
     google_id = Column(String, nullable=True, unique=True)
@@ -30,6 +30,6 @@ class User(Base):
     onboarding_completed = Column(Boolean, default=False)
 
     # Relaciones
-    teacher_profile = relationship("TeacherProfile", back_populates="user", uselist=False, foreign_keys="TeacherProfile.user_id")
-    student_profile = relationship("StudentProfile", back_populates="user", uselist=False, foreign_keys="StudentProfile.user_id")
+    teacher_profile = relationship("TeacherProfile", back_populates="user", uselist=False)
+    student_profile = relationship("StudentProfile", back_populates="user", uselist=False)
     calendar_tokens = relationship("GoogleCalendarToken", back_populates="user")

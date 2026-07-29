@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, logger, status, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, logger, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional 
 from app.db.base import get_db
@@ -113,51 +113,3 @@ def update_my_teacher_profile(
     db.refresh(profile)
     return profile
 
-@router.post("/me/photo")
-async def upload_teacher_photo(
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_teacher),
-    db: Session = Depends(get_db)
-):
-    """
-    Sube la foto de perfil a Cloudinary y actualiza la URL en la base de datos.
-    Si ya existía una foto, la borra de Cloudinary para ahorrar espacio.
-    """
-    profile = current_user.teacher_profile
-    if not profile:
-        raise HTTPException(status_code=404, detail="Perfil de profesor no encontrado")
-
-    try:
-        # 1. Leer el contenido del archivo
-        file_bytes = await file.read()
-        
-        # 2. Subir a Cloudinary (usamos la carpeta 'profiles')
-        result = upload_file(
-            file_bytes=file_bytes,
-            filename=file.filename,
-            content_type=file.content_type,
-            folder="tpm/profiles" 
-        )
-
-        # 3. (Opcional) Borrar la foto vieja si existe
-        if profile.profile_photo_public_id:
-            delete_file(profile.profile_photo_public_id, resource_type="image")
-
-        # 4. Actualizar el modelo en la base de datos
-        # Asegúrate de que tu modelo TeacherProfile tenga estos campos
-        profile.profile_photo_url = result["url"]
-        profile.profile_photo_public_id = result["public_id"]
-
-        db.commit()
-        db.refresh(profile)
-
-        return {
-            "message": "Foto actualizada correctamente",
-            "url": result["url"]
-        }
-
-    except ValueError as e:
-        # Errores de validación (tamaño, tipo de archivo)
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Error interno al procesar la imagen")

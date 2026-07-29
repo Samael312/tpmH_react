@@ -9,7 +9,7 @@ class StudentProfile(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    user_username = Column(String, nullable=False)
+    user_username = Column(String, nullable=False) # Tip: esto también podrías obtenerlo de user.username
     timezone = Column(String, default="UTC")
     goal = Column(String, nullable=True)
     preferred_payment_methods = Column(JSONB, default=list)
@@ -18,5 +18,5 @@ class StudentProfile(Base):
     profile_photo_public_id = Column(String, nullable=True)
 
     # Relaciones
-    user = relationship("User", back_populates="student_profile", foreign_keys="StudentProfile.user_id")
+    user = relationship("User", back_populates="student_profile")
     enrollments = relationship("Enrollment", back_populates="student")
