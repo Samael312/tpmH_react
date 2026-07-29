@@ -12,6 +12,7 @@ export interface User {
   // Extended fields
   timezone?: string;
   goal?: string;
+  phone_number?: string;
   preferred_payment_methods?: string[];
   onboarding_completed?: boolean;
   avatar_url?: string | null;

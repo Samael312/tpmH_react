@@ -79,6 +79,7 @@ class UserAdminResponse(BaseModel):
     email: str
     name: str
     surname: str
+    phone_number: Optional[str] = None
     role: str
     is_active: bool
     is_verified: bool
@@ -96,4 +97,5 @@ class AdminUserUpdate(BaseModel):
     role:            Optional[str]   = None
     status:          Optional[str]   = None
     package_name:    Optional[str]   = None
+    phone_number:    Optional[str]   = None
     price_per_class: Optional[float] = None

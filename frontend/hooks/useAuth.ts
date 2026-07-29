@@ -11,6 +11,7 @@ export interface User {
   // Perfil extendido
   timezone?: string;
   goal?: string;
+  phone_number?: string;
   preferred_payment_methods?: string[];
   onboarding_completed?: boolean;
   // Foto

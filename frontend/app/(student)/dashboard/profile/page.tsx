@@ -133,7 +133,7 @@ export default function StudentProfilePage() {
   const [timezone, setTz]     = useState("UTC");
   const [goal, setGoal]       = useState("");
   const [payMethods, setPay]  = useState<string[]>([]);
-
+  const [phone, setPhone]     = useState("");
   const [savingInfo, setSavingInfo]     = useState(false);
   const [infoFeedback, setInfoFeedback] =
     useState<{ msg: string; type: "success" | "error" } | null>(null);
@@ -171,6 +171,7 @@ export default function StudentProfilePage() {
       setPay(d.student_profile?.preferred_payment_methods ??
              d.preferred_payment_methods ?? []);
       setAvatarUrl(d.avatar ?? d.avatar_url ?? null);
+      setPhone(d.phone_number ?? "");
     }).catch(() => {});
   }, []);
 
@@ -186,6 +187,7 @@ export default function StudentProfilePage() {
       await api.patch("/users/me/student-profile", {
         timezone,
         goal,
+        phone_number: phone,
         preferred_payment_methods: payMethods,
       });
 

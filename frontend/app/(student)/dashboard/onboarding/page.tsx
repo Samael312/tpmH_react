@@ -14,12 +14,22 @@ import { useAuthStore } from "@/store/authStore";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const TIMEZONES = [
-  "America/Caracas", "America/Bogota", "America/Lima",
-  "America/Mexico_City", "America/New_York", "America/Los_Angeles",
-  "America/Santiago", "America/Buenos_Aires",
-  "America/Sao_Paulo", "America/Chicago",
-  "Europe/Madrid", "Europe/London", "Europe/Paris",
-  "Asia/Tokyo", "Asia/Dubai", "UTC",
+  { value: "America/Caracas",      flag: "🇻🇪", label: "Caracas" },
+  { value: "America/Bogota",       flag: "🇨🇴", label: "Bogotá" },
+  { value: "America/Lima",         flag: "🇵🇪", label: "Lima" },
+  { value: "America/Mexico_City",  flag: "🇲🇽", label: "Ciudad de México" },
+  { value: "America/New_York",     flag: "🇺🇸", label: "Nueva York" },
+  { value: "America/Los_Angeles",  flag: "🇺🇸", label: "Los Ángeles" },
+  { value: "America/Santiago",     flag: "🇨🇱", label: "Santiago" },
+  { value: "America/Buenos_Aires", flag: "🇦🇷", label: "Buenos Aires" },
+  { value: "America/Sao_Paulo",    flag: "🇧🇷", label: "São Paulo" },
+  { value: "America/Chicago",      flag: "🇺🇸", label: "Chicago" },
+  { value: "Europe/Madrid",        flag: "🇪🇸", label: "Madrid" },
+  { value: "Europe/London",        flag: "🇬🇧", label: "Londres" },
+  { value: "Europe/Paris",         flag: "🇫🇷", label: "París" },
+  { value: "Asia/Tokyo",           flag: "🇯🇵", label: "Tokio" },
+  { value: "Asia/Dubai",           flag: "🇦🇪", label: "Dubái" },
+  { value: "UTC",                  flag: "🌐", label: "UTC" },
 ];
 
 const GOALS = [
@@ -139,7 +149,22 @@ function StepWelcome({ name, onNext }: { name: string; onNext: () => void }) {
 }
 
 // ─── Paso 2: Zona horaria y objetivo ──────────────────────────────────────────
-function StepPreferences({ timezone, setTimezone, goal, setGoal, onNext, onBack }: any) {
+interface StepPreferencesProps {
+  timezone: string;
+  setTimezone: (tz: string) => void;
+  goal: string;
+  setGoal: (goal: string) => void;
+  phone: string;
+  setPhone: (phone: string) => void;
+  onNext: () => void;
+  onBack: () => void;
+}
+
+function StepPreferences({
+  timezone, setTimezone, goal, setGoal,
+  phone, setPhone,
+  onNext, onBack,
+}: StepPreferencesProps) {
   const valid = timezone && goal;
 
   return (
@@ -153,26 +178,52 @@ function StepPreferences({ timezone, setTimezone, goal, setGoal, onNext, onBack 
         <label className="text-xs font-black text-slate-400 uppercase tracking-widest block">Tu zona horaria</label>
         <div className="relative max-w-md">
           <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
-          <select value={timezone} onChange={(e) => setTimezone(e.target.value)} className="w-full appearance-none bg-slate-50 border-2 border-slate-100 rounded-xl text-base font-bold text-slate-800 pl-12 pr-10 py-4 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300 cursor-pointer">
+          <select
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            className="w-full appearance-none bg-slate-50 border-2 border-slate-100 rounded-xl text-base font-bold text-slate-800 pl-12 pr-10 py-4 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300 cursor-pointer"
+          >
             <option value="">Seleccionar zona horaria...</option>
-            {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+            {TIMEZONES.map((tz) => (
+              <option key={tz.value} value={tz.value}>
+                {tz.flag} {tz.label} — {tz.value}
+              </option>
+            ))}
           </select>
           <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+        </div>
+
+        <label className="text-xs font-black text-slate-400 uppercase tracking-widest block pt-2">
+          Número de teléfono (opcional)
+        </label>
+        <div className="relative max-w-md">
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+58 412 000 0000"
+            className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl text-base font-bold text-slate-800 placeholder:text-slate-400 px-4 py-4 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
+          />
         </div>
       </div>
 
       <div>
         <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-4">¿Cuál es tu objetivo principal?</label>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {GOALS.map((g) => (
-            <button key={g.text} onClick={() => setGoal(g.text)} className={`flex items-start gap-4 p-4 rounded-2xl border-2 text-left transition-all duration-200 ${goal === g.text ? "border-pink-500 bg-pink-50 shadow-md shadow-pink-100" : "border-slate-100 bg-white hover:border-slate-200 hover:bg-slate-50"}`}>
-              <div className="text-3xl flex-shrink-0">{g.icon}</div>
-              <div className="flex-1">
-                <span className={`block font-bold text-base leading-snug ${goal === g.text ? "text-pink-700" : "text-slate-700"}`}>{g.text}</span>
-                <span className="block text-sm text-slate-500 mt-1">{g.desc}</span>
-              </div>
-              <div className={`w-5 h-5 mt-1 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${goal === g.text ? "border-pink-500 bg-pink-500" : "border-slate-300"}`}>
-                {goal === g.text && <div className="w-2 h-2 bg-white rounded-full" />}
+            <button
+              key={g.text}
+              onClick={() => setGoal(g.text)}
+              className={`flex items-start gap-4 p-4 rounded-2xl border-2 text-left transition-all duration-200 ${
+                goal === g.text
+                  ? "border-pink-500 bg-pink-50 shadow-md"
+                  : "border-slate-100 bg-white hover:border-pink-200"
+              }`}
+            >
+              <div className="text-3xl">{g.icon}</div>
+              <div>
+                <p className={`font-bold ${goal === g.text ? "text-pink-700" : "text-slate-800"}`}>{g.text}</p>
+                <p className="text-xs text-slate-500 mt-1">{g.desc}</p>
               </div>
             </button>
           ))}
@@ -192,16 +243,21 @@ function StepPreferences({ timezone, setTimezone, goal, setGoal, onNext, onBack 
 }
 
 // ─── Paso 3: Horario preferencial (Selección visual por bloques) ────────────
-function StepSchedule({ blocks, setBlocks, onNext, onBack }: any) {
+interface StepScheduleProps {
+  blocks: ScheduleBlock[];
+  setBlocks: (blocks: ScheduleBlock[]) => void;
+  onNext: () => void;
+  onBack: () => void;
+}
+
+function StepSchedule({ blocks, setBlocks, onNext, onBack }: StepScheduleProps) {
   const [selectedDay, setSelectedDay] = useState(0);
 
-  // Generamos las horas disponibles (ej. de 07:00 a 22:00)
   const AVAILABLE_HOURS = Array.from({ length: 16 }, (_, i) => `${(i + 7).toString().padStart(2, "0")}:00`);
 
-  // Estado local para manejar las horas sueltas seleccionadas por día
   const [selectedSlots, setSelectedSlots] = useState<Record<number, string[]>>(() => {
     const initial: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-    blocks.forEach((b: any) => {
+    blocks.forEach((b) => {
       const start = parseInt(b.start_time_local.split(":")[0]);
       const end = parseInt(b.end_time_local.split(":")[0]);
       for (let h = start; h < end; h++) {
@@ -211,9 +267,8 @@ function StepSchedule({ blocks, setBlocks, onNext, onBack }: any) {
     return initial;
   });
 
-  // Cada vez que el usuario marca/desmarca horas, calculamos los rangos contiguos
   useEffect(() => {
-    const newBlocks: any[] = [];
+    const newBlocks: ScheduleBlock[] = [];
 
     Object.entries(selectedSlots).forEach(([dayStr, hours]) => {
       if (hours.length === 0) return;
@@ -285,7 +340,6 @@ function StepSchedule({ blocks, setBlocks, onNext, onBack }: any) {
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
         
-        {/* Columna Izquierda: Selector Interactivo */}
         <div className="lg:col-span-3 bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col">
           <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Días de la semana</p>
           
@@ -319,7 +373,6 @@ function StepSchedule({ blocks, setBlocks, onNext, onBack }: any) {
             </button>
           </div>
 
-          {/* Grid de píldoras de horas */}
           <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 flex-1 overflow-y-auto pr-2 max-h-[250px]">
             {AVAILABLE_HOURS.map((hour) => {
               const isSelected = selectedSlots[selectedDay].includes(hour);
@@ -339,7 +392,6 @@ function StepSchedule({ blocks, setBlocks, onNext, onBack }: any) {
           </div>
         </div>
 
-        {/* Columna Derecha: Vista Previa */}
         <div className="lg:col-span-2 bg-slate-50 rounded-3xl p-6 border border-slate-100 flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
@@ -352,7 +404,7 @@ function StepSchedule({ blocks, setBlocks, onNext, onBack }: any) {
           
           {blocks.length > 0 ? (
             <div className="space-y-3 overflow-y-auto pr-2 flex-1 max-h-[320px]">
-              {blocks.map((block: any, idx: number) => (
+              {blocks.map((block, idx) => (
                 <div key={idx} className="flex items-center justify-between bg-white border border-slate-100 rounded-xl px-4 py-3.5 shadow-sm animate-in zoom-in-95 duration-200">
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-black text-white bg-slate-800 px-2.5 py-1 rounded-lg w-10 text-center">
@@ -395,8 +447,16 @@ function StepSchedule({ blocks, setBlocks, onNext, onBack }: any) {
 }
 
 // ─── Paso 4: Métodos de pago ──────────────────────────────────────────────────
-function StepPaymentMethods({ selected, setSelected, onNext, onBack, saving }: any) {
-  const toggle = (v: string) => setSelected(selected.includes(v) ? selected.filter((x: string) => x !== v) : [...selected, v]);
+interface StepPaymentMethodsProps {
+  selected: string[];
+  setSelected: (v: string[]) => void;
+  onNext: () => void;
+  onBack: () => void;
+  saving: boolean;
+}
+
+function StepPaymentMethods({ selected, setSelected, onNext, onBack, saving }: StepPaymentMethodsProps) {
+  const toggle = (v: string) => setSelected(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]);
 
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-300 w-full max-w-3xl mx-auto space-y-8">
@@ -487,6 +547,8 @@ export default function OnboardingPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const [phone, setPhone] = useState(""); 
+
   const name = user?.name ?? "Estudiante";
 
   const next = () => setStep((p) => Math.min(p + 1, TOTAL_STEPS));
@@ -496,6 +558,8 @@ export default function OnboardingPage() {
     setSaving(true);
     setError("");
     try {
+      await api.patch("/users/me", { phone_number: phone || undefined });
+      
       // 1. Guardar perfil del estudiante
       await api.patch("/users/me/student-profile", {
         timezone,
@@ -559,7 +623,7 @@ export default function OnboardingPage() {
 
         <div className="w-full flex justify-center">
           {step === 1 && <StepWelcome name={name} onNext={next} />}
-          {step === 2 && <StepPreferences timezone={timezone} setTimezone={setTimezone} goal={goal} setGoal={setGoal} onNext={next} onBack={back} />}
+          {step === 2 && <StepPreferences timezone={timezone} setTimezone={setTimezone} goal={goal} setGoal={setGoal} onNext={next} onBack={back} phone={phone} setPhone={setPhone} />}
           {step === 3 && <StepSchedule blocks={blocks} setBlocks={setBlocks} onNext={next} onBack={back} />}
           {step === 4 && <StepPaymentMethods selected={payMethods} setSelected={setPayMethods} onNext={finish} onBack={back} saving={saving} />}
           

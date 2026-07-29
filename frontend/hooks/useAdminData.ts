@@ -37,6 +37,7 @@ interface Teacher {
   username: string
   name: string
   surname: string
+  phone_number?: string
   email: string
   status: string
   commission_rate: number
@@ -51,6 +52,7 @@ interface Student {
   username: string
   name: string
   surname: string
+  phone_number?: string
   email: string
   role: string
   is_active: boolean

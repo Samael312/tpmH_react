@@ -12,15 +12,8 @@ import {
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 
-// ─── Constantes ───────────────────────────────────────────────────────────────
-const TIMEZONES = [
-  "America/Caracas", "America/Bogota", "America/Lima",
-  "America/Mexico_City", "America/New_York", "America/Los_Angeles",
-  "America/Santiago", "America/Buenos_Aires",
-  "America/Sao_Paulo", "America/Chicago",
-  "Europe/Madrid", "Europe/London", "Europe/Paris",
-  "Asia/Tokyo", "Asia/Dubai", "UTC",
-];
+// ─── Constantes ─────────────────────────────────────────────────────────────
+import { TIMEZONE_OPTIONS, TIMEZONE_OPTIONS as TIMEZONES } from "@/lib/timezones";
 
 const LANGUAGES = ["Español", "English", "Français", "Italiano", "Português", "Deutsch"];
 const SUBJECTS  = ["Inglés", "Español", "Francés", "Italiano", "Alemán", "Matemáticas", "Ciencias"];
@@ -147,7 +140,7 @@ function StepWelcome({ name, onNext }: { name: string; onNext: () => void }) {
 function StepProfile({
   photoPreview, setPhotoPreview, setPhotoFile,
   title_, setTitle_, bio, setBio, timezone, setTimezone,
-  onNext, onBack,
+  onNext, onBack, setPhone, phone,
 }: any) {
   const valid = title_.trim() && bio.trim() && timezone;
 
@@ -225,9 +218,26 @@ function StepProfile({
               className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-12 pr-10 py-4 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all cursor-pointer"
             >
               <option value="">Seleccionar zona horaria...</option>
-              {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+              {TIMEZONE_OPTIONS.map(tz => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.flag} {tz.label} — {tz.value}
+                </option>
+              ))}
             </select>
           </div>
+        </div>
+
+        <div>
+          <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">
+            Número de teléfono (opcional)
+          </label>
+          <input
+            type="tel"
+            value={phone}
+            onChange={e => setPhone(e.target.value)}
+            placeholder="+58 412 000 0000"
+            className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 px-4 py-4 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
+          />
         </div>
       </div>
 
@@ -610,6 +620,8 @@ export default function TeacherOnboardingPage() {
   const [timezone, setTimezone]         = useState(
     typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC"
   );
+  const [phone, setPhone]                 = useState("");
+
   // Step 3
   const [languages, setLanguages]       = useState<string[]>([]);
   const [subjects, setSubjects]         = useState<string[]>([]);
@@ -642,6 +654,8 @@ export default function TeacherOnboardingPage() {
         });
         photoUrl = res.data.url;
       }
+
+      await api.patch("/users/me", { phone_number: phone || undefined });
 
       // 2. Guardar perfil del profesor
       await api.patch("/teachers/me/profile", {
@@ -706,7 +720,7 @@ export default function TeacherOnboardingPage() {
               photoPreview={photoPreview} setPhotoPreview={setPhotoPreview} setPhotoFile={setPhotoFile}
               title_={title_} setTitle_={setTitle_} bio={bio} setBio={setBio}
               timezone={timezone} setTimezone={setTimezone}
-              onNext={next} onBack={back}
+              onNext={next} onBack={back} phone={phone} setPhone={setPhone}
             />
           )}
           {step === 3 && (

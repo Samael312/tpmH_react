@@ -23,6 +23,7 @@ class UserResponse(UserBase):
     # Campos adicionales (opcionales) que tenías en tu primera versión
     timezone: Optional[str] = "UTC"
     goal: Optional[str] = None
+    phone_number: Optional[str] = None
     preferred_payment_methods: Optional[List[str]] = []
     onboarding_completed: bool = False
 

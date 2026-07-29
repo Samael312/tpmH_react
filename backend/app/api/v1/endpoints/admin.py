@@ -555,6 +555,8 @@ def admin_update_user(
         user.role = data.role
     if data.status is not None:
         user.status = data.status
+    if data.phone_number is not None:
+        user.phone_number = data.phone_number
     if data.package_name is not None:
         # Cascada: actualizar enrollment activo
         enrollment = (

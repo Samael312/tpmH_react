@@ -216,7 +216,7 @@ export default function TeacherProfilePage() {
   const photoRef = useRef<HTMLInputElement>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile]       = useState<File | null>(null);
-
+  const [phone, setPhone]       = useState("");
   const [bio, setBio]           = useState("");
   const [title_, setTitle_]     = useState("");
   const [timezone, setTimezone] = useState("");
@@ -233,6 +233,10 @@ export default function TeacherProfilePage() {
 
   // 🧠 SOLUCIÓN 1: Mover la inicialización a un useEffect
   useEffect(() => {
+    api.get("/users/me").then(res => {
+      setPhone(res.data.phone_number ?? "");
+    }).catch(() => {});
+
     if (profile && !initialized) {
       setBio(profile.bio ?? "");
       setTitle_(profile.title ?? "");
@@ -284,6 +288,8 @@ export default function TeacherProfilePage() {
         });
         photoUrl = res.data.url;
       }
+
+      await api.patch("/users/me", { phone_number: phone });
 
       await api.patch("/teachers/me/profile", {
         bio,
@@ -453,6 +459,20 @@ export default function TeacherProfilePage() {
 
         {/* Zona horaria */}
         <Section title="Configuración" icon={<Globe className="w-5 h-5" />}>
+
+          <div className="mt-6">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+              Número de teléfono
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              placeholder="+58 412 000 0000"
+              className="w-full max-w-sm bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 px-4 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
+            />
+          </div>      
+
           <div>
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
               Zona horaria
