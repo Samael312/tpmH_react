@@ -4,6 +4,7 @@ import cloudinary.api
 import os
 from dotenv import load_dotenv
 import logging
+import re
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -51,12 +52,19 @@ ALL_ALLOWED_TYPES = (
 # Tamaño máximo: 50MB
 MAX_FILE_SIZE = 50 * 1024 * 1024
 
+def _slugify(text: str) -> str:
+    """Convierte un texto en un nombre de archivo seguro para Cloudinary"""
+    text = text.strip().lower()
+    text = re.sub(r"[^\w\s-]", "", text)      # quita caracteres raros
+    text = re.sub(r"[\s]+", "-", text)        # espacios -> guiones
+    return text[:80] or "material"  
 
 def upload_file(
     file_bytes: bytes,
     filename: str,
     content_type: str,
     folder: str = "materials",
+    display_name: str | None = None
 ) -> dict:
     """
     Sube un archivo a Cloudinary.
@@ -66,6 +74,7 @@ def upload_file(
         filename: nombre original del archivo
         content_type: MIME type del archivo
         folder: carpeta en Cloudinary
+        display_name: nombre para mostrar del archivo
 
     Returns:
         dict con url, public_id y resource_type
@@ -77,6 +86,10 @@ def upload_file(
     if len(file_bytes) > MAX_FILE_SIZE:
         raise ValueError("El archivo supera el tamaño máximo de 50MB")
 
+    ext = filename.rsplit(".", 1)[-1] if "." in filename else ""
+    base_name = _slugify(display_name) if display_name else _slugify(filename.rsplit(".", 1)[0])
+    upload_filename = f"{base_name}.{ext}" if ext else base_name
+
     try:
         # Usar resource_type="auto" permite que Cloudinary detecte 
         # correctamente los PDFs (como imágenes/documentos con extensión)
@@ -84,6 +97,7 @@ def upload_file(
             file_bytes,
             folder=folder,
             resource_type="auto",
+            filename=upload_filename,
             use_filename=True,
             unique_filename=True,
         )

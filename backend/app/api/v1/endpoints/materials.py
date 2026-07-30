@@ -55,7 +55,8 @@ async def create_material(
                 file_bytes=file_bytes,
                 filename=file.filename,
                 content_type=file.content_type,
-                folder=f"materials/teacher_{current_user.teacher_profile.id}"
+                folder=f"materials/teacher_{current_user.teacher_profile.id}",
+                display_name=title
             )
             file_url = upload_result["url"]
             file_public_id = upload_result["public_id"]
