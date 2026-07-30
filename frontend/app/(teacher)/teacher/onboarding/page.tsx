@@ -1,22 +1,28 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
   ChevronRight, ChevronLeft, Check, Globe,
   Briefcase, BookOpen, Award, MessageCircle,
   Sparkles, Upload, Plus, X, Rocket,
-  Languages, GraduationCap, Clock, Star
+  Languages, GraduationCap, Clock, Star,
+  ChevronDown,
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 
 // ─── Constantes ─────────────────────────────────────────────────────────────
-import { TIMEZONE_OPTIONS, TIMEZONE_OPTIONS as TIMEZONES } from "@/lib/timezones";
+import {
+  TIMEZONE_OPTIONS,
+  TIMEZONE_OPTIONS as TIMEZONES,
+  TIMEZONE_TO_COUNTRY,
+  DEFAULT_COUNTRY,
+} from "@/lib/timezones";
 
 const LANGUAGES = ["Español", "English", "Français", "Italiano", "Português", "Deutsch"];
-const SUBJECTS  = ["Inglés", "Español", "Francés", "Italiano", "Alemán", "Matemáticas", "Ciencias"];
+const SUBJECTS  = ["Matematica", "Lenguaje", "Física", "Musica", "Quimica", "Historia", "Arte", "Programación", "Ciencias", "Economía", "Psicología", "Negocios"];
 const SKILL_SUGGESTIONS = [
   "Gramática", "Conversación", "Pronunciación", "Vocabulario",
   "Business English", "IELTS", "TOEFL", "Niños", "Viajes", "Redacción",
@@ -33,11 +39,39 @@ interface ScheduleBlock {
   is_available: boolean;
 }
 
+interface CountryInfo {
+  flag: string;
+  dialCode: string;
+}
+
+// ─── Función Auxiliar para Convertir Errores de API (FastAPI / Pydantic) ────
+function parseApiError(detail: any): string {
+  if (typeof detail === "string") return detail;
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === "object" && item !== null && item.msg) {
+          const field = Array.isArray(item.loc) ? item.loc[item.loc.length - 1] : "";
+          return field ? `${field}: ${item.msg}` : item.msg;
+        }
+        return JSON.stringify(item);
+      })
+      .join(" | ");
+  }
+
+  if (detail && typeof detail === "object") {
+    return detail.msg || JSON.stringify(detail);
+  }
+
+  return "Error guardando el perfil. Inténtalo de nuevo.";
+}
+
 // ─── Panel lateral de progreso ─────────────────────────────────────────────
 function SidebarProgress({ step, name }: { step: number; name: string }) {
   const steps = [
     { num: 1, title: "Bienvenida",     desc: "Empecemos" },
-    { num: 2, title: "Tu perfil",      desc: "Foto y bio" },
+    { num: 2, title: "Tu perfil",      desc: "Foto, bio y WhatsApp" },
     { num: 3, title: "Especialidades", desc: "Qué enseñas" },
     { num: 4, title: "Disponibilidad", desc: "Tus horarios" },
     { num: 5, title: "Redes sociales", desc: "Contacto" },
@@ -136,13 +170,54 @@ function StepWelcome({ name, onNext }: { name: string; onNext: () => void }) {
   );
 }
 
-// ─── Paso 2: Foto, bio y título ───────────────────────────────────────────────
+// ─── Paso 2: Foto, bio, título y WhatsApp con código de país ─────────────────
+interface StepProfileProps {
+  photoPreview: string | null;
+  setPhotoPreview: (v: string | null) => void;
+  setPhotoFile: (v: File | null) => void;
+  title_: string;
+  setTitle_: (v: string) => void;
+  bio: string;
+  setBio: (v: string) => void;
+  timezone: string;
+  setTimezone: (v: string) => void;
+  country: CountryInfo;
+  setCountry: (v: CountryInfo) => void;
+  phone: string;
+  setPhone: (v: string) => void;
+  onNext: () => void;
+  onBack: () => void;
+}
+
 function StepProfile({
   photoPreview, setPhotoPreview, setPhotoFile,
   title_, setTitle_, bio, setBio, timezone, setTimezone,
-  onNext, onBack, setPhone, phone,
-}: any) {
-  const valid = title_.trim() && bio.trim() && timezone;
+  country, setCountry, phone, setPhone,
+  onNext, onBack,
+}: StepProfileProps) {
+  const valid = Boolean(title_.trim() && bio.trim() && timezone && phone.trim());
+
+  const COUNTRY_OPTIONS = useMemo(() => {
+    const map = new Map<string, CountryInfo>();
+    Object.values(TIMEZONE_TO_COUNTRY).forEach((c) => {
+      if (c?.dialCode) map.set(c.dialCode, c);
+    });
+    if (DEFAULT_COUNTRY?.dialCode) {
+      map.set(DEFAULT_COUNTRY.dialCode, DEFAULT_COUNTRY);
+    }
+    return Array.from(map.values());
+  }, []);
+
+  const handleTimezoneChange = (newTz: string) => {
+    setTimezone(newTz);
+    const detected = TIMEZONE_TO_COUNTRY[newTz] ?? DEFAULT_COUNTRY;
+    setCountry(detected);
+  };
+
+  const removePhoto = () => {
+    setPhotoFile(null);
+    setPhotoPreview(null);
+  };
 
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-300 w-full max-w-3xl mx-auto space-y-7">
@@ -155,33 +230,44 @@ function StepProfile({
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
         <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Foto de perfil</p>
         <div className="flex items-center gap-6">
-          <label className="cursor-pointer group">
-            <div className="relative w-24 h-24 rounded-2xl overflow-hidden border-2 border-dashed border-slate-200 group-hover:border-pink-400 transition-colors bg-slate-50 flex items-center justify-center">
-              {photoPreview ? (
-                <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
-              ) : (
-                <div className="flex flex-col items-center gap-1">
-                  <Upload className="w-6 h-6 text-slate-300" />
-                  <span className="text-[10px] text-slate-400 font-bold text-center">Subir foto</span>
+          <div className="relative flex-shrink-0">
+            <label className="cursor-pointer group">
+              <div className="relative w-24 h-24 rounded-2xl overflow-hidden border-2 border-dashed border-slate-200 group-hover:border-pink-400 transition-colors bg-slate-50 flex items-center justify-center">
+                {photoPreview ? (
+                  <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="flex flex-col items-center gap-1">
+                    <Upload className="w-6 h-6 text-slate-300" />
+                    <span className="text-[10px] text-slate-400 font-bold text-center">Subir foto</span>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <Upload className="w-5 h-5 text-white" />
                 </div>
-              )}
-              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <Upload className="w-5 h-5 text-white" />
               </div>
-            </div>
-            <input type="file" accept="image/*" className="hidden" onChange={e => {
-              const f = e.target.files?.[0];
-              if (f) { setPhotoFile(f); setPhotoPreview(URL.createObjectURL(f)); }
-            }} />
-          </label>
+              <input type="file" accept="image/*" className="hidden" onChange={e => {
+                const f = e.target.files?.[0];
+                if (f) { setPhotoFile(f); setPhotoPreview(URL.createObjectURL(f)); }
+              }} />
+            </label>
+          </div>
           <div className="text-sm text-slate-500">
             <p className="font-bold text-slate-700 mb-1">Sube una foto profesional</p>
             <p className="text-xs">JPG, PNG. Max 5MB. <br/>Un buen retrato aumenta la confianza de los estudiantes.</p>
+            {photoPreview && (
+              <button
+                type="button"
+                onClick={removePhoto}
+                className="mt-2 text-xs font-bold text-rose-500 hover:text-rose-600 transition-colors"
+              >
+                Quitar foto
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Título */}
+      {/* Título, bio, zona horaria, WhatsApp */}
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
         <div>
           <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">Título profesional *</label>
@@ -214,7 +300,7 @@ function StepProfile({
             <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
             <select
               value={timezone}
-              onChange={e => setTimezone(e.target.value)}
+              onChange={e => handleTimezoneChange(e.target.value)}
               className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-12 pr-10 py-4 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all cursor-pointer"
             >
               <option value="">Seleccionar zona horaria...</option>
@@ -228,16 +314,48 @@ function StepProfile({
         </div>
 
         <div>
-          <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">
-            Número de teléfono (opcional)
-          </label>
-          <input
-            type="tel"
-            value={phone}
-            onChange={e => setPhone(e.target.value)}
-            placeholder="+58 412 000 0000"
-            className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 px-4 py-4 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
-          />
+          <div className="flex items-center gap-2 mb-2">
+            <MessageCircle className="w-4 h-4 text-emerald-500" />
+            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">
+              Número de WhatsApp *
+            </label>
+          </div>
+          <div className="flex gap-2">
+            <div className="relative w-32 flex-shrink-0">
+              <div className="w-full h-full bg-slate-50 border-2 border-transparent rounded-xl px-3 py-4 flex items-center justify-between pointer-events-none font-bold text-slate-800">
+                <span className="text-xl leading-none">{country.flag}</span>
+                <span className="text-sm font-black text-slate-600">{country.dialCode}</span>
+                <ChevronDown className="w-4 h-4 text-slate-400" />
+              </div>
+              <select
+                value={country.dialCode}
+                onChange={(e) => {
+                  const selected = COUNTRY_OPTIONS.find((c) => c.dialCode === e.target.value);
+                  if (selected) setCountry(selected);
+                }}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                title="Seleccionar código de país"
+              >
+                {COUNTRY_OPTIONS.map((c, idx) => (
+                  <option key={idx} value={c.dialCode}>
+                    {c.flag} {c.dialCode}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <input
+              type="tel"
+              required
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="412 000 0000"
+              className="flex-1 bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 px-4 py-4 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
+            />
+          </div>
+          <p className="text-[11px] text-slate-400 font-medium pl-1 mt-1.5">
+            Este número se utilizará para que tus alumnos se comuniquen contigo por WhatsApp.
+          </p>
         </div>
       </div>
 
@@ -524,8 +642,8 @@ function StepAvailability({ blocks, setBlocks, onNext, onBack }: any) {
 
 // ─── Paso 5: Redes sociales y finalizar ──────────────────────────────────────
 function StepSocial({ socialLinks, setSocialLinks, onFinish, onBack, saving }: any) {
+  // Nota: WhatsApp ya se pide en el paso 2, por lo que aquí solo quedan redes secundarias o sitio web
   const fields = [
-    { key: "whatsapp", label: "WhatsApp", placeholder: "+58 412 000 0000", icon: <MessageCircle className="w-5 h-5" /> },
     { key: "instagram", label: "Instagram", placeholder: "@tuprofemaria", icon: <GraduationCap className="w-5 h-5" /> },
     { key: "website", label: "Sitio web", placeholder: "https://tuweb.com", icon: <Globe className="w-5 h-5" /> },
   ];
@@ -533,8 +651,8 @@ function StepSocial({ socialLinks, setSocialLinks, onFinish, onBack, saving }: a
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-300 w-full max-w-2xl mx-auto space-y-7">
       <div>
-        <h2 className="text-4xl font-black text-slate-800 tracking-tight">Contacto y redes</h2>
-        <p className="text-slate-500 text-lg mt-2">¿Cómo pueden contactarte los estudiantes? (Todo opcional)</p>
+        <h2 className="text-4xl font-black text-slate-800 tracking-tight">Otras redes y sitio web</h2>
+        <p className="text-slate-500 text-lg mt-2">¿Tienes alguna red social adicional o web? (Todo opcional)</p>
       </div>
 
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
@@ -620,6 +738,9 @@ export default function TeacherOnboardingPage() {
   const [timezone, setTimezone]         = useState(
     typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC"
   );
+  const [country, setCountry] = useState<CountryInfo>(
+    () => TIMEZONE_TO_COUNTRY[timezone] ?? DEFAULT_COUNTRY
+  );
   const [phone, setPhone]                 = useState("");
 
   // Step 3
@@ -629,8 +750,8 @@ export default function TeacherOnboardingPage() {
   const [certificates, setCertificates] = useState<{ title: string; year: string }[]>([]);
   // Step 4
   const [blocks, setBlocks]             = useState<ScheduleBlock[]>([]);
-  // Step 5
-  const [socialLinks, setSocialLinks]   = useState({ whatsapp: "", instagram: "", website: "" });
+  // Step 5 (Ya no requiere whatsapp aquí, se toma de 'phone' del Paso 2)
+  const [socialLinks, setSocialLinks]   = useState({ instagram: "", website: "" });
 
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState("");
@@ -649,15 +770,18 @@ export default function TeacherOnboardingPage() {
       if (photoFile) {
         const form = new FormData();
         form.append("file", photoFile);
-        const res = await api.post("/teachers/me/photo", form, {
+        const res = await api.post("/users/me/photo", form, {
           headers: { "Content-Type": "multipart/form-data" },
         });
         photoUrl = res.data.url;
       }
 
-      await api.patch("/users/me", { phone_number: phone || undefined });
+      const dialCode = country.dialCode || DEFAULT_COUNTRY.dialCode;
+      const fullPhone = `${dialCode} ${phone.trim()}`.trim();
 
-      // 2. Guardar perfil del profesor
+      await api.patch("/users/me", { phone_number: fullPhone });
+
+      // 2. Guardar perfil del profesor incluyendo el teléfono del paso 2 como whatsapp en social_links
       await api.patch("/teachers/me/profile", {
         bio,
         title: title_,
@@ -666,7 +790,10 @@ export default function TeacherOnboardingPage() {
         subjects,
         skills,
         certificates: certificates.filter(c => c.title.trim()),
-        social_links: socialLinks,
+        social_links: {
+          ...socialLinks,
+          whatsapp: fullPhone,
+        },
         ...(photoUrl ? { photo_url: photoUrl } : {}),
       });
 
@@ -683,7 +810,7 @@ export default function TeacherOnboardingPage() {
 
       // 5. Actualizar store
       if (user) {
-        setUser({ ...user, onboarding_completed: true });
+        setUser({ ...user, onboarding_completed: true, phone_number: fullPhone });
       }
 
       // 6. Ir a paso de éxito
@@ -693,7 +820,8 @@ export default function TeacherOnboardingPage() {
       setTimeout(() => router.push("/teacher/dashboard"), 3000);
 
     } catch (e: any) {
-      setError(e.response?.data?.detail || "Error guardando el perfil. Inténtalo de nuevo.");
+      const errorDetail = e.response?.data?.detail;
+      setError(parseApiError(errorDetail));
     } finally {
       setSaving(false);
     }
@@ -720,7 +848,9 @@ export default function TeacherOnboardingPage() {
               photoPreview={photoPreview} setPhotoPreview={setPhotoPreview} setPhotoFile={setPhotoFile}
               title_={title_} setTitle_={setTitle_} bio={bio} setBio={setBio}
               timezone={timezone} setTimezone={setTimezone}
-              onNext={next} onBack={back} phone={phone} setPhone={setPhone}
+              country={country} setCountry={setCountry}
+              phone={phone} setPhone={setPhone}
+              onNext={next} onBack={back}
             />
           )}
           {step === 3 && (
