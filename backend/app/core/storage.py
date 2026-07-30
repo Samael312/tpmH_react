@@ -77,19 +77,13 @@ def upload_file(
     if len(file_bytes) > MAX_FILE_SIZE:
         raise ValueError("El archivo supera el tamaño máximo de 50MB")
 
-    # Determinar resource_type para Cloudinary
-    if content_type in ALLOWED_IMAGE_TYPES:
-        resource_type = "image"
-    elif content_type in ALLOWED_VIDEO_TYPES:
-        resource_type = "video"
-    else:
-        resource_type = "raw"  # PDFs y documentos
-
     try:
+        # Usar resource_type="auto" permite que Cloudinary detecte 
+        # correctamente los PDFs (como imágenes/documentos con extensión)
         result = cloudinary.uploader.upload(
             file_bytes,
             folder=folder,
-            resource_type=resource_type,
+            resource_type="auto",
             use_filename=True,
             unique_filename=True,
         )
@@ -97,7 +91,7 @@ def upload_file(
         return {
             "url": result["secure_url"],
             "public_id": result["public_id"],
-            "resource_type": resource_type,
+            "resource_type": result.get("resource_type", "auto"),
             "format": result.get("format", ""),
             "size_bytes": result.get("bytes", 0),
         }
@@ -107,7 +101,7 @@ def upload_file(
         raise ValueError(f"Error al subir el archivo: {str(e)}")
 
 
-def delete_file(public_id: str, resource_type: str = "raw") -> bool:
+def delete_file(public_id: str, resource_type: str = "image") -> bool:
     """
     Elimina un archivo de Cloudinary.
 

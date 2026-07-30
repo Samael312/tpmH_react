@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
+import logging
 
 from app.db.base import get_db
 from app.auth.dependencies import get_current_user, get_current_teacher, get_current_student
@@ -17,6 +19,7 @@ from app.schemas.materials import (
 from app.core.storage import upload_file, delete_file
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ─── ENDPOINTS DEL PROFESOR ─────────────────────────────────────────────────
@@ -141,28 +144,29 @@ def assign_material(
     assigned_count = 0
     already_assigned = 0
 
-    for student_id in data.student_ids:
-        # Verificar que el estudiante existe
-        student = db.query(StudentProfile).filter(
-            StudentProfile.id == student_id
+    for user_id in data.student_ids:
+        # 1. Buscar el perfil del estudiante usando el user_id recibido del frontend
+        student_profile = db.query(StudentProfile).filter(
+            StudentProfile.user_id == user_id
         ).first()
 
-        if not student:
+        if not student_profile:
             continue
 
-        # Verificar que no está ya asignado
+        # 2. Verificar que no esté ya asignado usando el ID real del StudentProfile
         existing = db.query(MaterialAssignment).filter(
             MaterialAssignment.material_id == material_id,
-            MaterialAssignment.student_id == student_id
+            MaterialAssignment.student_id == student_profile.id
         ).first()
 
         if existing:
             already_assigned += 1
             continue
 
+        # 3. Crear la asignación con el StudentProfile.id
         assignment = MaterialAssignment(
             material_id=material_id,
-            student_id=student_id
+            student_id=student_profile.id
         )
         db.add(assignment)
         assigned_count += 1
@@ -220,7 +224,7 @@ def delete_material(
     return {"message": "Material eliminado"}
 
 
-# ─── ENDPOINTS DEL ESTUDIANTE ───────────────────────────────────────────────
+# ─── ENDPOINTS DEL ESTUDIANTE Y PROXY ───────────────────────────────────────
 
 @router.get(
     "/student/my-materials",
@@ -271,3 +275,20 @@ def update_material_progress(
     db.refresh(assignment)
 
     return assignment
+
+
+@router.get("/{material_id}/stream")
+def stream_material_file(
+    material_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Redirige directamente al archivo en Cloudinary de forma segura"""
+    material = db.query(Material).filter(Material.id == material_id).first()
+    if not material or not material.file_url:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Archivo no encontrado"
+        )
+    
+    return RedirectResponse(url=material.file_url)
