@@ -1,83 +1,160 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
-  User, Briefcase, Globe, MapPin, Link2,
-  MessageCircle, Plus,
-  X, Check, Save, Upload, Award, BookOpen,
-  ChevronDown, ExternalLink
+  User, Briefcase, Globe, MapPin, Link2, MessageCircle, Plus,
+  X, Check, Save, Upload, Award, BookOpen, ChevronDown, ExternalLink,
+  AlertTriangle, Phone, Lock, Eye, EyeOff, Trash2, Edit2, RefreshCw, Calendar,
 } from "lucide-react";
 import api from "@/lib/api";
 import { useTeacherProfile, TeacherProfile } from "@/hooks/useTeacherData";
+import { useAuthStore } from "@/store/authStore";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import CalendarSync from "./CalendarSync";
 
-// ─── Inline icon replacements ─────────────
-const InstagramIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
-    <circle cx="12" cy="12" r="4"/>
-    <circle cx="17.5" cy="6.5" r="0.5" fill="currentColor"/>
-  </svg>
-);
+// ─── Helpers ──────────────────────────────────────────────────────────────
+function formatErrorMessage(error: any, fallbackMessage: string): string {
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail.map((err: any) => err?.msg || JSON.stringify(err)).join(". ");
+  }
+  if (typeof detail === "object" && detail !== null) return detail.msg || JSON.stringify(detail);
+  return fallbackMessage;
+}
 
-const YoutubeIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-    <path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/>
-    <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="currentColor" stroke="none"/>
-  </svg>
-);
-
-// ─── Extended profile type ──
 type TeacherProfileWithPhoto = TeacherProfile & { photo_url?: string | null };
 
-const LANGUAGES  = ["Español","English","Français","Italiano","Português","Deutsch"];
-const SUBJECTS   = ["Inglés","Español","Francés","Italiano","Alemán","Matemáticas","Ciencias"];
+const LANGUAGES  = ["Español", "English", "Français", "Italiano", "Português", "Deutsch"];
+const SUBJECTS   = ["Inglés", "Español", "Francés", "Italiano", "Alemán", "Matemáticas", "Ciencias"];
 const TIMEZONES  = [
-  "America/Caracas","America/Bogota","America/Lima","America/Mexico_City",
-  "America/New_York","America/Los_Angeles","Europe/Madrid","Europe/London",
-  "Europe/Paris","UTC",
+  "America/Caracas", "America/Bogota", "America/Lima", "America/Mexico_City",
+  "America/New_York", "America/Los_Angeles", "Europe/Madrid", "Europe/London",
+  "Europe/Paris", "UTC",
 ];
 const SKILL_SUGGESTIONS = [
-  "Gramática","Conversación","Pronunciación","Vocabulario",
-  "Business English","IELTS","TOEFL","Niños","Viajes","Redacción",
+  "Gramática", "Conversación", "Pronunciación", "Vocabulario",
+  "Business English", "IELTS", "TOEFL", "Niños", "Viajes", "Redacción",
 ];
 
-// ─── Chip seleccionable ───────────────────────────────────────────────────────
+// ─── Iconos redes sociales ────────────────────────────────────────────────
+const InstagramIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+    <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+    <circle cx="12" cy="12" r="4" />
+    <circle cx="17.5" cy="6.5" r="0.5" fill="currentColor" />
+  </svg>
+);
+const YoutubeIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+    <path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" />
+    <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+// ─── UI base ──────────────────────────────────────────────────────────────
+function Toast({ msg, type }: { msg: React.ReactNode; type: "success" | "error" }) {
+  const displayMsg = typeof msg === "string" ? msg : msg ? String(msg) : "";
+  return (
+    <div
+      className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold animate-in fade-in slide-in-from-top-2 duration-300 ${
+        type === "success"
+          ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+          : "bg-rose-50 text-rose-600 border border-rose-100"
+      }`}
+    >
+      {type === "success" ? <Check className="w-4 h-4 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
+      {displayMsg}
+    </div>
+  );
+}
+
+function ProfileSkeleton() {
+  return (
+    <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6">
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div className="bg-white/80 rounded-[2rem] border border-white shadow-lg p-7 flex items-center gap-5">
+          <div className="w-20 h-20 rounded-2xl bg-slate-200 animate-pulse" />
+          <div className="space-y-2 flex-1">
+            <div className="h-5 w-48 bg-slate-200 rounded-lg animate-pulse" />
+            <div className="h-3 w-32 bg-slate-100 rounded-lg animate-pulse" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-7 bg-white/80 rounded-[2rem] border border-white shadow-lg p-7 h-[500px] animate-pulse" />
+          <div className="lg:col-span-5 space-y-6">
+            <div className="bg-white/80 rounded-[2rem] border border-white shadow-lg p-7 h-[250px] animate-pulse" />
+            <div className="bg-white/80 rounded-[2rem] border border-white shadow-lg p-7 h-[180px] animate-pulse" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Section({
+  title, subtitle, icon, action, children,
+}: { title: string; subtitle?: string; icon: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg shadow-slate-100 p-6 sm:p-7">
+      <div className="flex items-start justify-between gap-4 mb-5">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-pink-50 flex items-center justify-center flex-shrink-0 text-pink-500">
+            {icon}
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-slate-800 tracking-tight">{title}</h2>
+            {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
+          </div>
+        </div>
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ReadField({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+  return (
+    <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{label}</span>
+      <p className="text-sm font-bold text-slate-800 flex items-center gap-1.5 truncate">
+        {icon}
+        {value || "No especificado"}
+      </p>
+    </div>
+  );
+}
+
 function ChipSelector({
-  options,
-  selected,
-  onChange,
-  color = "pink",
+  options, selected, onChange, color = "pink", disabled = false,
 }: {
   options: string[];
   selected: string[];
   onChange: (v: string[]) => void;
   color?: "pink" | "purple" | "blue";
+  disabled?: boolean;
 }) {
-  const toggle = (v: string) =>
-    onChange(selected.includes(v)
-      ? selected.filter(x => x !== v)
-      : [...selected, v]);
-
-  const cls: Record<string, string> = {
-    pink:   "border-pink-400 bg-pink-50 text-pink-600",
-    purple: "border-purple-400 bg-purple-50 text-purple-600",
-    blue:   "border-blue-400 bg-blue-50 text-blue-600",
+  const toggle = (v: string) => {
+    if (disabled) return;
+    onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]);
   };
-
+  const cls: Record<string, string> = {
+    pink: "border-pink-400 bg-pink-50 text-pink-600",
+    purple: "border-purple-400 bg-purple-50 text-purple-600",
+    blue: "border-blue-400 bg-blue-50 text-blue-600",
+  };
   return (
     <div className="flex flex-wrap gap-2">
       {options.map(o => (
         <button
           key={o}
+          type="button"
+          disabled={disabled}
           onClick={() => toggle(o)}
-          className={`px-3.5 py-1.5 rounded-xl text-sm font-bold border-2
-            transition-all duration-200
-            ${selected.includes(o)
-              ? cls[color]
-              : "border-transparent bg-slate-100 text-slate-500 hover:border-slate-200"
-            }`}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed ${
+            selected.includes(o) ? cls[color] : "border-transparent bg-slate-100 text-slate-500 hover:border-slate-200"
+          }`}
         >
           {o}
         </button>
@@ -86,90 +163,69 @@ function ChipSelector({
   );
 }
 
-// ─── Input chip con texto libre ───────────────────────────────────────────────
 function FreeChipInput({
-  value,
-  onChange,
-  placeholder,
-  suggestions = [],
+  value, onChange, placeholder, suggestions = [], disabled = false,
 }: {
   value: string[];
   onChange: (v: string[]) => void;
   placeholder: string;
   suggestions?: string[];
+  disabled?: boolean;
 }) {
   const [input, setInput] = useState("");
-
   const add = (text?: string) => {
+    if (disabled) return;
     const w = (text ?? input).trim();
     if (!w || value.includes(w)) return;
     onChange([...value, w]);
     setInput("");
   };
-
-  const remove = (w: string) => onChange(value.filter(x => x !== w));
+  const remove = (w: string) => !disabled && onChange(value.filter(x => x !== w));
 
   return (
     <div className="space-y-2">
-      {suggestions.length > 0 && (
+      {!disabled && suggestions.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {suggestions
-            .filter(s => !value.includes(s))
-            .map(s => (
-              <button
-                key={s}
-                onClick={() => add(s)}
-                className="px-3 py-1 rounded-xl text-xs font-bold
-                           bg-slate-100 text-slate-500 hover:bg-pink-50
-                           hover:text-pink-600 transition-colors border-2
-                           border-transparent hover:border-pink-200"
-              >
-                + {s}
-              </button>
-            ))}
+          {suggestions.filter(s => !value.includes(s)).map(s => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => add(s)}
+              className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-100 text-slate-500 hover:bg-pink-50 hover:text-pink-600 transition-colors border-2 border-transparent hover:border-pink-200"
+            >
+              + {s}
+            </button>
+          ))}
         </div>
       )}
-
-      <div className="flex gap-2">
-        <div className="group relative flex-1">
+      {!disabled && (
+        <div className="flex gap-2">
           <input
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && add()}
+            onKeyDown={e => e.key === "Enter" && (e.preventDefault(), add())}
             placeholder={placeholder}
-            className="w-full bg-slate-50 border-2 border-transparent
-                       rounded-xl text-sm font-bold text-slate-800
-                       placeholder:text-slate-400 px-4 py-3
-                       focus:outline-none focus:bg-white
-                       focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                       transition-all duration-300"
+            className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
           />
+          <button
+            type="button"
+            onClick={() => add()}
+            className="px-4 bg-pink-50 text-pink-600 hover:bg-pink-100 font-bold rounded-xl transition-colors flex-shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
         </div>
-        <button
-          onClick={() => add()}
-          className="px-4 bg-pink-50 text-pink-600 hover:bg-pink-100
-                     font-bold rounded-xl transition-colors flex-shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
-      </div>
-
+      )}
       {value.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 pt-1">
           {value.map(w => (
-            <span
-              key={w}
-              className="inline-flex items-center gap-1.5 bg-white border
-                         border-slate-200 text-slate-700 text-sm font-bold
-                         px-3 py-1.5 rounded-xl shadow-sm"
-            >
+            <span key={w} className="inline-flex items-center gap-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-bold px-3 py-1.5 rounded-xl shadow-sm">
               {w}
-              <button
-                onClick={() => remove(w)}
-                className="text-slate-300 hover:text-rose-400 transition-colors"
-              >
-                <X className="w-3 h-3" />
-              </button>
+              {!disabled && (
+                <button type="button" onClick={() => remove(w)} className="text-slate-300 hover:text-rose-400 transition-colors">
+                  <X className="w-3 h-3" />
+                </button>
+              )}
             </span>
           ))}
         </div>
@@ -178,120 +234,120 @@ function FreeChipInput({
   );
 }
 
-// ─── Sección con título ───────────────────────────────────────────────────────
-function Section({
-  title,
-  icon,
-  children,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
-                    border border-white shadow-2xl shadow-slate-200/50 p-6 sm:p-8">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-9 h-9 rounded-xl bg-pink-50 flex items-center
-                        justify-center flex-shrink-0">
-          <span className="text-pink-500">{icon}</span>
-        </div>
-        <h2 className="text-lg font-black text-slate-800 tracking-tight">
-          {title}
-        </h2>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-// ─── Página principal ─────────────────────────────────────────────────────────
+// ─── Componente principal ──────────────────────────────────────────────────
 export default function TeacherProfilePage() {
   const { profile: rawProfile, loading, refetch } = useTeacherProfile();
   const profile = rawProfile as TeacherProfileWithPhoto | null;
+  const { logout } = useAuthStore();
 
-  const [saving, setSaving]   = useState(false);
-  const [saved, setSaved]     = useState(false);
-  const [error, setError]     = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [infoFeedback, setInfoFeedback] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+
   const photoRef = useRef<HTMLInputElement>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [photoFile, setPhotoFile]       = useState<File | null>(null);
-  const [phone, setPhone]       = useState("");
-  const [bio, setBio]           = useState("");
-  const [title_, setTitle_]     = useState("");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Campos de formulario
+  const [phone, setPhone] = useState("");
+  const [bio, setBio] = useState("");
+  const [title_, setTitle_] = useState("");
   const [timezone, setTimezone] = useState("");
   const [languages, setLanguages] = useState<string[]>([]);
-  const [subjects, setSubjects]   = useState<string[]>([]);
-  const [skills, setSkills]       = useState<string[]>([]);
-  const [certificates, setCertificates] = useState<
-    { title: string; year: string }[]
-  >([]);
-  const [socialLinks, setSocialLinks] = useState({
-    instagram: "", youtube: "", whatsapp: "", website: "",
-  });
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [skills, setSkills] = useState<string[]>([]);
+  const [certificates, setCertificates] = useState<{ title: string; year: string }[]>([]);
+  const [socialLinks, setSocialLinks] = useState({ instagram: "", youtube: "", whatsapp: "", website: "" });
   const [initialized, setInitialized] = useState(false);
 
-  // 🧠 SOLUCIÓN 1: Mover la inicialización a un useEffect
-  useEffect(() => {
-    api.get("/users/me").then(res => {
-      setPhone(res.data.phone_number ?? "");
-    }).catch(() => {});
+  // Seguridad
+  const [oldPw, setOldPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [showOld, setShowOld] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [savingPw, setSavingPw] = useState(false);
+  const [pwFeedback, setPwFeedback] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
-    if (profile && !initialized) {
-      setBio(profile.bio ?? "");
-      setTitle_(profile.title ?? "");
-      setTimezone(profile.timezone ?? "");
-      setLanguages(profile.languages ?? []);
-      setSubjects(profile.subjects ?? []);
-      setSkills(profile.skills ?? []);
-      setCertificates(
-        Array.isArray(profile.certificates) ? profile.certificates : []
-      );
-      setSocialLinks({
-        instagram: profile.social_links?.instagram ?? "",
-        youtube:   profile.social_links?.youtube ?? "",
-        whatsapp:  profile.social_links?.whatsapp ?? "",
-        website:   profile.social_links?.website ?? "",
-      });
+  // Eliminar cuenta
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteInput, setDeleteInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  const populateFields = useCallback((prof: TeacherProfileWithPhoto, phoneNum: string) => {
+    setPhone(phoneNum);
+    setBio(prof.bio ?? "");
+    setTitle_(prof.title ?? "");
+    setTimezone(prof.timezone ?? "");
+    setLanguages(prof.languages ?? []);
+    setSubjects(prof.subjects ?? []);
+    setSkills(prof.skills ?? []);
+    setCertificates(Array.isArray(prof.certificates) ? prof.certificates : []);
+    setSocialLinks({
+      instagram: prof.social_links?.instagram ?? "",
+      youtube: prof.social_links?.youtube ?? "",
+      whatsapp: prof.social_links?.whatsapp ?? "",
+      website: prof.social_links?.website ?? "",
+    });
+  }, []);
+
+  const fetchAll = useCallback(async () => {
+    try {
+      const res = await api.get("/users/me");
+      if (profile) populateFields(profile, res.data.phone_number ?? "");
+      if (res.data.avatar) setPhotoUrl(res.data.avatar);
+    } catch {
+      if (profile) populateFields(profile, "");
+    } finally {
       setInitialized(true);
     }
-  }, [profile, initialized]);
+  }, [profile, populateFields]);
 
-  const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setPhotoFile(f);
-    setPhotoPreview(URL.createObjectURL(f));
+  useEffect(() => {
+    if (profile && !initialized) fetchAll();
+  }, [profile, initialized, fetchAll]);
+
+  const handleCancelEdit = () => {
+    if (profile) fetchAll();
+    setIsEditing(false);
   };
 
-  const addCert = () =>
-    setCertificates(p => [...p, { title: "", year: "" }]);
-
-  const updateCert = (idx: number, field: "title" | "year", val: string) =>
-    setCertificates(p =>
-      p.map((c, i) => i === idx ? { ...c, [field]: val } : c)
-    );
-
-  const removeCert = (idx: number) =>
-    setCertificates(p => p.filter((_, i) => i !== idx));
-
-  const save = async () => {
-    setSaving(true);
-    setError("");
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setPhotoPreview(URL.createObjectURL(f));
+    setUploadingPhoto(true);
     try {
-      let photoUrl = profile?.photo_url ?? null;
-      if (photoFile) {
-        const form = new FormData();
-        form.append("file", photoFile);
-        const res = await api.post("/teachers/me/photo", form, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        photoUrl = res.data.url;
+      const form = new FormData();
+      form.append("file", f);
+      const resPhoto = await api.post("/teacher/me/photo", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (resPhoto.data?.avatar || resPhoto.data?.photo_url) {
+        setPhotoUrl(resPhoto.data.avatar || resPhoto.data.photo_url);
       }
+      refetch();
+      setInfoFeedback({ msg: "Foto de perfil actualizada", type: "success" });
+    } catch (e: any) {
+      setInfoFeedback({ msg: formatErrorMessage(e, "Error subiendo la foto"), type: "error" });
+    } finally {
+      setUploadingPhoto(false);
+      setTimeout(() => setInfoFeedback(null), 3500);
+    }
+  };
 
+  const addCert = () => setCertificates(p => [...p, { title: "", year: "" }]);
+  const updateCert = (idx: number, field: "title" | "year", val: string) =>
+    setCertificates(p => p.map((c, i) => (i === idx ? { ...c, [field]: val } : c)));
+  const removeCert = (idx: number) => setCertificates(p => p.filter((_, i) => i !== idx));
+
+  const saveInfo = async () => {
+    setSaving(true);
+    setInfoFeedback(null);
+    try {
       await api.patch("/users/me", { phone_number: phone });
-
-      await api.patch("/teachers/me/profile", {
+      await api.patch("/teacher/me/profile", {
         bio,
         title: title_,
         timezone,
@@ -300,345 +356,548 @@ export default function TeacherProfilePage() {
         skills,
         certificates: certificates.filter(c => c.title.trim()),
         social_links: socialLinks,
-        ...(photoUrl ? { photo_url: photoUrl } : {}),
       });
-
-      setSaved(true);
-      refetch();
-      setTimeout(() => setSaved(false), 2500);
+      await refetch();
+      setInfoFeedback({ msg: "Perfil actualizado correctamente", type: "success" });
+      setIsEditing(false);
     } catch (e: any) {
-      setError(e.response?.data?.detail || "Error guardando el perfil");
+      setInfoFeedback({ msg: formatErrorMessage(e, "Error guardando el perfil"), type: "error" });
     } finally {
       setSaving(false);
+      setTimeout(() => setInfoFeedback(null), 4000);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500
-                        rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const savePw = async () => {
+    if (newPw !== confirmPw) {
+      setPwFeedback({ msg: "Las contraseñas no coinciden", type: "error" });
+      return;
+    }
+    if (newPw.length < 8) {
+      setPwFeedback({ msg: "La contraseña debe tener al menos 8 caracteres", type: "error" });
+      return;
+    }
+    setSavingPw(true);
+    setPwFeedback(null);
+    try {
+      await api.post("/users/me/change-password", {
+        current_password: oldPw,
+        new_password: newPw,
+      });
+      setOldPw(""); setNewPw(""); setConfirmPw("");
+      setPwFeedback({ msg: "Contraseña actualizada exitosamente", type: "success" });
+    } catch (e: any) {
+      setPwFeedback({ msg: formatErrorMessage(e, "Contraseña actual incorrecta"), type: "error" });
+    } finally {
+      setSavingPw(false);
+      setTimeout(() => setPwFeedback(null), 5000);
+    }
+  };
+
+  const deleteAccount = async () => {
+    if (deleteInput !== profile?.user_username) return;
+    setDeleting(true);
+    try {
+      await api.delete("/users/me");
+      logout();
+      window.location.href = "/";
+    } catch {
+      setDeleting(false);
+    }
+  };
+
+  const displayPhoto = photoPreview ?? photoUrl ?? profile?.photo_url ?? null;
+
+  if (loading) return <ProfileSkeleton />;
 
   return (
-    <div className="min-h-screen bg-slate-50 relative overflow-hidden">
-      <div className="fixed top-[-80px] right-[-80px] w-[500px] h-[500px]
-                      bg-pink-300/20 rounded-full blur-[100px] pointer-events-none" />
-      <div className="fixed bottom-[-100px] left-[-100px] w-[400px] h-[400px]
-                      bg-purple-300/15 rounded-full blur-[100px] pointer-events-none" />
+    <div className="min-h-screen bg-slate-50 relative overflow-hidden py-8 px-4 sm:px-6 lg:px-8">
+      <div className="fixed top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/20 rounded-full blur-[120px] pointer-events-none" />
+      <div className="fixed bottom-[-80px] left-[-80px] w-[400px] h-[400px] bg-purple-300/15 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      <div className="relative max-w-5xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
-        {/* Header */}
-        <div className="flex items-start justify-between
-                        animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div>
-            <h1 className="text-3xl font-black text-slate-800 tracking-tight">
-              Mi Perfil Público
-            </h1>
-            <p className="text-slate-500 mt-1">
-              Así te ven los estudiantes en el marketplace
-            </p>
+        {/* ─── Cabecera ─── */}
+        <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg p-6 sm:p-7 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+          <div className="flex items-center gap-5">
+            <div className="relative flex-shrink-0">
+              <div
+                onClick={() => photoRef.current?.click()}
+                className="w-20 h-20 rounded-2xl overflow-hidden cursor-pointer group border-2 border-slate-200 hover:border-pink-400 transition-all shadow-md relative bg-gradient-to-br from-pink-400 to-rose-400 flex items-center justify-center"
+              >
+                {displayPhoto ? (
+                  <img src={displayPhoto} alt="avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-white font-black text-2xl">
+                    {profile?.user_username?.[0]?.toUpperCase() ?? "T"}
+                  </span>
+                )}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  {uploadingPhoto ? (
+                    <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Upload className="w-5 h-5 text-white" />
+                  )}
+                </div>
+              </div>
+              <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+            </div>
+
+            <div className="min-w-0">
+              <h1 className="text-2xl font-black text-slate-800 tracking-tight truncate">
+                {title_ || "Perfil de Profesor"}
+              </h1>
+              <p className="text-slate-500 text-sm mt-0.5 truncate">@{profile?.user_username}</p>
+              <span className="inline-block mt-2 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-pink-50 text-pink-600 border border-pink-100">
+                Profesor
+              </span>
+            </div>
           </div>
 
           {profile && (
             <a
-              href={`/teachers/${profile.user_username}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden sm:flex items-center gap-2 px-4 py-2.5
-                         bg-white border-2 border-slate-200 rounded-xl
-                         text-sm font-bold text-slate-600
-                         hover:border-pink-300 hover:text-pink-600
-                         transition-all duration-200 shadow-sm"
-            >
-              <ExternalLink className="w-4 h-4" />
-              Ver perfil
-            </a>
+            href="/teacher/profile/public"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:border-pink-300 hover:text-pink-600 transition-all shadow-sm"
+          >
+            <ExternalLink className="w-4 h-4" />
+            Ver perfil público
+          </a>
           )}
         </div>
 
-        {error && (
-          <div className="bg-rose-50 border border-rose-100 text-rose-600
-                          px-4 py-3 rounded-xl text-xs font-bold
-                          flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
-            <X className="w-4 h-4 flex-shrink-0" />
-            {error}
-          </div>
-        )}
+        {infoFeedback && <Toast msg={infoFeedback.msg} type={infoFeedback.type} />}
 
-        {/* 🧠 SOLUCIÓN 2: Extraer la sincronización del calendario a un bloque destacado */}
-        <div className="animate-in fade-in slide-in-from-bottom-5 duration-700">
-          <CalendarSync />
-        </div>
+        {/* ─── Grid Principal ─── */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-        {/* Foto y datos básicos */}
-        <Section title="Presentación" icon={<User className="w-5 h-5" />}>
-          <div className="flex flex-col sm:flex-row gap-6">
-            <div className="flex flex-col items-center gap-3 flex-shrink-0">
-              <div
-                onClick={() => photoRef.current?.click()}
-                className="relative w-28 h-28 rounded-[1.5rem] overflow-hidden
-                           cursor-pointer group border-2 border-slate-200
-                           hover:border-pink-400 transition-colors"
-              >
-                {photoPreview || profile?.photo_url ? (
-                  <img
-                    src={photoPreview ?? profile?.photo_url ?? ""}
-                    alt="Foto"
-                    className="w-full h-full object-cover"
-                  />
+          {/* Columna izquierda: Perfil profesional editable */}
+          <div className="lg:col-span-7">
+            <Section
+              title="Perfil Profesional"
+              subtitle="Cómo te ven los estudiantes en la plataforma"
+              icon={<User className="w-5 h-5" />}
+              action={
+                !isEditing ? (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-pink-50 hover:bg-pink-100 text-pink-600 rounded-xl font-bold text-xs border border-pink-100 transition-colors active:scale-95"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    Editar perfil
+                  </button>
                 ) : (
-                  <div className="w-full h-full bg-slate-100 flex items-center justify-center">
-                    <User className="w-10 h-10 text-slate-300" />
+                  <button
+                    onClick={handleCancelEdit}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-slate-400 hover:text-slate-600 font-bold text-xs transition-colors disabled:opacity-50"
+                  >
+                    <X className="w-4 h-4" />
+                    Cancelar
+                  </button>
+                )
+              }
+            >
+              {!isEditing ? (
+                // ─── Vista de solo lectura ───
+                <div className="space-y-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <ReadField icon={<Briefcase className="w-3.5 h-3.5 text-slate-400" />} label="Título profesional" value={title_} />
+                    <ReadField icon={<Phone className="w-3.5 h-3.5 text-slate-400" />} label="Teléfono" value={phone} />
+                    <div className="sm:col-span-2">
+                      <ReadField icon={<Globe className="w-3.5 h-3.5 text-slate-400" />} label="Zona horaria" value={timezone} />
+                    </div>
                   </div>
+
+                  <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Sobre mí</span>
+                    <p className="text-sm font-medium text-slate-700 leading-relaxed">{bio || "Sin biografía"}</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3.5">
+                    <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Idiomas</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {languages.length ? languages.map(l => (
+                          <span key={l} className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">{l}</span>
+                        )) : <span className="text-xs text-slate-400 font-bold">Ninguno seleccionado</span>}
+                      </div>
+                    </div>
+                    <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Materias</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {subjects.length ? subjects.map(s => (
+                          <span key={s} className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">{s}</span>
+                        )) : <span className="text-xs text-slate-400 font-bold">Ninguna seleccionada</span>}
+                      </div>
+                    </div>
+                    <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Habilidades</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {skills.length ? skills.map(s => (
+                          <span key={s} className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">{s}</span>
+                        )) : <span className="text-xs text-slate-400 font-bold">Ninguna añadida</span>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {certificates.length > 0 && (
+                    <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Certificaciones</span>
+                      <div className="space-y-2">
+                        {certificates.map((c, i) => (
+                          <div key={i} className="flex items-center justify-between bg-white rounded-xl px-3 py-2 border border-slate-100">
+                            <span className="text-xs font-bold text-slate-700">{c.title}</span>
+                            <span className="text-[10px] font-black text-slate-400">{c.year}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Redes y contacto</span>
+                    {Object.values(socialLinks).some(v => v) ? (
+                      <div className="flex flex-wrap gap-2">
+                        {socialLinks.instagram && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">IG: {socialLinks.instagram}</span>}
+                        {socialLinks.whatsapp && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">WA: {socialLinks.whatsapp}</span>}
+                        {socialLinks.youtube && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">YouTube</span>}
+                        {socialLinks.website && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">Web</span>}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 font-bold">Sin enlaces configurados</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                // ─── Vista de edición ───
+                <div className="space-y-5 animate-in fade-in duration-300">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Título profesional</label>
+                    <div className="relative group">
+                      <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors pointer-events-none" />
+                      <input
+                        value={title_}
+                        onChange={e => setTitle_(e.target.value)}
+                        disabled={saving}
+                        placeholder="Ej: Profesora de Inglés Certificada"
+                        className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Sobre mí</label>
+                    <textarea
+                      value={bio}
+                      onChange={e => setBio(e.target.value)}
+                      disabled={saving}
+                      rows={4}
+                      placeholder="Cuéntales a los estudiantes quién eres y tu metodología..."
+                      className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-medium text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all resize-none disabled:opacity-60"
+                    />
+                    <p className="text-[11px] text-slate-400 text-right mt-1 font-bold">{bio.length} caracteres</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Teléfono</label>
+                      <div className="relative group">
+                        <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors pointer-events-none" />
+                        <input
+                          type="tel"
+                          value={phone}
+                          onChange={e => setPhone(e.target.value)}
+                          disabled={saving}
+                          placeholder="+58 412 000 0000"
+                          className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Zona horaria</label>
+                      <div className="relative group">
+                        <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                        <select
+                          value={timezone}
+                          onChange={e => setTimezone(e.target.value)}
+                          disabled={saving}
+                          className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-10 pr-10 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all cursor-pointer disabled:opacity-60"
+                        >
+                          <option value="">Seleccionar zona...</option>
+                          {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-purple-500" />
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Qué enseñas</p>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Idiomas</label>
+                      <ChipSelector options={LANGUAGES} selected={languages} onChange={setLanguages} color="pink" disabled={saving} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Materias / Áreas</label>
+                      <ChipSelector options={SUBJECTS} selected={subjects} onChange={setSubjects} color="purple" disabled={saving} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Habilidades específicas</label>
+                      <FreeChipInput value={skills} onChange={setSkills} placeholder="Ej: Conversación fluida, TOEFL..." suggestions={SKILL_SUGGESTIONS} disabled={saving} />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Award className="w-4 h-4 text-amber-500" />
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Certificaciones</p>
+                    </div>
+                    {certificates.map((cert, idx) => (
+                      <div key={idx} className="flex gap-2.5 items-center bg-slate-50/80 rounded-2xl p-3 border border-slate-100">
+                        <div className="flex-1 grid grid-cols-2 gap-2">
+                          <input
+                            value={cert.title}
+                            onChange={e => updateCert(idx, "title", e.target.value)}
+                            disabled={saving}
+                            placeholder="Nombre del certificado"
+                            className="bg-white border-2 border-transparent rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 px-3 py-2.5 focus:outline-none focus:border-pink-500 transition-all disabled:opacity-60"
+                          />
+                          <input
+                            value={cert.year}
+                            onChange={e => updateCert(idx, "year", e.target.value)}
+                            disabled={saving}
+                            placeholder="Año (ej: 2023)"
+                            className="bg-white border-2 border-transparent rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 px-3 py-2.5 focus:outline-none focus:border-pink-500 transition-all disabled:opacity-60"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeCert(idx)}
+                          disabled={saving}
+                          className="w-9 h-9 rounded-xl bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors flex-shrink-0 disabled:opacity-60"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={addCert}
+                      disabled={saving}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-pink-50 text-slate-600 hover:text-pink-600 rounded-xl text-xs font-bold transition-colors disabled:opacity-60"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Añadir certificación
+                    </button>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 space-y-3.5">
+                    <div className="flex items-center gap-2">
+                      <Link2 className="w-4 h-4 text-blue-500" />
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Redes y contacto</p>
+                    </div>
+                    {[
+                      { key: "instagram" as const, label: "Instagram", placeholder: "@tuprofe", icon: <InstagramIcon /> },
+                      { key: "youtube" as const, label: "YouTube", placeholder: "https://youtube.com/@canal", icon: <YoutubeIcon /> },
+                      { key: "whatsapp" as const, label: "WhatsApp", placeholder: "+58 412 000 0000", icon: <MessageCircle className="w-4 h-4" /> },
+                      { key: "website" as const, label: "Sitio web", placeholder: "https://tuweb.com", icon: <Globe className="w-4 h-4" /> },
+                    ].map(field => (
+                      <div key={field.key} className="group">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{field.label}</label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-pink-500 transition-colors">
+                            {field.icon}
+                          </span>
+                          <input
+                            value={socialLinks[field.key]}
+                            onChange={e => setSocialLinks(p => ({ ...p, [field.key]: e.target.value }))}
+                            disabled={saving}
+                            placeholder={field.placeholder}
+                            className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-2.5 focus:outline-none focus:bg-white focus:border-pink-500 transition-all disabled:opacity-60"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      disabled={saving}
+                      className="w-1/3 py-3 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveInfo}
+                      disabled={saving}
+                      className="w-2/3 py-3 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-lg shadow-pink-200 hover:shadow-pink-300 active:scale-[0.98] transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {saving ? (
+                        <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <><Check className="w-4 h-4" /> Guardar cambios</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </Section>
+          </div>
+
+          {/* Columna derecha: Seguridad + Sincronización + Zona de peligro */}
+          <div className="lg:col-span-5 space-y-6">
+
+            <Section title="Seguridad" subtitle="Actualiza tu contraseña de acceso" icon={<Lock className="w-5 h-5" />}>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Contraseña actual</label>
+                  <div className="relative group">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type={showOld ? "text" : "password"}
+                      value={oldPw}
+                      onChange={e => setOldPw(e.target.value)}
+                      disabled={savingPw}
+                      placeholder="••••••••"
+                      className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-10 pr-10 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
+                    />
+                    <button type="button" onClick={() => setShowOld(p => !p)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500 transition-colors">
+                      {showOld ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Nueva contraseña</label>
+                  <div className="relative group">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type={showNew ? "text" : "password"}
+                      value={newPw}
+                      onChange={e => setNewPw(e.target.value)}
+                      disabled={savingPw}
+                      placeholder="Mínimo 8 caracteres"
+                      className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-10 pr-10 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
+                    />
+                    <button type="button" onClick={() => setShowNew(p => !p)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500 transition-colors">
+                      {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Confirmar nueva contraseña</label>
+                  <input
+                    type="password"
+                    value={confirmPw}
+                    onChange={e => setConfirmPw(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && savePw()}
+                    disabled={savingPw}
+                    placeholder="Repite la nueva contraseña"
+                    className={`w-full bg-slate-50 border-2 rounded-xl text-sm font-bold text-slate-800 px-4 py-3 focus:outline-none transition-all disabled:opacity-60 ${
+                      confirmPw && confirmPw !== newPw ? "border-rose-300 focus:border-rose-500 focus:ring-rose-50" : "border-transparent focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50"
+                    }`}
+                  />
+                </div>
+
+                {confirmPw.length > 0 && (
+                  <p className={`text-xs font-bold flex items-center gap-1.5 ${confirmPw === newPw ? "text-emerald-600" : "text-rose-500"}`}>
+                    {confirmPw === newPw ? (<><Check className="w-3.5 h-3.5" /> Las contraseñas coinciden</>) : (<><AlertTriangle className="w-3.5 h-3.5" /> No coinciden</>)}
+                  </p>
                 )}
-                <div className="absolute inset-0 bg-black/40 opacity-0
-                                group-hover:opacity-100 transition-opacity
-                                flex items-center justify-center">
-                  <Upload className="w-6 h-6 text-white" />
-                </div>
-              </div>
-              <input
-                ref={photoRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePhoto}
-              />
-              <p className="text-[10px] text-slate-400 text-center font-bold uppercase tracking-widest">
-                Clic para cambiar
-              </p>
-            </div>
 
-            <div className="flex-1 space-y-4">
-              <div className="group">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                  Título profesional
-                </label>
-                <div className="relative">
-                  <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2
-                                        w-5 h-5 text-slate-400 group-focus-within:text-pink-500 transition-colors" />
-                  <input
-                    value={title_}
-                    onChange={e => setTitle_(e.target.value)}
-                    placeholder="Ej: Profesora de Inglés Certificada"
-                    className="w-full bg-slate-50 border-2 border-transparent
-                               rounded-xl text-sm font-bold text-slate-800
-                               placeholder:text-slate-400 pl-11 pr-4 py-3.5
-                               focus:outline-none focus:bg-white focus:border-pink-500
-                               focus:ring-4 focus:ring-pink-50 transition-all duration-300"
-                  />
-                </div>
-              </div>
+                {pwFeedback && <Toast msg={pwFeedback.msg} type={pwFeedback.type} />}
 
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                  Sobre mí
-                </label>
-                <textarea
-                  value={bio}
-                  onChange={e => setBio(e.target.value)}
-                  rows={4}
-                  placeholder="Cuéntales a los estudiantes quién eres, tu experiencia y método de enseñanza..."
-                  className="w-full bg-slate-50 border-2 border-transparent
-                             rounded-xl text-sm font-medium text-slate-800
-                             placeholder:text-slate-400 px-4 py-3.5
-                             focus:outline-none focus:bg-white focus:border-pink-500
-                             focus:ring-4 focus:ring-pink-50 transition-all duration-300 resize-none"
-                />
-                <p className="text-xs text-slate-400 text-right mt-1">
-                  {bio.length} caracteres
-                </p>
-              </div>
-            </div>
-          </div>
-        </Section>
-
-        {/* Zona horaria */}
-        <Section title="Configuración" icon={<Globe className="w-5 h-5" />}>
-
-          <div className="mt-6">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-              Número de teléfono
-            </label>
-            <input
-              type="tel"
-              value={phone}
-              onChange={e => setPhone(e.target.value)}
-              placeholder="+58 412 000 0000"
-              className="w-full max-w-sm bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 px-4 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
-            />
-          </div>      
-
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-              Zona horaria
-            </label>
-            <div className="relative max-w-sm">
-              <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2
-                                 w-5 h-5 text-slate-400 pointer-events-none" />
-              <select
-                value={timezone}
-                onChange={e => setTimezone(e.target.value)}
-                className="w-full appearance-none bg-slate-50 border-2
-                           border-transparent rounded-xl text-sm font-bold
-                           text-slate-800 pl-11 pr-10 py-3.5
-                           focus:outline-none focus:bg-white focus:border-pink-500
-                           focus:ring-4 focus:ring-pink-50 transition-all duration-300 cursor-pointer"
-              >
-                <option value="">Seleccionar zona...</option>
-                {TIMEZONES.map(tz => (
-                  <option key={tz} value={tz}>{tz}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2
-                                      w-4 h-4 text-slate-400 pointer-events-none" />
-            </div>
-            <p className="text-xs text-slate-400 mt-2">
-              Se usa para mostrar tu disponibilidad correctamente a cada estudiante
-            </p>
-          </div>
-        </Section>
-
-        {/* Idiomas y materias */}
-        <Section title="Qué enseñas" icon={<BookOpen className="w-5 h-5" />}>
-          <div className="space-y-6">
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">
-                Idiomas que enseñas
-              </label>
-              <ChipSelector options={LANGUAGES} selected={languages} onChange={setLanguages} color="pink" />
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">
-                Materias / Áreas
-              </label>
-              <ChipSelector options={SUBJECTS} selected={subjects} onChange={setSubjects} color="purple" />
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">
-                Habilidades específicas
-              </label>
-              <FreeChipInput
-                value={skills}
-                onChange={setSkills}
-                placeholder="Ej: Present Perfect, IELTS Writing..."
-                suggestions={SKILL_SUGGESTIONS}
-              />
-            </div>
-          </div>
-        </Section>
-
-        {/* Certificaciones */}
-        <Section title="Certificaciones" icon={<Award className="w-5 h-5" />}>
-          <div className="space-y-3">
-            {certificates.map((cert, idx) => (
-              <div key={idx} className="flex gap-3 items-center bg-slate-50 rounded-2xl p-3">
-                <div className="flex-1 min-w-0">
-                  <input
-                    value={cert.title}
-                    onChange={e => updateCert(idx, "title", e.target.value)}
-                    placeholder="Nombre del certificado"
-                    className="w-full bg-white border-2 border-transparent
-                               rounded-xl text-sm font-bold text-slate-800
-                               placeholder:text-slate-400 px-3 py-2.5
-                               focus:outline-none focus:border-pink-500
-                               focus:ring-4 focus:ring-pink-50 transition-all duration-300 mb-2"
-                  />
-                  <input
-                    value={cert.year}
-                    onChange={e => updateCert(idx, "year", e.target.value)}
-                    placeholder="Año (ej: 2022)"
-                    className="w-32 bg-white border-2 border-transparent
-                               rounded-xl text-sm font-bold text-slate-800
-                               placeholder:text-slate-400 px-3 py-2.5
-                               focus:outline-none focus:border-pink-500
-                               focus:ring-4 focus:ring-pink-50 transition-all duration-300"
-                  />
-                </div>
                 <button
-                  onClick={() => removeCert(idx)}
-                  className="w-9 h-9 rounded-xl bg-red-50 text-red-400
-                             hover:bg-red-100 flex items-center justify-center
-                             transition-colors flex-shrink-0"
+                  onClick={savePw}
+                  disabled={savingPw || !oldPw || !newPw || newPw !== confirmPw || newPw.length < 8}
+                  className="w-full py-3 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-slate-700 to-slate-800 shadow-lg active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  <X className="w-4 h-4" />
+                  {savingPw ? (
+                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <><Lock className="w-4 h-4" /> Actualizar contraseña</>
+                  )}
                 </button>
               </div>
-            ))}
+            </Section>
 
-            <button
-              onClick={addCert}
-              className="flex items-center gap-2 px-4 py-2.5 bg-slate-100
-                         hover:bg-pink-50 text-slate-500 hover:text-pink-600
-                         rounded-xl text-sm font-bold transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Añadir certificación
-            </button>
-          </div>
-        </Section>
+            {/* Sincronización de calendario reubicada de forma sutil en la columna derecha */}
+            <Section title="Calendario" subtitle="Sincroniza tus clases y eventos" icon={<Calendar className="w-5 h-5" />}>
+              <CalendarSync />
+            </Section>
 
-        {/* Redes sociales */}
-        <Section title="Contacto y Redes" icon={<Link2 className="w-5 h-5" />}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[
-              { key: "instagram" as const, label: "Instagram", placeholder: "@tuprofemaria",         icon: <InstagramIcon /> },
-              { key: "youtube"   as const, label: "YouTube",   placeholder: "https://youtube.com/@canal", icon: <YoutubeIcon /> },
-              { key: "whatsapp"  as const, label: "WhatsApp",  placeholder: "+58 412 000 0000",      icon: <MessageCircle className="w-5 h-5" /> },
-              { key: "website"   as const, label: "Sitio web", placeholder: "https://tuweb.com",     icon: <Globe className="w-5 h-5" /> },
-            ].map(field => (
-              <div key={field.key} className="group">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                  {field.label}
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2
-                                   text-slate-400 group-focus-within:text-pink-500 transition-colors">
-                    {field.icon}
-                  </span>
-                  <input
-                    value={socialLinks[field.key]}
-                    onChange={e => setSocialLinks(p => ({ ...p, [field.key]: e.target.value }))}
-                    placeholder={field.placeholder}
-                    className="w-full bg-slate-50 border-2 border-transparent
-                               rounded-xl text-sm font-bold text-slate-800
-                               placeholder:text-slate-400 pl-11 pr-4 py-3.5
-                               focus:outline-none focus:bg-white focus:border-pink-500
-                               focus:ring-4 focus:ring-pink-50 transition-all duration-300"
-                  />
+            <Section title="Zona de peligro" subtitle="Acciones irreversibles sobre tu cuenta" icon={<AlertTriangle className="w-5 h-5" />}>
+              {!confirmDelete ? (
+                <div className="bg-rose-50/80 border-2 border-rose-100 rounded-2xl p-4 flex flex-col gap-3">
+                  <div>
+                    <p className="text-sm font-black text-rose-700">Eliminar mi cuenta</p>
+                    <p className="text-xs text-rose-500 mt-0.5">
+                      Se desactivará tu cuenta y perfil público de forma permanente.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setConfirmDelete(true)}
+                    className="w-full py-2.5 bg-rose-500 text-white text-xs font-bold rounded-xl shadow-md shadow-rose-200 hover:bg-rose-600 active:scale-[0.97] transition-all duration-200 flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Eliminar cuenta
+                  </button>
                 </div>
-              </div>
-            ))}
-          </div>
-        </Section>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4">
+                    <div className="flex items-start gap-2.5 mb-3">
+                      <AlertTriangle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-black text-rose-700">¿Estás absolutamente seguro?</p>
+                        <p className="text-[11px] text-rose-500 mt-0.5 leading-relaxed">
+                          Esta acción no se puede deshacer fácilmente. Tu perfil dejará de ser visible para estudiantes.
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-xs font-bold text-slate-600 mb-1.5">
+                      Escribe <span className="font-black text-rose-600">{profile?.user_username}</span> para confirmar:
+                    </p>
+                    <input
+                      value={deleteInput}
+                      onChange={e => setDeleteInput(e.target.value)}
+                      placeholder={profile?.user_username}
+                      className="w-full bg-white border-2 border-rose-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-300 px-3.5 py-2.5 focus:outline-none focus:border-rose-400 transition-all duration-200"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setConfirmDelete(false); setDeleteInput(""); }}
+                      className="flex-1 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={deleteAccount}
+                      disabled={deleteInput !== profile?.user_username || deleting}
+                      className="flex-1 py-2.5 text-xs font-bold text-white bg-rose-500 hover:bg-rose-600 rounded-xl shadow-md shadow-rose-200 active:scale-[0.97] transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {deleting ? (
+                        <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <><Trash2 className="w-3.5 h-3.5" /> Confirmar</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </Section>
 
-        {/* Botón guardar fijo */}
-        <div className="sticky bottom-6 flex justify-center animate-in fade-in duration-500">
-          <button
-            onClick={save}
-            disabled={saving}
-            className={`
-              flex items-center gap-3 px-8 py-4 rounded-2xl text-sm font-bold
-              shadow-2xl active:scale-[0.98] transition-all duration-300
-              disabled:opacity-70 disabled:cursor-not-allowed
-              ${saved
-                ? "bg-emerald-500 text-white shadow-emerald-200"
-                : "bg-gradient-to-r from-pink-500 to-rose-400 text-white shadow-pink-200 hover:shadow-pink-300"
-              }
-            `}
-          >
-            {saving ? (
-              <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-            ) : saved ? (
-              <><Check className="w-5 h-5" /> ¡Guardado correctamente!</>
-            ) : (
-              <><Save className="w-5 h-5" /> Guardar cambios</>
-            )}
-          </button>
+          </div>
         </div>
 
       </div>
