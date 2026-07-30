@@ -12,6 +12,7 @@ class StudentProfile(Base):
     user_username = Column(String, nullable=False) # Tip: esto también podrías obtenerlo de user.username
     timezone = Column(String, default="UTC")
     goal = Column(String, nullable=True)
+    teacher_username = Column(String, nullable=True)
     preferred_payment_methods = Column(JSONB, default=list)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     profile_photo_url = Column(String, nullable=True)

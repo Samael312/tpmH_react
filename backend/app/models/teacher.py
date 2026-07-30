@@ -25,6 +25,7 @@ class TeacherProfile(Base):
     skills = Column(JSONB, default=list)
     certificates = Column(JSONB, default=list)
     gallery = Column(JSONB, default=list)
+    students= Column(JSONB, default=list)
     social_links = Column(JSONB, default=dict)
     status = Column(Enum(TeacherStatus), default=TeacherStatus.pending)
     commission_rate = Column(Float, default=0.15)  # 15% por defecto
