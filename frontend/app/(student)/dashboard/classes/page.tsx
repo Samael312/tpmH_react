@@ -16,13 +16,14 @@ const STATUS_CONFIG: Record<string, {
   border: string;
   dot: string;
 }> = {
+  pending_trial:    { label: "Prueba pendiente",  badge: "bg-purple-100 text-purple-700", border: "border-l-purple-400", dot: "bg-purple-400" },
   pending:         { label: "Pendiente de pago",  badge: "bg-amber-100 text-amber-700",    border: "border-l-amber-400",   dot: "bg-amber-400" },
   pending_payment: { label: "Pago en revisión",   badge: "bg-blue-100 text-blue-700",      border: "border-l-blue-400",    dot: "bg-blue-400" },
   confirmed:       { label: "Confirmada",         badge: "bg-emerald-100 text-emerald-700", border: "border-l-emerald-400", dot: "bg-emerald-400" },
   completed:       { label: "Completada",         badge: "bg-slate-100 text-slate-500",    border: "border-l-slate-300",   dot: "bg-slate-300" },
   cancelled:       { label: "Cancelada",          badge: "bg-red-100 text-red-600",        border: "border-l-red-400",     dot: "bg-red-400" },
   no_show:         { label: "No asististe",       badge: "bg-red-100 text-red-600",        border: "border-l-red-600",     dot: "bg-red-600" },
-  rescheduled:     { label: "Reagendada",         badge: "bg-purple-100 text-purple-700",  border: "border-l-purple-400",  dot: "bg-purple-400" },
+  rescheduled:     { label: "Reagendada",         badge: "bg-orange-100 text-orange-700",  border: "border-l-orange-400",  dot: "bg-orange-400" },
 };
 
 const HISTORY_STATUSES = ["completed", "cancelled", "no_show"];
@@ -52,46 +53,46 @@ function RescheduleCalendar({
   );
 
   return (
-    <div className="bg-slate-50 rounded-2xl p-4">
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-slate-50/85 border border-slate-100 rounded-2xl p-3.5 shadow-inner">
+      <div className="flex items-center justify-between mb-2.5">
         <button
           onClick={() => {
             if (month === 0) { setMonth(11); setYear(y => y - 1); }
             else setMonth(m => m - 1);
           }}
-          className="w-8 h-8 rounded-lg bg-white border border-slate-200
+          className="w-7 h-7 rounded-xl bg-white border border-slate-200
                      flex items-center justify-center hover:border-pink-300
-                     transition-colors"
+                     hover:bg-pink-50/50 transition-all text-slate-600 shadow-sm"
         >
-          <ChevronLeft className="w-3.5 h-3.5 text-slate-600" />
+          <ChevronLeft className="w-3.5 h-3.5" />
         </button>
-        <span className="text-sm font-black text-slate-700">
+        <span className="text-xs font-black uppercase tracking-wider text-slate-700">
           {MONTHS[month]} {year}
         </span>
         <button
           onClick={() => {
             if (month === 11) { setMonth(0); setYear(y => y + 1); }
-            else setMonth(m => m + 1);
+            else setMonth(month + 1);
           }}
-          className="w-8 h-8 rounded-lg bg-white border border-slate-200
+          className="w-7 h-7 rounded-xl bg-white border border-slate-200
                      flex items-center justify-center hover:border-pink-300
-                     transition-colors"
+                     hover:bg-pink-50/50 transition-all text-slate-600 shadow-sm"
         >
-          <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+          <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
 
       <div className="grid grid-cols-7 mb-1">
         {DAYS_HEAD.map(d => (
           <div key={d}
-            className="text-center text-[9px] font-black text-slate-400
-                       uppercase tracking-widest py-1">
+            className="text-center text-[10px] font-black text-slate-400
+                       uppercase tracking-widest py-0.5">
             {d}
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-0.5">
+      <div className="grid grid-cols-7 gap-1">
         {cells.map((day, i) => {
           if (!day) return <div key={i} />;
           const dateStr = `${year}-${String(month + 1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
@@ -105,15 +106,15 @@ function RescheduleCalendar({
               disabled={isPast}
               onClick={() => onChange(dateStr)}
               className={`
-                w-full aspect-square rounded-lg text-xs font-bold
-                transition-all duration-150
+                w-full aspect-square rounded-xl text-xs font-black
+                transition-all duration-200 flex items-center justify-center
                 ${isSelected
-                  ? "bg-gradient-to-br from-pink-500 to-rose-400 text-white shadow-sm"
+                  ? "bg-gradient-to-br from-pink-500 to-rose-400 text-white shadow-md shadow-pink-200 scale-105"
                   : isPast
-                    ? "text-slate-300 cursor-not-allowed"
+                    ? "text-slate-300 cursor-not-allowed bg-transparent"
                     : isToday
-                      ? "bg-pink-50 text-pink-600 border border-pink-200"
-                      : "text-slate-600 hover:bg-pink-50 hover:text-pink-600"
+                      ? "bg-pink-100 text-pink-600 border border-pink-200"
+                      : "text-slate-600 bg-white border border-slate-100 hover:border-pink-300 hover:text-pink-600 shadow-sm"
                 }
               `}
             >
@@ -126,15 +127,13 @@ function RescheduleCalendar({
   );
 }
 
-// ─── Modal Reagendar ──────────────────────────────────────────────────────────
+// ─── Modal Reagendar Ajustado ────────────────────────────────────────────────
 function RescheduleModal({
-  classId,
-  currentDuration,
+  classItem,
   onClose,
   onSaved,
 }: {
-  classId: number;
-  currentDuration: number;
+  classItem: any;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -144,179 +143,248 @@ function RescheduleModal({
   const [error, setError]     = useState("");
   const [selected, setSelected] = useState<any>(null);
 
+  const currentDuration = classItem?.duration_minutes || 60;
   const { slots, loading } = useAvailableSlots(date, currentDuration);
 
-  const formatTime = (utc: string) =>
+  // Formateador coherente en hora local para evitar confusiones con la BD
+  const formatTimeLocal = (utc: string) =>
     new Date(utc).toLocaleTimeString("es", {
       hour: "2-digit", minute: "2-digit",
     });
 
+  const formatDateHuman = (dateStr: string) => {
+    if (!dateStr) return "";
+    const dateObj = new Date(dateStr);
+    return dateObj.toLocaleDateString("es", {
+      weekday: "long", day: "numeric", month: "long"
+    });
+  };
+
   const reschedule = async () => {
-    if (!selected) return;
+    if (!selected || !classItem) return;
     setSaving(true);
     setError("");
     try {
-      await api.patch(`/classes/${classId}/reschedule`, {
+      await api.patch(`/classes/${classItem.id}/reschedule`, {
         start_time_utc: selected.start_time_utc,
         end_time_utc:   selected.end_time_utc,
       });
       setSuccess(true);
       setTimeout(() => { onSaved(); onClose(); }, 1200);
     } catch (e: any) {
-      setError(e.response?.data?.detail || "Error reagendando");
+      setError(e.response?.data?.detail || "Error reagendando la clase");
     } finally {
       setSaving(false);
     }
   };
 
+  if (!classItem) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-md transition-opacity"
            onClick={onClose} />
 
       <div className="relative w-full max-w-2xl bg-white/95 backdrop-blur-2xl
-                      rounded-[2.5rem] shadow-2xl shadow-slate-200/60
-                      border border-white p-6 sm:p-8
-                      animate-in fade-in zoom-in-95 duration-200
-                      max-h-[90vh] overflow-y-auto">
+                      rounded-[2.5rem] shadow-2xl shadow-slate-300/50
+                      border border-white p-6 sm:p-7
+                      animate-in fade-in zoom-in-95 duration-300
+                      max-h-[90vh] flex flex-col overflow-hidden">
 
-        {/* Blob */}
-        <div className="absolute top-0 right-0 w-48 h-48 bg-purple-300/20
-                        rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute top-0 right-0 w-56 h-56 bg-pink-300/20
+                        rounded-full blur-[90px] pointer-events-none" />
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-xl font-black text-slate-800 tracking-tight">
-              Reagendar clase
-            </h2>
-            <p className="text-sm text-slate-500 mt-0.5">
-              Elige una nueva fecha y horario
-            </p>
+        <div className="flex items-center justify-between pb-4 border-b border-slate-100 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-pink-100 text-pink-600 flex items-center justify-center shadow-inner">
+              <RotateCcw className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-slate-800 tracking-tight">
+                Reagendar clase
+              </h2>
+              <p className="text-xs text-slate-500 font-medium">
+                Selecciona una nueva fecha y hora para tu sesión
+              </p>
+            </div>
           </div>
           <button onClick={onClose}
             className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200
-                       flex items-center justify-center transition-colors">
-            <X className="w-4 h-4 text-slate-500" />
+                       flex items-center justify-center transition-colors text-slate-500">
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {success ? (
-          <div className="flex flex-col items-center py-10 gap-3">
-            <div className="w-14 h-14 rounded-full bg-emerald-100
-                            flex items-center justify-center">
-              <Check className="w-7 h-7 text-emerald-600" />
+        {/* Cuerpo Scrolleable */}
+        <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+          {success ? (
+            <div className="flex flex-col items-center py-12 gap-3">
+              <div className="w-16 h-16 rounded-full bg-emerald-100
+                              flex items-center justify-center shadow-lg shadow-emerald-100 animate-bounce">
+                <Check className="w-8 h-8 text-emerald-600" />
+              </div>
+              <p className="text-lg font-black text-slate-800">¡Clase reagendada con éxito!</p>
+              <p className="text-xs text-slate-500">Actualizando tus datos...</p>
             </div>
-            <p className="font-bold text-slate-700">¡Clase reagendada!</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-
-            {/* Calendario */}
-            <div>
-              <p className="text-[10px] font-black text-slate-400
-                            uppercase tracking-widest mb-3">
-                Nueva fecha
-              </p>
-              <RescheduleCalendar value={date} onChange={setDate} />
-            </div>
-
-            {/* Slots */}
-            <div>
-              <p className="text-[10px] font-black text-slate-400
-                            uppercase tracking-widest mb-3">
-                Horarios disponibles
-              </p>
-
-              {!date ? (
-                <div className="flex flex-col items-center justify-center
-                                h-full py-10 bg-slate-50 rounded-2xl">
-                  <Calendar className="w-8 h-8 text-slate-200 mb-2" />
-                  <p className="text-xs text-slate-400 font-bold">
-                    Selecciona una fecha
+          ) : (
+            <div className="space-y-4">
+              
+              {/* Información de la clase actual */}
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex items-center gap-3.5 shadow-sm">
+                <div className="w-10 h-10 rounded-xl bg-pink-100 text-pink-600 flex items-center justify-center flex-shrink-0">
+                  <BookOpen className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">
+                    Clase actual a modificar
+                  </span>
+                  <h4 className="text-sm font-black text-slate-800 truncate">
+                    {classItem.subject || "Clase de Inglés General"}
+                  </h4>
+                  <p className="text-xs text-slate-500 font-medium capitalize mt-0.5">
+                    📅 {formatDateHuman(classItem.start_time_utc)} · ⏰ {formatTimeLocal(classItem.start_time_utc)} Hrs ({currentDuration} Min)
+                    {classItem.teacher_name && <span className="block sm:inline sm:ml-2">· 👨‍🏫 {classItem.teacher_name}</span>}
                   </p>
                 </div>
-              ) : loading ? (
-                <div className="flex justify-center py-10">
-                  <div className="w-7 h-7 border-4 border-pink-200
-                                  border-t-pink-500 rounded-full animate-spin" />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400
+                                uppercase tracking-widest mb-2">
+                    1. Elige la nueva fecha
+                  </label>
+                  <RescheduleCalendar value={date} onChange={(d) => { setDate(d); setSelected(null); }} />
                 </div>
-              ) : slots.length === 0 ? (
-                <div className="flex flex-col items-center justify-center
-                                py-10 bg-slate-50 rounded-2xl">
-                  <AlertCircle className="w-8 h-8 text-slate-200 mb-2" />
-                  <p className="text-xs text-slate-400 font-bold text-center">
-                    Sin disponibilidad
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2 max-h-64
-                                overflow-y-auto pr-1">
-                  {slots.map((slot, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setSelected(slot)}
-                      className={`
-                        py-3 px-2 rounded-xl text-center border-2
-                        transition-all duration-150
-                        ${selected?.start_time_utc === slot.start_time_utc
-                          ? "border-pink-400 bg-pink-50"
-                          : slot.is_preferred
-                            ? "border-purple-200 bg-purple-50 hover:border-purple-300"
-                            : "border-slate-100 bg-white hover:border-pink-200"
-                        }
-                      `}
-                    >
-                      <p className={`text-sm font-black
-                        ${selected?.start_time_utc === slot.start_time_utc
-                          ? "text-pink-600"
-                          : "text-slate-700"
-                        }`}>
-                        {formatTime(slot.start_time_utc)}
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400
+                                uppercase tracking-widest mb-2">
+                    2. Elige el horario disponible
+                  </label>
+
+                  {!date ? (
+                    <div className="flex flex-col items-center justify-center
+                                    h-[240px] bg-slate-50/80 border border-slate-100 rounded-2xl p-6 text-center">
+                      <Calendar className="w-9 h-9 text-slate-300 mb-2" />
+                      <p className="text-xs text-slate-500 font-bold">
+                        Primero selecciona una fecha en el calendario
                       </p>
-                      {slot.is_preferred && (
-                        <span className="text-[9px] font-black text-purple-500
-                                         uppercase tracking-widest">
-                          Preferido
-                        </span>
-                      )}
-                    </button>
-                  ))}
+                    </div>
+                  ) : loading ? (
+                    <div className="flex flex-col items-center justify-center h-[240px] bg-slate-50/80 rounded-2xl">
+                      <div className="w-8 h-8 border-4 border-pink-200
+                                      border-t-pink-500 rounded-full animate-spin mb-2" />
+                      <p className="text-xs font-semibold text-slate-400">Buscando horarios...</p>
+                    </div>
+                  ) : slots.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center
+                                    h-[240px] bg-slate-50/80 border border-slate-100 rounded-2xl p-6 text-center">
+                      <AlertCircle className="w-9 h-9 text-amber-400 mb-2" />
+                      <p className="text-xs text-slate-700 font-black mb-1">
+                        Sin disponibilidad
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        No hay huecos libres en este día. Prueba con otra fecha.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 h-[240px]
+                                    overflow-y-auto pr-1">
+                      {slots.map((slot, i) => {
+                        const isSelected = selected?.start_time_utc === slot.start_time_utc;
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => setSelected(slot)}
+                            className={`
+                              py-2.5 px-3 rounded-xl text-center border-2 flex flex-col items-center justify-center
+                              transition-all duration-200 relative group
+                              ${isSelected
+                                ? "border-pink-500 bg-pink-50 shadow-md shadow-pink-100"
+                                : slot.is_preferred
+                                  ? "border-purple-200 bg-purple-50/60 hover:border-purple-300"
+                                  : "border-slate-100 bg-white hover:border-pink-200 shadow-sm"
+                              }
+                            `}
+                          >
+                            <span className={`text-sm font-black tracking-tight
+                              ${isSelected ? "text-pink-600" : "text-slate-700"}`}>
+                              {formatTimeLocal(slot.start_time_utc)}
+                            </span>
+                            {slot.is_preferred && (
+                              <span className="text-[9px] font-black text-purple-600
+                                               uppercase tracking-wider mt-0.5">
+                                ★ Preferido
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {selected && (
+                <div className="bg-gradient-to-r from-pink-500/10 via-rose-500/5 to-purple-500/10 border border-pink-200/60 rounded-2xl p-3.5 flex items-center justify-between gap-4 animate-in fade-in duration-300">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-pink-500 to-rose-400 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+                      <Check className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-pink-600 uppercase tracking-wider">Nuevo horario seleccionado</p>
+                      <p className="text-xs sm:text-sm font-black text-slate-800 capitalize">
+                        {formatDateHuman(date)} · {formatTimeLocal(selected.start_time_utc)} hrs ({currentDuration} min)
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Error */}
-        {error && (
-          <div className="mt-4 bg-rose-50 border border-rose-100 text-rose-600
-                          px-4 py-3 rounded-xl text-xs font-bold
-                          flex items-center gap-2">
-            <X className="w-4 h-4 flex-shrink-0" />
-            {error}
-          </div>
-        )}
+          {error && (
+            <div className="bg-rose-50 border border-rose-100 text-rose-600
+                            px-4 py-3 rounded-xl text-xs font-bold
+                            flex items-center gap-2">
+              <X className="w-4 h-4 flex-shrink-0" />
+              {error}
+            </div>
+          )}
+        </div>
 
+        {/* Footer */}
         {!success && (
-          <button
-            onClick={reschedule}
-            disabled={!selected || saving}
-            className="w-full mt-5 py-3.5 text-sm font-bold text-white
-                       rounded-xl bg-gradient-to-r from-pink-500 to-rose-400
-                       hover:from-pink-600 hover:to-rose-500
-                       shadow-lg shadow-pink-200 active:scale-[0.98]
-                       transition-all duration-300 disabled:opacity-50
-                       disabled:cursor-not-allowed flex items-center
-                       justify-center gap-2"
-          >
-            {saving ? (
-              <div className="w-4 h-4 border-2 border-white/40
-                              border-t-white rounded-full animate-spin" />
-            ) : (
-              <><RotateCcw className="w-4 h-4" /> Confirmar reagendamiento</>
-            )}
-          </button>
+          <div className="pt-4 border-t border-slate-100 flex gap-3 flex-shrink-0">
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 text-sm font-bold text-slate-600
+                         bg-slate-100 hover:bg-slate-200 rounded-xl
+                         transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={reschedule}
+              disabled={!selected || saving}
+              className="flex-1 py-3 text-sm font-bold text-white
+                         rounded-xl bg-gradient-to-r from-pink-500 to-rose-400
+                         hover:from-pink-600 hover:to-rose-500
+                         shadow-lg shadow-pink-200 active:scale-[0.98]
+                         transition-all duration-300 disabled:opacity-50
+                         disabled:cursor-not-allowed flex items-center
+                         justify-center gap-2"
+            >
+              {saving ? (
+                <div className="w-4 h-4 border-2 border-white/40
+                                border-t-white rounded-full animate-spin" />
+              ) : (
+                <><RotateCcw className="w-4 h-4" /> Confirmar reagendamiento</>
+              )}
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -424,7 +492,7 @@ function CancelModal({
   );
 }
 
-// ─── Tarjeta de clase ─────────────────────────────────────────────────────────
+// ─── Tarjeta de clase (ClassCard) ─────────────────────────────────────────────
 function ClassCard({
   cls,
   onReschedule,
@@ -436,46 +504,42 @@ function ClassCard({
 }) {
   const cfg   = STATUS_CONFIG[cls.status] ?? STATUS_CONFIG.pending;
   const start = new Date(cls.start_time_utc);
-  const end   = new Date(cls.end_time_utc);
   const isHistory = HISTORY_STATUSES.includes(cls.status);
-  const canAct    = ["pending", "pending_payment", "confirmed"].includes(cls.status);
+  const canAct    = ["pending", "pending_trial", "pending_payment", "confirmed"].includes(cls.status);
+
+  const dayOfWeek = cls.day_of_week || start.toLocaleDateString("es", { weekday: "short" });
 
   return (
     <div className={`
-      bg-white/80 backdrop-blur-xl rounded-2xl border border-white
-      shadow-lg border-l-4 ${cfg.border}
-      hover:shadow-xl transition-all duration-300
-      ${isHistory ? "opacity-70 hover:opacity-100" : ""}
+      group bg-white/90 backdrop-blur-xl rounded-2xl border border-white/80
+      shadow-lg shadow-slate-100/80 border-l-4 ${cfg.border} p-5
+      hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300
+      relative overflow-hidden ${isHistory ? "opacity-75 hover:opacity-100" : ""}
     `}>
-      <div className="p-5">
-        <div className="flex items-start gap-4">
-
-          {/* Fecha */}
-          <div className="flex-shrink-0 text-center w-14">
-            <p className="text-3xl font-black text-slate-800 leading-none">
-              {start.getUTCDate()}
-            </p>
-            <p className="text-[10px] text-slate-400 font-black uppercase
-                           tracking-wide mt-0.5">
-              {start.toLocaleString("es", { month:"short", timeZone:"UTC" })}
-            </p>
-            <div className={`w-1.5 h-1.5 rounded-full mx-auto mt-2 ${cfg.dot}`} />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        
+        <div className="flex items-start gap-4 flex-1 min-w-0">
+          
+          <div className="flex flex-col items-center justify-center bg-pink-50/80 text-pink-600 rounded-2xl px-3.5 py-2.5 min-w-[64px] border border-pink-100/60 flex-shrink-0">
+            <span className="text-[10px] font-black uppercase tracking-wider text-pink-400">
+              {dayOfWeek}
+            </span>
+            <span className="text-xl font-black tracking-tight text-slate-800">
+              {start.getDate()}
+            </span>
+            <span className="text-[10px] font-bold text-pink-500 uppercase">
+              {start.toLocaleString("es", { month: "short" }).replace(".", "")}
+            </span>
           </div>
 
-          {/* Divider */}
-          <div className="w-px bg-slate-100 self-stretch flex-shrink-0" />
-
-          {/* Info */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap mb-2">
-              <span className={`text-[10px] font-black uppercase tracking-widest
-                                px-2.5 py-1 rounded-full ${cfg.badge}`}>
+            <div className="flex items-center gap-2 flex-wrap mb-1.5">
+              <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full ${cfg.badge}`}>
                 {cfg.label}
               </span>
               {cls.class_type === "trial" && (
-                <span className="text-[10px] font-black uppercase tracking-widest
-                                 px-2.5 py-1 rounded-full bg-purple-100 text-purple-700">
-                  Prueba
+                <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                  Clase de prueba
                 </span>
               )}
               {cls.class_count && (
@@ -485,73 +549,64 @@ function ClassCard({
               )}
             </div>
 
-            {/* Hora */}
-            <div className="flex items-center gap-2 text-slate-600 mb-2">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-sm font-bold">
-                {start.toLocaleTimeString("es", {
-                  hour: "2-digit", minute: "2-digit",
-                })}{" "}
-                –{" "}
-                {end.toLocaleTimeString("es", {
-                  hour: "2-digit", minute: "2-digit",
-                })}
+            <h3 className="text-base font-black text-slate-800 truncate mb-1">
+              {cls.subject ?? "Clase de Inglés General"}
+            </h3>
+
+            <div className="flex items-center gap-3 text-xs font-semibold text-slate-500 flex-wrap mb-2">
+              <span className="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-lg text-slate-600">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                {start.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })} ({cls.duration_minutes || 60} min)
               </span>
-              <span className="text-xs text-slate-400">
-                · {cls.duration_minutes} min
-              </span>
+              {cls.teacher_name && (
+                <span className="text-slate-400 truncate">
+                  Profesor: <strong className="text-slate-700">{cls.teacher_name}</strong>
+                </span>
+              )}
             </div>
 
-            {/* Subject */}
-            {cls.subject && (
-              <div className="flex items-center gap-1.5 text-xs
-                              text-slate-500 mb-3">
-                <BookOpen className="w-3.5 h-3.5" />
-                {cls.subject}
-              </div>
-            )}
-
-            {/* Meet link */}
             {cls.meet_link && cls.status === "confirmed" && (
-            <a
-                href={cls.meet_link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs font-bold
-                           text-white bg-emerald-500 hover:bg-emerald-600
-                           px-3.5 py-2 rounded-xl shadow-sm shadow-emerald-100
-                           transition-all duration-200 mb-3"
-              >
-                <Video className="w-3.5 h-3.5" />
-                Entrar a Google Meet
-              </a>
-            )}
-
-            {/* Acciones */}
-            {canAct && (
-              <div className="flex gap-2 flex-wrap">
-                <button
-                  onClick={onReschedule}
-                  className="flex items-center gap-1.5 text-xs font-bold
-                             text-purple-600 bg-purple-50 hover:bg-purple-100
-                             px-3.5 py-2 rounded-xl transition-colors"
+              <div className="mt-2">
+                <a
+                  href={cls.meet_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold
+                             text-white bg-emerald-500 hover:bg-emerald-600
+                             px-3.5 py-2 rounded-xl shadow-sm shadow-emerald-100
+                             transition-all duration-200"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Reagendar
-                </button>
-                <button
-                  onClick={onCancel}
-                  className="flex items-center gap-1.5 text-xs font-bold
-                             text-red-500 bg-red-50 hover:bg-red-100
-                             px-3.5 py-2 rounded-xl transition-colors"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  Cancelar
-                </button>
+                  <Video className="w-3.5 h-3.5" />
+                  Entrar a Google Meet
+                </a>
               </div>
             )}
           </div>
         </div>
+
+        {canAct && (
+          <div className="flex sm:flex-col gap-2 items-stretch sm:items-end justify-end flex-shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
+            <button
+              onClick={onReschedule}
+              className="flex items-center justify-center gap-1.5 text-xs font-bold
+                         text-purple-600 bg-purple-50 hover:bg-purple-100
+                         px-3.5 py-2 rounded-xl transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reagendar
+            </button>
+            <button
+              onClick={onCancel}
+              className="flex items-center justify-center gap-1.5 text-xs font-bold
+                         text-red-500 bg-red-50 hover:bg-red-100
+                         px-3.5 py-2 rounded-xl transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+              Cancelar
+            </button>
+          </div>
+        )}
+
       </div>
     </div>
   );
@@ -560,9 +615,7 @@ function ClassCard({
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function MyClassesPage() {
   const [tab, setTab] = useState<"upcoming" | "history">("upcoming");
-  const [rescheduleTarget, setRescheduleTarget] = useState<{
-    id: number; duration: number;
-  } | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<any | null>(null);
   const [cancelTarget, setCancelTarget] = useState<{
     id: number; date: string;
   } | null>(null);
@@ -592,7 +645,6 @@ export default function MyClassesPage() {
   return (
     <div className="min-h-screen bg-slate-50 relative overflow-hidden">
 
-      {/* Blobs */}
       <div className="fixed top-[-80px] right-[-80px] w-[500px] h-[500px]
                       bg-pink-300/20 rounded-full blur-[100px]
                       pointer-events-none" />
@@ -602,7 +654,6 @@ export default function MyClassesPage() {
 
       <div className="relative space-y-6">
 
-        {/* Header */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           <h1 className="text-3xl font-black text-slate-800 tracking-tight">
             Mis Clases
@@ -612,7 +663,6 @@ export default function MyClassesPage() {
           </p>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-1 bg-white/80 backdrop-blur-xl border
                         border-white rounded-2xl p-1 w-fit shadow-lg
                         shadow-slate-100 animate-in fade-in duration-500
@@ -638,7 +688,6 @@ export default function MyClassesPage() {
           ))}
         </div>
 
-        {/* Lista */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500
                         delay-150 space-y-3">
           {loading ? (
@@ -662,12 +711,7 @@ export default function MyClassesPage() {
               <ClassCard
                 key={cls.id}
                 cls={cls}
-                onReschedule={() =>
-                  setRescheduleTarget({
-                    id: cls.id,
-                    duration: cls.duration_minutes,
-                  })
-                }
+                onReschedule={() => setRescheduleTarget(cls)}
                 onCancel={() =>
                   setCancelTarget({
                     id: cls.id,
@@ -681,11 +725,9 @@ export default function MyClassesPage() {
         <ChipiWidget screenName="my_classes" />
       </div>
 
-      {/* Modals */}
       {rescheduleTarget && (
         <RescheduleModal
-          classId={rescheduleTarget.id}
-          currentDuration={rescheduleTarget.duration}
+          classItem={rescheduleTarget}
           onClose={() => setRescheduleTarget(null)}
           onSaved={refetch}
         />

@@ -1,3 +1,5 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import logging
 from typing import List
 
@@ -15,10 +17,38 @@ from app.core.timezone import convert_local_time_to_utc_string, validate_timezon
 from app.schemas.preferences import SetPreferencesRequest, PreferenceSlotResponse
 from app.core.storage import upload_file, delete_file
 
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+# ─── HELPERS DE ZONA HORARIA ──────────────────────────────────────────────────
+
+def convert_local_time_to_utc_string(local_time_str: str, tz_str: str) -> str:
+    """
+    Convierte una hora local ("HH:MM") en la zona horaria del usuario a UTC ("HH:MM"),
+    respetando correctamente el horario de verano/invierno (DST).
+    """
+    try:
+        parts = local_time_str.split(":")
+        h, m = int(parts[0]), int(parts[1])
+        
+        # Obtener la fecha actual en la zona horaria del usuario
+        now_local = datetime.now(ZoneInfo(tz_str))
+        
+        # Crear el objeto datetime con la hora local indicada
+        dt_local = datetime(
+            now_local.year, now_local.month, now_local.day, 
+            h, m, tzinfo=ZoneInfo(tz_str)
+        )
+        
+        # Convertir a UTC
+        dt_utc = dt_local.astimezone(ZoneInfo("UTC"))
+        
+        return dt_utc.strftime("%H:%M")
+    except Exception as e:
+        raise ValueError(f"Error al convertir la hora local a UTC: {e}")
 
 # ─── HELPER DE AVATAR / FOTO DE PERFIL ───────────────────────────────────────
 
@@ -316,7 +346,6 @@ def set_schedule_preferences(
     """
     El estudiante configura sus horas preferidas.
     Reemplaza todas las preferencias anteriores.
-    El calendario las usa para resaltar slots en morado.
     """
     if not validate_timezone(data.timezone):
         raise HTTPException(
@@ -366,10 +395,66 @@ def get_schedule_preferences(
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    """Devuelve las preferencias de horario del estudiante"""
+    """Devuelve las preferencias de horario del estudiante en UTC para que el frontend las adapte"""
+    student_profile = current_user.student_profile
+    if not student_profile:
+        return []
+
     return db.query(StudentSchedulePreference).filter(
-        StudentSchedulePreference.student_id == current_user.student_profile.id
+        StudentSchedulePreference.student_id == student_profile.id
     ).order_by(
         StudentSchedulePreference.day_of_week,
         StudentSchedulePreference.start_time_utc
     ).all()
+
+
+@router.put("/me/preferences", response_model=List[PreferenceSlotResponse])
+def update_schedule_preferences(
+    data: SetPreferencesRequest,
+    current_user: User = Depends(get_current_student),
+    db: Session = Depends(get_db)
+):
+    """
+    Actualiza (reemplaza) las preferencias de horario del estudiante vía PUT.
+    """
+    if not validate_timezone(data.timezone):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Zona horaria inválida: {data.timezone}"
+        )
+
+    student_id = current_user.student_profile.id
+
+    db.query(StudentSchedulePreference).filter(
+        StudentSchedulePreference.student_id == student_id
+    ).delete()
+
+    new_prefs = []
+    for slot in data.slots:
+        try:
+            start_utc = convert_local_time_to_utc_string(
+                slot.start_time_local, data.timezone
+            )
+            end_utc = convert_local_time_to_utc_string(
+                slot.end_time_local, data.timezone
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
+
+        pref = StudentSchedulePreference(
+            student_id=student_id,
+            day_of_week=slot.day_of_week,
+            start_time_utc=start_utc,
+            end_time_utc=end_utc,
+        )
+        db.add(pref)
+        new_prefs.append(pref)
+
+    db.commit()
+    for pref in new_prefs:
+        db.refresh(pref)
+
+    return new_prefs

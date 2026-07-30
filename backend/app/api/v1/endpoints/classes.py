@@ -1,42 +1,103 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
-from typing import List, Optional
+import logging
 from datetime import datetime, timedelta
+from typing import Optional
 
-from app.db.base import get_db
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
 from app.auth.dependencies import (
-    get_current_user,
-    get_current_teacher_or_teacher_admin,
     get_current_student,
     get_current_staff,
+    get_current_teacher_or_teacher_admin,
 )
-from app.models.user import User
-from app.models.class_ import Class, ClassType
-from app.models.package import Enrollment, EnrollmentStatus
-from app.models.student import StudentProfile
-from app.models.teacher import TeacherProfile
-from app.schemas.classes import (
-    BookClassRequest,
-    BookTrialRequest,
-    RescheduleClassRequest,
-    UpdateClassStatusRequest,
-    ClassResponse,
-    ClassListResponse,
+from app.core.calendar_sync import (
+    sync_class_cancelled,
+    sync_class_created,
+    sync_class_updated,
 )
-from app.core.timezone import utc_now, UTC
 from app.core.class_logic import (
     can_book_slot,
     can_cancel_class,
     can_reschedule_class,
     update_enrollment_counter,
 )
-from app.core.calendar_sync import (
-    sync_class_created,
-    sync_class_updated, 
-    sync_class_cancelled,
+from app.core.timezone import UTC, utc_now
+from app.db.base import get_db
+from app.models.class_ import Class, ClassType
+from app.models.package import Enrollment, EnrollmentStatus
+from app.models.student import StudentProfile
+from app.models.teacher import TeacherProfile
+from app.models.user import User
+from app.schemas.classes import (
+    BookClassRequest,
+    BookTrialRequest,
+    ClassListResponse,
+    ClassResponse,
+    RescheduleClassRequest,
+    UpdateClassStatusRequest,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+# Incluimos 'pending_trial' para que las clases de prueba pendientes aparezcan en los listados próximos
+UPCOMING_STATUSES = ["pending", "pending_trial", "pending_payment", "confirmed"]
+DAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
+# ─── HELPER FUNCTIONS ─────────────────────────────────────────────────────────
+
+def _get_class_or_404(
+    db: Session,
+    class_id: int,
+    student_id: Optional[int] = None,
+    teacher_id: Optional[int] = None
+) -> Class:
+    """Busca una clase garantizando existencia y pertenencia según el rol."""
+    query = db.query(Class).filter(Class.id == class_id)
+    
+    if student_id is not None:
+        query = query.filter(Class.student_id == student_id)
+    if teacher_id is not None:
+        query = query.filter(Class.teacher_id == teacher_id)
+
+    class_ = query.first()
+    if not class_:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clase no encontrada"
+        )
+    return class_
+
+
+def _sync_google_calendar_created(new_class: Class, db: Session) -> None:
+    """Intenta sincronizar la creación con Google Calendar sin romper la API si falla."""
+    try:
+        event_id = sync_class_created(new_class, db)
+        if event_id:
+            new_class.google_event_id = event_id
+            db.commit()
+    except Exception as e:
+        logger.error(f"Error al sincronizar Google Calendar (creación): {e}")
+
+
+def _sync_google_calendar_updated(class_: Class, db: Session) -> None:
+    """Intenta sincronizar la actualización con Google Calendar."""
+    try:
+        sync_class_updated(class_, class_.google_event_id, db)
+    except Exception as e:
+        logger.error(f"Error al sincronizar Google Calendar (actualización): {e}")
+
+
+def _sync_google_calendar_cancelled(teacher_id: int, event_id: Optional[str], db: Session) -> None:
+    """Intenta sincronizar la cancelación con Google Calendar."""
+    if not event_id:
+        return
+    try:
+        sync_class_cancelled(teacher_id, event_id, db)
+    except Exception as e:
+        logger.error(f"Error al sincronizar Google Calendar (cancelación): {e}")
 
 
 # ─── ESTUDIANTE ──────────────────────────────────────────────────────────────
@@ -53,12 +114,13 @@ def book_class(
 ):
     """
     Reserva una clase regular.
-    El slot queda en 'pending' y BLOQUEA el calendario
-    inmediatamente — nadie más puede reservar ese horario.
+    El slot queda en 'pending' y BLOQUEA el calendario inmediatamente.
     """
+    student_id = current_user.student_profile.id
+
     enrollment = db.query(Enrollment).filter(
         Enrollment.id == data.enrollment_id,
-        Enrollment.student_id == current_user.student_profile.id,
+        Enrollment.student_id == student_id,
         Enrollment.status == EnrollmentStatus.active
     ).first()
 
@@ -78,7 +140,7 @@ def book_class(
     can_book, error_msg = can_book_slot(
         start_time_utc=data.start_time_utc,
         teacher_id=enrollment.teacher_id,
-        student_id=current_user.student_profile.id,
+        student_id=student_id,
         db=db
     )
 
@@ -88,28 +150,29 @@ def book_class(
             detail=error_msg
         )
 
+    teacher_tz = getattr(enrollment.teacher, "timezone", None) if enrollment.teacher else None
+    day_of_week = DAYS_ES[data.start_time_utc.weekday()]
+
     new_class = Class(
         enrollment_id=enrollment.id,
         teacher_id=enrollment.teacher_id,
-        student_id=current_user.student_profile.id,
+        student_id=student_id,
         class_type=ClassType.regular,
         subject=enrollment.package.subject,
         start_time_utc=data.start_time_utc,
         end_time_utc=data.end_time_utc,
         duration=data.duration_minutes,
-        teacher_timezone=enrollment.teacher.timezone
-            if hasattr(enrollment.teacher, 'timezone') else None,
+        teacher_timezone=teacher_tz,
         student_timezone=current_user.student_profile.timezone,
-        status="pending"
+        status="pending",
+        day_of_week=day_of_week
     )
 
     db.add(new_class)
     db.commit()
     db.refresh(new_class)
-    event_id = sync_class_created(new_class, db)
-    if event_id:
-        new_class.google_event_id = event_id
-        db.commit()
+
+    _sync_google_calendar_created(new_class, db)
     return new_class
 
 
@@ -127,9 +190,7 @@ def get_my_classes_student(
 
     if not include_history:
         query = query.filter(
-            Class.status.in_([
-                "pending", "pending_payment", "confirmed"
-            ]),
+            Class.status.in_(UPCOMING_STATUSES),
             Class.start_time_utc >= now
         )
 
@@ -137,8 +198,7 @@ def get_my_classes_student(
 
     upcoming = sum(
         1 for c in all_classes
-        if c.status in ["pending", "pending_payment", "confirmed"]
-        and c.start_time_utc >= now
+        if c.status in UPCOMING_STATUSES and c.start_time_utc >= now
     )
     completed = sum(1 for c in all_classes if c.status == "completed")
 
@@ -157,16 +217,7 @@ def cancel_class_student(
     db: Session = Depends(get_db)
 ):
     """Cancelar clase — mínimo 12h de antelación"""
-    class_ = db.query(Class).filter(
-        Class.id == class_id,
-        Class.student_id == current_user.student_profile.id
-    ).first()
-
-    if not class_:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Clase no encontrada"
-        )
+    class_ = _get_class_or_404(db, class_id, student_id=current_user.student_profile.id)
 
     can_cancel, error_msg = can_cancel_class(class_, current_user.id)
     if not can_cancel:
@@ -177,8 +228,9 @@ def cancel_class_student(
 
     class_.status = "cancelled"
     db.commit()
-    sync_class_cancelled(class_.teacher_id, class_.google_event_id, db)
-    return {"message": "Clase cancelada"}
+
+    _sync_google_calendar_cancelled(class_.teacher_id, class_.google_event_id, db)
+    return {"message": "Clase cancelada exitosamente"}
 
 
 @router.patch("/{class_id}/reschedule", response_model=ClassResponse)
@@ -189,16 +241,8 @@ def reschedule_class_student(
     db: Session = Depends(get_db)
 ):
     """Reagendar clase — mínimo 12h de antelación"""
-    class_ = db.query(Class).filter(
-        Class.id == class_id,
-        Class.student_id == current_user.student_profile.id
-    ).first()
-
-    if not class_:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Clase no encontrada"
-        )
+    student_id = current_user.student_profile.id
+    class_ = _get_class_or_404(db, class_id, student_id=student_id)
 
     can_reschedule, error_msg = can_reschedule_class(class_, role="student")
     if not can_reschedule:
@@ -210,7 +254,7 @@ def reschedule_class_student(
     can_book, error_msg = can_book_slot(
         start_time_utc=data.start_time_utc,
         teacher_id=class_.teacher_id,
-        student_id=current_user.student_profile.id,
+        student_id=student_id,
         db=db,
         exclude_class_id=class_id
     )
@@ -223,10 +267,13 @@ def reschedule_class_student(
 
     class_.start_time_utc = data.start_time_utc
     class_.end_time_utc = data.end_time_utc
-    class_.status = "pending"
+    # Si era trial, puede mantener 'pending_trial', o pasar a 'pending' según tu lógica de negocio. 
+    # Lo dejamos en pending_trial si es trial, o pending si es regular.
+    class_.status = "pending_trial" if class_.class_type == ClassType.trial else "pending"
     db.commit()
     db.refresh(class_)
-    sync_class_updated(class_, class_.google_event_id, db)
+
+    _sync_google_calendar_updated(class_, db)
     return class_
 
 
@@ -242,14 +289,7 @@ def book_trial_class(
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db)
 ):
-    """
-    El staff crea una clase de prueba para un estudiante.
-    Las clases trial:
-    - No requieren enrollment
-    - No consumen clases del paquete
-    - Son de 30min por defecto
-    - El staff decide a quién ofrecerlas
-    """
+    """El staff crea una clase de prueba para un estudiante con estado 'pending_trial'."""
     teacher = db.query(TeacherProfile).filter(
         TeacherProfile.user_username == data.teacher_username
     ).first()
@@ -283,8 +323,10 @@ def book_trial_class(
             detail=error_msg
         )
 
+    day_of_week = DAYS_ES[data.start_time_utc.weekday()]
+
     trial_class = Class(
-        enrollment_id=None,          # Sin enrollment
+        enrollment_id=None,
         teacher_id=teacher.id,
         student_id=data.student_id,
         class_type=ClassType.trial,
@@ -294,16 +336,15 @@ def book_trial_class(
         duration=data.duration_minutes,
         teacher_timezone=teacher.timezone,
         student_timezone=student.timezone,
-        status="pending"
+        status="pending_trial",
+        day_of_week=day_of_week
     )
 
     db.add(trial_class)
     db.commit()
     db.refresh(trial_class)
-    event_id = sync_class_created(trial_class, db)
-    if event_id:
-        trial_class.google_event_id = event_id
-        db.commit()
+
+    _sync_google_calendar_created(trial_class, db)
     return trial_class
 
 
@@ -336,7 +377,7 @@ def get_my_classes_teacher(
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Formato de fecha inválido"
+                detail="Formato de fecha inválido (debe ser YYYY-MM-DD)"
             )
 
     if status_filter:
@@ -350,15 +391,14 @@ def get_my_classes_teacher(
 
     if not include_history:
         query = query.filter(
-            Class.status.in_(["pending", "pending_payment", "confirmed"]),
+            Class.status.in_(UPCOMING_STATUSES),
             Class.start_time_utc >= now
         )
 
     all_classes = query.order_by(Class.start_time_utc).all()
     upcoming = sum(
         1 for c in all_classes
-        if c.status in ["pending", "pending_payment", "confirmed"]
-        and c.start_time_utc >= now
+        if c.status in UPCOMING_STATUSES and c.start_time_utc >= now
     )
     completed = sum(1 for c in all_classes if c.status == "completed")
 
@@ -377,22 +417,8 @@ def update_class_status(
     current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
-    """
-    El profesor actualiza el estado de una clase.
-    Al marcar como 'completed':
-    - Se actualiza el contador del enrollment
-    - Solo si es clase regular (trial no cuenta)
-    """
-    class_ = db.query(Class).filter(
-        Class.id == class_id,
-        Class.teacher_id == current_user.teacher_profile.id
-    ).first()
-
-    if not class_:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Clase no encontrada"
-        )
+    """Actualizar estado de una clase por parte del profesor."""
+    class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
 
     old_status = class_.status
     class_.status = data.status
@@ -400,8 +426,7 @@ def update_class_status(
     if data.notes:
         class_.notes = data.notes
 
-    # Solo las clases regular consumen del paquete
-    if class_.class_type == ClassType.regular:
+    if class_.class_type == ClassType.regular and class_.enrollment_id:
         if data.status == "completed" and old_status != "completed":
             update_enrollment_counter(class_.enrollment_id, delta=1, db=db)
         elif old_status == "completed" and data.status != "completed":
@@ -409,7 +434,8 @@ def update_class_status(
 
     db.commit()
     db.refresh(class_)
-    sync_class_updated(class_, class_.google_event_id, db)
+
+    _sync_google_calendar_updated(class_, db)
     return class_
 
 
@@ -421,16 +447,7 @@ def reschedule_class_teacher(
     db: Session = Depends(get_db)
 ):
     """El profesor reagenda sin restricción de tiempo"""
-    class_ = db.query(Class).filter(
-        Class.id == class_id,
-        Class.teacher_id == current_user.teacher_profile.id
-    ).first()
-
-    if not class_:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Clase no encontrada"
-        )
+    class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
 
     can_reschedule, error_msg = can_reschedule_class(class_, role="teacher")
     if not can_reschedule:
@@ -455,10 +472,12 @@ def reschedule_class_teacher(
 
     class_.start_time_utc = data.start_time_utc
     class_.end_time_utc = data.end_time_utc
-    class_.status = "pending"
+    class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
+    class_.status = "pending_trial" if class_.class_type == ClassType.trial else "pending"
     db.commit()
     db.refresh(class_)
-    sync_class_updated(class_, class_.google_event_id, db)
+
+    _sync_google_calendar_updated(class_, db)
     return class_
 
 
@@ -470,13 +489,7 @@ def reschedule_class_admin(
     db: Session = Depends(get_db)
 ):
     """El staff reagenda cualquier clase sin restricciones"""
-    class_ = db.query(Class).filter(Class.id == class_id).first()
-
-    if not class_:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Clase no encontrada"
-        )
+    class_ = _get_class_or_404(db, class_id)
 
     can_book, error_msg = can_book_slot(
         start_time_utc=data.start_time_utc,
@@ -494,8 +507,9 @@ def reschedule_class_admin(
 
     class_.start_time_utc = data.start_time_utc
     class_.end_time_utc = data.end_time_utc
-    class_.status = "pending"
+    class_.status = "pending_trial" if class_.class_type == ClassType.trial else "pending"
     db.commit()
     db.refresh(class_)
-    sync_class_updated(class_, class_.google_event_id, db)
+
+    _sync_google_calendar_updated(class_, db)
     return class_

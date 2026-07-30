@@ -132,7 +132,7 @@ function MiniCalendar({
   );
 }
 
-// ─── Paso: Seleccionar slot (usado tanto para prueba como para clase regular) ─
+// ─── Paso: Seleccionar slot (muestra todos y destaca los preferidos de 18:00 a 22:00 localmente) ─────
 function StepSelectSlot({
   onSelect,
   isTrial = false,
@@ -149,6 +149,16 @@ function StepSelectSlot({
     new Date(utc).toLocaleTimeString("es", {
       hour: "2-digit", minute: "2-digit",
     });
+
+  // Determina si el slot cae dentro del horario preferencial del usuario (18:00 - 22:00 hora local)
+  const isPreferredSlot = (slot: any) => {
+    if (slot.is_preferred) return true;
+    const localDate = new Date(slot.start_time_utc);
+    const hour = localDate.getHours();
+    const minutes = localDate.getMinutes();
+    const totalMinutes = hour * 60 + minutes;
+    return totalMinutes >= 18 * 60 && totalMinutes < 22 * 60;
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -196,20 +206,22 @@ function StepSelectSlot({
         )}
       </div>
 
-      {/* Columna derecha: slots disponibles */}
+      {/* Columna derecha: todos los slots con los preferidos destacados */}
       <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
                       border border-white shadow-2xl shadow-slate-200/50 p-6">
-        <p className="text-[10px] font-black text-slate-400 uppercase
-                      tracking-widest mb-4">
-          Horarios disponibles
-          {date && (
-            <span className="ml-2 text-slate-300 normal-case font-bold">
-              — {new Date(date + "T00:00:00").toLocaleDateString("es", {
-                weekday: "long", day: "numeric", month: "long",
-              })}
-            </span>
-          )}
-        </p>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <p className="text-[10px] font-black text-slate-400 uppercase
+                        tracking-widest">
+            Horarios disponibles
+            {date && (
+              <span className="ml-2 text-slate-300 normal-case font-bold">
+                — {new Date(date + "T00:00:00").toLocaleDateString("es", {
+                  weekday: "long", day: "numeric", month: "long",
+                })}
+              </span>
+            )}
+          </p>
+        </div>
 
         {!date ? (
           <div className="flex flex-col items-center justify-center py-16">
@@ -233,38 +245,41 @@ function StepSelectSlot({
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3
                           max-h-[400px] overflow-y-auto pr-1">
-            {slots.map((slot, i) => (
-              <button
-                key={i}
-                onClick={() => onSelect(date, slot, duration)}
-                className={`
-                  relative py-4 px-3 rounded-2xl text-center
-                  border-2 transition-all duration-200
-                  hover:-translate-y-0.5 hover:shadow-md
-                  ${slot.is_preferred
-                    ? "border-purple-300 bg-purple-50 hover:border-purple-400"
-                    : "border-slate-100 bg-white hover:border-pink-300"
-                  }
-                `}
-              >
-                {slot.is_preferred && (
-                  <div className="absolute -top-2 left-1/2 -translate-x-1/2
-                                  bg-purple-500 text-white text-[8px] font-black
-                                  uppercase tracking-widest px-2 py-0.5 rounded-full">
-                    Preferido
-                  </div>
-                )}
-                <Clock className={`w-4 h-4 mx-auto mb-1.5
-                  ${slot.is_preferred ? "text-purple-400" : "text-slate-400"}`} />
-                <p className={`text-base font-black
-                  ${slot.is_preferred ? "text-purple-700" : "text-slate-800"}`}>
-                  {formatTime(slot.start_time_utc)}
-                </p>
-                <p className="text-[10px] text-slate-400 font-bold mt-0.5">
-                  hasta {formatTime(slot.end_time_utc)}
-                </p>
-              </button>
-            ))}
+            {slots.map((slot, i) => {
+              const preferred = isPreferredSlot(slot);
+              return (
+                <button
+                  key={i}
+                  onClick={() => onSelect(date, slot, duration)}
+                  className={`
+                    relative py-4 px-3 rounded-2xl text-center
+                    border-2 transition-all duration-200
+                    hover:-translate-y-0.5 hover:shadow-md
+                    ${preferred
+                      ? "border-purple-300 bg-purple-50/80 hover:border-purple-400 shadow-sm shadow-purple-100"
+                      : "border-slate-100 bg-white hover:border-pink-300"
+                    }
+                  `}
+                >
+                  {preferred && (
+                    <div className="absolute -top-2 left-1/2 -translate-x-1/2
+                                    bg-purple-500 text-white text-[8px] font-black
+                                    uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm">
+                      Preferido
+                    </div>
+                  )}
+                  <Clock className={`w-4 h-4 mx-auto mb-1.5
+                    ${preferred ? "text-purple-500" : "text-slate-400"}`} />
+                  <p className={`text-base font-black
+                    ${preferred ? "text-purple-800" : "text-slate-800"}`}>
+                    {formatTime(slot.start_time_utc)}
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                    hasta {formatTime(slot.end_time_utc)}
+                  </p>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -357,7 +372,7 @@ function StepConfirmTrial({
             ¡Prueba reservada!
           </h3>
           <p className="text-slate-500 text-sm">
-            El staff confirmará tu clase de prueba pronto
+            Prepárate para tu clase de prueba gratuita.
           </p>
         </div>
       ) : (
@@ -867,7 +882,7 @@ export default function SchedulePage() {
   const loadStage = () => {
     api.get("/payments/booking-status")
       .then(res => setStage(res.data.stage))
-      .catch(() => setStage("ready")); // fallback conservador: no bloquear al usuario
+      .catch(() => setStage("ready"));
   };
 
   useEffect(() => { loadStage(); }, []);
@@ -925,7 +940,7 @@ export default function SchedulePage() {
               </h1>
               <p className="text-slate-500 mt-1">
                 {stage === "needs_trial" && "Tu primera clase es gratuita, sin compromiso"}
-                {stage === "trial_in_progress" && "El staff confirmará tu clase pronto"}
+                {stage === "trial_in_progress" && "Prepárate para tu clase de prueba gratuita"}
                 {stage === "needs_package" && "Selecciona el paquete que mejor se adapte a ti"}
                 {stage === "ready" && step === "select" && "Selecciona fecha y horario disponible"}
                 {stage === "ready" && step === "payment" && "Completa el pago para confirmar tu clase"}
@@ -933,7 +948,7 @@ export default function SchedulePage() {
             </div>
           </div>
 
-          {/* Steps indicator — solo aplica al flujo regular con pago */}
+          {/* Steps indicator */}
           {stage === "ready" && (
             <div className="flex items-center gap-3 mt-4">
               {[
@@ -971,7 +986,6 @@ export default function SchedulePage() {
           )}
         </div>
 
-        {/* Alerta de falta de paquete activo (solo aplica en ready) */}
         {stage === "ready" && step === "payment" && !activeEnrollment && (
           <div className="bg-rose-50 border border-rose-100 text-rose-600
                           px-4 py-3 rounded-xl text-xs font-bold
@@ -982,9 +996,7 @@ export default function SchedulePage() {
           </div>
         )}
 
-        {/* Contenido según etapa */}
         <div className="animate-in fade-in duration-300">
-
           {stage === "loading" && (
             <div className="flex justify-center py-24">
               <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500

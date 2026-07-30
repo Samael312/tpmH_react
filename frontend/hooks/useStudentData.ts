@@ -96,12 +96,15 @@ export function useStudentClasses(includeHistory = false) {
         `/classes/my-classes?include_history=${includeHistory}`
       );
       
-      // Aseguramos que siempre se guarde un arreglo
-      setClasses(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+      const rawData = res.data;
+      const classList = Array.isArray(rawData) 
+        ? rawData 
+        : (rawData?.classes || rawData?.data || []);
+
+      setClasses(classList);
       
     } catch (error) { 
       console.error("Error fetching student classes:", error);
-      // Si la petición falla, aseguramos que el estado vuelva a ser un arreglo vacío
       setClasses([]);
     } finally { 
       setLoading(false); 
@@ -121,7 +124,6 @@ export function useAvailableSlots(date: string, duration: number) {
     if (!date) return;
     setLoading(true);
     try {
-      // CORRECCIÓN: Agregado "const" para declarar la variable
       const featured_teacher = process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "mar12"; 
       
       const res = await api.get(
@@ -215,7 +217,6 @@ export function useFeaturedTeacher() {
   const fetch = useCallback(async () => {
     try {
       setLoading(true);
-      // CORRECCIÓN: Agregado fallback en caso de que la variable de entorno falle
       const username = process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "mar12";
       
       const [tRes, rRes] = await Promise.all([

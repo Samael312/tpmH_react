@@ -35,6 +35,8 @@ from app.core.class_logic import can_book_slot, get_student_booking_stage
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+DAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
 def _get_featured_teacher(db: Session):
     from app.models.payment_config import PlatformConfig
     from app.core.config import settings
@@ -105,86 +107,6 @@ def update_payment_config(
 
 
 # ─── FLUJO DE RESERVA Y PAGO ─────────────────────────────────────────────────
-
-@router.post("/book", status_code=status.HTTP_201_CREATED)
-def book_class(
-    data: BookAndPayRequest,
-    current_user: User = Depends(get_current_student),
-    db: Session = Depends(get_db)
-):
-    """
-    Paso 1 — El estudiante reserva un slot.
-    La clase queda en estado 'pending'.
-    El slot NO está bloqueado todavía — se bloquea al subir el comprobante.
-    """
-    # Verificar enrollment activo
-    enrollment = db.query(Enrollment).filter(
-        Enrollment.id == data.enrollment_id,
-        Enrollment.student_id == current_user.student_profile.id,
-        Enrollment.status == "active"
-    ).first()
-
-    if not enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Enrollment no encontrado o no activo"
-        )
-
-    if enrollment.classes_used >= enrollment.classes_total:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Has agotado todas las clases de este paquete"
-        )
-
-    # Verificar disponibilidad del slot
-    can_book, error_msg = can_book_slot(
-        start_time_utc=data.start_time_utc,
-        teacher_id=enrollment.teacher_id,
-        student_id=current_user.student_profile.id,
-        db=db
-    )
-
-    if not can_book:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=error_msg
-        )
-
-    # Crear la clase en estado pending
-    new_class = Class(
-        enrollment_id=enrollment.id,
-        teacher_id=enrollment.teacher_id,
-        student_id=current_user.student_profile.id,
-        start_time_utc=data.start_time_utc,
-        end_time_utc=data.end_time_utc,
-        duration=data.duration_minutes,
-        teacher_timezone=enrollment.teacher.timezone
-            if hasattr(enrollment.teacher, 'timezone') else None,
-        student_timezone=current_user.student_profile.timezone,
-        status="pending"
-    )
-
-    db.add(new_class)
-    db.commit()
-    db.refresh(new_class)
-
-    # Devolver la config de pagos junto con la clase
-    # para que el frontend sepa cómo debe pagar
-    config = db.query(PaymentConfig).first()
-
-    return {
-        "class_id": new_class.id,
-        "status": new_class.status,
-        "message": "Slot reservado. Sube el comprobante para confirmar.",
-        "payment_instructions": {
-            "paypal_enabled": config.paypal_enabled if config else False,
-            "binance_enabled": config.binance_enabled if config else False,
-            "paypal_email": config.paypal_email if config else None,
-            "binance_address": config.binance_address if config else None,
-            "binance_network": config.binance_network if config else None,
-            "whatsapp_number": config.whatsapp_number if config else None,
-        }
-    }
 
 
 @router.post("/submit-receipt")
@@ -265,6 +187,134 @@ def submit_payment_receipt(
 
 
 # ─── VALIDACIÓN POR STAFF ────────────────────────────────────────────────────
+
+@router.post("/book", status_code=status.HTTP_201_CREATED)
+def book_class(
+    data: BookAndPayRequest,
+    current_user: User = Depends(get_current_student),
+    db: Session = Depends(get_db)
+):
+    student_id = current_user.student_profile.id
+    stage = get_student_booking_stage(student_id, db)
+
+    if stage == "trial_in_progress":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ya tienes una clase de prueba pendiente. Complétala antes de agendar otra."
+        )
+
+    if stage == "needs_package":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debes elegir un paquete de clases para poder seguir agendando."
+        )
+
+    # ─── Primera clase del estudiante: SIEMPRE es de prueba, sin paquete ───
+    if stage == "needs_trial":
+        teacher = _get_featured_teacher(db)
+        if not teacher:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No hay profesor disponible para la clase de prueba"
+            )
+
+        trial_start = data.start_time_utc
+        trial_end = trial_start + timedelta(minutes=30)
+
+        day_of_week = DAYS_ES[trial_start.weekday()]
+
+        can_book, error_msg = can_book_slot(
+            start_time_utc=trial_start,
+            teacher_id=teacher.id,
+            student_id=student_id,
+            db=db
+        )
+        if not can_book:
+            raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
+
+        trial_class = Class(
+            enrollment_id=None,
+            teacher_id=teacher.id,
+            student_id=student_id,
+            class_type=ClassType.trial,
+            subject="Clase de prueba",
+            start_time_utc=trial_start,
+            end_time_utc=trial_end,
+            duration=30,
+            teacher_timezone=teacher.timezone,
+            student_timezone=current_user.student_profile.timezone,
+            status="pending_trial", 
+            day_of_week=day_of_week,
+        )
+        db.add(trial_class)
+        db.commit()
+        db.refresh(trial_class)
+
+        return {
+            "class_id": trial_class.id,
+            "status": trial_class.status,
+            "is_trial": True,
+            "message": "Tu clase de prueba fue reservada. El staff la confirmará en breve.",
+        }
+
+    # ─── stage == "ready": flujo normal contra el paquete activo ───
+    if not data.enrollment_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Falta el paquete (enrollment_id)")
+
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.id == data.enrollment_id,
+        Enrollment.student_id == student_id,
+        Enrollment.status == "active"
+    ).first()
+
+    if not enrollment:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado o no activo")
+
+    if enrollment.classes_used >= enrollment.classes_total:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Has agotado todas las clases de este paquete")
+
+    can_book, error_msg = can_book_slot(
+        start_time_utc=data.start_time_utc,
+        teacher_id=enrollment.teacher_id,
+        student_id=student_id,
+        db=db
+    )
+    if not can_book:
+        raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
+
+    day_of_week = DAYS_ES[data.start_time_utc.weekday()]
+
+    new_class = Class(
+        enrollment_id=enrollment.id,
+        teacher_id=enrollment.teacher_id,
+        student_id=student_id,
+        class_type=ClassType.regular,
+        start_time_utc=data.start_time_utc,
+        end_time_utc=data.end_time_utc,
+        duration=data.duration_minutes,
+        teacher_timezone=getattr(enrollment.teacher, "timezone", None),
+        student_timezone=current_user.student_profile.timezone,
+        status="pending",
+        day_of_week=day_of_week,
+    )
+    db.add(new_class)
+    db.commit()
+    db.refresh(new_class)
+
+    config = db.query(PaymentConfig).first()
+    return {
+        "class_id": new_class.id,
+        "status": new_class.status,
+        "message": "Slot reservado. Sube el comprobante para confirmar.",
+        "payment_instructions": {
+            "paypal_enabled": config.paypal_enabled if config else False,
+            "binance_enabled": config.binance_enabled if config else False,
+            "paypal_email": config.paypal_email if config else None,
+            "binance_address": config.binance_address if config else None,
+            "binance_network": config.binance_network if config else None,
+            "whatsapp_number": config.whatsapp_number if config else None,
+        }
+    }
 
 @router.get("/pending-review")
 def get_payments_pending_review(
@@ -567,125 +617,3 @@ def get_booking_status(
     """El frontend usa esto para saber qué flujo de reserva mostrar."""
     stage = get_student_booking_stage(current_user.student_profile.id, db)
     return {"stage": stage}
-
-@router.post("/book", status_code=status.HTTP_201_CREATED)
-def book_class(
-    data: BookAndPayRequest,
-    current_user: User = Depends(get_current_student),
-    db: Session = Depends(get_db)
-):
-    student_id = current_user.student_profile.id
-    stage = get_student_booking_stage(student_id, db)
-
-    if stage == "trial_in_progress":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ya tienes una clase de prueba pendiente. Complétala antes de agendar otra."
-        )
-
-    if stage == "needs_package":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Debes elegir un paquete de clases para poder seguir agendando."
-        )
-
-    # ─── Primera clase del estudiante: SIEMPRE es de prueba, sin paquete ───
-    if stage == "needs_trial":
-        teacher = _get_featured_teacher(db)
-        if not teacher:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No hay profesor disponible para la clase de prueba"
-            )
-
-        trial_start = data.start_time_utc
-        trial_end = trial_start + timedelta(minutes=30)
-
-        can_book, error_msg = can_book_slot(
-            start_time_utc=trial_start,
-            teacher_id=teacher.id,
-            student_id=student_id,
-            db=db
-        )
-        if not can_book:
-            raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
-
-        trial_class = Class(
-            enrollment_id=None,
-            teacher_id=teacher.id,
-            student_id=student_id,
-            class_type=ClassType.trial,
-            subject="Clase de prueba",
-            start_time_utc=trial_start,
-            end_time_utc=trial_end,
-            duration=30,
-            teacher_timezone=teacher.timezone,
-            student_timezone=current_user.student_profile.timezone,
-            status="pending",
-        )
-        db.add(trial_class)
-        db.commit()
-        db.refresh(trial_class)
-
-        return {
-            "class_id": trial_class.id,
-            "status": trial_class.status,
-            "is_trial": True,
-            "message": "Tu clase de prueba fue reservada. El staff la confirmará en breve.",
-        }
-
-    # ─── stage == "ready": flujo normal contra el paquete activo ───
-    if not data.enrollment_id:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Falta el paquete (enrollment_id)")
-
-    enrollment = db.query(Enrollment).filter(
-        Enrollment.id == data.enrollment_id,
-        Enrollment.student_id == student_id,
-        Enrollment.status == "active"
-    ).first()
-
-    if not enrollment:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado o no activo")
-
-    if enrollment.classes_used >= enrollment.classes_total:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Has agotado todas las clases de este paquete")
-
-    can_book, error_msg = can_book_slot(
-        start_time_utc=data.start_time_utc,
-        teacher_id=enrollment.teacher_id,
-        student_id=student_id,
-        db=db
-    )
-    if not can_book:
-        raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
-
-    new_class = Class(
-        enrollment_id=enrollment.id,
-        teacher_id=enrollment.teacher_id,
-        student_id=student_id,
-        class_type=ClassType.regular,
-        start_time_utc=data.start_time_utc,
-        end_time_utc=data.end_time_utc,
-        duration=data.duration_minutes,
-        teacher_timezone=getattr(enrollment.teacher, "timezone", None),
-        student_timezone=current_user.student_profile.timezone,
-        status="pending"
-    )
-    db.add(new_class)
-    db.commit()
-    db.refresh(new_class)
-
-    config = db.query(PaymentConfig).first()
-    return {
-        "class_id": new_class.id,
-        "status": new_class.status,
-        "message": "Slot reservado. Sube el comprobante para confirmar.",
-        "payment_instructions": {
-            "paypal_enabled": config.paypal_enabled if config else False,
-            "binance_enabled": config.binance_enabled if config else False,
-            "paypal_email": config.paypal_email if config else None,
-            "binance_address": config.binance_address if config else None,
-            "binance_network": config.binance_network if config else None,
-            "whatsapp_number": config.whatsapp_number if config else None,
-        }
-    }

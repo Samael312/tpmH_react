@@ -97,3 +97,11 @@ class AvailableSlotResponse(BaseModel):
     end_time_utc: datetime      # "2025-04-14T14:00:00Z"
     duration_minutes: int
     is_past: bool = False       # True si el slot ya pasó
+
+class PreferenceDraft(BaseModel):
+    day_of_week: int
+    start_time_local: str
+    end_time_local: str
+
+class UpdatePreferencesRequest(BaseModel):
+    preferences: List[PreferenceDraft]

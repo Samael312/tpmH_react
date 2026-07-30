@@ -35,10 +35,12 @@ class Class(Base):
 
     start_time_utc = Column(DateTime(timezone=True), nullable=False)
     end_time_utc = Column(DateTime(timezone=True), nullable=False)
+    day_of_week = Column(String, nullable=True) # Nuevo campo (ej. "Lunes", "Martes")
     duration = Column(Integer, nullable=False)
     google_event_id = Column(String, nullable=True)  # Para sync con Calendar
     # Estados
     status = Column(String, default="pending")
+    # pending_trial      → bloquea horario
     # pending          → bloquea slot, esperando comprobante
     # pending_payment  → comprobante subido, en revisión
     # confirmed        → pago validado, Meet link visible

@@ -14,6 +14,7 @@ class BookClassRequest(BaseModel):
     enrollment_id: int
     start_time_utc: datetime
     end_time_utc: datetime
+    day_of_week: Optional[str] = None
     duration_minutes: int
 
     @field_validator("duration_minutes")
@@ -33,6 +34,7 @@ class BookTrialRequest(BaseModel):
     student_id: int          # El staff elige al estudiante
     start_time_utc: datetime
     end_time_utc: datetime
+    day_of_week: Optional[str] = None
     subject: str
     duration_minutes: int = 30   # Las trials son 30min por defecto
 
@@ -47,6 +49,7 @@ class BookTrialRequest(BaseModel):
 class RescheduleClassRequest(BaseModel):
     start_time_utc: datetime
     end_time_utc: datetime
+    day_of_week: Optional[str] = None
 
 
 class UpdateClassStatusRequest(BaseModel):
@@ -58,7 +61,7 @@ class UpdateClassStatusRequest(BaseModel):
     @classmethod
     def validate_status(cls, v):
         allowed = [
-            "pending", "pending_payment", "confirmed",
+            "pending", "pending_trial", "pending_payment", "confirmed",
             "completed", "cancelled", "no_show", "rescheduled"
         ]
         if v not in allowed:
@@ -75,6 +78,7 @@ class ClassResponse(BaseModel):
     subject: Optional[str]
     start_time_utc: datetime
     end_time_utc: datetime
+    day_of_week: Optional[str]
     duration_minutes: int
     status: str
     # Meet link solo se incluye si la clase está confirmed

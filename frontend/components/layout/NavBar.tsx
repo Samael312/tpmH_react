@@ -70,6 +70,7 @@ export default function DashboardSidebar() {
             <nav className="space-y-1">
               <NavItem href="/dashboard" icon={<LayoutDashboard size={20} />} label="Inicio" active={pathname === "/dashboard"} collapsed={collapsed} />
               <NavItem href="/dashboard/schedule" icon={<Calendar size={20} />} label="Horario" active={isActive("/dashboard/schedule")} collapsed={collapsed} />
+              <NavItem href="/dashboard/availability" icon={<Users size={20} />} label="Disponibilidad" active={isActive("/dashboard/availability")} collapsed={collapsed} />
               <NavItem href="/dashboard/classes" icon={<MonitorPlay size={20} />} label="Mis Clases" active={isActive("/dashboard/classes")} collapsed={collapsed} />
               <NavItem href="/dashboard/materials" icon={<Book size={20} />} label="Materiales" active={isActive("/dashboard/materials")} collapsed={collapsed} />
               <NavItem href="/dashboard/homework" icon={<ClipboardEdit size={20} />} label="Mis Tareas" active={isActive("/dashboard/homework")} collapsed={collapsed} />
