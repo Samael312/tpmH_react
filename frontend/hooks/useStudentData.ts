@@ -21,6 +21,8 @@ export interface AvailableSlot {
   end_time_utc: string;
   duration_minutes: number;
   is_preferred: boolean;
+  is_available: boolean;
+  is_past?: boolean;
 }
 
 export interface StudentEnrollment {
@@ -59,6 +61,14 @@ export interface StudentHomework {
     feedback?: string;
     graded_at?: string;
   } | null;
+}
+
+// ─── Resolución del profesor según el modo de la plataforma ──────────────────
+export interface TeacherResolution {
+  loading: boolean;
+  isSingleTenant: boolean;
+  teacherUsername: string | null;
+  hasChosenTeacher: boolean; // solo relevante en multi-tenant
 }
 
 export interface TeacherPublicProfile {
@@ -115,31 +125,80 @@ export function useStudentClasses(includeHistory = false) {
   return { classes, loading, refetch: fetch };
 }
 
-// ─── Slots disponibles ────────────────────────────────────────────────────────
-export function useAvailableSlots(date: string, duration: number) {
-  const [slots, setSlots]     = useState<AvailableSlot[]>([]);
-  const [loading, setLoading] = useState(false);
-  
+export function useTeacherResolution() {
+  const [state, setState] = useState<TeacherResolution>({
+    loading: true,
+    isSingleTenant: true,
+    teacherUsername: null,
+    hasChosenTeacher: false,
+  });
+
   const fetch = useCallback(async () => {
-    if (!date) return;
-    setLoading(true);
+    setState(s => ({ ...s, loading: true }));
     try {
-      const featured_teacher = process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "mar12"; 
-      
-      const res = await api.get(
-        `/availability/${featured_teacher}/slots?date=${date}&duration=${duration}`
-      );
-      setSlots(res.data);
-    } catch (error) { 
-      console.error("Error fetching available slots:", error);
-      setSlots([]);
-    } finally { 
-      setLoading(false); 
+      const cfgRes = await api.get("/admin/platform-config");
+      const cfg = cfgRes.data;
+
+      if (cfg.is_single_tenant) {
+        setState({
+          loading: false,
+          isSingleTenant: true,
+          teacherUsername: cfg.featured_teacher?.username ?? null,
+          hasChosenTeacher: true, // no aplica bloqueo en single-tenant
+        });
+      } else {
+        const spRes = await api
+          .get("/users/me/student-profile")
+          .catch(() => ({ data: {} }));
+        const chosen = spRes.data?.teacher_username ?? null;
+        setState({
+          loading: false,
+          isSingleTenant: false,
+          teacherUsername: chosen,
+          hasChosenTeacher: !!chosen,
+        });
+      }
+    } catch {
+      setState({
+        loading: false,
+        isSingleTenant: true,
+        teacherUsername: null,
+        hasChosenTeacher: false,
+      });
     }
-  }, [date, duration]);
+  }, []);
 
   useEffect(() => { fetch(); }, [fetch]);
-  return { slots, loading, refetch: fetch };
+  return { ...state, refetch: fetch };
+}
+
+// ─── Slots disponibles ────────────────────────────────────────────────────────
+export function useAvailableSlots(date: string, duration: number) {
+  const { teacherUsername, loading: resolvingTeacher } = useTeacherResolution();
+  const [slots, setSlots]     = useState<AvailableSlot[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetch = useCallback(async () => {
+    if (!date || !teacherUsername) {
+      setSlots([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await api.get(
+        `/availability/${teacherUsername}/slots?date=${date}&duration=${duration}`
+      );
+      setSlots(res.data);
+    } catch (error) {
+      console.error("Error fetching available slots:", error);
+      setSlots([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [date, duration, teacherUsername]);
+
+  useEffect(() => { fetch(); }, [fetch]);
+  return { slots, loading: loading || resolvingTeacher, refetch: fetch, teacherUsername };
 }
 
 // ─── Enrollments ──────────────────────────────────────────────────────────────

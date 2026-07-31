@@ -1,14 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAvailableSlots, useEnrollments } from "@/hooks/useStudentData";
+import { useAvailableSlots, useEnrollments, useTeacherResolution } from "@/hooks/useStudentData";
 import {
   Calendar, Clock, CreditCard,
   Upload, Check, X, ChevronLeft,
-  ChevronRight, AlertCircle, Video,
+  ChevronRight, AlertCircle, Video, AlertTriangle,
   Sparkles, Package as PackageIcon, Hourglass,
 } from "lucide-react";
 import api from "@/lib/api";
+import Link from "next/link";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 type BookingStage = "loading" | "needs_trial" | "trial_in_progress" | "needs_package" | "ready";
@@ -243,43 +244,55 @@ function StepSelectSlot({
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3
-                          max-h-[400px] overflow-y-auto pr-1">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4
+                          max-h-[400px] overflow-y-auto pr-1 pt-3">
             {slots.map((slot, i) => {
               const preferred = isPreferredSlot(slot);
+              const blocked = !slot.is_available || slot.is_past;
+
               return (
                 <button
                   key={i}
-                  onClick={() => onSelect(date, slot, duration)}
+                  onClick={() => !blocked && onSelect(date, slot, duration)}
+                  disabled={blocked}
                   className={`
-                    relative py-4 px-3 rounded-2xl text-center
-                    border-2 transition-all duration-200
-                    hover:-translate-y-0.5 hover:shadow-md
-                    ${preferred
-                      ? "border-purple-300 bg-purple-50/80 hover:border-purple-400 shadow-sm shadow-purple-100"
-                      : "border-slate-100 bg-white hover:border-pink-300"
-                    }
-                  `}
-                >
-                  {preferred && (
-                    <div className="absolute -top-2 left-1/2 -translate-x-1/2
-                                    bg-purple-500 text-white text-[8px] font-black
-                                    uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm">
-                      Preferido
-                    </div>
-                  )}
-                  <Clock className={`w-4 h-4 mx-auto mb-1.5
-                    ${preferred ? "text-purple-500" : "text-slate-400"}`} />
-                  <p className={`text-base font-black
-                    ${preferred ? "text-purple-800" : "text-slate-800"}`}>
-                    {formatTime(slot.start_time_utc)}
-                  </p>
-                  <p className="text-[10px] text-slate-400 font-bold mt-0.5">
-                    hasta {formatTime(slot.end_time_utc)}
-                  </p>
-                </button>
-              );
-            })}
+                      relative py-4 px-3 rounded-2xl text-center
+                      border-2 transition-all duration-200
+                      ${blocked
+                        ? "border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed"
+                        : "hover:-translate-y-0.5 hover:shadow-md " +
+                          (preferred
+                            ? "border-purple-300 bg-purple-50/80 hover:border-purple-400 shadow-sm shadow-purple-100"
+                            : "border-slate-100 bg-white hover:border-pink-300")
+                      }
+                    `}
+                  >
+                    {preferred && !blocked && (
+                      <div className="absolute -top-2 left-1/2 -translate-x-1/2
+                                      bg-purple-500 text-white text-[8px] font-black
+                                      uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm">
+                        Preferido
+                      </div>
+                    )}
+                    {blocked && (
+                      <div className="absolute -top-2 left-1/2 -translate-x-1/2
+                                      bg-slate-400 text-white text-[8px] font-black
+                                      uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm">
+                        {slot.is_past ? "Pasado" : "Ocupado"}
+                      </div>
+                    )}
+                    <Clock className={`w-4 h-4 mx-auto mb-1.5
+                      ${blocked ? "text-slate-300" : preferred ? "text-purple-500" : "text-slate-400"}`} />
+                    <p className={`text-base font-black
+                      ${blocked ? "text-slate-400" : preferred ? "text-purple-800" : "text-slate-800"}`}>
+                      {formatTime(slot.start_time_utc)}
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                      hasta {formatTime(slot.end_time_utc)}
+                    </p>
+                  </button>
+                );
+              })}
           </div>
         )}
       </div>
@@ -764,14 +777,15 @@ function NeedsPackageScreen({ onSelected }: { onSelected: () => void }) {
   const [loading, setLoading] = useState(true);
   const [selecting, setSelecting] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const { teacherUsername } = useTeacherResolution();
 
   useEffect(() => {
-    const username = process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "mar12";
-    api.get(`/packages/teacher/${username}`)
+    if (!teacherUsername) { setLoading(false); return; }
+    api.get(`/packages/teacher/${teacherUsername}`)
       .then(res => setPackages(res.data))
       .catch(() => setPackages([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [teacherUsername]);
 
   const choose = async (packageId: number) => {
     setSelecting(packageId);
@@ -878,6 +892,15 @@ export default function SchedulePage() {
 
   const { enrollments, refetch: refetchEnrollments } = useEnrollments();
   const activeEnrollment = enrollments.find(e => e.status === "active");
+
+  const {
+    loading: resolvingTeacher,
+    isSingleTenant,
+    teacherUsername,
+    hasChosenTeacher,
+  } = useTeacherResolution();
+
+  const teacherBlocked = !resolvingTeacher && !isSingleTenant && !hasChosenTeacher;
 
   const loadStage = () => {
     api.get("/payments/booking-status")
@@ -986,6 +1009,32 @@ export default function SchedulePage() {
           )}
         </div>
 
+        {teacherBlocked && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4
+                          flex items-center justify-between gap-4 max-w-2xl
+                          animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-black text-amber-800">
+                  Aún no has elegido un profesor
+                </p>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  Elige tu profesor para poder ver su disponibilidad y agendar clases.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/dashboard/teachers"
+              className="flex-shrink-0 px-4 py-2.5 bg-amber-500 hover:bg-amber-600
+                         text-white text-xs font-bold rounded-xl shadow-sm
+                         transition-colors whitespace-nowrap"
+            >
+              Elegir profesor
+            </Link>
+          </div>
+        )}
+
         {stage === "ready" && step === "payment" && !activeEnrollment && (
           <div className="bg-rose-50 border border-rose-100 text-rose-600
                           px-4 py-3 rounded-xl text-xs font-bold
@@ -996,7 +1045,7 @@ export default function SchedulePage() {
           </div>
         )}
 
-        <div className="animate-in fade-in duration-300">
+        <div className={`animate-in fade-in duration-300 ${teacherBlocked ? "opacity-40 pointer-events-none select-none" : ""}`}>
           {stage === "loading" && (
             <div className="flex justify-center py-24">
               <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500

@@ -295,29 +295,36 @@ function RescheduleModal({
                                     overflow-y-auto pr-1">
                       {slots.map((slot, i) => {
                         const isSelected = selected?.start_time_utc === slot.start_time_utc;
+                        const blocked = !slot.is_available || slot.is_past;
                         return (
                           <button
                             key={i}
-                            onClick={() => setSelected(slot)}
+                            onClick={() => !blocked && setSelected(slot)}
+                            disabled={blocked}
                             className={`
                               py-2.5 px-3 rounded-xl text-center border-2 flex flex-col items-center justify-center
                               transition-all duration-200 relative group
-                              ${isSelected
-                                ? "border-pink-500 bg-pink-50 shadow-md shadow-pink-100"
-                                : slot.is_preferred
-                                  ? "border-purple-200 bg-purple-50/60 hover:border-purple-300"
-                                  : "border-slate-100 bg-white hover:border-pink-200 shadow-sm"
+                              ${blocked
+                                ? "border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed"
+                                : isSelected
+                                  ? "border-pink-500 bg-pink-50 shadow-md shadow-pink-100"
+                                  : slot.is_preferred
+                                    ? "border-purple-200 bg-purple-50/60 hover:border-purple-300"
+                                    : "border-slate-100 bg-white hover:border-pink-200 shadow-sm"
                               }
                             `}
                           >
                             <span className={`text-sm font-black tracking-tight
-                              ${isSelected ? "text-pink-600" : "text-slate-700"}`}>
+                              ${blocked ? "text-slate-400" : isSelected ? "text-pink-600" : "text-slate-700"}`}>
                               {formatTimeLocal(slot.start_time_utc)}
                             </span>
-                            {slot.is_preferred && (
-                              <span className="text-[9px] font-black text-purple-600
-                                               uppercase tracking-wider mt-0.5">
-                                ★ Preferido
+                            {blocked ? (
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-0.5">
+                                {slot.is_past ? "Pasado" : "Ocupado"}
+                              </span>
+                            ) : slot.is_preferred && (
+                              <span className="text-[9px] font-black text-purple-600 uppercase tracking-wider mt-0.5">
+                                ★ Tu Preferido
                               </span>
                             )}
                           </button>

@@ -22,7 +22,7 @@ from app.core.timezone import (
     utc_now,
     convert_local_time_to_utc_string,
     build_weekly_range_utc,
-    get_available_slots_utc,
+    get_all_slots_utc,
     is_slot_in_past,
     validate_timezone,
 )
@@ -297,13 +297,13 @@ def get_teacher_available_slots(
     # 6. Calcular slots libres en UTC
     all_busy = busy_from_exceptions + busy_from_classes
 
-    free_slots = get_available_slots_utc(
+    all_slots = get_all_slots_utc(
         availability_ranges=availability_ranges,
         busy_ranges=all_busy,
         duration_minutes=duration,
     )
 
-    if not free_slots:
+    if not all_slots:
         return []
 
     # 7. Obtener preferencias del estudiante si está autenticado
@@ -331,7 +331,7 @@ def get_teacher_available_slots(
     duration_td = timedelta(minutes=duration)
 
     result = []
-    for slot_start in free_slots:
+    for slot_start, is_busy in all_slots:
         slot_end = slot_start + duration_td
 
         result.append(AvailableSlotResponse(
@@ -339,7 +339,8 @@ def get_teacher_available_slots(
             end_time_utc=slot_end,
             duration_minutes=duration,
             is_past=is_slot_in_past(slot_start),
-            is_preferred=is_preferred_slot(slot_start, student_preferences)
+            is_preferred=is_preferred_slot(slot_start, student_preferences),
+            is_available=not is_busy
         ))
 
     return result

@@ -97,6 +97,8 @@ class AvailableSlotResponse(BaseModel):
     end_time_utc: datetime      # "2025-04-14T14:00:00Z"
     duration_minutes: int
     is_past: bool = False       # True si el slot ya pasó
+    is_preferred: bool = False   # True si el slot coincide con la preferencia del estudiante
+    is_available: bool = True      # True si el slot está disponible para reservar
 
 class PreferenceDraft(BaseModel):
     day_of_week: int

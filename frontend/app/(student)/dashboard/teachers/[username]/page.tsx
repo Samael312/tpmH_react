@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import { useTeacherResolution } from "@/hooks/useStudentData";
 
 function displayName(t: any) {
   return t?.name || t?.user_username?.replace(/[_.]/g, " ") || "Profesor";
@@ -18,14 +19,24 @@ export default function TeacherBrowsePage() {
   const router = useRouter();
   const username = params?.username as string;
 
+  const { isSingleTenant } = useTeacherResolution();
+
   const [teacher, setTeacher] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>([]);
   const [myTeacherUsername, setMyTeacherUsername] = useState<string | null>(null);
+  const [isStudent, setIsStudent] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [choosing, setChoosing] = useState(false);
   const [chooseError, setChooseError] = useState("");
   const [chosen, setChosen] = useState(false);
+
+  // Estados para el formulario de reseñas
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewError, setReviewError] = useState("");
 
   useEffect(() => {
     if (!username) return;
@@ -40,6 +51,8 @@ export default function TeacherBrowsePage() {
         setTeacher(tRes.data);
         setReviews(Array.isArray(rRes.data) ? rRes.data : []);
         setMyTeacherUsername(sRes.data?.teacher_username ?? null);
+        // Si el objeto no está vacío, asumimos que es un estudiante válido
+        setIsStudent(!!sRes.data && Object.keys(sRes.data).length > 0);
       })
       .catch(() => setError("No se pudo cargar el perfil de este profesor."))
       .finally(() => setLoading(false));
@@ -63,6 +76,40 @@ export default function TeacherBrowsePage() {
       setChooseError(e.response?.data?.detail || "Error seleccionando profesor");
     } finally {
       setChoosing(false);
+    }
+  };
+
+  const submitReview = async () => {
+    if (reviewRating === 0) {
+      setReviewError("Por favor selecciona una calificación en estrellas.");
+      return;
+    }
+    if (!reviewComment.trim()) {
+      setReviewError("Por favor escribe un comentario.");
+      return;
+    }
+
+    setSubmittingReview(true);
+    setReviewError("");
+    try {
+      // FIX: Agregamos ${username} a la URL del POST y enviamos solo rating y comment
+      await api.post(`/reviews/${username}`, {
+        rating: reviewRating,
+        comment: reviewComment,
+      });
+
+      // Recargar las reseñas después de enviar
+      const rRes = await api.get(`/reviews/${username}`);
+      setReviews(Array.isArray(rRes.data) ? rRes.data : []);
+      
+      // Limpiar formulario y cerrar
+      setShowReviewForm(false);
+      setReviewRating(0);
+      setReviewComment("");
+    } catch (e: any) {
+      setReviewError(e.response?.data?.detail || "Error al enviar tu reseña.");
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -149,24 +196,26 @@ export default function TeacherBrowsePage() {
             </div>
 
             <div className="flex flex-col gap-3 w-full md:w-auto">
-              {!isMine ? (
-                <button
-                  onClick={chooseTeacher}
-                  disabled={choosing}
-                  className="flex items-center justify-center gap-2 bg-white text-pink-600 hover:bg-pink-50
-                             px-5 py-3 rounded-2xl text-sm font-bold transition-all duration-200 shadow-lg
-                             disabled:opacity-60"
-                >
-                  {choosing ? <Loader2 className="w-4 h-4 animate-spin" /> : chosen ? (
-                    <><Check className="w-4 h-4" /> ¡Profesor elegido!</>
-                  ) : (
-                    <><UserCheck className="w-4 h-4" /> {myTeacherUsername ? "Cambiar a este profesor" : "Elegir este profesor"}</>
-                  )}
-                </button>
-              ) : (
-                <span className="flex items-center justify-center gap-2 bg-white/20 text-white px-5 py-3 rounded-2xl text-sm font-bold">
-                  <Check className="w-4 h-4" /> Ya es tu profesor
-                </span>
+              {!isSingleTenant && (
+                !isMine ? (
+                  <button
+                    onClick={chooseTeacher}
+                    disabled={choosing}
+                    className="flex items-center justify-center gap-2 bg-white text-pink-600 hover:bg-pink-50
+                               px-5 py-3 rounded-2xl text-sm font-bold transition-all duration-200 shadow-lg
+                               disabled:opacity-60"
+                  >
+                    {choosing ? <Loader2 className="w-4 h-4 animate-spin" /> : chosen ? (
+                      <><Check className="w-4 h-4" /> ¡Profesor elegido!</>
+                    ) : (
+                      <><UserCheck className="w-4 h-4" /> {myTeacherUsername ? "Cambiar a este profesor" : "Elegir este profesor"}</>
+                    )}
+                  </button>
+                ) : (
+                  <span className="flex items-center justify-center gap-2 bg-white/20 text-white px-5 py-3 rounded-2xl text-sm font-bold">
+                    <Check className="w-4 h-4" /> Ya es tu profesor
+                  </span>
+                )
               )}
 
               <button
@@ -278,7 +327,64 @@ export default function TeacherBrowsePage() {
               <h2 className="text-xl font-black text-slate-800">
                 Reseñas de estudiantes ({safeReviews.length})
               </h2>
+              {isStudent && !showReviewForm && (
+                <button
+                  onClick={() => setShowReviewForm(true)}
+                  className="text-sm font-bold text-pink-600 hover:text-pink-700 bg-pink-50 hover:bg-pink-100 px-4 py-2 rounded-xl transition-colors"
+                >
+                  Dejar una reseña
+                </button>
+              )}
             </div>
+
+            {/* Formulario para dejar reseña */}
+            {showReviewForm && (
+              <div className="bg-white/95 backdrop-blur-xl rounded-2xl border border-pink-200 shadow-lg p-6 space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                <h3 className="text-md font-bold text-slate-800">Escribe tu reseña</h3>
+                
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <button 
+                      key={star} 
+                      onClick={() => setReviewRating(star)}
+                      className="focus:outline-none transition-transform hover:scale-110 active:scale-95"
+                    >
+                      <Star className={`w-8 h-8 transition-colors ${star <= reviewRating ? "text-amber-400 fill-amber-400" : "text-slate-200"}`} />
+                    </button>
+                  ))}
+                </div>
+
+                <textarea 
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  placeholder="¿Qué te parecieron las clases con este profesor?"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition-all resize-none"
+                  rows={3}
+                />
+
+                {reviewError && (
+                  <p className="text-xs font-bold text-rose-500 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> {reviewError}
+                  </p>
+                )}
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button 
+                    onClick={() => setShowReviewForm(false)}
+                    className="px-5 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    onClick={submitReview}
+                    disabled={submittingReview}
+                    className="flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-xl disabled:opacity-50 transition-all shadow-md active:scale-95 min-w-[140px]"
+                  >
+                    {submittingReview ? <Loader2 className="w-4 h-4 animate-spin" /> : "Enviar reseña"}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {safeReviews.length === 0 ? (
               <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-xl py-16 text-center space-y-3">
@@ -290,7 +396,7 @@ export default function TeacherBrowsePage() {
             ) : (
               <div className="space-y-4">
                 {safeReviews.map((r: any) => (
-                  <div key={r.id} className="bg-white/95 backdrop-blur-xl rounded-2xl border border-slate-100 shadow-lg p-5">
+                  <div key={r.id} className="bg-white/95 backdrop-blur-xl rounded-2xl border border-slate-100 shadow-lg p-5 hover:-translate-y-0.5 transition-transform duration-200">
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-pink-400 to-rose-400 flex items-center justify-center flex-shrink-0 shadow-md shadow-pink-200">

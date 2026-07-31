@@ -193,6 +193,41 @@ def get_available_slots_utc(
     # Eliminar duplicados y ordenar
     return sorted(set(free_slots))
 
+def get_all_slots_utc(
+    availability_ranges: List[Tuple[datetime, datetime]],
+    busy_ranges: List[Tuple[datetime, datetime]],
+    duration_minutes: int,
+    step_minutes: int = 30,
+) -> List[Tuple[datetime, bool]]:
+    """
+    Igual que get_available_slots_utc pero NO descarta los slots ocupados:
+    devuelve todos los slots dentro de los rangos de disponibilidad,
+    marcando cada uno con su estado de ocupación (is_busy).
+
+    Returns:
+        Lista de tuplas (slot_start_utc, is_busy) ordenada cronológicamente.
+        Si un slot cae en más de un rango, se marca ocupado si lo está
+        en cualquiera de ellos.
+    """
+    duration = timedelta(minutes=duration_minutes)
+    step = timedelta(minutes=step_minutes)
+
+    slots: dict[datetime, bool] = {}
+
+    for range_start, range_end in availability_ranges:
+        curr = range_start
+        while curr + duration <= range_end:
+            slot_end = curr + duration
+            is_busy = any(
+                curr < busy_end and slot_end > busy_start
+                for busy_start, busy_end in busy_ranges
+            )
+            if curr not in slots or is_busy:
+                slots[curr] = is_busy
+            curr += step
+
+    return sorted(slots.items())
+
 
 def is_slot_in_past(slot_utc: datetime, buffer_minutes: int = 60) -> bool:
     """

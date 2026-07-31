@@ -51,6 +51,22 @@ def _get_featured_teacher(db: Session):
         return None
     return db.query(TeacherProfile).filter(TeacherProfile.user_username == username).first()
 
+def _sync_student_teacher_username(current_user: User, teacher: TeacherProfile, db: Session):
+    """
+    En modo single-tenant, al agendar una clase el estudiante queda
+    vinculado automáticamente al profesor featured (sin necesidad de
+    pasar por choose-teacher).
+    """
+    from app.models.payment_config import PlatformConfig
+    config = db.query(PlatformConfig).first()
+    if not config or not config.is_single_tenant:
+        return
+
+    student_profile = current_user.student_profile
+    if student_profile and student_profile.teacher_username != teacher.user_username:
+        student_profile.teacher_username = teacher.user_username
+        db.commit()
+
 def _get_trial_teacher(current_user: User, db: Session):
     """
     Determina con qué profesor se agenda la clase de prueba.
@@ -239,6 +255,8 @@ def book_class(
                 detail="Debes elegir un profesor antes de reservar tu clase de prueba"
             )
 
+        _sync_student_teacher_username(current_user, teacher, db)
+
         trial_start = data.start_time_utc
         trial_end = trial_start + timedelta(minutes=30)
 
@@ -290,6 +308,8 @@ def book_class(
 
     if not enrollment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado o no activo")
+
+    _sync_student_teacher_username(current_user, enrollment.teacher, db)
 
     if enrollment.classes_used >= enrollment.classes_total:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Has agotado todas las clases de este paquete")
