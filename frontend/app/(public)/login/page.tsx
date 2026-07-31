@@ -112,7 +112,7 @@ export default function LoginPage() {
       <div className="absolute top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/25 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-100px] left-[-100px] w-[400px] h-[400px] bg-rose-300/20 rounded-full blur-[100px] pointer-events-none" />
 
-      <main className="flex-1 flex items-center justify-center p-4 relative z-10">
+      <main className="flex-1 flex justify-center pt-8 p-4 relative z-10">
         <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-6 duration-500">
 
           {/* Logo y Encabezado */}
@@ -139,8 +139,8 @@ export default function LoginPage() {
           )}
 
           {/* Formulario */}
-          <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-8">
-            <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6">
+            <form onSubmit={handleSubmit} className="space-y-3">
               <div className="group">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Usuario o email</label>
                 <div className="relative">
@@ -148,9 +148,9 @@ export default function LoginPage() {
                   <input
                     type="text"
                     value={form.login}
-                    onChange={(e) => setForm({ ...form, login: e.target.value })}
+                    onChange={(e) => setForm({ ...form, login: e.target.value.toLowerCase() })}
                     placeholder="Tu usuario"
-                    className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-11 pr-4 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
+                    className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-11 pr-4 py-2.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
                   />
                 </div>
               </div>
@@ -167,7 +167,7 @@ export default function LoginPage() {
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                     placeholder="••••••••"
-                    className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-11 pr-11 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
+                    className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-11 pr-11 py-2.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
                   />
                   <button
                     type="button"
@@ -189,7 +189,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading || !form.login || !form.password}
-                className="w-full py-3.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full py-2.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {loading
                   ? <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -198,7 +198,7 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <div className="flex items-center gap-3 my-6">
+            <div className="flex items-center gap-3 my-4">
               <div className="flex-1 h-px bg-slate-100" />
               <span className="text-[10px] font-black text-slate-400 uppercase">O</span>
               <div className="flex-1 h-px bg-slate-100" />
@@ -206,7 +206,7 @@ export default function LoginPage() {
 
             <button
               onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/google`}
-              className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-100 hover:border-slate-200 text-slate-700 text-sm font-bold py-3.5 rounded-xl transition-all hover:shadow-md"
+              className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-100 hover:border-slate-200 text-slate-700 text-sm font-bold py-2.5 rounded-xl transition-all hover:shadow-md"
             >
               <svg viewBox="0 0 24 24" className="w-5 h-5">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -218,7 +218,7 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <p className="text-center text-sm text-slate-500 mt-8">
+          <p className="text-center text-sm text-slate-500 mt-4">
             ¿No tienes cuenta? <Link href="/register" className="font-black text-pink-600 hover:text-pink-700">Regístrate gratis</Link>
           </p>
         </div>
