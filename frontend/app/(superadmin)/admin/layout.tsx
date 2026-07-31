@@ -17,7 +17,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (!user || user.role !== 'superadmin') {
       router.push('/login')
     }
-  }, [user])
+  }, [user, hasHydrated])
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">

@@ -68,7 +68,7 @@ export default function TeacherLayout({
           setReady(true)
         }
       })
-  }, [pathname])
+  }, [pathname, hasHydrated])
 
   // Mientras se verifica la API, mostrar spinner en lugar del dashboard
   if (!ready) {

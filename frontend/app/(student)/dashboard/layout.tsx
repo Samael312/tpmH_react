@@ -73,7 +73,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         setChecked(true);
       }
     });
-  }, [pathname]);
+  }, [pathname, hasHydrated]);
 
   const handleLogout = () => {
     logout();
