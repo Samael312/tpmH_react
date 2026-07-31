@@ -9,10 +9,11 @@ import NavBar from '@/components/layout/NavBar'
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
-  const { user, logout } = useAuthStore()
+  const { user, logout, hasHydrated } = useAuthStore()
   const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
+    if (!hasHydrated) return
     if (!user || user.role !== 'superadmin') {
       router.push('/login')
     }

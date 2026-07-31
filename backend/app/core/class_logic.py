@@ -206,18 +206,26 @@ def finalize_past_classes(db: Session) -> int:
     Retorna cuántas clases se actualizaron.
     """
     now = utc_now()
+    count = 0
 
-    expired = db.query(Class).filter(
+    # confirmadas que ya pasaron -> finalizada
+    expired_confirmed = db.query(Class).filter(
         Class.status == "confirmed",
         Class.end_time_utc < now,
     ).all()
+    for c in expired_confirmed:
+        c.status = "finalized"
+        count += 1
 
-    count = 0
-    for class_ in expired:
-        class_.status = "finalized"
+    # nunca se confirmaron/pagaron y ya pasó su horario -> no_show
+    expired_pending = db.query(Class).filter(
+        Class.status.in_(["pending", "pending_trial", "pending_payment"]),
+        Class.end_time_utc < now,
+    ).all()
+    for c in expired_pending:
+        c.status = "no_show"
         count += 1
 
     if count:
         db.commit()
-
     return count

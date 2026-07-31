@@ -15,7 +15,7 @@ export default function TeacherLayout({
 }) {
   const router   = useRouter()
   const pathname = usePathname()
-  const { user, token, setUser } = useAuthStore()
+  const { user, token, setUser, hasHydrated } = useAuthStore()
 
   const isFullscreen = FULLSCREEN_ROUTES.some(r => pathname.startsWith(r))
 
@@ -23,6 +23,8 @@ export default function TeacherLayout({
   const [ready, setReady] = useState(isFullscreen)
 
   useEffect(() => {
+    if (!hasHydrated) return
+
     if (!user || !token) {
       router.push('/login')
       return

@@ -23,13 +23,14 @@ const FULLSCREEN_ROUTES = ["/dashboard/onboarding"];
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, token, logout, setUser } = useAuthStore();
+  const { user, token, logout, setUser, hasHydrated } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
   const [checked, setChecked] = useState(false);
 
   const isFullscreen = FULLSCREEN_ROUTES.some((r) => pathname.startsWith(r));
 
   useEffect(() => {
+    if (!hasHydrated) return;
     if (!user || !token) {
       router.push("/login");
       return;

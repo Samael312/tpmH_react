@@ -456,7 +456,7 @@ export default function TeacherProfilePage() {
 
           {profile && (
             <a
-            href="/teacher/profile/public"
+            href="/teacher/profile/preview"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:border-pink-300 hover:text-pink-600 transition-all shadow-sm"

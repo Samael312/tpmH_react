@@ -21,6 +21,7 @@ from app.core.class_logic import (
     can_cancel_class,
     can_reschedule_class,
     update_enrollment_counter,
+    finalize_past_classes,
 )
 from app.core.timezone import UTC, utc_now
 from app.db.base import get_db
@@ -183,6 +184,7 @@ def get_my_classes_student(
     db: Session = Depends(get_db)
 ):
     """Clases del estudiante — próximas e historial"""
+    finalize_past_classes(db)  # Aseguramos que las clases pasadas se finalicen antes de listar
     now = utc_now()
     student_id = current_user.student_profile.id
 
@@ -361,6 +363,7 @@ def get_my_classes_teacher(
     db: Session = Depends(get_db)
 ):
     """Clases del profesor con filtros"""
+    finalize_past_classes(db)  # Aseguramos que las clases pasadas se finalicen antes de listar
     now = utc_now()
     teacher_id = current_user.teacher_profile.id
 

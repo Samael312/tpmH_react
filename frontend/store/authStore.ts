@@ -22,11 +22,13 @@ interface AuthStore {
   user: User | null;
   token: string | null;
   isLoading: boolean;
+  hasHydrated: boolean;
 
   login: (token: string, user: User) => void;
   logout: () => void;
   setLoading: (loading: boolean) => void;
   setUser: (user: User) => void;
+  setHasHydrated: (hydrated: boolean) => void;
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -35,6 +37,7 @@ export const useAuthStore = create<AuthStore>()(
       user: null,
       token: Cookies.get("access_token") || null,
       isLoading: false,
+      hasHydrated: false,
 
       login: (token, user) => {
         Cookies.set("access_token", token, { expires: 7, secure: true });
@@ -49,6 +52,8 @@ export const useAuthStore = create<AuthStore>()(
       setLoading: (loading) => set({ isLoading: loading }),
 
       setUser: (user) => set({ user }),
+
+      setHasHydrated: (hydrated) => set({ hasHydrated: hydrated }),
     }),
     {
       name: "auth-storage",
@@ -56,6 +61,10 @@ export const useAuthStore = create<AuthStore>()(
         token: state.token,
         user: state.user,
       }),
+      onRehydrateStorage: () => (state) => {
+        // Se llama cuando Zustand termina de leer localStorage
+        state?.setHasHydrated(true);
+      },
     }
   )
 );
