@@ -37,6 +37,7 @@ class StudentProfileResponse(BaseModel):
     goal: Optional[str] = None
     phone_number: Optional[str] = None
     preferred_payment_methods: Optional[List[str]] = []
+    teacher_username: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -56,6 +57,7 @@ class StudentProfileUpdate(BaseModel):
     goal: Optional[str] = None
     phone_number: Optional[str] = None
     preferred_payment_methods: Optional[List[str]] = None
+    
 
 class UpdateProfileRequest(BaseModel):
     """
@@ -74,3 +76,6 @@ class UpdateProfileRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+class ChooseTeacherRequest(BaseModel):
+    teacher_username: str

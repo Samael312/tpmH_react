@@ -472,10 +472,10 @@ export default function StudentDashboard() {
               icon={<ClipboardList className="w-7 h-7" />}
             />
             <QuickAction
-              href="/dashboard/teacher"
+              href="/dashboard/teachers"
               color="emerald"
-              label="Mi Profesora"
-              description="Contacta y conoce a tu profesora"
+              label="Mi Profesor"
+              description="Contacta y conoce a tu profesor o profesora"
               icon={<CheckCircle className="w-7 h-7" />}
             />
           </div>

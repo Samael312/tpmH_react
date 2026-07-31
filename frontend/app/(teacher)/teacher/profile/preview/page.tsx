@@ -140,16 +140,30 @@ export default function TeacherProfilePage() {
           }
 
           resolvedName = teacherData?.user_username || currentUser.username;
+        
         } else if (currentUser.role === "student") {
           try {
-            const studentProfileRes = await api.get("/me/student-profile");
-            resolvedName = studentProfileRes.data?.teacher_username;
+            const cfgRes = await api.get("/admin/platform-config");
+            const cfg = cfgRes.data;
+
+            if (cfg.is_single_tenant && cfg.featured_teacher?.username) {
+              resolvedName = cfg.featured_teacher.username;
+            } else {
+              const studentProfileRes = await api.get("/users/me/student-profile");
+              resolvedName = studentProfileRes.data?.teacher_username;
+            }
           } catch (profileErr) {
-            console.error("No se pudo obtener el perfil de estudiante:", profileErr);
+            console.error("No se pudo resolver el profesor del estudiante:", profileErr);
           }
 
           if (!resolvedName) {
             resolvedName = (params?.username as string) || process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME || "";
+          }
+
+          if (!resolvedName) {
+            setError("Aún no has elegido un profesor. Ve a la sección Profesores para elegir el tuyo.");
+            setLoading(false);
+            return;
           }
 
           if (resolvedName) {

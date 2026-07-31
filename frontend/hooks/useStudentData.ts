@@ -237,3 +237,88 @@ export function useFeaturedTeacher() {
   useEffect(() => { fetch(); }, [fetch]);
   return { teacher, reviews, loading, refetch: fetch };
 }
+
+// ─── Directorio de profesores y config de plataforma ──────────────────────
+export interface TeacherDirectoryItem {
+  user_username: string;
+  bio: string | null;
+  title: string | null;
+  profile_photo_url: string | null;
+  languages: string[];
+  subjects: string[];
+  skills: string[];
+  average_rating?: number;
+  total_reviews?: number;
+}
+
+export function useTeacherDirectory() {
+  const [teachers, setTeachers] = useState<TeacherDirectoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetch = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await api.get("/teachers/");
+      const list: TeacherDirectoryItem[] = res.data || [];
+
+      const withRatings = await Promise.all(
+        list.map(async (t) => {
+          try {
+            const r = await api.get(`/reviews/${t.user_username}/summary`);
+            return {
+              ...t,
+              average_rating: r.data.average_rating,
+              total_reviews: r.data.total_reviews,
+            };
+          } catch {
+            return t;
+          }
+        })
+      );
+      setTeachers(withRatings);
+    } catch (error) {
+      console.error("Error fetching teachers directory:", error);
+      setTeachers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetch(); }, [fetch]);
+  return { teachers, loading, refetch: fetch };
+}
+
+export interface PlatformConfigInfo {
+  platform_name: string;
+  platform_tagline: string | null;
+  is_single_tenant: boolean;
+  featured_teacher: {
+    username: string;
+    name: string;
+    title: string | null;
+    bio: string | null;
+    avatar: string | null;
+    subjects: string[];
+  } | null;
+}
+
+export function usePlatformConfig() {
+  const [config, setConfig] = useState<PlatformConfigInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetch = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await api.get("/admin/platform-config");
+      setConfig(res.data);
+    } catch (error) {
+      console.error("Error fetching platform config:", error);
+      setConfig(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetch(); }, [fetch]);
+  return { config, loading, refetch: fetch };
+}

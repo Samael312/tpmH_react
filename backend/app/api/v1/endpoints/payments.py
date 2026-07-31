@@ -16,7 +16,7 @@ from app.models.class_ import Class, ClassType
 from app.models.payment import Payment, TeacherWallet, Withdrawal
 from app.models.package import Enrollment
 from app.models.package import Package
-from app.models.teacher import TeacherProfile
+from app.models.teacher import TeacherProfile, TeacherStatus
 from app.models.payment_config import PaymentConfig
 from app.core.timezone import utc_now
 from app.schemas.payments import (
@@ -51,6 +51,27 @@ def _get_featured_teacher(db: Session):
         return None
     return db.query(TeacherProfile).filter(TeacherProfile.user_username == username).first()
 
+def _get_trial_teacher(current_user: User, db: Session):
+    """
+    Determina con qué profesor se agenda la clase de prueba.
+    - Modo single-tenant activo: siempre el profesor featured.
+    - Modo multi-tenant: el profesor que el estudiante haya elegido.
+    """
+    from app.models.payment_config import PlatformConfig
+    config = db.query(PlatformConfig).first()
+
+    if not config or config.is_single_tenant:
+        return _get_featured_teacher(db)
+
+    student_profile = current_user.student_profile
+    username = student_profile.teacher_username if student_profile else None
+    if not username:
+        return None
+
+    return db.query(TeacherProfile).filter(
+        TeacherProfile.user_username == username,
+        TeacherProfile.status == TeacherStatus.approved
+    ).first()
 
 
 # ─── CONFIGURACIÓN DE PAGOS ──────────────────────────────────────────────────
@@ -211,11 +232,11 @@ def book_class(
 
     # ─── Primera clase del estudiante: SIEMPRE es de prueba, sin paquete ───
     if stage == "needs_trial":
-        teacher = _get_featured_teacher(db)
+        teacher = _get_trial_teacher(current_user, db)
         if not teacher:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No hay profesor disponible para la clase de prueba"
+                detail="Debes elegir un profesor antes de reservar tu clase de prueba"
             )
 
         trial_start = data.start_time_utc

@@ -28,6 +28,15 @@ from app.models.payment_config import PlatformConfig
 router = APIRouter()
 
 
+# ─── SCHEMAS LOCALES ────────────────────────────────────────────────────────
+
+class PlatformConfigUpdate(BaseModel):
+    platform_name: Optional[str] = None
+    platform_tagline: Optional[str] = None
+    is_single_tenant: Optional[bool] = None
+    featured_teacher_username: Optional[str] = None
+
+
 # ─── DEPENDENCIES ───────────────────────────────────────────────────────────
 
 def require_superadmin(current_user: User = Depends(get_currtent_user)) -> User:
@@ -506,10 +515,7 @@ def get_platform_config(db: Session = Depends(get_db)):
 
 @router.patch("/platform-config")
 def update_platform_config(
-    featured_teacher_username: Optional[str] = None,
-    platform_name: Optional[str] = None,
-    platform_tagline: Optional[str] = None,
-    is_single_tenant: Optional[bool] = None,
+    data: PlatformConfigUpdate,
     current_user: User = Depends(get_currtent_user),
     db: Session = Depends(get_db)
 ):
@@ -519,9 +525,9 @@ def update_platform_config(
         config = PlatformConfig()
         db.add(config)
 
-    if featured_teacher_username:
+    if data.featured_teacher_username:
         teacher = db.query(TeacherProfile).filter(
-            TeacherProfile.user_username == featured_teacher_username
+            TeacherProfile.user_username == data.featured_teacher_username
         ).first()
         if not teacher:
             raise HTTPException(
@@ -529,13 +535,16 @@ def update_platform_config(
                 detail="Profesor no encontrado"
             )
         config.featured_teacher_id = teacher.id
+    elif data.featured_teacher_username == "":
+        # Permite "desvincular" al profesor si el input se envía vacío
+        config.featured_teacher_id = None
 
-    if platform_name:
-        config.platform_name = platform_name
-    if platform_tagline:
-        config.platform_tagline = platform_tagline
-    if is_single_tenant is not None:
-        config.is_single_tenant = is_single_tenant
+    if data.platform_name is not None:
+        config.platform_name = data.platform_name
+    if data.platform_tagline is not None:
+        config.platform_tagline = data.platform_tagline
+    if data.is_single_tenant is not None:
+        config.is_single_tenant = data.is_single_tenant
 
     db.commit()
     return {"message": "Configuración actualizada"}
@@ -581,5 +590,3 @@ def admin_update_user(
 
     db.commit()
     return {"ok": True}
-
-

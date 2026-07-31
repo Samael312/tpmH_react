@@ -16,7 +16,8 @@ from app.models.student_preferences import StudentSchedulePreference
 from app.core.timezone import convert_local_time_to_utc_string, validate_timezone
 from app.schemas.preferences import SetPreferencesRequest, PreferenceSlotResponse
 from app.core.storage import upload_file, delete_file
-
+from app.models.teacher import TeacherProfile, TeacherStatus
+from app.schemas.user import ChooseTeacherRequest
 
 logger = logging.getLogger(__name__)
 
@@ -458,3 +459,70 @@ def update_schedule_preferences(
         db.refresh(pref)
 
     return new_prefs
+
+@router.post("/me/choose-teacher")
+def choose_teacher(
+    data: ChooseTeacherRequest,
+    current_user: User = Depends(get_current_student),
+    db: Session = Depends(get_db)
+):
+    """El estudiante elige su profesor por primera vez."""
+    profile = current_user.student_profile
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Perfil de estudiante no encontrado"
+        )
+
+    if profile.teacher_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ya tienes un profesor asignado. Usa la opción de cambiar profesor."
+        )
+
+    teacher = db.query(TeacherProfile).filter(
+        TeacherProfile.user_username == data.teacher_username,
+        TeacherProfile.status == TeacherStatus.approved
+    ).first()
+
+    if not teacher:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profesor no encontrado o no disponible"
+        )
+
+    profile.teacher_username = data.teacher_username
+    db.commit()
+
+    return {"message": "Profesor asignado correctamente", "teacher_username": data.teacher_username}
+
+
+@router.put("/me/choose-teacher")
+def change_teacher(
+    data: ChooseTeacherRequest,
+    current_user: User = Depends(get_current_student),
+    db: Session = Depends(get_db)
+):
+    """El estudiante cambia el profesor que tenía asignado."""
+    profile = current_user.student_profile
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Perfil de estudiante no encontrado"
+        )
+
+    teacher = db.query(TeacherProfile).filter(
+        TeacherProfile.user_username == data.teacher_username,
+        TeacherProfile.status == TeacherStatus.approved
+    ).first()
+
+    if not teacher:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profesor no encontrado o no disponible"
+        )
+
+    profile.teacher_username = data.teacher_username
+    db.commit()
+
+    return {"message": "Profesor actualizado correctamente", "teacher_username": data.teacher_username}

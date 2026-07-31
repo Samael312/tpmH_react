@@ -19,6 +19,7 @@ interface PlatformConfig {
   platform_tagline: string | null
   is_single_tenant: boolean
   featured_teacher: any
+  featured_teacher_username?: string // NUEVO: Estado para controlar el input
 }
 
 export default function SettingsPage() {
@@ -29,9 +30,17 @@ export default function SettingsPage() {
 
   useEffect(() => {
     api.get('/payments/config').then(r => setPaymentConfig(r.data))
-    api.get('/admin/platform-config').then(r => setPlatformConfig(r.data))
+    
+    // NUEVO: Inicializamos el username a partir de los datos del backend
+    api.get('/admin/platform-config').then(r => {
+      setPlatformConfig({
+        ...r.data,
+        featured_teacher_username: r.data.featured_teacher?.username || ''
+      })
+    })
   }, [])
 
+  // ... (El savePaymentConfig se queda igual)
   const savePaymentConfig = async () => {
     setSaving(true)
     try {
@@ -48,11 +57,21 @@ export default function SettingsPage() {
   const savePlatformConfig = async () => {
     setSaving(true)
     try {
+      // NUEVO: Enviamos el username del profesor destacado al backend
       await api.patch('/admin/platform-config', {
         platform_name: platformConfig?.platform_name,
         platform_tagline: platformConfig?.platform_tagline,
         is_single_tenant: platformConfig?.is_single_tenant,
+        featured_teacher_username: platformConfig?.featured_teacher_username || null,
       })
+      
+      // NUEVO: Recargamos los datos para que el frontend traiga el objeto "featured_teacher" completo (con su nombre y avatar)
+      const r = await api.get('/admin/platform-config')
+      setPlatformConfig({
+        ...r.data,
+        featured_teacher_username: r.data.featured_teacher?.username || ''
+      })
+      
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e: any) {
@@ -76,7 +95,8 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-8">
-        {/* ─── Métodos de pago ─────────────────────────────────── */}
+        
+      {/* ─── Métodos de pago ─────────────────────────────────── */}
         <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-1.5 h-6 bg-emerald-400 rounded-full" />
@@ -225,7 +245,7 @@ export default function SettingsPage() {
             <div className="h-40 bg-slate-50 rounded-2xl animate-pulse border border-slate-100" />
           )}
         </Card>
-
+        
         {/* ─── Configuración de plataforma ─────────────────────────────────── */}
         <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-6">
           <div className="flex items-center gap-3 mb-2">
@@ -308,6 +328,28 @@ export default function SettingsPage() {
                   `}/>
                 </button>
               </div>
+
+              {/* NUEVO: Campo para asignar el profesor destacado */}
+              {platformConfig.is_single_tenant && (
+                <div className="space-y-2 pt-2 animate-in fade-in slide-in-from-top-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    Username del Profesor Destacado
+                  </label>
+                  <input
+                    type="text"
+                    value={platformConfig.featured_teacher_username || ''}
+                    onChange={e => setPlatformConfig({
+                      ...platformConfig,
+                      featured_teacher_username: e.target.value
+                    })}
+                    placeholder="Ejemplo: mar12"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300 transition-all"
+                  />
+                  <p className="text-xs text-slate-500 font-medium ml-1 mt-1">
+                    Ingresa el nombre de usuario exacto del profesor. Si el usuario no existe, arrojará un error.
+                  </p>
+                </div>
+              )}
 
               <div className="pt-2 flex justify-end">
                 <Button
