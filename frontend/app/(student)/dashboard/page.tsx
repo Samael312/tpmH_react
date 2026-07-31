@@ -182,7 +182,7 @@ export default function StudentDashboard() {
   const hasTrial = classList.some(c => c.class_type === "trial");
 
   const upcoming = classList
-    .filter(c => !["completed","cancelled","no_show"].includes(c.status))
+    .filter(c => !["completed","cancelled","no_show", "finalized"].includes(c.status))
     .sort((a, b) =>
       new Date(a.start_time_utc).getTime() -
       new Date(b.start_time_utc).getTime()

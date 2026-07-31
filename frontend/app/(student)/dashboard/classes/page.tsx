@@ -24,9 +24,10 @@ const STATUS_CONFIG: Record<string, {
   cancelled:       { label: "Cancelada",          badge: "bg-red-100 text-red-600",        border: "border-l-red-400",     dot: "bg-red-400" },
   no_show:         { label: "No asististe",       badge: "bg-red-100 text-red-600",        border: "border-l-red-600",     dot: "bg-red-600" },
   rescheduled:     { label: "Reagendada",         badge: "bg-orange-100 text-orange-700",  border: "border-l-orange-400",  dot: "bg-orange-400" },
+  finalized:       { label: "Finalizada",         badge: "bg-slate-100 text-slate-500",    border: "border-l-slate-300",   dot: "bg-slate-300" },
 };
 
-const HISTORY_STATUSES = ["completed", "cancelled", "no_show"];
+const HISTORY_STATUSES = ["completed", "cancelled", "no_show", "finalized"];
 
 // ─── Mini calendario inline para reagendar ────────────────────────────────────
 function RescheduleCalendar({

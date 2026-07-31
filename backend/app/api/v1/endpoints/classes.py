@@ -200,7 +200,7 @@ def get_my_classes_student(
         1 for c in all_classes
         if c.status in UPCOMING_STATUSES and c.start_time_utc >= now
     )
-    completed = sum(1 for c in all_classes if c.status == "completed")
+    completed = sum(1 for c in all_classes if c.status in ("completed", "finalized"))
 
     return ClassListResponse(
         classes=all_classes,

@@ -51,7 +51,7 @@ def can_book_slot(
         Class.teacher_id == teacher_id,
         Class.start_time_utc < end_approx,
         Class.end_time_utc > start_time_utc,
-        Class.status.notin_(["cancelled", "pending"])
+        Class.status.notin_(["cancelled", "pending", "pending_trial"])
     )
     if exclude_class_id:
         query = query.filter(Class.id != exclude_class_id)
@@ -65,7 +65,7 @@ def can_book_slot(
         Class.student_id == student_id,
         Class.start_time_utc < end_approx,
         Class.end_time_utc > start_time_utc,
-        Class.status.notin_(["cancelled"])
+        Class.status.notin_(["cancelled", "pending", "pending_trial"])
     )
     if exclude_class_id:
         query_student = query_student.filter(Class.id != exclude_class_id)
@@ -88,7 +88,7 @@ def can_cancel_class(
     now = utc_now()
 
     # Solo pending o confirmed se pueden cancelar
-    if class_.status not in ["pending", "confirmed"]:
+    if class_.status not in ["pending", "pending_trial", "confirmed"]:
         return False, f"No se puede cancelar una clase con estado '{class_.status}'"
 
     # Verificar antelación mínima (solo para estudiantes)
@@ -191,3 +191,33 @@ def get_student_booking_stage(student_id: int, db: Session) -> str:
     ).first()
 
     return "ready" if active_enrollment else "needs_package"
+
+# ─── Finalización automática ────────────────────────────────────────────────
+
+def finalize_past_classes(db: Session) -> int:
+    """
+    Marca como 'finalized' las clases confirmadas cuyo horario ya terminó
+    (end_time_utc < ahora) pero que nadie marcó manualmente como
+    completed / no_show / cancelled.
+
+    Se ejecuta periódicamente desde el scheduler como red de seguridad,
+    ya que normalmente es el profesor quien marca 'completed' a mano.
+
+    Retorna cuántas clases se actualizaron.
+    """
+    now = utc_now()
+
+    expired = db.query(Class).filter(
+        Class.status == "confirmed",
+        Class.end_time_utc < now,
+    ).all()
+
+    count = 0
+    for class_ in expired:
+        class_.status = "finalized"
+        count += 1
+
+    if count:
+        db.commit()
+
+    return count

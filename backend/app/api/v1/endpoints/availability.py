@@ -49,7 +49,7 @@ def get_my_weekly_availability(
     ).all()
 
 
-@router.post(
+@router.put(
     "/me/weekly",
     response_model=List[WeeklySlotResponse]
 )
@@ -59,8 +59,7 @@ def set_my_weekly_availability(
     db: Session = Depends(get_db)
 ):
     """
-    Reemplaza toda la disponibilidad semanal del profesor.
-    Convierte las horas locales del profesor a UTC antes de guardar.
+    Actualiza (reemplaza) la disponibilidad semanal del profesor vía PUT.
     """
     if not validate_timezone(data.timezone):
         raise HTTPException(
@@ -70,22 +69,18 @@ def set_my_weekly_availability(
 
     teacher_id = current_user.teacher_profile.id
 
-    # Borrar disponibilidad anterior
     db.query(TeacherAvailability).filter(
         TeacherAvailability.teacher_id == teacher_id
     ).delete()
 
-    # Crear nueva disponibilidad convirtiendo a UTC
     new_slots = []
     for slot in data.slots:
         try:
             start_utc = convert_local_time_to_utc_string(
-                slot.start_time_local,
-                data.timezone
+                slot.start_time_local, data.timezone
             )
             end_utc = convert_local_time_to_utc_string(
-                slot.end_time_local,
-                data.timezone
+                slot.end_time_local, data.timezone
             )
         except ValueError as e:
             raise HTTPException(
@@ -98,7 +93,7 @@ def set_my_weekly_availability(
             day_of_week=slot.day_of_week,
             start_time_utc=start_utc,
             end_time_utc=end_utc,
-            is_available=slot.is_available
+            is_available=slot.is_available,
         )
         db.add(new_slot)
         new_slots.append(new_slot)
@@ -207,13 +202,6 @@ def get_teacher_available_slots(
     """
     Devuelve los slots disponibles de un profesor para una fecha.
     Devuelve UTC. El frontend convierte a zona local del usuario.
-
-    Proceso:
-    1. Obtiene disponibilidad semanal del profesor para ese día
-    2. Aplica excepciones (bloqueos o extras)
-    3. Resta las clases ya agendadas
-    4. Devuelve slots libres en UTC
-    5. Marca los horarios como preferidos si el estudiante está logueado
     """
 
     # 1. Verificar que el profesor existe y está aprobado
@@ -370,11 +358,6 @@ def get_featured_teacher_slots(
 ):
     """
     Slots disponibles de la profesora featured.
-    Shortcut para el modo single-tenant — el frontend
-    no necesita saber el username de la profesora.
-
-    Internamente llama al mismo endpoint de slots
-    con el username de la profesora featured.
     """
     from app.models.payment_config import PlatformConfig
     from app.core.config import settings

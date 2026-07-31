@@ -10,11 +10,26 @@ from app.models.student import StudentProfile
 from app.models.user import User
 from app.core.timezone import utc_now
 from app.core.email import send_class_reminder_email
+from app.core.class_logic import finalize_past_classes
 
 logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
 
+async def finalize_expired_classes():
+    """
+    Job que se ejecuta cada 15 minutos.
+    Marca como 'finalized' las clases confirmadas cuyo horario ya pasó.
+    """
+    db: Session = SessionLocal()
+    try:
+        count = finalize_past_classes(db)
+        if count:
+            logger.info(f"Clases finalizadas automáticamente: {count}")
+    except Exception as e:
+        logger.error(f"Error en job de finalización de clases: {e}")
+    finally:
+        db.close()
 
 async def send_class_reminders():
     """
@@ -87,6 +102,12 @@ def start_scheduler():
         send_class_reminders,
         trigger=IntervalTrigger(hours=1),
         id="class_reminders",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        finalize_expired_classes,
+        trigger=IntervalTrigger(minutes=10),
+        id="finalize_expired_classes",
         replace_existing=True,
     )
     scheduler.start()

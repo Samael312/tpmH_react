@@ -62,7 +62,7 @@ class UpdateClassStatusRequest(BaseModel):
     def validate_status(cls, v):
         allowed = [
             "pending", "pending_trial", "pending_payment", "confirmed",
-            "completed", "cancelled", "no_show", "rescheduled"
+            "completed", "cancelled", "no_show", "rescheduled", "finalized"
         ]
         if v not in allowed:
             raise ValueError(f"Estado inválido. Opciones: {allowed}")
@@ -93,7 +93,7 @@ class ClassResponse(BaseModel):
 
     def model_post_init(self, __context):
         # Ocultar meet_link si la clase no está confirmed
-        if self.status not in ["confirmed", "completed"]:
+        if self.status not in ["confirmed", "completed", "finalized"]:
             self.meet_link = None
 
 

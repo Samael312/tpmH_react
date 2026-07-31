@@ -17,15 +17,17 @@ const STATUS_CONFIG: Record<string, {
   completed:       { badge: 'neutral', label: 'Completada',        border: 'border-l-zinc-600' },
   cancelled:       { badge: 'danger',  label: 'Cancelada',         border: 'border-l-red-500/50' },
   no_show:         { badge: 'danger',  label: 'No asistió',        border: 'border-l-red-800/50' },
+  finalized:       { badge: 'neutral', label: 'Finalizada',        border: 'border-l-zinc-600' },
 }
 
 const NEXT_STATUSES: Record<string, string[]> = {
   pending:         ['cancelled'],
   pending_payment: ['cancelled'],
   confirmed:       ['completed', 'no_show', 'cancelled'],
-  completed:       [],
-  cancelled:       [],
-  no_show:         [],
+  completed:       ['no_show'],
+  cancelled:       ['no_show', 'completed'],
+  no_show:         ['completed', 'cancelled'],
+  finalized:       ['completed', 'no_show', 'cancelled'],
 }
 
 interface ClassCardProps {
