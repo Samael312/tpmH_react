@@ -1,14 +1,23 @@
 'use client'
 
-import { useState } from 'react'
-import { useTeacherClasses, useWallet } from '@/hooks/useTeacherData'
+import { useState, useMemo } from 'react'
+import { useTeacherClasses, useWallet, type TeacherClass } from '@/hooks/useTeacherData'
 import ClassCard from '@/components/teacher/ClassCard'
 import StatCard from '@/components/ui/StatCard'
 import Card from '@/components/ui/Card'
-import Button from '@/components/ui/Button'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from 'lucide-react'
 
 const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+
+// Estos deben reflejar exactamente los estados usados en el backend (class_.py / classes.py)
+const UPCOMING_STATUSES = ['pending', 'pending_trial', 'pending_payment', 'confirmed']
+const HISTORY_STATUSES = ['completed', 'cancelled', 'no_show', 'finalized']
+
+function toUtcDateStr(date: Date) {
+  return date.toISOString().split('T')[0]
+}
 
 function getWeekDates() {
   const today = new Date()
@@ -21,33 +30,137 @@ function getWeekDates() {
   })
 }
 
+// ─── Calendario para elegir cualquier fecha (pasada o futura) ────────────────
+function DatePickerCalendar({
+  value,
+  onSelect,
+  onClose,
+}: {
+  value: string
+  onSelect: (d: string) => void
+  onClose: () => void
+}) {
+  const initial = value ? new Date(value + 'T00:00:00Z') : new Date()
+  const [year, setYear] = useState(initial.getUTCFullYear())
+  const [month, setMonth] = useState(initial.getUTCMonth())
+
+  const firstDay = new Date(Date.UTC(year, month, 1)).getUTCDay()
+  const offset = (firstDay + 6) % 7
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+  const cells = Array.from({ length: offset + daysInMonth }, (_, i) => (i < offset ? null : i - offset + 1))
+
+  const todayStr = toUtcDateStr(new Date())
+
+  const select = (day: number) => {
+    const d = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    onSelect(d)
+    onClose()
+  }
+
+  return (
+    <div className="absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-2xl shadow-slate-300/50 border border-slate-100 p-4 animate-in fade-in zoom-in-95 duration-150">
+      <div className="flex items-center justify-between mb-3">
+        <button
+          onClick={() => { if (month === 0) { setMonth(11); setYear(y => y - 1) } else setMonth(m => m - 1) }}
+          className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4 text-slate-600" />
+        </button>
+        <span className="text-sm font-black text-slate-800">{MONTHS[month]} {year}</span>
+        <button
+          onClick={() => { if (month === 11) { setMonth(0); setYear(y => y + 1) } else setMonth(m => m + 1) }}
+          className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"
+        >
+          <ChevronRight className="w-4 h-4 text-slate-600" />
+        </button>
+      </div>
+      <div className="grid grid-cols-7 mb-1">
+        {['L','M','X','J','V','S','D'].map(d => (
+          <div key={d} className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest py-1">
+            {d}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((day, i) => {
+          if (!day) return <div key={i} />
+          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+          const isSelected = dateStr === value
+          const isToday = dateStr === todayStr
+          return (
+            <button
+              key={i}
+              onClick={() => select(day)}
+              className={`
+                w-full aspect-square rounded-lg text-xs font-bold transition-all duration-150
+                ${isSelected
+                  ? 'bg-gradient-to-br from-pink-500 to-rose-400 text-white shadow-md'
+                  : isToday
+                    ? 'bg-pink-50 text-pink-600 border border-pink-200'
+                    : 'text-slate-700 hover:bg-pink-50 hover:text-pink-600'}
+              `}
+            >
+              {day}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function TeacherDashboard() {
   const weekDates = getWeekDates()
-  const today = new Date()
-  const [selectedDate, setSelectedDate] = useState(
-    today.toISOString().split('T')[0]
-  )
+  const todayStr = toUtcDateStr(new Date())
+
+  const [selectedDate, setSelectedDate] = useState<string | null>(todayStr)
+  const [showCalendar, setShowCalendar] = useState(false)
   const [tab, setTab] = useState<'upcoming' | 'history'>('upcoming')
 
-  const { classes, loading, stats, refetch } = useTeacherClasses({
-    date: tab === 'upcoming' ? selectedDate : undefined,
-    includeHistory: tab === 'history',
-  })
-  
+  // Traemos TODAS las clases una sola vez (incluye historial) y filtramos en cliente,
+  // así los contadores de stats, "hoy" y el historial usan siempre la misma fuente de verdad.
+  const { classes, loading, refetch } = useTeacherClasses({ includeHistory: true })
   const { wallet } = useWallet()
 
-  // 🛡️ PROTECCIÓN 1: Asegurarnos de que classes sea un array siempre
-  const safeClasses = Array.isArray(classes) ? classes : [];
+  const safeClasses: TeacherClass[] = Array.isArray(classes) ? classes : []
+  const now = new Date()
 
-  const todayClasses = safeClasses.filter(c => {
-    if (!c?.start_time_utc) return false;
-    const d = new Date(c.start_time_utc).toISOString().split('T')[0]
-    return d === today.toISOString().split('T')[0]
-  })
+  const upcomingAll = useMemo(() => {
+    return safeClasses
+      .filter(c => UPCOMING_STATUSES.includes(c.status) && new Date(c.end_time_utc) >= now)
+      .sort((a, b) => new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [safeClasses])
 
-  // 🛡️ PROTECCIÓN 2: Valores por defecto seguros para el wallet
-  const availableBalance = wallet?.available_balance || 0;
-  const totalEarned = wallet?.total_earned || 0;
+  const historyList = useMemo(() => {
+    return safeClasses
+      .filter(c => HISTORY_STATUSES.includes(c.status))
+      .sort((a, b) => new Date(b.start_time_utc).getTime() - new Date(a.start_time_utc).getTime())
+  }, [safeClasses])
+
+  const todayUpcoming = useMemo(
+    () => upcomingAll.filter(c => c.start_time_utc.slice(0, 10) === todayStr),
+    [upcomingAll, todayStr]
+  )
+
+  const completadas = useMemo(
+    () => safeClasses.filter(c => c.status === 'completed').length,
+    [safeClasses]
+  )
+
+  const selectedDateClasses = useMemo(() => {
+    if (!selectedDate) return upcomingAll
+    return upcomingAll.filter(c => c.start_time_utc.slice(0, 10) === selectedDate)
+  }, [upcomingAll, selectedDate])
+
+  const availableBalance = wallet?.available_balance || 0
+  const totalEarned = wallet?.total_earned || 0
+
+  const selectedDateLabel = selectedDate
+    ? new Date(selectedDate + 'T00:00:00Z').toLocaleDateString('es', {
+        weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC',
+      })
+    : null
 
   return (
     <div className="space-y-8 animate-fade-up bg-white min-h-screen p-6 rounded-3xl">
@@ -65,10 +178,10 @@ export default function TeacherDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-up animate-fade-up-delay-1">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 animate-fade-up animate-fade-up-delay-1">
         <StatCard
           label="Próximas"
-          value={stats?.upcoming || 0}
+          value={upcomingAll.length}
           icon={
             <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-pink-500">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"/>
@@ -76,8 +189,18 @@ export default function TeacherDashboard() {
           }
         />
         <StatCard
+          label="Hoy"
+          value={todayUpcoming.length}
+          changeType={todayUpcoming.length > 0 ? 'up' : 'neutral'}
+          icon={
+            <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-purple-500">
+              <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"/>
+            </svg>
+          }
+        />
+        <StatCard
           label="Completadas"
-          value={stats?.completed || 0}
+          value={completadas}
           changeType="up"
           icon={
             <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-rose-500">
@@ -107,24 +230,43 @@ export default function TeacherDashboard() {
         />
       </div>
 
-      {/* Selector de semana */}
-      <div className="animate-fade-up animate-fade-up-delay-2 bg-slate-50/50 p-4 rounded-2xl border border-pink-50">
-        <p className="text-xs text-pink-400 uppercase tracking-widest font-bold mb-3">
-          Semana actual
-        </p>
+      {/* Selector de semana + calendario global */}
+      <div className="animate-fade-up animate-fade-up-delay-2 bg-slate-50/50 p-4 rounded-2xl border border-pink-50 relative z-20">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs text-pink-400 uppercase tracking-widest font-bold">
+            Semana actual
+          </p>
+          <div className="relative">
+            <button
+              onClick={() => setShowCalendar(p => !p)}
+              className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-pink-600
+                         bg-white border border-slate-200 hover:border-pink-300 px-3 py-1.5 rounded-xl
+                         transition-colors"
+            >
+              <CalendarIcon className="w-3.5 h-3.5" />
+              Elegir fecha
+            </button>
+            {showCalendar && (
+              <DatePickerCalendar
+                value={selectedDate ?? todayStr}
+                onSelect={(d) => { setSelectedDate(d); setTab('upcoming') }}
+                onClose={() => setShowCalendar(false)}
+              />
+            )}
+          </div>
+        </div>
+
         <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
-          {weekDates.map((date, i) => {
-            const dateStr = date.toISOString().split('T')[0]
-            const isToday = dateStr === today.toISOString().split('T')[0]
+          {weekDates.map((date) => {
+            const dateStr = toUtcDateStr(date)
+            const isToday = dateStr === todayStr
             const isSelected = dateStr === selectedDate
+            const dayIdx = (date.getUTCDay() + 6) % 7 // Domingo=0 -> índice 6
 
             return (
               <button
                 key={dateStr}
-                onClick={() => {
-                  setSelectedDate(dateStr)
-                  setTab('upcoming')
-                }}
+                onClick={() => { setSelectedDate(dateStr); setTab('upcoming') }}
                 className={`
                   flex-shrink-0 flex flex-col items-center px-4 py-3
                   rounded-2xl text-xs transition-all duration-300 shadow-sm
@@ -136,7 +278,7 @@ export default function TeacherDashboard() {
                   }
                 `}
               >
-                <span className="font-medium">{DAYS[i]}</span>
+                <span className="font-medium">{DAYS[dayIdx]}</span>
                 <span className={`
                   text-lg font-bold mt-1
                   ${isSelected ? 'text-white' : 'text-slate-700'}
@@ -148,15 +290,29 @@ export default function TeacherDashboard() {
             )
           })}
         </div>
+
+        {selectedDate && (
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            <span className="text-xs font-bold text-slate-500 bg-white px-3 py-1.5 rounded-full border border-slate-100 capitalize">
+              Mostrando: {selectedDateLabel}
+            </span>
+            <button
+              onClick={() => setSelectedDate(null)}
+              className="flex items-center gap-1 text-xs font-bold text-pink-500 hover:text-pink-600 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" /> Ver todas las próximas
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Tabs y lista */}
       <div className="animate-fade-up animate-fade-up-delay-3">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div className="flex gap-1 bg-slate-100/80 border border-slate-200/60 rounded-xl p-1.5 shadow-inner">
             {[
               { key: 'upcoming', label: 'Próximas' },
-              { key: 'history',  label: 'Historial' },
+              { key: 'history', label: 'Historial' },
             ].map(t => (
               <button
                 key={t.key}
@@ -174,12 +330,15 @@ export default function TeacherDashboard() {
             ))}
           </div>
 
-          {tab === 'upcoming' && (
+          {tab === 'upcoming' ? (
             <p className="text-sm font-medium text-slate-500 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
-              {new Date(selectedDate + 'T00:00:00Z').toLocaleDateString('es', {
-                weekday: 'long', day: 'numeric', month: 'long',
-                timeZone: 'UTC'
-              })}
+              {selectedDate
+                ? `${selectedDateClasses.length} clase${selectedDateClasses.length !== 1 ? 's' : ''}`
+                : `${upcomingAll.length} próximas en total`}
+            </p>
+          ) : (
+            <p className="text-sm font-medium text-slate-500 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
+              {historyList.length} en el historial
             </p>
           )}
         </div>
@@ -190,27 +349,42 @@ export default function TeacherDashboard() {
               <div key={i} className="bg-slate-50 border border-pink-50 rounded-2xl h-28 animate-pulse shadow-sm" />
             ))}
           </div>
-        ) : safeClasses.length === 0 ? (
-          <Card className="py-20 text-center bg-slate-50/50 border-dashed border-2 border-slate-200 rounded-3xl shadow-none">
-            <div className="text-5xl mb-4 drop-shadow-sm">
-              {tab === 'upcoming' ? '🌸' : '📋'}
+        ) : tab === 'upcoming' ? (
+          selectedDateClasses.length === 0 ? (
+            <Card className="py-20 text-center bg-slate-50/50 border-dashed border-2 border-slate-200 rounded-3xl shadow-none">
+              <div className="text-5xl mb-4 drop-shadow-sm">🌸</div>
+              <p className="text-slate-500 font-medium text-lg">
+                {selectedDate
+                  ? '¡Día libre! No tienes clases programadas ese día.'
+                  : '¡Sin clases próximas por ahora!'}
+              </p>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {selectedDateClasses.map(c => (
+                <ClassCard key={c.id} class_={c} onUpdate={refetch} />
+              ))}
             </div>
-            <p className="text-slate-500 font-medium text-lg">
-              {tab === 'upcoming'
-                ? '¡Día libre! No tienes clases programadas.'
-                : 'Aún no hay historial de clases.'
-              }
-            </p>
-          </Card>
+          )
         ) : (
-          <div className="space-y-4">
-            {safeClasses.map(c => (
-              <ClassCard key={c.id} class_={c} onUpdate={refetch} />
-            ))}
-          </div>
+          historyList.length === 0 ? (
+            <Card className="py-20 text-center bg-slate-50/50 border-dashed border-2 border-slate-200 rounded-3xl shadow-none">
+              <div className="text-5xl mb-4 drop-shadow-sm">📋</div>
+              <p className="text-slate-500 font-medium text-lg">
+                Aún no hay historial de clases.
+              </p>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {historyList.map(c => (
+                <ClassCard key={c.id} class_={c} onUpdate={refetch} />
+              ))}
+            </div>
+          )
         )}
       </div>
-      <ChipiWidget screenName="teacher_home" />   
+
+      <ChipiWidget screenName="teacher_home" />
     </div>
   )
 }
