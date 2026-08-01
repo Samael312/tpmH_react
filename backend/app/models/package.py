@@ -33,7 +33,15 @@ class Package(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     teacher = relationship("TeacherProfile", back_populates="packages")
-    enrollments = relationship("Enrollment", back_populates="package")
+
+    # Explícito: solo enrollments donde package_id apunta a este paquete
+    # (no confundir con renewal_requested_package_id, que es otra FK
+    # hacia esta misma tabla usada para las solicitudes de renovación).
+    enrollments = relationship(
+        "Enrollment",
+        back_populates="package",
+        foreign_keys="Enrollment.package_id",
+    )
 
 
 class Enrollment(Base):
@@ -54,7 +62,6 @@ class Enrollment(Base):
 
     # Renovación
     renewal_count = Column(Integer, default=0)
-    # Cuántas veces ha renovado este paquete el estudiante
     previous_enrollment_id = Column(
         Integer, ForeignKey("enrollments.id"), nullable=True
     )
@@ -62,9 +69,24 @@ class Enrollment(Base):
     renewal_requested_package_id = Column(Integer, ForeignKey("packages.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    enrollments = relationship("Enrollment", back_populates="package", foreign_keys="[Enrollment.package_id]" )
     student = relationship("StudentProfile", back_populates="enrollments")
-    package = relationship("Package", back_populates="enrollments")
+
+    # Explícito: esta relación usa package_id, no renewal_requested_package_id
+    package = relationship(
+        "Package",
+        back_populates="enrollments",
+        foreign_keys=[package_id],
+    )
+
+    # Relación auxiliar de solo lectura hacia el paquete que el estudiante
+    # pidió al solicitar la renovación (sin back_populates — Package no
+    # necesita una lista inversa de esto).
+    renewal_requested_package = relationship(
+        "Package",
+        foreign_keys=[renewal_requested_package_id],
+        viewonly=True,
+    )
+
     classes = relationship("Class", back_populates="enrollment")
     payment = relationship("Payment", back_populates="enrollment", uselist=False)
     teacher = relationship("TeacherProfile", back_populates="enrollments")

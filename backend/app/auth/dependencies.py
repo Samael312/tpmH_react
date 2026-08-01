@@ -60,7 +60,7 @@ def get_current_student(current_user: User = Depends(get_current_user)) -> User:
         )
     return current_user
 
-def get_current_user(current_user: User = Depends(get_current_user)) -> User:
+def get_currtent_user(current_user: User = Depends(get_current_user)) -> User:
     """No se permite acceso a estudiantes."""
     if current_user.role == UserRole.student:
         raise HTTPException(

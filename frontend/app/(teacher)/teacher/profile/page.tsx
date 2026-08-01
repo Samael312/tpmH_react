@@ -11,6 +11,13 @@ import { useTeacherProfile, TeacherProfile } from "@/hooks/useTeacherData";
 import { useAuthStore } from "@/store/authStore";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import CalendarSync from "./CalendarSync";
+import {SUBJECTS, LANGUAGES, SKILL_SUGGESTIONS} from "@/lib/teacherOptions";
+import {
+  TIMEZONE_OPTIONS,
+  TIMEZONE_OPTIONS as TIMEZONES,
+  TIMEZONE_TO_COUNTRY,
+  DEFAULT_COUNTRY,
+} from "@/lib/timezones";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 function formatErrorMessage(error: any, fallbackMessage: string): string {
@@ -24,18 +31,6 @@ function formatErrorMessage(error: any, fallbackMessage: string): string {
 }
 
 type TeacherProfileWithPhoto = TeacherProfile & { photo_url?: string | null };
-
-const LANGUAGES  = ["Español", "English", "Français", "Italiano", "Português", "Deutsch"];
-const SUBJECTS   = ["Inglés", "Español", "Francés", "Italiano", "Alemán", "Matemáticas", "Ciencias"];
-const TIMEZONES  = [
-  "America/Caracas", "America/Bogota", "America/Lima", "America/Mexico_City",
-  "America/New_York", "America/Los_Angeles", "Europe/Madrid", "Europe/London",
-  "Europe/Paris", "UTC",
-];
-const SKILL_SUGGESTIONS = [
-  "Gramática", "Conversación", "Pronunciación", "Vocabulario",
-  "Business English", "IELTS", "TOEFL", "Niños", "Viajes", "Redacción",
-];
 
 // ─── Iconos redes sociales ────────────────────────────────────────────────
 const InstagramIcon = () => (
@@ -625,8 +620,12 @@ export default function TeacherProfilePage() {
                           disabled={saving}
                           className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-10 pr-10 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all cursor-pointer disabled:opacity-60"
                         >
-                          <option value="">Seleccionar zona...</option>
-                          {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+                          <option value="">Seleccionar zona horaria...</option>
+                            {TIMEZONE_OPTIONS.map(tz => (
+                                <option key={tz.value} value={tz.value}>
+                                  {tz.flag} {tz.label} — {tz.value}
+                                </option> 
+                            ))}
                         </select>
                         <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                       </div>

@@ -21,12 +21,8 @@ import {
   DEFAULT_COUNTRY,
 } from "@/lib/timezones";
 
-const LANGUAGES = ["Español", "English", "Français", "Italiano", "Português", "Deutsch"];
-const SUBJECTS  = ["Matematica", "Lenguaje", "Física", "Musica", "Quimica", "Historia", "Arte", "Programación", "Ciencias", "Economía", "Psicología", "Negocios"];
-const SKILL_SUGGESTIONS = [
-  "Gramática", "Conversación", "Pronunciación", "Vocabulario",
-  "Business English", "IELTS", "TOEFL", "Niños", "Viajes", "Redacción",
-];
+import { SUBJECTS, LANGUAGES, SKILL_SUGGESTIONS } from "@/lib/teacherOptions";
+
 const DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const AVAILABLE_HOURS = Array.from({ length: 16 }, (_, i) =>
   `${(i + 7).toString().padStart(2, "0")}:00`

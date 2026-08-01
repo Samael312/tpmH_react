@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import { SUBJECTS } from "@/lib/teacherOptions";
 
 interface Package {
   id: number;
@@ -40,7 +41,7 @@ const DURATIONS = [30, 60];
 
 const emptyForm = {
   name: "", subject: "", description: "",
-  classes_count: 4, price: 50, duration_minutes: 60,
+  classes_count: "4", price: "10", duration_minutes: 60,
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -98,8 +99,8 @@ export default function TeacherPackagesPage() {
       name: pkg.name,
       subject: pkg.subject,
       description: pkg.description ?? "",
-      classes_count: pkg.classes_count,
-      price: pkg.price,
+      classes_count: String(pkg.classes_count),
+      price: String(pkg.price),
       duration_minutes: pkg.duration_minutes,
     });
     setShowForm(true);
@@ -107,13 +108,34 @@ export default function TeacherPackagesPage() {
 
   const savePackage = async () => {
     if (!form.name.trim() || !form.subject.trim()) return;
+
+    const classesCountNum = parseInt(form.classes_count, 10);
+    const priceNum = parseFloat(form.price);
+
+    if (!Number.isFinite(classesCountNum) || classesCountNum < 1) {
+      setError("Introduce un número de clases válido (mínimo 1)");
+      return;
+    }
+    if (!Number.isFinite(priceNum) || priceNum <= 0) {
+      setError("Introduce un precio válido (mayor que 0)");
+      return;
+    }
+
     setSaving(true);
     setError("");
     try {
+      const payload = {
+        name: form.name,
+        subject: form.subject,
+        description: form.description,
+        classes_count: classesCountNum,
+        price: priceNum,
+        duration_minutes: form.duration_minutes,
+      };
       if (editingId) {
-        await api.patch(`/packages/${editingId}`, form);
+        await api.patch(`/packages/${editingId}`, payload);
       } else {
-        await api.post("/packages/", form);
+        await api.post("/packages/", payload);
       }
       setShowForm(false);
       setEditingId(null);
@@ -239,17 +261,18 @@ export default function TeacherPackagesPage() {
 
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                  Duración de cada clase
+                  Materia
                 </label>
                 <div className="relative">
                   <select
-                    value={form.duration_minutes}
-                    onChange={e => setForm({ ...form, duration_minutes: Number(e.target.value) })}
+                    value={form.subject}
+                    onChange={e => setForm({ ...form, subject: e.target.value })}
                     className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl
                                text-sm font-bold text-slate-800 px-4 py-3 focus:outline-none focus:bg-white
                                focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all cursor-pointer"
                   >
-                    {DURATIONS.map(d => <option key={d} value={d}>{d} min</option>)}
+                    <option value="">Selecciona una materia...</option>
+                    {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 </div>
@@ -260,12 +283,18 @@ export default function TeacherPackagesPage() {
                   Número de clases
                 </label>
                 <input
-                  type="number"
-                  min={1}
+                  type="text"
+                  inputMode="numeric"
                   value={form.classes_count}
-                  onChange={e => setForm({ ...form, classes_count: Number(e.target.value) })}
+                  onChange={e => {
+                    const v = e.target.value;
+                    if (v === "" || /^[0-9]*$/.test(v)) {
+                      setForm({ ...form, classes_count: v });
+                    }
+                  }}
+                  placeholder="Ej: 8"
                   className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold
-                             text-slate-800 px-4 py-3 focus:outline-none focus:bg-white
+                             text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none focus:bg-white
                              focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
                 />
               </div>
@@ -275,13 +304,18 @@ export default function TeacherPackagesPage() {
                   Precio total ($)
                 </label>
                 <input
-                  type="number"
-                  min={0}
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={form.price}
-                  onChange={e => setForm({ ...form, price: Number(e.target.value) })}
+                  onChange={e => {
+                    const v = e.target.value;
+                    if (v === "" || /^[0-9]*\.?[0-9]*$/.test(v)) {
+                      setForm({ ...form, price: v });
+                    }
+                  }}
+                  placeholder="Ej: 50.00"
                   className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold
-                             text-slate-800 px-4 py-3 focus:outline-none focus:bg-white
+                             text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none focus:bg-white
                              focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
                 />
               </div>
