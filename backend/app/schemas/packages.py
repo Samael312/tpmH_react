@@ -10,7 +10,7 @@ class PackageCreate(BaseModel):
     name: str
     subject: str
     description: Optional[str] = None
-    classes_count: int
+    classes_count: Optional[int] = None
     price: float
     duration_minutes: int = 60
 
@@ -24,8 +24,8 @@ class PackageCreate(BaseModel):
     @field_validator("classes_count")
     @classmethod
     def validate_classes(cls, v):
-        if v < 1:
-            raise ValueError("El paquete debe tener al menos 1 clase")
+        if v is not None and v < 1:
+            raise ValueError("El paquete debe tener al menos 1 clase, o dejarlo vacío para ilimitadas")
         return v
 
     @field_validator("price")
@@ -42,7 +42,7 @@ class PackageResponse(BaseModel):
     name: str
     subject: str
     description: Optional[str]
-    classes_count: int
+    classes_count: Optional[int] 
     price: float
     duration_minutes: int
     is_active: bool
@@ -58,7 +58,7 @@ class EnrollmentResponse(BaseModel):
     package_id: int
     teacher_id: int
     classes_used: int
-    classes_total: int
+    classes_total: Optional[int]
     status: str
     renewal_count: int
     created_at: datetime
@@ -89,7 +89,7 @@ class EnrollmentComplianceResponse(BaseModel):
     package_id: int
     package_name: str
     classes_used: int
-    classes_total: int
+    classes_total: Optional[int]
     status: str
     completed_count: int
     no_show_count: int

@@ -7,14 +7,14 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
-import { SUBJECTS } from "@/lib/teacherOptions";
+import { SUBJECTS, LANGUAGES } from "@/lib/teacherOptions";
 
 interface Package {
   id: number;
   name: string;
   subject: string;
   description: string | null;
-  classes_count: number;
+  classes_count: number | null;
   price: number;
   duration_minutes: number;
   is_active: boolean;
@@ -28,7 +28,7 @@ interface EnrollmentCompliance {
   package_id: number;
   package_name: string;
   classes_used: number;
-  classes_total: number;
+  classes_total: number | null;
   status: string;
   completed_count: number;
   no_show_count: number;
@@ -58,6 +58,9 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function TeacherPackagesPage() {
+  const [kind, setKind] = useState<"subject" | "language">("subject");
+  const [unlimited, setUnlimited] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
   const [packages, setPackages] = useState<Package[]>([]);
   const [enrollments, setEnrollments] = useState<EnrollmentCompliance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,6 +98,8 @@ export default function TeacherPackagesPage() {
 
   const openEdit = (pkg: Package) => {
     setEditingId(pkg.id);
+    setUnlimited(pkg.classes_count === null);
+    setKind(LANGUAGES.includes(pkg.subject) ? "language" : "subject");
     setForm({
       name: pkg.name,
       subject: pkg.subject,
@@ -109,11 +114,11 @@ export default function TeacherPackagesPage() {
   const savePackage = async () => {
     if (!form.name.trim() || !form.subject.trim()) return;
 
-    const classesCountNum = parseInt(form.classes_count, 10);
+    const classesCountNum = unlimited ? null : parseInt(form.classes_count, 10);
     const priceNum = parseFloat(form.price);
 
-    if (!Number.isFinite(classesCountNum) || classesCountNum < 1) {
-      setError("Introduce un número de clases válido (mínimo 1)");
+    if (!unlimited && (!Number.isFinite(classesCountNum) || classesCountNum! < 1)) {
+      setError("Introduce un número de clases válido (mínimo 1), o marca 'Ilimitadas'");
       return;
     }
     if (!Number.isFinite(priceNum) || priceNum <= 0) {
@@ -140,7 +145,10 @@ export default function TeacherPackagesPage() {
       setShowForm(false);
       setEditingId(null);
       setForm(emptyForm);
-      fetchAll();
+      setUnlimited(false);
+      await fetchAll();
+      setSavedOk(true);
+      setTimeout(() => setSavedOk(false), 3000);
     } catch (e: any) {
       setError(e.response?.data?.detail || "Error guardando el paquete");
     } finally {
@@ -148,27 +156,27 @@ export default function TeacherPackagesPage() {
     }
   };
 
-  const deactivatePackage = async (id: number) => {
-    if (!confirm("¿Desactivar este paquete? Los estudiantes con enrollments activos no se ven afectados.")) return;
-    try {
-      await api.delete(`/packages/${id}`);
-      fetchAll();
-    } catch (e: any) {
-      alert(e.response?.data?.detail || "Error desactivando el paquete");
-    }
-  };
+    const deactivatePackage = async (id: number) => {
+      if (!confirm("¿Desactivar este paquete? Los estudiantes con enrollments activos no se ven afectados.")) return;
+      try {
+        await api.delete(`/packages/${id}`);
+        fetchAll();
+      } catch (e: any) {
+        alert(e.response?.data?.detail || "Error desactivando el paquete");
+      }
+    };
 
-  const approveRenewal = async (enrollmentId: number) => {
-    setApprovingId(enrollmentId);
-    try {
-      await api.post(`/packages/${enrollmentId}/activate-renewal`);
-      fetchAll();
-    } catch (e: any) {
-      alert(e.response?.data?.detail || "Error activando la renovación");
-    } finally {
-      setApprovingId(null);
-    }
-  };
+    const approveRenewal = async (enrollmentId: number) => {
+      setApprovingId(enrollmentId);
+      try {
+        await api.post(`/packages/${enrollmentId}/activate-renewal`);
+        fetchAll();
+      } catch (e: any) {
+        alert(e.response?.data?.detail || "Error activando la renovación");
+      } finally {
+        setApprovingId(null);
+      }
+    };
 
   const pendingRenewals = enrollments.filter(e => e.status === "pending_renewal");
 
@@ -228,7 +236,13 @@ export default function TeacherPackagesPage() {
               <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
                 <X className="w-4 h-4 flex-shrink-0" /> {error}
               </div>
+              
             )}
+            {savedOk && (
+                <div className="bg-emerald-50 border border-emerald-100 text-emerald-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
+                  <Check className="w-4 h-4 flex-shrink-0" /> Paquete guardado correctamente
+                </div>
+              )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
@@ -245,59 +259,70 @@ export default function TeacherPackagesPage() {
                 />
               </div>
 
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                  Materia
-                </label>
-                <input
-                  value={form.subject}
-                  onChange={e => setForm({ ...form, subject: e.target.value })}
-                  placeholder="Ej: Inglés"
-                  className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold
-                             text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none
-                             focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                  Materia
-                </label>
-                <div className="relative">
-                  <select
-                    value={form.subject}
-                    onChange={e => setForm({ ...form, subject: e.target.value })}
-                    className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl
-                               text-sm font-bold text-slate-800 px-4 py-3 focus:outline-none focus:bg-white
-                               focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all cursor-pointer"
-                  >
-                    <option value="">Selecciona una materia...</option>
-                    {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <div className="sm:col-span-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                    ¿Qué vas a enseñar?
+                  </label>
+                  <div className="flex gap-2 mb-2.5">
+                    {[
+                      { key: "subject", label: "Una materia" },
+                      { key: "language", label: "Un idioma" },
+                    ].map(opt => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => { setKind(opt.key as any); setForm({ ...form, subject: "" }); }}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all
+                          ${kind === opt.key ? "border-pink-400 bg-pink-50 text-pink-600" : "border-slate-100 bg-slate-50 text-slate-500"}`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="relative">
+                    <select
+                      value={form.subject}
+                      onChange={e => setForm({ ...form, subject: e.target.value })}
+                      className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl
+                                text-sm font-bold text-slate-800 px-4 py-3 focus:outline-none focus:bg-white
+                                focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all cursor-pointer"
+                    >
+                      <option value="">{kind === "subject" ? "Selecciona una materia..." : "Selecciona un idioma..."}</option>
+                      {(kind === "subject" ? SUBJECTS : LANGUAGES).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
                 </div>
-              </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                  Número de clases
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={form.classes_count}
-                  onChange={e => {
-                    const v = e.target.value;
-                    if (v === "" || /^[0-9]*$/.test(v)) {
-                      setForm({ ...form, classes_count: v });
-                    }
-                  }}
-                  placeholder="Ej: 8"
-                  className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold
-                             text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none focus:bg-white
-                             focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
-                />
-              </div>
+  <div className="flex items-center justify-between mb-1.5">
+    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+      Número de clases
+    </label>
+    <button
+      type="button"
+      onClick={() => setUnlimited(p => !p)}
+      className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors
+        ${unlimited ? "bg-pink-500 text-white" : "bg-slate-100 text-slate-500"}`}
+    >
+      {unlimited ? "✓ Ilimitadas" : "Marcar ilimitadas"}
+    </button>
+    </div>
+      <input
+        type="text"
+        inputMode="numeric"
+        disabled={unlimited}
+        value={unlimited ? "" : form.classes_count}
+        onChange={e => {
+          const v = e.target.value;
+          if (v === "" || /^[0-9]*$/.test(v)) setForm({ ...form, classes_count: v });
+        }}
+        placeholder={unlimited ? "Ilimitadas" : "Ej: 8"}
+        className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold
+                  text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none focus:bg-white
+                  focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-50"
+      />
+    </div>
 
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
@@ -376,7 +401,7 @@ export default function TeacherPackagesPage() {
                   </div>
                   <h3 className="text-base font-black text-slate-800 mb-1">{pkg.name}</h3>
                   <p className="text-xs text-slate-400 font-bold mb-3">
-                    {pkg.subject} · {pkg.classes_count} clases · {pkg.duration_minutes} min c/u
+                    {pkg.subject} · {pkg.classes_count === null ? "Ilimitadas" : `${pkg.classes_count} clases`} · {pkg.duration_minutes} min c/u
                   </p>
                   {pkg.description && (
                     <p className="text-xs text-slate-500 mb-3 line-clamp-2">{pkg.description}</p>
@@ -432,7 +457,7 @@ export default function TeacherPackagesPage() {
             <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg overflow-hidden">
               <div className="divide-y divide-slate-50">
                 {enrollments.map(e => {
-                  const progressPct = e.classes_total > 0
+                  const progressPct = e.classes_total 
                     ? Math.min((e.classes_used / e.classes_total) * 100, 100)
                     : 0;
                   return (
@@ -456,7 +481,7 @@ export default function TeacherPackagesPage() {
                         </div>
 
                         <div className="flex items-center gap-3 flex-wrap text-[10px] font-bold text-slate-400">
-                          <span>{e.classes_used}/{e.classes_total} usadas</span>
+                          <span>{e.classes_used}/{e.classes_total ?? "∞"} usadas</span>
                           <span className="text-emerald-600">{e.completed_count} completadas</span>
                           <span className="text-red-500">{e.no_show_count} no-show</span>
                           <span className="text-amber-600">{e.cancelled_late_count} canceladas tarde</span>

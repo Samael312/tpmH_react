@@ -132,12 +132,12 @@ def book_class(
             detail="Enrollment no encontrado o no activo"
         )
 
-    if enrollment.classes_used >= enrollment.classes_total:
+    if enrollment.classes_total is not None and enrollment.classes_used >= enrollment.classes_total:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Has agotado todas las clases de este paquete. "
-                   "Solicita una renovación desde tu dashboard."
-        )
+                "Solicita una renovación desde tu dashboard."
+    )
 
     can_book, error_msg = can_book_slot(
         start_time_utc=data.start_time_utc,

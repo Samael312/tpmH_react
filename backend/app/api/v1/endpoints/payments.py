@@ -312,7 +312,7 @@ def book_class(
 
     _sync_student_teacher_username(current_user, enrollment.teacher, db)
 
-    if enrollment.classes_used >= enrollment.classes_total:
+    if enrollment.classes_total is not None and enrollment.classes_used >= enrollment.classes_total:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Has agotado todas las clases de este paquete")
 
     can_book, error_msg = can_book_slot(

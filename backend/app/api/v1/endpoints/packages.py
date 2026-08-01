@@ -113,6 +113,66 @@ def deactivate_package(
     db.commit()
     return {"message": "Paquete desactivado"}
 
+# ─── PROFESOR — Seguimiento de cumplimiento ──────────────────────────────────
+
+@router.get("/teacher/enrollments", response_model=List[EnrollmentComplianceResponse])
+def get_teacher_enrollments_overview(
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista todos los enrollments (activos, agotados y pendientes de
+    renovación) de los estudiantes del profesor, con el desglose de
+    cumplimiento: completadas, no-show y canceladas tarde.
+    """
+    teacher_id = current_user.teacher_profile.id
+
+    enrollments = db.query(Enrollment).filter(
+        Enrollment.teacher_id == teacher_id
+    ).order_by(Enrollment.created_at.desc()).all()
+
+    result = []
+    for e in enrollments:
+        classes = db.query(Class).filter(Class.enrollment_id == e.id).all()
+
+        completed_count = sum(1 for c in classes if c.status in ("completed", "finalized"))
+        no_show_count = sum(1 for c in classes if c.status == "no_show")
+        # Aproximamos "cancelada tarde" comparando contra cuándo se actualizó
+        # el registro, ya que no guardamos un timestamp específico de cancelación.
+        cancelled_late_count = sum(
+            1 for c in classes
+            if c.status == "cancelled"
+            and c.updated_at is not None
+            and (c.start_time_utc - c.updated_at) < timedelta(hours=12)
+        )
+
+        student_user = e.student.user if e.student else None
+        package = e.package
+
+        requested_pkg_name = None
+        if e.renewal_requested_package_id:
+            rp = db.query(Package).filter(Package.id == e.renewal_requested_package_id).first()
+            requested_pkg_name = rp.name if rp else None
+
+        result.append(EnrollmentComplianceResponse(
+            id=e.id,
+            student_id=e.student_id,
+            student_username=student_user.username if student_user else "unknown",
+            student_name=f"{student_user.name} {student_user.surname}" if student_user else "Desconocido",
+            package_id=e.package_id,
+            package_name=package.name if package else "N/A",
+            classes_used=e.classes_used,
+            classes_total=e.classes_total,
+            status=e.status,
+            completed_count=completed_count,
+            no_show_count=no_show_count,
+            cancelled_late_count=cancelled_late_count,
+            renewal_requested_package_name=requested_pkg_name,
+            created_at=e.created_at,
+        ))
+
+    return result
+
 
 # ─── PÚBLICO — Ver paquetes de un profesor ───────────────────────────────────
 
@@ -360,62 +420,3 @@ def select_initial_package(
         "classes_total": enrollment.classes_total,
     }
 
-# ─── PROFESOR — Seguimiento de cumplimiento ──────────────────────────────────
-
-@router.get("/teacher/enrollments", response_model=List[EnrollmentComplianceResponse])
-def get_teacher_enrollments_overview(
-    current_user: User = Depends(get_current_teacher_or_teacher_admin),
-    db: Session = Depends(get_db)
-):
-    """
-    Lista todos los enrollments (activos, agotados y pendientes de
-    renovación) de los estudiantes del profesor, con el desglose de
-    cumplimiento: completadas, no-show y canceladas tarde.
-    """
-    teacher_id = current_user.teacher_profile.id
-
-    enrollments = db.query(Enrollment).filter(
-        Enrollment.teacher_id == teacher_id
-    ).order_by(Enrollment.created_at.desc()).all()
-
-    result = []
-    for e in enrollments:
-        classes = db.query(Class).filter(Class.enrollment_id == e.id).all()
-
-        completed_count = sum(1 for c in classes if c.status in ("completed", "finalized"))
-        no_show_count = sum(1 for c in classes if c.status == "no_show")
-        # Aproximamos "cancelada tarde" comparando contra cuándo se actualizó
-        # el registro, ya que no guardamos un timestamp específico de cancelación.
-        cancelled_late_count = sum(
-            1 for c in classes
-            if c.status == "cancelled"
-            and c.updated_at is not None
-            and (c.start_time_utc - c.updated_at) < timedelta(hours=12)
-        )
-
-        student_user = e.student.user if e.student else None
-        package = e.package
-
-        requested_pkg_name = None
-        if e.renewal_requested_package_id:
-            rp = db.query(Package).filter(Package.id == e.renewal_requested_package_id).first()
-            requested_pkg_name = rp.name if rp else None
-
-        result.append(EnrollmentComplianceResponse(
-            id=e.id,
-            student_id=e.student_id,
-            student_username=student_user.username if student_user else "unknown",
-            student_name=f"{student_user.name} {student_user.surname}" if student_user else "Desconocido",
-            package_id=e.package_id,
-            package_name=package.name if package else "N/A",
-            classes_used=e.classes_used,
-            classes_total=e.classes_total,
-            status=e.status,
-            completed_count=completed_count,
-            no_show_count=no_show_count,
-            cancelled_late_count=cancelled_late_count,
-            renewal_requested_package_name=requested_pkg_name,
-            created_at=e.created_at,
-        ))
-
-    return result

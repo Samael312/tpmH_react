@@ -12,12 +12,8 @@ import { useAuthStore } from "@/store/authStore";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import CalendarSync from "./CalendarSync";
 import {SUBJECTS, LANGUAGES, SKILL_SUGGESTIONS} from "@/lib/teacherOptions";
-import {
-  TIMEZONE_OPTIONS,
-  TIMEZONE_OPTIONS as TIMEZONES,
-  TIMEZONE_TO_COUNTRY,
-  DEFAULT_COUNTRY,
-} from "@/lib/timezones";
+import { COUNTRY_OPTIONS, DEFAULT_COUNTRY, parsePhoneNumber, CountryInfo, TIMEZONE_OPTIONS } from "@/lib/timezones";
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 function formatErrorMessage(error: any, fallbackMessage: string): string {
@@ -31,6 +27,12 @@ function formatErrorMessage(error: any, fallbackMessage: string): string {
 }
 
 type TeacherProfileWithPhoto = TeacherProfile & { photo_url?: string | null };
+
+const inputCls = (withIcon = true) =>
+  `w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 ${
+    withIcon ? "pl-11" : "px-4"
+  } pr-4 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed`;
+
 
 // ─── Iconos redes sociales ────────────────────────────────────────────────
 const InstagramIcon = () => (
@@ -245,7 +247,8 @@ export default function TeacherProfilePage() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // Campos de formulario
-  const [phone, setPhone] = useState("");
+  const [phoneCountry, setPhoneCountry] = useState<CountryInfo>(DEFAULT_COUNTRY);
+  const [phoneRest, setPhoneRest] = useState("");
   const [bio, setBio] = useState("");
   const [title_, setTitle_] = useState("");
   const [timezone, setTimezone] = useState("");
@@ -271,7 +274,9 @@ export default function TeacherProfilePage() {
   const [deleting, setDeleting] = useState(false);
 
   const populateFields = useCallback((prof: TeacherProfileWithPhoto, phoneNum: string) => {
-    setPhone(phoneNum);
+    const { country, rest } = parsePhoneNumber(phoneNum);
+    setPhoneCountry(country);
+    setPhoneRest(rest);
     setBio(prof.bio ?? "");
     setTitle_(prof.title ?? "");
     setTimezone(prof.timezone ?? "");
@@ -316,12 +321,14 @@ export default function TeacherProfilePage() {
     try {
       const form = new FormData();
       form.append("file", f);
-      const resPhoto = await api.post("/teacher/me/photo", form, {
+
+      const resPhoto = await api.post("/users/me/photo", form, {   // antes: "/teacher/me/photo"
         headers: { "Content-Type": "multipart/form-data" },
       });
-      if (resPhoto.data?.avatar || resPhoto.data?.photo_url) {
-        setPhotoUrl(resPhoto.data.avatar || resPhoto.data.photo_url);
+      if (resPhoto.data?.avatar_url || resPhoto.data?.url) {
+        setPhotoUrl(resPhoto.data.avatar_url || resPhoto.data.url);   // antes: resPhoto.data.avatar || resPhoto.data.photo_url
       }
+
       refetch();
       setInfoFeedback({ msg: "Foto de perfil actualizada", type: "success" });
     } catch (e: any) {
@@ -341,14 +348,10 @@ export default function TeacherProfilePage() {
     setSaving(true);
     setInfoFeedback(null);
     try {
-      await api.patch("/users/me", { phone_number: phone });
-      await api.patch("/teacher/me/profile", {
-        bio,
-        title: title_,
-        timezone,
-        languages,
-        subjects,
-        skills,
+      const fullPhone = phoneRest.trim() ? `${phoneCountry.dialCode} ${phoneRest.trim()}` : "";
+      await api.patch("/users/me", { phone_number: fullPhone });
+      await api.patch("/teachers/me/profile", {   // antes: "/teacher/me/profile"
+        bio, title: title_, timezone, languages, subjects, skills,
         certificates: certificates.filter(c => c.title.trim()),
         social_links: socialLinks,
       });
@@ -499,7 +502,7 @@ export default function TeacherProfilePage() {
                 <div className="space-y-5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <ReadField icon={<Briefcase className="w-3.5 h-3.5 text-slate-400" />} label="Título profesional" value={title_} />
-                    <ReadField icon={<Phone className="w-3.5 h-3.5 text-slate-400" />} label="Teléfono" value={phone} />
+                    <ReadField icon={<Phone className="w-3.5 h-3.5 text-slate-400" />} label="Teléfono" value={phoneRest ? `${phoneCountry.dialCode} ${phoneRest}` : ""} />
                     <div className="sm:col-span-2">
                       <ReadField icon={<Globe className="w-3.5 h-3.5 text-slate-400" />} label="Zona horaria" value={timezone} />
                     </div>
@@ -597,16 +600,36 @@ export default function TeacherProfilePage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Teléfono</label>
-                      <div className="relative group">
-                        <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors pointer-events-none" />
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                        Teléfono
+                      </label>
+                      <div className="flex gap-2">
+                        <div className="relative w-28 flex-shrink-0">
+                          <div className="w-full h-full bg-slate-50 border-2 border-transparent rounded-xl px-3 py-3.5 flex items-center justify-between pointer-events-none font-bold text-slate-800">
+                            <span className="text-lg leading-none">{phoneCountry.flag}</span>
+                            <span className="text-sm font-black text-slate-600">{phoneCountry.dialCode}</span>
+                          </div>
+                          <select
+                            value={phoneCountry.dialCode}
+                            onChange={e => {
+                              const sel = COUNTRY_OPTIONS.find(c => c.dialCode === e.target.value);
+                              if (sel) setPhoneCountry(sel);
+                            }}
+                            disabled={saving}
+                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                          >
+                            {COUNTRY_OPTIONS.map((c, i) => (
+                              <option key={i} value={c.dialCode}>{c.flag} {c.dialCode}</option>
+                            ))}
+                          </select>
+                        </div>
                         <input
                           type="tel"
-                          value={phone}
-                          onChange={e => setPhone(e.target.value)}
+                          value={phoneRest}
+                          onChange={e => setPhoneRest(e.target.value)}
                           disabled={saving}
-                          placeholder="+58 412 000 0000"
-                          className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
+                          placeholder="412 000 0000"
+                          className={inputCls(false)}
                         />
                       </div>
                     </div>

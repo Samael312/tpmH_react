@@ -24,7 +24,7 @@ class Package(Base):
     # "Inglés", "Francés", "Guitarra", "Matemáticas", etc.
 
     description = Column(String, nullable=True)
-    classes_count = Column(Integer, nullable=False)
+    classes_count = Column(Integer, nullable=True)
     price = Column(Float, nullable=False)
     duration_minutes = Column(Integer, default=60)
     # Duración estándar de cada clase en este paquete: 30, 60 o 90
@@ -53,7 +53,7 @@ class Enrollment(Base):
     teacher_id = Column(Integer, ForeignKey("teacher_profiles.id"), nullable=False)
 
     classes_used = Column(Integer, default=0)
-    classes_total = Column(Integer, nullable=False)
+    classes_total = Column(Integer, nullable=True)
 
     status = Column(
         Enum(EnrollmentStatus),

@@ -31,7 +31,7 @@ export interface StudentEnrollment {
   package_name: string;
   subject: string;
   classes_used: number;
-  classes_total: number;
+  classes_total: number | null;
   status: string;
   start_date: string;
   end_date: string | null;

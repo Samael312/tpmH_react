@@ -852,7 +852,7 @@ function NeedsPackageScreen({ onSelected }: { onSelected: () => void }) {
                 {pkg.name}
               </h3>
               <p className="text-xs text-slate-400 font-bold mb-4">
-                {pkg.subject} · {pkg.classes_count} clases · {pkg.duration_minutes} min c/u
+                {pkg.subject} · {pkg.classes_count == null ? "Ilimitadas" : `${pkg.classes_count} clases`} · {pkg.duration_minutes} min c/u
               </p>
               <p className="text-2xl font-black text-pink-600 mb-5">
                 ${pkg.price?.toFixed ? pkg.price.toFixed(2) : pkg.price}
@@ -981,7 +981,7 @@ function NeedsRenewalScreen({ onRequested }: { onRequested: () => void }) {
               </div>
               <h3 className="text-lg font-black text-slate-800 mb-1">{pkg.name}</h3>
               <p className="text-xs text-slate-400 font-bold mb-4">
-                {pkg.subject} · {pkg.classes_count} clases · {pkg.duration_minutes} min c/u
+                {pkg.subject} · {pkg.classes_count == null ? "Ilimitadas" : `${pkg.classes_count} clases`} · {pkg.duration_minutes} min c/u
               </p>
               <p className="text-2xl font-black text-pink-600 mb-5">
                 ${pkg.price?.toFixed ? pkg.price.toFixed(2) : pkg.price}

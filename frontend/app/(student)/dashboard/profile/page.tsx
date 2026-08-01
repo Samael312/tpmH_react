@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
+import { COUNTRY_OPTIONS, DEFAULT_COUNTRY, parsePhoneNumber, CountryInfo } from "@/lib/timezones";
 
 // ─── Helpers & Formateadores de Errores ──────────────────────────────────────
 function formatErrorMessage(error: any, fallbackMessage: string): string {
@@ -159,7 +160,8 @@ export default function StudentProfilePage() {
   const [name, setName]         = useState("");
   const [surname, setSurname]   = useState("");
   const [email, setEmail]       = useState("");
-  const [phone, setPhone]       = useState("");
+  const [phoneCountry, setPhoneCountry] = useState<CountryInfo>(DEFAULT_COUNTRY);
+  const [phoneRest, setPhoneRest] = useState("");
   const [timezone, setTz]       = useState("UTC");
   const [goal, setGoal]         = useState("");
   const [payMethods, setPay]    = useState<string[]>([]);
@@ -195,7 +197,11 @@ export default function StudentProfilePage() {
     setName(userData.name ?? "");
     setSurname(userData.surname ?? "");
     setEmail(userData.email ?? "");
-    setPhone(userData.phone_number ?? userData.phone ?? "");
+
+    const rawPhone = userData.phone_number ?? userData.phone ?? "";
+    const { country, rest } = parsePhoneNumber(rawPhone);
+    setPhoneCountry(country);
+    setPhoneRest(rest);
 
     const detectedTz =
       studentData.timezone ||
@@ -245,6 +251,7 @@ export default function StudentProfilePage() {
     setIsEditing(false);
   }, [profile, populateFields]);
 
+  const fullPhone = phoneRest.trim() ? `${phoneCountry.dialCode} ${phoneRest.trim()}` : "";
   // ─── PATCH: Actualizar Perfil y Student Profile ──────────────────────────────
   const saveInfo = useCallback(async () => {
     setSavingInfo(true);
@@ -256,7 +263,7 @@ export default function StudentProfilePage() {
           name,
           surname,
           email,
-          phone_number: phone
+          phone_number:fullPhone
         }),
         api.patch("/users/me/student-profile", {
           timezone,
@@ -276,7 +283,7 @@ export default function StudentProfilePage() {
           name: updatedUserData.name ?? name,
           surname: updatedUserData.surname ?? surname,
           email: updatedUserData.email ?? email,
-          phone_number: updatedUserData.phone_number ?? phone,
+          phone_number: updatedUserData.phone_number ?? fullPhone,
           ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
         });
       }
@@ -292,7 +299,7 @@ export default function StudentProfilePage() {
       setSavingInfo(false);
       setTimeout(() => setInfoFeedback(null), 4000);
     }
-  }, [username, name, surname, email, phone, timezone, goal, payMethods, populateFields, user, setUser, avatarUrl]);
+  }, [username, name, surname, email, fullPhone, timezone, goal, payMethods, populateFields, user, setUser, avatarUrl]);
 
   // ─── POST: Cambiar Contraseña ────────────────────────────────────────────────
   const savePw = useCallback(async () => {
@@ -346,7 +353,7 @@ export default function StudentProfilePage() {
     setUploading(true);
     try {
       const form = new FormData();
-      form.append("photo", file);
+      form.append("file", file);
 
       const res = await api.patch("/users/me/avatar", form, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -480,7 +487,7 @@ export default function StudentProfilePage() {
                     <ReadField icon={<AtSign className="w-3.5 h-3.5 text-slate-400" />} label="Usuario" value={username} />
                     <ReadField label="Nombre completo" value={displayName} />
                     <ReadField icon={<Mail className="w-3.5 h-3.5 text-slate-400" />} label="Correo electrónico" value={email} />
-                    <ReadField icon={<Phone className="w-3.5 h-3.5 text-slate-400" />} label="Teléfono" value={phone || "No registrado"} />
+                    <ReadField icon={<Phone className="w-3.5 h-3.5 text-slate-400" />} label="Teléfono" value={phoneRest ? `${phoneCountry.dialCode} ${phoneRest}` : ""} />
                     <div className="sm:col-span-2">
                       <ReadField icon={<Globe className="w-3.5 h-3.5 text-slate-400" />} label="Zona horaria" value={timezone} />
                     </div>
@@ -533,10 +540,42 @@ export default function StudentProfilePage() {
                     <Field label="Correo electrónico" icon={<Mail className="w-5 h-5" />}>
                       <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputCls()} placeholder="correo@ejemplo.com" disabled={savingInfo} />
                     </Field>
-                    <Field label="Teléfono" icon={<Phone className="w-5 h-5" />}>
-                      <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className={inputCls()} placeholder="+1 234 567 890" disabled={savingInfo} />
-                    </Field>
                   </div>
+
+                  <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                    Teléfono
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="relative w-28 flex-shrink-0">
+                      <div className="w-full h-full bg-slate-50 border-2 border-transparent rounded-xl px-3 py-3.5 flex items-center justify-between pointer-events-none font-bold text-slate-800">
+                        <span className="text-lg leading-none">{phoneCountry.flag}</span>
+                        <span className="text-sm font-black text-slate-600">{phoneCountry.dialCode}</span>
+                      </div>
+                      <select
+                        value={phoneCountry.dialCode}
+                        onChange={e => {
+                          const sel = COUNTRY_OPTIONS.find(c => c.dialCode === e.target.value);
+                          if (sel) setPhoneCountry(sel);
+                        }}
+                        disabled={savingInfo}
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      >
+                        {COUNTRY_OPTIONS.map((c, i) => (
+                          <option key={i} value={c.dialCode}>{c.flag} {c.dialCode}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <input
+                      type="tel"
+                      value={phoneRest}
+                      onChange={e => setPhoneRest(e.target.value)}
+                      disabled={savingInfo}
+                      placeholder="412 000 0000"
+                      className={inputCls(false)}
+                    />
+                  </div>
+                </div>
 
                   <Field label="Zona horaria" icon={<Globe className="w-5 h-5" />}>
                     <select

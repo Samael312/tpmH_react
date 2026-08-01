@@ -309,7 +309,7 @@ def update_student_profile(
     db.commit()
     db.refresh(profile)
 
-    return {"message": "Perfil actualizado"}
+    return profile
 
 
 @router.post("/me/preferences", response_model=List[PreferenceSlotResponse])

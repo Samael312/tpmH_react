@@ -147,8 +147,8 @@ def update_enrollment_counter(
     if enrollment:
         enrollment.classes_used = max(0, enrollment.classes_used + delta)
 
-        # Si se usaron todas las clases del paquete marcamos como completado
-        if enrollment.classes_used >= enrollment.classes_total:
+        # Si se usaron todas las clases del paquete marcamos como completado # None = ilimitadas, nunca se marca como completado por conteo
+        if enrollment.classes_total is not None and enrollment.classes_used >= enrollment.classes_total:
             enrollment.status = "completed"
         else:
             enrollment.status = "active"

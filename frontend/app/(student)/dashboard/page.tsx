@@ -352,20 +352,15 @@ export default function StudentDashboard() {
               <div className="text-right">
                 <p className="text-3xl font-black">
                   {activeEnrollment.classes_used}
-                  <span className="text-xl text-white/60">
-                    /{activeEnrollment.classes_total}
-                  </span>
+                  <span className="text-xl text-white/60">/{activeEnrollment.classes_total ?? "∞"}</span>
                 </p>
                 <p className="text-white/70 text-xs font-bold">clases usadas</p>
                 <div className="mt-2 w-40 h-2 bg-white/30 rounded-full overflow-hidden shadow-inner">
                   <div
                     className="h-full bg-white rounded-full transition-all duration-700"
-                    style={{
-                      width: `${Math.min(
-                        (activeEnrollment.classes_used /
-                          activeEnrollment.classes_total) * 100,
-                        100
-                      )}%`,
+                    style={{ width: activeEnrollment.classes_total
+                      ? `${Math.min((activeEnrollment.classes_used / activeEnrollment.classes_total) * 100, 100)}%`
+                      : "100%"
                     }}
                   />
                 </div>
