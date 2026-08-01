@@ -41,17 +41,20 @@ export default function StudentPreferencesPage() {
   });
 
   const fetchPreferences = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get("/users/me/preferences");
-      setPreferences(res.data);
+  setLoading(true);
+  try {
+    const res = await api.get("/users/me/preferences");
+    setPreferences(res.data);
+    
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const initialSlots: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+    
+    res.data.forEach((pref: any) => {
+      // Declaramos 'day' ANTES del try para que el catch pueda acceder a él
+      const day = pref.day_of_week; 
       
-      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const initialSlots: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-      
-      res.data.forEach((pref: any) => {
-        const day = pref.day_of_week;
-        const localStart = utcTimeToLocal(pref.start_time_utc,day ,userTimezone);
+      try {
+        const localStart = utcTimeToLocal(pref.start_time_utc, day, userTimezone);
         const localEnd = utcTimeToLocal(pref.end_time_utc, day, userTimezone);
 
         const startHour = parseInt(localStart.split(":")[0]);
@@ -66,15 +69,20 @@ export default function StudentPreferencesPage() {
           if (!initialSlots[day].includes(hourStr)) {
             initialSlots[day].push(hourStr);
           }
-        }
-      });
-      setSelectedSlots(initialSlots);
-    } catch (e) {
-      console.error("Error fetching preferences", e);
-    } finally {
-      setLoading(false);
-    }
-  };
+        } 
+      } catch (err) {
+        // Ahora esto funcionará perfectamente
+        console.error(`Error processing preference for day ${day}:`, err);
+      }
+    });
+    
+    setSelectedSlots(initialSlots);
+  } catch (e) {
+    console.error("Error fetching preferences", e);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     fetchPreferences();

@@ -39,7 +39,23 @@ export default function ExceptionsSection() {
     setLoading(true);
     try {
       const res = await api.get("/availability/me/exceptions");
-      setExceptions(res.data);
+      
+      const now = new Date();
+      
+      // Filtramos las excepciones: validas (futuras/actuales) y pasadas
+      const validExceptions = res.data.filter((exc: Exception) => new Date(exc.end_time_utc) >= now);
+      const pastExceptions = res.data.filter((exc: Exception) => new Date(exc.end_time_utc) < now);
+      
+      // Solo guardamos en el estado las que son válidas para mostrarlas al usuario
+      setExceptions(validExceptions);
+
+      // Limpieza automática: eliminamos las pasadas de la base de datos en segundo plano
+      pastExceptions.forEach((exc: Exception) => {
+        api.delete(`/availability/me/exceptions/${exc.id}`).catch(() => {
+          console.error(`Error limpiando excepción pasada ID: ${exc.id}`);
+        });
+      });
+
     } catch {
       // silencioso
     } finally {
@@ -101,11 +117,24 @@ export default function ExceptionsSection() {
   };
 
   const remove = async (id: number) => {
+    // 1. Limpiamos alertas previas
+    setError("");
+    setSuccess("");
+    
     try {
+      // 2. Ejecutamos el borrado en la API
       await api.delete(`/availability/me/exceptions/${id}`);
+      
+      // 3. Actualizamos la lista local
       setExceptions(prev => prev.filter(e => e.id !== id));
+      
+      // 4. Mostramos mensaje de éxito
+      setSuccess("Excepción eliminada correctamente");
     } catch {
       setError("Error eliminando la excepción");
+    } finally {
+      // 5. Ocultamos el mensaje de éxito después de 3 segundos
+      setTimeout(() => setSuccess(""), 3000);
     }
   };
 
@@ -150,7 +179,7 @@ export default function ExceptionsSection() {
       {/* Formulario Mejorado */}
       <div className="bg-slate-50/80 rounded-2xl p-6 border border-slate-100 space-y-6">
         
-        {/* Controles de Switches (Corregidos) */}
+        {/* Controles de Switches */}
         <div className="flex flex-col sm:flex-row gap-6 pb-4 border-b border-slate-200/60">
           <label className="flex items-center gap-3 cursor-pointer group w-fit">
             <button
@@ -292,7 +321,7 @@ export default function ExceptionsSection() {
             <button
             onClick={submit}
             disabled={saving}
-            className="w-full   py-3.5 text-sm font-bold text-white rounded-xl
+            className="w-full py-3.5 text-sm font-bold text-white rounded-xl
                        bg-gradient-to-r from-purple-600 to-pink-500
                        hover:from-purple-700 hover:to-pink-600
                        shadow-lg shadow-purple-200 active:scale-[0.98]
@@ -314,8 +343,13 @@ export default function ExceptionsSection() {
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
           Excepciones configuradas ({exceptions.length})
         </p>
+        
         {loading ? (
-          <div className="h-16 bg-slate-50 rounded-2xl animate-pulse" />
+          /* Aquí está el nuevo spinner de carga */
+          <div className="flex flex-col items-center justify-center py-10 space-y-3 bg-slate-50/50 rounded-2xl border border-slate-100">
+            <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+            <p className="text-xs font-bold text-slate-400">Cargando excepciones...</p>
+          </div>
         ) : sorted.length === 0 ? (
           <div className="bg-slate-50/50 rounded-2xl border border-slate-100 py-8 text-center">
             <p className="text-sm text-slate-400 font-bold">

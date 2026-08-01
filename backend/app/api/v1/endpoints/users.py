@@ -340,7 +340,7 @@ def set_schedule_preferences(
                 slot.start_time_local, data.timezone, slot.day_of_week
             )
             end_utc = convert_local_time_to_utc_string(
-                slot.end_time_local, data.timezone. slot.day_of_week
+                slot.end_time_local, data.timezone, slot.day_of_week 
             )
         except ValueError as e:
             raise HTTPException(
@@ -407,10 +407,10 @@ def update_schedule_preferences(
     for slot in data.slots:
         try:
             start_utc = convert_local_time_to_utc_string(
-                slot.start_time_local, data.timezone
+                slot.start_time_local, data.timezone, slot.day_of_week
             )
             end_utc = convert_local_time_to_utc_string(
-                slot.end_time_local, data.timezone
+                slot.end_time_local, data.timezone, slot.day_of_week
             )
         except ValueError as e:
             raise HTTPException(

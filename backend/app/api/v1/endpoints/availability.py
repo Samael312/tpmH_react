@@ -116,16 +116,19 @@ def get_my_exceptions(
     db: Session = Depends(get_db)
 ):
     """Devuelve todas las excepciones del profesor ordenadas por fecha"""
-    return db.query(TeacherAvailabilityException).filter(
+    exceptions = db.query(TeacherAvailabilityException).filter(
         TeacherAvailabilityException.teacher_id == current_user.teacher_profile.id
     ).order_by(
         TeacherAvailabilityException.start_time_utc
     ).all()
+    
+    # Aquí está la clave: mapear cada objeto de la BD usando la función auxiliar
+    return [_to_exception_response(exc) for exc in exceptions]
 
 
 @router.post(
     "/me/exceptions",
-    response_model=ExceptionResponse,
+    response_model=List[ExceptionResponse],  # ✅ CORREGIDO A List[]
     status_code=status.HTTP_201_CREATED
 )
 def add_exception(
@@ -229,6 +232,38 @@ def add_exception(
 
     return [_to_exception_response(exc) for exc in created]
 
+@router.delete(
+    "/me/exceptions/{exception_id}",
+    status_code=status.HTTP_204_NO_CONTENT
+)
+def delete_exception(
+    exception_id: int,
+    current_user: User = Depends(get_current_teacher),
+    db: Session = Depends(get_db)
+):
+    """
+    Elimina una excepción específica del profesor.
+    Verifica que la excepción exista y pertenezca al profesor autenticado.
+    """
+    teacher_id = current_user.teacher_profile.id
+    
+    # Buscamos la excepción asegurándonos de que le pertenezca a este profesor
+    exception = db.query(TeacherAvailabilityException).filter(
+        TeacherAvailabilityException.id == exception_id,
+        TeacherAvailabilityException.teacher_id == teacher_id
+    ).first()
+
+    if not exception:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Excepción no encontrada o no tienes permisos para eliminarla"
+        )
+
+    # Si existe, la borramos y guardamos los cambios
+    db.delete(exception)
+    db.commit()
+    
+    return None # HTTP 204 No Content no requiere cuerpo en la respuesta
 
 # ─── ENDPOINT PÚBLICO (VISTA ESTUDIANTE) ────────────────────────────────────
 
@@ -450,100 +485,3 @@ def _to_exception_response(exc: TeacherAvailabilityException) -> ExceptionRespon
         reason=exc.reason,
         is_full_day=is_full_day,
     )
-
-
-@router.get("/me/exceptions", response_model=List[ExceptionResponse])
-def get_my_exceptions(
-    current_user: User = Depends(get_current_teacher),
-    db: Session = Depends(get_db)
-):
-    exceptions = db.query(TeacherAvailabilityException).filter(
-        TeacherAvailabilityException.teacher_id == current_user.teacher_profile.id
-    ).order_by(TeacherAvailabilityException.start_time_utc).all()
-    return [_to_exception_response(e) for e in exceptions]
-
-
-@router.post(
-    "/me/exceptions",
-    response_model=ExceptionResponse,
-    status_code=status.HTTP_201_CREATED
-)
-def add_exception(
-    data: ExceptionCreate,
-    current_user: User = Depends(get_current_teacher),
-    db: Session = Depends(get_db)
-):
-    """
-    Añade una excepción puntual (día completo u horas específicas).
-    El profesor envía fecha + hora LOCAL + su zona horaria; el backend
-    convierte a UTC usando la fecha real (sin ambigüedad de DST).
-
-    is_available=False → bloquea ese rango (aunque el horario semanal
-    lo tenga como disponible, esta excepción es la fuente de verdad).
-    is_available=True  → agrega disponibilidad extra puntual.
-    """
-    if not validate_timezone(data.timezone):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Zona horaria inválida: {data.timezone}"
-        )
-
-    try:
-        base_date = datetime.strptime(data.date, "%Y-%m-%d").date()
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Formato de fecha inválido. Usa YYYY-MM-DD"
-        )
-
-    tz = ZoneInfo(data.timezone)
-
-    if data.is_full_day:
-        start_local = datetime.combine(base_date, time(0, 0), tzinfo=tz)
-        end_local = datetime.combine(base_date + timedelta(days=1), time(0, 0), tzinfo=tz)
-    else:
-        if not data.start_time_local or not data.end_time_local:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Debes indicar hora de inicio y fin, o marcar 'todo el día'"
-            )
-        start_local = datetime.strptime(
-            f"{data.date} {data.start_time_local}", "%Y-%m-%d %H:%M"
-        ).replace(tzinfo=tz)
-        end_local = datetime.strptime(
-            f"{data.date} {data.end_time_local}", "%Y-%m-%d %H:%M"
-        ).replace(tzinfo=tz)
-        if end_local <= start_local:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="La hora de fin debe ser posterior a la de inicio"
-            )
-
-    start_utc = start_local.astimezone(UTC)
-    end_utc = end_local.astimezone(UTC)
-
-    teacher_id = current_user.teacher_profile.id
-
-    overlap = db.query(TeacherAvailabilityException).filter(
-        TeacherAvailabilityException.teacher_id == teacher_id,
-        TeacherAvailabilityException.start_time_utc < end_utc,
-        TeacherAvailabilityException.end_time_utc > start_utc,
-    ).first()
-
-    if overlap:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ya existe una excepción que se solapa con ese rango horario"
-        )
-
-    exception = TeacherAvailabilityException(
-        teacher_id=teacher_id,
-        start_time_utc=start_utc,
-        end_time_utc=end_utc,
-        is_available=data.is_available,
-        reason=data.reason
-    )
-    db.add(exception)
-    db.commit()
-    db.refresh(exception)
-    return _to_exception_response(exception)
