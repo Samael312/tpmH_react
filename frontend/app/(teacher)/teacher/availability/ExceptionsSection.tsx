@@ -6,6 +6,7 @@ import {
   AlertTriangle, Check, Loader2
 } from "lucide-react";
 import api from "@/lib/api";
+import CalendarPicker from "@/components/layout/CalendarPicker";
 
 interface Exception {
   id: number;
@@ -23,7 +24,11 @@ export default function ExceptionsSection() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  const [isRange, setIsRange] = useState(false);
   const [date, setDate] = useState("");
+  const [rangeStart, setRangeStart] = useState("");
+  const [rangeEnd, setRangeEnd] = useState("");
+
   const [isFullDay, setIsFullDay] = useState(true);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("13:00");
@@ -46,6 +51,8 @@ export default function ExceptionsSection() {
 
   const resetForm = () => {
     setDate("");
+    setRangeStart("");
+    setRangeEnd("");
     setIsFullDay(true);
     setStartTime("09:00");
     setEndTime("13:00");
@@ -54,17 +61,26 @@ export default function ExceptionsSection() {
   };
 
   const submit = async () => {
-    if (!date) {
-      setError("Selecciona una fecha");
+    const effectiveDate = isRange ? rangeStart : date;
+    const effectiveEndDate = isRange ? (rangeEnd || rangeStart) : undefined;
+
+    if (!effectiveDate) {
+      setError(isRange ? "Selecciona el rango de fechas" : "Selecciona una fecha");
       return;
     }
+    if (isRange && !rangeEnd) {
+      setError("Selecciona también la fecha final del rango");
+      return;
+    }
+
     setSaving(true);
     setError("");
     setSuccess("");
     try {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      await api.post("/availability/me/exceptions", {
-        date,
+      const res = await api.post("/availability/me/exceptions", {
+        date: effectiveDate,
+        end_date: effectiveEndDate,
         timezone,
         is_full_day: isFullDay,
         start_time_local: isFullDay ? null : startTime,
@@ -72,7 +88,8 @@ export default function ExceptionsSection() {
         is_available: mode === "extra",
         reason: reason.trim() || null,
       });
-      setSuccess("Excepción guardada correctamente");
+      const count = Array.isArray(res.data) ? res.data.length : 1;
+      setSuccess(`${count} excepción${count !== 1 ? "es" : ""} guardada${count !== 1 ? "s" : ""} correctamente`);
       resetForm();
       fetchExceptions();
     } catch (e: any) {
@@ -112,7 +129,7 @@ export default function ExceptionsSection() {
           Días y horas no disponibles
         </h2>
         <p className="text-sm font-bold text-slate-700 mt-1">
-          Bloquea días completos o rangos puntuales (vacaciones, citas, etc.)
+          Bloquea días completos, rangos de días (ej. vacaciones) u horas puntuales,
           o agrega disponibilidad extra en un día que normalmente no trabajas.
         </p>
       </div>
@@ -130,154 +147,189 @@ export default function ExceptionsSection() {
         </div>
       )}
 
-      {/* Formulario */}
-      <div className="bg-slate-50/80 rounded-2xl p-5 border border-slate-100 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-              Fecha
-            </label>
-            <input
-              type="date"
-              value={date}
-              onChange={e => setDate(e.target.value)}
-              min={new Date().toISOString().split("T")[0]}
-              className="w-full bg-white border-2 border-slate-200 rounded-xl text-sm font-bold
-                         text-slate-800 px-4 py-3 focus:outline-none focus:border-purple-400
-                         focus:ring-4 focus:ring-purple-50 transition-all"
-            />
-          </div>
-
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-              Tipo de excepción
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setMode("block")}
-                className={`flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold
-                  border-2 transition-all ${mode === "block"
-                    ? "border-rose-400 bg-rose-50 text-rose-600"
-                    : "border-transparent bg-white text-slate-500"}`}
-              >
-                <CalendarOff className="w-3.5 h-3.5" /> Bloquear
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("extra")}
-                className={`flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold
-                  border-2 transition-all ${mode === "extra"
-                    ? "border-emerald-400 bg-emerald-50 text-emerald-600"
-                    : "border-transparent bg-white text-slate-500"}`}
-              >
-                <CalendarPlus className="w-3.5 h-3.5" /> Añadir extra
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* --- SWITCH ARREGLADO --- */}
-        <label className="flex items-center gap-3 cursor-pointer w-fit select-none py-1">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={isFullDay}
-            onClick={() => setIsFullDay(p => !p)}
-            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
-              isFullDay ? "bg-purple-600" : "bg-slate-300"
-            }`}
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                isFullDay ? "translate-x-5" : "translate-x-0.5"
-              }`}
-            />
-          </button>
-          <span className="text-xs font-bold text-slate-600">Todo el día</span>
-        </label>
-        {/* -------------------------- */}
-
-        {!isFullDay && (
-          <div className="grid grid-cols-2 gap-3 animate-in fade-in duration-200">
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                Desde
-              </label>
-              <input
-                type="time"
-                value={startTime}
-                onChange={e => setStartTime(e.target.value)}
-                className="w-full bg-white border-2 border-slate-200 rounded-xl text-sm font-bold
-                           text-slate-800 px-3 py-2.5 focus:outline-none focus:border-purple-400"
+      {/* Formulario Mejorado */}
+      <div className="bg-slate-50/80 rounded-2xl p-6 border border-slate-100 space-y-6">
+        
+        {/* Controles de Switches (Corregidos) */}
+        <div className="flex flex-col sm:flex-row gap-6 pb-4 border-b border-slate-200/60">
+          <label className="flex items-center gap-3 cursor-pointer group w-fit">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isRange}
+              onClick={() => { setIsRange(p => !p); setDate(""); setRangeStart(""); setRangeEnd(""); }}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 ${isRange ? "bg-pink-500" : "bg-slate-300"}`}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isRange ? "translate-x-5" : "translate-x-0"}`}
               />
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                Hasta
-              </label>
-              <input
-                type="time"
-                value={endTime}
-                onChange={e => setEndTime(e.target.value)}
-                className="w-full bg-white border-2 border-slate-200 rounded-xl text-sm font-bold
-                           text-slate-800 px-3 py-2.5 focus:outline-none focus:border-purple-400"
-              />
-            </div>
-          </div>
-        )}
-
-        <div>
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-            Motivo (opcional)
+            </button>
+            <span className="text-xs font-bold text-slate-600 group-hover:text-slate-800 transition-colors">
+              Rango de fechas (ej. vacaciones)
+            </span>
           </label>
-          <input
-            value={reason}
-            onChange={e => setReason(e.target.value)}
-            placeholder="Ej: Vacaciones, cita médica..."
-            className="w-full bg-white border-2 border-slate-200 rounded-xl text-sm font-bold
-                       text-slate-800 placeholder:text-slate-400 px-4 py-3
-                       focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-50"
-          />
+
+          <label className="flex items-center gap-3 cursor-pointer group w-fit">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isFullDay}
+              onClick={() => setIsFullDay(p => !p)}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${isFullDay ? "bg-purple-500" : "bg-slate-300"}`}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isFullDay ? "translate-x-5" : "translate-x-0"}`}
+              />
+            </button>
+            <span className="text-xs font-bold text-slate-600 group-hover:text-slate-800 transition-colors">
+              Todo el día
+            </span>
+          </label>
         </div>
 
-        <button
-          onClick={submit}
-          disabled={saving || !date}
-          className="w-full py-3.5 text-sm font-bold text-white rounded-xl
-                     bg-gradient-to-r from-purple-600 to-pink-500
-                     hover:from-purple-700 hover:to-pink-600
-                     shadow-lg shadow-purple-200 active:scale-[0.98]
-                     transition-all duration-300 disabled:opacity-50
-                     flex items-center justify-center gap-2"
-        >
-          {saving ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <><Plus className="w-4 h-4" /> Agregar excepción</>
-          )}
-        </button>
+        {/* Grid de Configuración */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Columna Izquierda: Fecha */}
+          <div className="space-y-4">
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                {isRange ? "Selecciona la fecha de inicio y luego la de fin" : "Fecha"}
+              </label>
+
+              {isRange ? (
+                <div className="space-y-3">
+                  <CalendarPicker
+                    mode="range"
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    onRangeChange={(s, e) => { setRangeStart(s); setRangeEnd(e); }}
+                  />
+                  {rangeStart && (
+                    <p className="text-xs font-bold text-pink-600 bg-pink-50 py-2 px-3 rounded-lg inline-block">
+                      {rangeStart}{rangeEnd ? ` → ${rangeEnd}` : " → (elige la fecha final)"}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <CalendarPicker mode="single" value={date} onChange={setDate} />
+              )}
+            </div>
+          </div>
+
+          {/* Columna Derecha: Tipo, Horas y Motivo */}
+          <div className="space-y-5">
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                Tipo de excepción
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMode("block")}
+                  className={`flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold border-2 transition-all ${mode === "block"
+                      ? "border-rose-400 bg-rose-50 text-rose-600 shadow-sm"
+                      : "border-slate-100 bg-white text-slate-500 hover:border-slate-200"}`}
+                >
+                  <CalendarOff className="w-4 h-4" /> Bloquear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("extra")}
+                  className={`flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold border-2 transition-all ${mode === "extra"
+                      ? "border-emerald-400 bg-emerald-50 text-emerald-600 shadow-sm"
+                      : "border-slate-100 bg-white text-slate-500 hover:border-slate-200"}`}
+                >
+                  <CalendarPlus className="w-4 h-4" /> Añadir extra
+                </button>
+              </div>
+            </div>
+
+            {!isFullDay && (
+              <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-200">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                    Desde
+                  </label>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={e => setStartTime(e.target.value)}
+                    className="w-full bg-white border-2 border-slate-100 rounded-xl text-sm font-bold
+                               text-slate-800 px-3 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-50 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                    Hasta
+                  </label>
+                  <input
+                    type="time"
+                    value={endTime}
+                    onChange={e => setEndTime(e.target.value)}
+                    className="w-full bg-white border-2 border-slate-100 rounded-xl text-sm font-bold
+                               text-slate-800 px-3 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-50 transition-all"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                Motivo (opcional)
+              </label>
+              <input
+                value={reason}
+                onChange={e => setReason(e.target.value)}
+                placeholder="Ej: Vacaciones, cita médica..."
+                className="w-full bg-white border-2 border-slate-100 rounded-xl text-sm font-bold
+                           text-slate-800 placeholder:text-slate-400 px-4 py-3
+                           focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-50 transition-all"
+              />
+            </div>
+
+            <button
+            onClick={submit}
+            disabled={saving}
+            className="w-full   py-3.5 text-sm font-bold text-white rounded-xl
+                       bg-gradient-to-r from-purple-600 to-pink-500
+                       hover:from-purple-700 hover:to-pink-600
+                       shadow-lg shadow-purple-200 active:scale-[0.98]
+                       transition-all duration-300 disabled:opacity-50
+                       flex items-center justify-center gap-2"
+          >
+            {saving ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <><Plus className="w-5 h-5" /> Agregar excepción</>
+            )}
+          </button>
+          </div>
+        </div>
       </div>
 
       {/* Lista */}
-      <div>
+      <div className="pt-2">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
           Excepciones configuradas ({exceptions.length})
         </p>
         {loading ? (
           <div className="h-16 bg-slate-50 rounded-2xl animate-pulse" />
         ) : sorted.length === 0 ? (
-          <p className="text-xs text-slate-400 font-bold py-6 text-center">
-            Sin excepciones configuradas
-          </p>
+          <div className="bg-slate-50/50 rounded-2xl border border-slate-100 py-8 text-center">
+            <p className="text-sm text-slate-400 font-bold">
+              Sin excepciones configuradas
+            </p>
+          </div>
         ) : (
-          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
             {sorted.map(exc => (
               <div key={exc.id}
                 className="flex items-center justify-between gap-3 bg-white border
-                           border-slate-100 rounded-xl px-4 py-3 shadow-sm">
+                           border-slate-100 hover:border-slate-200 rounded-xl px-4 py-3 shadow-sm transition-colors">
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg flex-shrink-0
+                  <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg flex-shrink-0
                     ${exc.is_available ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
                     {exc.is_available ? "Extra" : "Bloqueado"}
                   </span>
@@ -285,18 +337,19 @@ export default function ExceptionsSection() {
                     <p className="text-xs font-bold text-slate-700 capitalize truncate">
                       {fmtDate(exc.start_time_utc)}
                     </p>
-                    <p className="text-[11px] text-slate-400 font-bold">
+                    <p className="text-[11px] text-slate-400 font-bold mt-0.5">
                       {exc.is_full_day ? "Todo el día" : `${fmtTime(exc.start_time_utc)} – ${fmtTime(exc.end_time_utc)}`}
-                      {exc.reason && ` · ${exc.reason}`}
+                      {exc.reason && <span className="text-slate-500"> · {exc.reason}</span>}
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => remove(exc.id)}
                   className="text-slate-300 hover:text-rose-500 hover:bg-rose-50
-                             p-1.5 rounded-lg transition-colors flex-shrink-0"
+                             p-2 rounded-lg transition-colors flex-shrink-0"
+                  title="Eliminar excepción"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             ))}

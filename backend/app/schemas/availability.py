@@ -58,11 +58,12 @@ class WeeklySlotResponse(BaseModel):
 class ExceptionCreate(BaseModel):
     """
     Excepción puntual sobre la disponibilidad semanal.
-    El profesor envía fecha + hora LOCAL + su timezone; el backend
-    convierte a UTC (evita ambigüedad de DST al usar la fecha real).
+    El profesor envía fecha (o rango) + hora LOCAL + su timezone;
+    el backend convierte a UTC (evita ambigüedad de DST al usar la fecha real).
     """
-    date: str                     # "2025-08-03"
-    timezone: str                 # "America/Caracas"
+    date: str                     # "2025-08-17" (fecha de inicio si es rango)
+    end_date: Optional[str] = None  # "2025-08-21" — si se envía, aplica a todo el rango inclusive
+    timezone: str
     is_full_day: bool = False
     start_time_local: Optional[str] = None   # requerido si is_full_day=False
     end_time_local: Optional[str] = None
