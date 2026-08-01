@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import { utcTimeToLocal } from "@/lib/scheduleUtc";
 
 const DAYS = [
   { value: 0, label: "Lunes", short: "Lun" },
@@ -25,24 +26,6 @@ interface PreferenceDraft {
   start_time_local: string;
   end_time_local: string;
 }
-
-// Helper para convertir hora UTC ("HH:MM") a la hora local del navegador
-const utcToLocalString = (utcTimeStr: string, timeZone: string) => {
-  try {
-    const [h, m] = utcTimeStr.split(":").map(Number);
-    const now = new Date();
-    const utcDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), h, m));
-    const formatter = new Intl.DateTimeFormat('en-GB', {
-      timeZone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
-    return formatter.format(utcDate);
-  } catch {
-    return utcTimeStr;
-  }
-};
 
 export default function StudentPreferencesPage() {
   const [preferences, setPreferences] = useState<any[]>([]);
@@ -68,8 +51,8 @@ export default function StudentPreferencesPage() {
       
       res.data.forEach((pref: any) => {
         const day = pref.day_of_week;
-        const localStart = utcToLocalString(pref.start_time_utc, userTimezone);
-        const localEnd = utcToLocalString(pref.end_time_utc, userTimezone);
+        const localStart = utcTimeToLocal(pref.start_time_utc,day ,userTimezone);
+        const localEnd = utcTimeToLocal(pref.end_time_utc, day, userTimezone);
 
         const startHour = parseInt(localStart.split(":")[0]);
         let endHour = parseInt(localEnd.split(":")[0]);

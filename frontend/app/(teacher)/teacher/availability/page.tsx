@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import { utcTimeToLocal } from "@/lib/scheduleUtc";
+import ExceptionsSection from "./ExceptionsSection";
 
 const DAYS = [
   { value: 0, label: "Lunes", short: "Lun" },
@@ -26,24 +28,6 @@ interface AvailabilityDraft {
   end_time_local: string;
   is_available: boolean;
 }
-
-// Helper para convertir hora UTC ("HH:MM") del backend a la hora local del navegador
-const utcToLocalString = (utcTimeStr: string, timeZone: string) => {
-  try {
-    const [h, m] = utcTimeStr.split(":").map(Number);
-    const now = new Date();
-    const utcDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), h, m));
-    const formatter = new Intl.DateTimeFormat('en-GB', {
-      timeZone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
-    return formatter.format(utcDate);
-  } catch {
-    return utcTimeStr;
-  }
-};
 
 export default function TeacherAvailabilityPage() {
   const [availability, setAvailability] = useState<any[]>([]);
@@ -70,8 +54,8 @@ export default function TeacherAvailabilityPage() {
       res.data.forEach((slot: any) => {
         if (!slot.is_available) return;
         const day = slot.day_of_week;
-        const localStart = utcToLocalString(slot.start_time_utc, userTimezone);
-        const localEnd = utcToLocalString(slot.end_time_utc, userTimezone);
+        const localStart = utcTimeToLocal(slot.start_time_utc, day, userTimezone);
+        const localEnd = utcTimeToLocal(slot.end_time_utc, day, userTimezone);
 
         const startHour = parseInt(localStart.split(":")[0]);
         let endHour = parseInt(localEnd.split(":")[0]);
@@ -381,6 +365,8 @@ export default function TeacherAvailabilityPage() {
 
           </div>
         </div>
+
+        <ExceptionsSection />
 
       </div>
       <ChipiWidget screenName="teacher-availability" />

@@ -24,33 +24,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# ─── HELPERS DE ZONA HORARIA ──────────────────────────────────────────────────
-
-def convert_local_time_to_utc_string(local_time_str: str, tz_str: str) -> str:
-    """
-    Convierte una hora local ("HH:MM") en la zona horaria del usuario a UTC ("HH:MM"),
-    respetando correctamente el horario de verano/invierno (DST).
-    """
-    try:
-        parts = local_time_str.split(":")
-        h, m = int(parts[0]), int(parts[1])
-        
-        # Obtener la fecha actual en la zona horaria del usuario
-        now_local = datetime.now(ZoneInfo(tz_str))
-        
-        # Crear el objeto datetime con la hora local indicada
-        dt_local = datetime(
-            now_local.year, now_local.month, now_local.day, 
-            h, m, tzinfo=ZoneInfo(tz_str)
-        )
-        
-        # Convertir a UTC
-        dt_utc = dt_local.astimezone(ZoneInfo("UTC"))
-        
-        return dt_utc.strftime("%H:%M")
-    except Exception as e:
-        raise ValueError(f"Error al convertir la hora local a UTC: {e}")
-
 # ─── HELPER DE AVATAR / FOTO DE PERFIL ───────────────────────────────────────
 
 async def _process_and_update_user_avatar(
@@ -364,10 +337,10 @@ def set_schedule_preferences(
     for slot in data.slots:
         try:
             start_utc = convert_local_time_to_utc_string(
-                slot.start_time_local, data.timezone
+                slot.start_time_local, data.timezone, slot.day_of_week
             )
             end_utc = convert_local_time_to_utc_string(
-                slot.end_time_local, data.timezone
+                slot.end_time_local, data.timezone. slot.day_of_week
             )
         except ValueError as e:
             raise HTTPException(

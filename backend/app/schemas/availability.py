@@ -55,22 +55,29 @@ class WeeklySlotResponse(BaseModel):
 
 
 # ─── Excepciones ────────────────────────────────────────────────────────────
-
 class ExceptionCreate(BaseModel):
     """
-    Excepción puntual. El frontend envía UTC directamente
-    porque ya conoce la fecha y hora exactas.
+    Excepción puntual sobre la disponibilidad semanal.
+    El profesor envía fecha + hora LOCAL + su timezone; el backend
+    convierte a UTC (evita ambigüedad de DST al usar la fecha real).
     """
-    start_time_utc: datetime
-    end_time_utc: datetime
-    is_available: bool = True
+    date: str                     # "2025-08-03"
+    timezone: str                 # "America/Caracas"
+    is_full_day: bool = False
+    start_time_local: Optional[str] = None   # requerido si is_full_day=False
+    end_time_local: Optional[str] = None
+    is_available: bool = True     # False = bloquea, True = disponibilidad extra
     reason: Optional[str] = None
 
-    @field_validator("end_time_utc")
+    @field_validator("start_time_local", "end_time_local")
     @classmethod
-    def validate_end_after_start(cls, v, info):
-        if "start_time_utc" in info.data and v <= info.data["start_time_utc"]:
-            raise ValueError("end_time_utc debe ser posterior a start_time_utc")
+    def validate_time_format(cls, v):
+        if v is None:
+            return v
+        try:
+            datetime.strptime(v, "%H:%M")
+        except ValueError:
+            raise ValueError("Formato de hora inválido. Usa HH:MM")
         return v
 
 
@@ -81,6 +88,7 @@ class ExceptionResponse(BaseModel):
     end_time_utc: datetime
     is_available: bool
     reason: Optional[str]
+    is_full_day: bool
 
     class Config:
         from_attributes = True

@@ -105,31 +105,39 @@ def build_weekly_range_utc(
         logger.error(f"Error en build_weekly_range_utc: {e}")
         raise ValueError(f"Rango horario inválido: {start_hhmm_utc} - {end_hhmm_utc}")
 
+def get_next_weekday_date(day_of_week: int, tz_str: str, reference: datetime | None = None) -> str:
+    """
+    Devuelve la fecha (YYYY-MM-DD) de la próxima ocurrencia de day_of_week
+    (0=Lunes...6=Domingo) a partir de "hoy" en la zona horaria indicada.
+    Se usa como fecha de referencia para las conversiones de horarios
+    recurrentes, así el offset UTC/DST calculado al guardar coincide
+    siempre con el que usa el frontend al mostrar el horario.
+    """
+    tz = ZoneInfo(tz_str)
+    now_local = reference.astimezone(tz) if reference else datetime.now(tz)
+    days_ahead = (day_of_week - now_local.weekday()) % 7
+    target_date = now_local.date() + timedelta(days=days_ahead)
+    return target_date.strftime("%Y-%m-%d")
+
 
 def convert_local_time_to_utc_string(
     time_str: str,
     tz_str: str,
-    reference_date: str = "2025-01-06",  # Lunes de referencia neutral
+    day_of_week: int,
 ) -> str:
     """
     Convierte una hora local "HH:MM" a su equivalente UTC "HH:MM".
-    Usa una fecha de referencia neutral para la conversión.
-    Se usa cuando el profesor configura su horario semanal.
-
-    Args:
-        time_str: "09:00" (hora local del profesor)
-        tz_str: "America/Caracas"
-        reference_date: fecha de referencia para la conversión
-
-    Returns:
-        "13:00" (hora en UTC)
+    Usa la próxima fecha real de ese día de la semana como referencia,
+    para que el offset (incluyendo DST) sea el correcto y consistente
+    con la conversión inversa que hace el frontend al mostrar el horario.
 
     Example:
-        convert_local_time_to_utc_string("09:00", "America/Caracas")
+        convert_local_time_to_utc_string("09:00", "America/Caracas", 0)
         → "13:00"
     """
     try:
         tz = ZoneInfo(tz_str)
+        reference_date = get_next_weekday_date(day_of_week, tz_str)
         dt_local = datetime.strptime(
             f"{reference_date}T{time_str}:00", "%Y-%m-%dT%H:%M:%S"
         ).replace(tzinfo=tz)
