@@ -76,3 +76,26 @@ class RenewalRequest(BaseModel):
     current_enrollment_id: int
     new_package_id: int
     # Puede ser el mismo package_id (repetir) u otro (cambiar)
+
+class EnrollmentComplianceResponse(BaseModel):
+    """
+    Vista de seguimiento de cumplimiento para el profesor:
+    cuántas clases del paquete se han completado, no-show o cancelado tarde.
+    """
+    id: int
+    student_id: int
+    student_username: str
+    student_name: str
+    package_id: int
+    package_name: str
+    classes_used: int
+    classes_total: int
+    status: str
+    completed_count: int
+    no_show_count: int
+    cancelled_late_count: int
+    renewal_requested_package_name: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

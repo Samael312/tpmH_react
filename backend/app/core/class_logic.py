@@ -158,57 +158,63 @@ def update_enrollment_counter(
 def get_student_booking_stage(student_id: int, db: Session) -> str:
     """
     Determina la etapa de reserva del estudiante:
-    - "needs_trial": no tiene prueba activa ni completada -> debe reservar su prueba (30min)
-    - "trial_in_progress": ya tiene una prueba agendada/confirmada pero aún no se realiza
-    - "needs_package": realizó/completó la prueba pero no tiene paquete activo
-    - "ready": puede reservar contra su paquete activo
+    - "needs_trial": no tiene prueba activa ni completada
+    - "trial_in_progress": prueba agendada/confirmada pero no realizada
+    - "needs_package": completó la prueba pero nunca tuvo ningún paquete
+    - "needs_renewal": agotó un paquete anterior y no tiene uno activo
+    - "renewal_pending": ya solicitó renovación, esperando aprobación
+    - "ready": tiene paquete activo
     """
-    # 1. Verificar si tiene una clase de prueba en progreso o confirmada
     trial_pending = db.query(Class).filter(
         Class.student_id == student_id,
         Class.class_type == ClassType.trial,
         Class.status.in_(["pending", "pending_trial", "pending_payment", "confirmed"])
     ).first()
-
     if trial_pending:
         return "trial_in_progress"
 
-    # 2. Verificar si ya completó una clase de prueba en el pasado
     trial_completed = db.query(Class).filter(
         Class.student_id == student_id,
         Class.class_type == ClassType.trial,
         Class.status == "completed"
     ).first()
-
-    # Si no ha completado una prueba ni la tiene en curso, le corresponde la clase de prueba
     if not trial_completed:
         return "needs_trial"
 
-    # 3. Si ya completó la prueba, verificamos si tiene un paquete activo
     active_enrollment = db.query(Enrollment).filter(
         Enrollment.student_id == student_id,
         Enrollment.status == EnrollmentStatus.active
     ).first()
+    if active_enrollment:
+        return "ready"
 
-    return "ready" if active_enrollment else "needs_package"
+    pending_renewal = db.query(Enrollment).filter(
+        Enrollment.student_id == student_id,
+        Enrollment.status == EnrollmentStatus.pending_renewal
+    ).first()
+    if pending_renewal:
+        return "renewal_pending"
+
+    any_enrollment_ever = db.query(Enrollment).filter(
+        Enrollment.student_id == student_id
+    ).first()
+    if any_enrollment_ever:
+        return "needs_renewal"
+
+    return "needs_package"
 
 # ─── Finalización automática ────────────────────────────────────────────────
 
 def finalize_past_classes(db: Session) -> int:
     """
-    Marca como 'finalized' las clases confirmadas cuyo horario ya terminó
-    (end_time_utc < ahora) pero que nadie marcó manualmente como
-    completed / no_show / cancelled.
-
-    Se ejecuta periódicamente desde el scheduler como red de seguridad,
-    ya que normalmente es el profesor quien marca 'completed' a mano.
-
-    Retorna cuántas clases se actualizaron.
+    Marca como 'finalized' las clases confirmadas cuyo horario ya terminó,
+    y como 'no_show' las que nunca se confirmaron/pagaron y ya pasó su hora.
+    Actualiza también el contador de clases usadas del paquete, ya que estos
+    estados cuentan contra el cupo del estudiante.
     """
     now = utc_now()
     count = 0
 
-    # confirmadas que ya pasaron -> finalizada
     expired_confirmed = db.query(Class).filter(
         Class.status == "confirmed",
         Class.end_time_utc < now,
@@ -217,7 +223,6 @@ def finalize_past_classes(db: Session) -> int:
         c.status = "finalized"
         count += 1
 
-    # nunca se confirmaron/pagaron y ya pasó su horario -> no_show
     expired_pending = db.query(Class).filter(
         Class.status.in_(["pending", "pending_trial", "pending_payment"]),
         Class.end_time_utc < now,
@@ -225,7 +230,35 @@ def finalize_past_classes(db: Session) -> int:
     for c in expired_pending:
         c.status = "no_show"
         count += 1
+        if c.class_type == ClassType.regular and c.enrollment_id:
+            update_enrollment_counter(c.enrollment_id, delta=1, db=db)
 
     if count:
         db.commit()
     return count
+
+# ─── Conteo contra el paquete ────────────────────────────────────────────────
+
+TERMINAL_COUNTING_STATUSES = {"completed", "no_show"}
+
+
+def class_counts_towards_package(
+    class_status: str,
+    start_time_utc: datetime,
+    reference_time: datetime | None = None,
+) -> bool:
+    """
+    Determina si una clase en este estado debe contarse contra el
+    paquete del estudiante (classes_used).
+
+    - completed / no_show: siempre cuenta.
+    - cancelled: solo cuenta si fue una cancelación tardía
+      (menos de MIN_CANCEL_HOURS antes del inicio de la clase).
+    - cualquier otro estado (pending, confirmed, etc.): no cuenta.
+    """
+    if class_status in TERMINAL_COUNTING_STATUSES:
+        return True
+    if class_status == "cancelled":
+        ref = reference_time or utc_now()
+        return (start_time_utc - ref) < timedelta(hours=MIN_CANCEL_HOURS)
+    return False

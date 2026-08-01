@@ -12,7 +12,7 @@ import api from "@/lib/api";
 import Link from "next/link";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 
-type BookingStage = "loading" | "needs_trial" | "trial_in_progress" | "needs_package" | "ready";
+type BookingStage = "loading" | "needs_trial" | "trial_in_progress" | "needs_package" | "needs_renewal" | "renewal_pending" | "ready";
 
 const DURATIONS = [
   { value: 30, label: "30 min" },
@@ -882,6 +882,149 @@ function NeedsPackageScreen({ onSelected }: { onSelected: () => void }) {
   );
 }
 
+// ─── Pantalla: agotó un paquete, debe pedir renovación ───────────────────────
+function NeedsRenewalScreen({ onRequested }: { onRequested: () => void }) {
+  const [packages, setPackages] = useState<any[]>([]);
+  const [lastEnrollmentId, setLastEnrollmentId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [requesting, setRequesting] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+  const { teacherUsername } = useTeacherResolution();
+
+  useEffect(() => {
+    if (!teacherUsername) { setLoading(false); return; }
+    Promise.all([
+      api.get(`/packages/teacher/${teacherUsername}`),
+      api.get("/packages/my-enrollments"),
+    ])
+      .then(([pkgRes, enrRes]) => {
+        setPackages(pkgRes.data);
+        // El más reciente es el que acaba de agotarse
+        setLastEnrollmentId(enrRes.data?.[0]?.id ?? null);
+      })
+      .catch(() => { setPackages([]); setLastEnrollmentId(null); })
+      .finally(() => setLoading(false));
+  }, [teacherUsername]);
+
+  const requestRenewal = async (packageId: number) => {
+    if (!lastEnrollmentId) return;
+    setRequesting(packageId);
+    setError("");
+    try {
+      await api.post("/packages/request-renewal", {
+        current_enrollment_id: lastEnrollmentId,
+        new_package_id: packageId,
+      });
+      setDone(true);
+      setTimeout(onRequested, 1500);
+    } catch (e: any) {
+      setError(extractErrorMessage(e, "Error solicitando la renovación"));
+    } finally {
+      setRequesting(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-24">
+        <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (done) {
+    return (
+      <div className="max-w-lg mx-auto bg-white/80 backdrop-blur-xl rounded-[2rem]
+                      border border-white shadow-2xl p-10 text-center">
+        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Check className="w-8 h-8 text-emerald-600" />
+        </div>
+        <h3 className="text-xl font-black text-slate-800 mb-2">¡Solicitud enviada!</h3>
+        <p className="text-slate-500 text-sm">
+          Tu profesor(a) confirmará tu pago y activará el nuevo paquete en breve.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-6">
+      <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex gap-3 items-start">
+        <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+        <p className="text-sm font-bold text-amber-700 leading-relaxed">
+          Ya usaste todas las clases de tu paquete anterior. Elige tu siguiente
+          paquete — tu profesor(a) confirmará el pago y lo activará.
+        </p>
+      </div>
+
+      {error && (
+        <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3
+                        rounded-xl text-xs font-bold flex items-center gap-2">
+          <X className="w-4 h-4 flex-shrink-0" /> {error}
+        </div>
+      )}
+
+      {packages.length === 0 ? (
+        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg py-16 text-center">
+          <PackageIcon className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+          <p className="text-slate-500 font-bold">No hay paquetes disponibles. Contacta al staff.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {packages.map(pkg => (
+            <div key={pkg.id} className="bg-white/80 backdrop-blur-xl rounded-[1.75rem]
+                            border border-white shadow-xl shadow-slate-200/50 p-6 flex flex-col
+                            hover:-translate-y-1 hover:shadow-2xl transition-all duration-300">
+              <div className="w-10 h-10 bg-pink-50 rounded-xl flex items-center justify-center mb-4">
+                <PackageIcon className="w-5 h-5 text-pink-500" />
+              </div>
+              <h3 className="text-lg font-black text-slate-800 mb-1">{pkg.name}</h3>
+              <p className="text-xs text-slate-400 font-bold mb-4">
+                {pkg.subject} · {pkg.classes_count} clases · {pkg.duration_minutes} min c/u
+              </p>
+              <p className="text-2xl font-black text-pink-600 mb-5">
+                ${pkg.price?.toFixed ? pkg.price.toFixed(2) : pkg.price}
+              </p>
+              <button
+                onClick={() => requestRenewal(pkg.id)}
+                disabled={requesting !== null}
+                className="mt-auto w-full py-3 text-sm font-bold text-white rounded-xl
+                           bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500
+                           shadow-md shadow-pink-200 active:scale-[0.98] transition-all duration-300
+                           disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {requesting === pkg.id ? (
+                  <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                ) : "Solicitar este paquete"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Pantalla: renovación ya solicitada, esperando aprobación ────────────────
+function RenewalPendingScreen() {
+  return (
+    <div className="max-w-lg mx-auto">
+      <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white
+                      shadow-2xl shadow-slate-200/50 p-10 text-center">
+        <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Hourglass className="w-8 h-8 text-amber-500" />
+        </div>
+        <h3 className="text-xl font-black text-slate-800 mb-2">Renovación en revisión</h3>
+        <p className="text-slate-500 text-sm leading-relaxed">
+          Ya enviaste tu solicitud de renovación. Tu profesor(a) confirmará tu
+          pago y activará el nuevo paquete pronto.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function SchedulePage() {
   const [stage, setStage] = useState<BookingStage>("loading");
@@ -957,6 +1100,8 @@ export default function SchedulePage() {
                 {stage === "needs_trial" && step === "payment" && "Confirmar clase de prueba"}
                 {stage === "trial_in_progress" && "Clase de prueba pendiente"}
                 {stage === "needs_package" && "Elige tu paquete"}
+                {stage === "needs_renewal" && "Renueva tu paquete"}
+                {stage === "renewal_pending" && "Renovación en revisión"}
                 {stage === "ready" && step === "select" && "Agendar Clase"}
                 {stage === "ready" && step === "payment" && "Confirmar Reserva"}
                 {stage === "loading" && "Cargando..."}
@@ -965,6 +1110,8 @@ export default function SchedulePage() {
                 {stage === "needs_trial" && "Tu primera clase es gratuita, sin compromiso"}
                 {stage === "trial_in_progress" && "Prepárate para tu clase de prueba gratuita"}
                 {stage === "needs_package" && "Selecciona el paquete que mejor se adapte a ti"}
+                {stage === "needs_renewal" && "Renueva tu paquete para continuar con tu aprendizaje"}
+                {stage === "renewal_pending" && "Tu solicitud de renovación está en revisión"}
                 {stage === "ready" && step === "select" && "Selecciona fecha y horario disponible"}
                 {stage === "ready" && step === "payment" && "Completa el pago para confirmar tu clase"}
               </p>
@@ -1076,6 +1223,12 @@ export default function SchedulePage() {
               }}
             />
           )}
+
+          {stage === "needs_renewal" && (
+            <NeedsRenewalScreen onRequested={loadStage} />
+          )}
+
+          {stage === "renewal_pending" && <RenewalPendingScreen />}
 
           {stage === "ready" && step === "select" && (
             <StepSelectSlot onSelect={handleSlotSelect} />

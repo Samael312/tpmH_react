@@ -22,6 +22,7 @@ from app.core.class_logic import (
     can_reschedule_class,
     update_enrollment_counter,
     finalize_past_classes,
+    class_counts_towards_package
 )
 from app.core.timezone import UTC, utc_now
 from app.db.base import get_db
@@ -424,15 +425,18 @@ def update_class_status(
     class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
 
     old_status = class_.status
+    old_counts = class_counts_towards_package(old_status, class_.start_time_utc)
+
     class_.status = data.status
+    new_counts = class_counts_towards_package(data.status, class_.start_time_utc)
 
     if data.notes:
         class_.notes = data.notes
 
     if class_.class_type == ClassType.regular and class_.enrollment_id:
-        if data.status == "completed" and old_status != "completed":
+        if new_counts and not old_counts:
             update_enrollment_counter(class_.enrollment_id, delta=1, db=db)
-        elif old_status == "completed" and data.status != "completed":
+        elif old_counts and not new_counts:
             update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
 
     db.commit()

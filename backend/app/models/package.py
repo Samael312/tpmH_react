@@ -59,9 +59,10 @@ class Enrollment(Base):
         Integer, ForeignKey("enrollments.id"), nullable=True
     )
     # Referencia al enrollment anterior para historial de renovaciones
-
+    renewal_requested_package_id = Column(Integer, ForeignKey("packages.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    enrollments = relationship("Enrollment", back_populates="package", foreign_keys="[Enrollment.package_id]" )
     student = relationship("StudentProfile", back_populates="enrollments")
     package = relationship("Package", back_populates="enrollments")
     classes = relationship("Class", back_populates="enrollment")

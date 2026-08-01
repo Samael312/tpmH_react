@@ -123,3 +123,20 @@ def get_current_approved_teacher(current_user: User = Depends(get_current_user))
             detail="Tu cuenta de profesor debe estar aprobada para asignar material o tareas"
         )
     return current_user
+
+def get_current_staff_or_teacher(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Permite acceso a superadmin, teacher_admin y teacher.
+    Se usa para aprobar renovaciones de paquete: el staff o el propio
+    profesor del estudiante pueden confirmar el pago y activarla.
+    """
+    if current_user.role not in [
+        UserRole.superadmin,
+        UserRole.teacher_admin,
+        UserRole.teacher,
+    ]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso solo para staff o profesores"
+        )
+    return current_user

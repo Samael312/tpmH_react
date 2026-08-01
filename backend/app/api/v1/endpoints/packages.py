@@ -9,7 +9,11 @@ from app.auth.dependencies import (
     get_current_student,
     get_current_teacher_or_teacher_admin,
     get_current_staff,
+    get_current_staff_or_teacher,
 )
+from app.models.class_ import Class, ClassType 
+from app.core.timezone import utc_now             
+from datetime import timedelta 
 from app.models.user import User
 from app.models.package import Package, Enrollment, EnrollmentStatus
 from app.models.teacher import TeacherProfile
@@ -18,6 +22,7 @@ from app.schemas.packages import (
     PackageResponse,
     EnrollmentResponse,
     RenewalRequest,
+    EnrollmentComplianceResponse
 )
 
 router = APIRouter()
@@ -169,16 +174,11 @@ def request_renewal(
     db: Session = Depends(get_db)
 ):
     """
-    El estudiante solicita renovar su paquete.
-
-    Puede elegir:
-    - El mismo paquete (repetir)
-    - Otro paquete del mismo profesor (cambiar)
-
-    El enrollment pasa a 'pending_renewal'.
-    El staff lo activa al confirmar el pago.
+    El estudiante solicita renovar su paquete (mismo u otro del mismo
+    profesor). El enrollment pasa a 'pending_renewal' y se guarda cuál
+    paquete pidió, para que el staff/profesor no tenga que preguntarle
+    de nuevo al aprobar.
     """
-    # Verificar enrollment actual
     current_enrollment = db.query(Enrollment).filter(
         Enrollment.id == data.current_enrollment_id,
         Enrollment.student_id == current_user.student_profile.id
@@ -199,7 +199,6 @@ def request_renewal(
             detail="Solo puedes renovar un paquete activo o completado"
         )
 
-    # Verificar que el nuevo paquete existe y es del mismo profesor
     new_package = db.query(Package).filter(
         Package.id == data.new_package_id,
         Package.teacher_id == current_enrollment.teacher_id,
@@ -212,7 +211,6 @@ def request_renewal(
             detail="Paquete no encontrado o no disponible"
         )
 
-    # Verificar que no hay ya una renovación pendiente
     existing_renewal = db.query(Enrollment).filter(
         Enrollment.student_id == current_user.student_profile.id,
         Enrollment.teacher_id == current_enrollment.teacher_id,
@@ -225,14 +223,13 @@ def request_renewal(
             detail="Ya tienes una solicitud de renovación pendiente"
         )
 
-    # Marcar el enrollment actual como pending_renewal
-    # No creamos el nuevo hasta que el staff confirme el pago
     current_enrollment.status = EnrollmentStatus.pending_renewal
+    current_enrollment.renewal_requested_package_id = new_package.id
     db.commit()
 
     return {
         "message": "Solicitud de renovación enviada. "
-                   "El staff la activará al confirmar tu pago.",
+                   "Tu profesor(a) la activará al confirmar tu pago.",
         "enrollment_id": current_enrollment.id,
         "requested_package": new_package.name,
         "price": new_package.price,
@@ -244,17 +241,16 @@ def request_renewal(
 @router.post("/{enrollment_id}/activate-renewal")
 def activate_renewal(
     enrollment_id: int,
-    new_package_id: int,
-    current_user: User = Depends(get_current_staff),
+    new_package_id: Optional[int] = None,
+    current_user: User = Depends(get_current_staff_or_teacher),
     db: Session = Depends(get_db)
 ):
     """
-    El staff activa la renovación tras confirmar el pago.
+    El staff o el profesor dueño del enrollment activa la renovación
+    tras confirmar el pago (fuera de la plataforma).
 
-    Proceso:
-    1. Marca el enrollment anterior como 'completed'
-    2. Crea un nuevo enrollment con el nuevo paquete
-    3. El estudiante puede volver a agendar clases
+    Si no se pasa new_package_id, se usa el que el estudiante pidió
+    al solicitar la renovación.
     """
     old_enrollment = db.query(Enrollment).filter(
         Enrollment.id == enrollment_id,
@@ -267,8 +263,23 @@ def activate_renewal(
             detail="Solicitud de renovación no encontrada"
         )
 
+    # Un profesor solo puede aprobar renovaciones de sus propios estudiantes
+    if current_user.role == "teacher":
+        if not current_user.teacher_profile or old_enrollment.teacher_id != current_user.teacher_profile.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo puedes aprobar renovaciones de tus propios estudiantes"
+            )
+
+    target_package_id = new_package_id or old_enrollment.renewal_requested_package_id
+    if not target_package_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se especificó qué paquete activar"
+        )
+
     new_package = db.query(Package).filter(
-        Package.id == new_package_id,
+        Package.id == target_package_id,
         Package.is_active == True
     ).first()
 
@@ -278,10 +289,8 @@ def activate_renewal(
             detail="Paquete no encontrado"
         )
 
-    # Completar el enrollment anterior
     old_enrollment.status = EnrollmentStatus.completed
 
-    # Crear nuevo enrollment
     new_enrollment = Enrollment(
         student_id=old_enrollment.student_id,
         package_id=new_package.id,
@@ -350,3 +359,63 @@ def select_initial_package(
         "enrollment_id": enrollment.id,
         "classes_total": enrollment.classes_total,
     }
+
+# ─── PROFESOR — Seguimiento de cumplimiento ──────────────────────────────────
+
+@router.get("/teacher/enrollments", response_model=List[EnrollmentComplianceResponse])
+def get_teacher_enrollments_overview(
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista todos los enrollments (activos, agotados y pendientes de
+    renovación) de los estudiantes del profesor, con el desglose de
+    cumplimiento: completadas, no-show y canceladas tarde.
+    """
+    teacher_id = current_user.teacher_profile.id
+
+    enrollments = db.query(Enrollment).filter(
+        Enrollment.teacher_id == teacher_id
+    ).order_by(Enrollment.created_at.desc()).all()
+
+    result = []
+    for e in enrollments:
+        classes = db.query(Class).filter(Class.enrollment_id == e.id).all()
+
+        completed_count = sum(1 for c in classes if c.status in ("completed", "finalized"))
+        no_show_count = sum(1 for c in classes if c.status == "no_show")
+        # Aproximamos "cancelada tarde" comparando contra cuándo se actualizó
+        # el registro, ya que no guardamos un timestamp específico de cancelación.
+        cancelled_late_count = sum(
+            1 for c in classes
+            if c.status == "cancelled"
+            and c.updated_at is not None
+            and (c.start_time_utc - c.updated_at) < timedelta(hours=12)
+        )
+
+        student_user = e.student.user if e.student else None
+        package = e.package
+
+        requested_pkg_name = None
+        if e.renewal_requested_package_id:
+            rp = db.query(Package).filter(Package.id == e.renewal_requested_package_id).first()
+            requested_pkg_name = rp.name if rp else None
+
+        result.append(EnrollmentComplianceResponse(
+            id=e.id,
+            student_id=e.student_id,
+            student_username=student_user.username if student_user else "unknown",
+            student_name=f"{student_user.name} {student_user.surname}" if student_user else "Desconocido",
+            package_id=e.package_id,
+            package_name=package.name if package else "N/A",
+            classes_used=e.classes_used,
+            classes_total=e.classes_total,
+            status=e.status,
+            completed_count=completed_count,
+            no_show_count=no_show_count,
+            cancelled_late_count=cancelled_late_count,
+            renewal_requested_package_name=requested_pkg_name,
+            created_at=e.created_at,
+        ))
+
+    return result
