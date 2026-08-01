@@ -18,6 +18,7 @@ from app.schemas.preferences import SetPreferencesRequest, PreferenceSlotRespons
 from app.core.storage import upload_file, delete_file
 from app.models.teacher import TeacherProfile, TeacherStatus
 from app.schemas.user import ChooseTeacherRequest
+from app.core.teacher_students import link_student_to_teacher
 
 logger = logging.getLogger(__name__)
 
@@ -442,10 +443,7 @@ def choose_teacher(
     """El estudiante elige su profesor por primera vez."""
     profile = current_user.student_profile
     if not profile:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Perfil de estudiante no encontrado"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil de estudiante no encontrado")
 
     if profile.teacher_username:
         raise HTTPException(
@@ -459,13 +457,12 @@ def choose_teacher(
     ).first()
 
     if not teacher:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Profesor no encontrado o no disponible"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profesor no encontrado o no disponible")
 
     profile.teacher_username = data.teacher_username
     db.commit()
+
+    link_student_to_teacher(db, profile, teacher, old_teacher_username=None)
 
     return {"message": "Profesor asignado correctamente", "teacher_username": data.teacher_username}
 
@@ -479,10 +476,7 @@ def change_teacher(
     """El estudiante cambia el profesor que tenía asignado."""
     profile = current_user.student_profile
     if not profile:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Perfil de estudiante no encontrado"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil de estudiante no encontrado")
 
     teacher = db.query(TeacherProfile).filter(
         TeacherProfile.user_username == data.teacher_username,
@@ -490,12 +484,12 @@ def change_teacher(
     ).first()
 
     if not teacher:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Profesor no encontrado o no disponible"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profesor no encontrado o no disponible")
 
+    old_teacher_username = profile.teacher_username
     profile.teacher_username = data.teacher_username
     db.commit()
+
+    link_student_to_teacher(db, profile, teacher, old_teacher_username=old_teacher_username)
 
     return {"message": "Profesor actualizado correctamente", "teacher_username": data.teacher_username}

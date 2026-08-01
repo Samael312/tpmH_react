@@ -5,7 +5,7 @@ from typing import List, Optional
 import logging
 
 from app.db.base import get_db
-from app.auth.dependencies import get_current_user, get_current_teacher, get_current_student
+from app.auth.dependencies import get_current_user, get_current_teacher, get_current_student, get_current_approved_teacher
 from app.models.user import User
 from app.models.material import Material, MaterialAssignment
 from app.models.student import StudentProfile
@@ -127,34 +127,35 @@ def set_vocabulary_words(
 def assign_material(
     material_id: int,
     data: AssignMaterialRequest,
-    current_user: User = Depends(get_current_teacher),
+    current_user: User = Depends(get_current_approved_teacher),
     db: Session = Depends(get_db)
 ):
-    """Asigna un material a uno o varios estudiantes"""
+    """Asigna un material a uno o varios de TUS estudiantes (StudentProfile.id)"""
     material = db.query(Material).filter(
         Material.id == material_id,
         Material.teacher_id == current_user.teacher_profile.id
     ).first()
 
     if not material:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Material no encontrado"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Material no encontrado")
+
+    owned_ids = set(current_user.teacher_profile.students or [])
 
     assigned_count = 0
     already_assigned = 0
+    skipped_not_mine = 0
 
-    for user_id in data.student_ids:
-        # 1. Buscar el perfil del estudiante usando el user_id recibido del frontend
+    for student_profile_id in data.student_ids:
+        if student_profile_id not in owned_ids:
+            skipped_not_mine += 1
+            continue
+
         student_profile = db.query(StudentProfile).filter(
-            StudentProfile.user_id == user_id
+            StudentProfile.id == student_profile_id
         ).first()
-
         if not student_profile:
             continue
 
-        # 2. Verificar que no esté ya asignado usando el ID real del StudentProfile
         existing = db.query(MaterialAssignment).filter(
             MaterialAssignment.material_id == material_id,
             MaterialAssignment.student_id == student_profile.id
@@ -164,7 +165,6 @@ def assign_material(
             already_assigned += 1
             continue
 
-        # 3. Crear la asignación con el StudentProfile.id
         assignment = MaterialAssignment(
             material_id=material_id,
             student_id=student_profile.id
@@ -177,7 +177,8 @@ def assign_material(
     return {
         "message": f"Material asignado a {assigned_count} estudiantes",
         "assigned": assigned_count,
-        "already_assigned": already_assigned
+        "already_assigned": already_assigned,
+        "skipped_not_mine": skipped_not_mine,
     }
 
 

@@ -9,8 +9,9 @@ from app.auth.dependencies import (
     get_current_student,
     get_current_teacher_or_teacher_admin,
     get_current_staff,
-    get_currtent_user,
+    get_current_user,
 )
+from app.core.teacher_students import link_student_to_teacher
 from app.models.user import User
 from app.models.class_ import Class, ClassType
 from app.models.payment import Payment, TeacherWallet, Withdrawal
@@ -658,3 +659,20 @@ def get_booking_status(
     """El frontend usa esto para saber qué flujo de reserva mostrar."""
     stage = get_student_booking_stage(current_user.student_profile.id, db)
     return {"stage": stage}
+
+def _sync_student_teacher_username(current_user: User, teacher: TeacherProfile, db: Session):
+    """
+    En modo single-tenant, al agendar una clase el estudiante queda
+    vinculado automáticamente al profesor featured.
+    """
+    from app.models.payment_config import PlatformConfig
+    config = db.query(PlatformConfig).first()
+    if not config or not config.is_single_tenant:
+        return
+
+    student_profile = current_user.student_profile
+    if student_profile and student_profile.teacher_username != teacher.user_username:
+        old_teacher_username = student_profile.teacher_username
+        student_profile.teacher_username = teacher.user_username
+        db.commit()
+        link_student_to_teacher(db, student_profile, teacher, old_teacher_username=old_teacher_username)

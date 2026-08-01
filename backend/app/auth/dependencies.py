@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.base import get_db
 from app.auth.jwt import decode_access_token
 from app.models.user import User, UserRole
+from app.models.teacher import TeacherStatus
 
 # Extrae el token del header "Authorization: Bearer <token>"
 security = HTTPBearer()
@@ -59,7 +60,7 @@ def get_current_student(current_user: User = Depends(get_current_user)) -> User:
         )
     return current_user
 
-def get_currtent_user(current_user: User = Depends(get_current_user)) -> User:
+def get_current_user(current_user: User = Depends(get_current_user)) -> User:
     """No se permite acceso a estudiantes."""
     if current_user.role == UserRole.student:
         raise HTTPException(
@@ -100,5 +101,25 @@ def get_current_teacher_or_teacher_admin(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acceso solo para profesores"
+        )
+    return current_user
+
+from app.models.teacher import TeacherStatus  # nuevo import arriba del archivo
+
+def get_current_approved_teacher(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Solo permite acceso a profesores con status='approved'.
+    Se usa donde el profesor asigna material o tareas.
+    """
+    if current_user.role != UserRole.teacher:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso solo para profesores"
+        )
+    profile = current_user.teacher_profile
+    if not profile or profile.status != TeacherStatus.approved:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu cuenta de profesor debe estar aprobada para asignar material o tareas"
         )
     return current_user

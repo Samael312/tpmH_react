@@ -10,6 +10,7 @@ from app.schemas.teacher import (
     UpdateTeacherProfileRequest,
     TeacherPublicResponse
 )
+from app.models.student import StudentProfile
 from app.core.storage import upload_file, delete_file
 
 router = APIRouter()
@@ -112,4 +113,39 @@ def update_my_teacher_profile(
     db.commit()
     db.refresh(profile)
     return profile
+
+@router.get("/me/students")
+def get_my_students(
+    current_user: User = Depends(get_current_teacher),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista los estudiantes vinculados al profesor autenticado
+    (teacher_profiles.students). La usan los modales de asignar
+    material/tareas para buscar solo entre sus propios estudiantes.
+    """
+    profile = current_user.teacher_profile
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil no encontrado")
+
+    student_ids = profile.students or []
+    if not student_ids:
+        return []
+
+    students = db.query(StudentProfile).filter(StudentProfile.id.in_(student_ids)).all()
+
+    result = []
+    for sp in students:
+        u = sp.user
+        if not u:
+            continue
+        result.append({
+            "id": sp.id,          # StudentProfile.id — usar este para asignar
+            "user_id": u.id,
+            "username": u.username,
+            "name": u.name,
+            "surname": u.surname,
+            "avatar": u.avatar or sp.profile_photo_url,
+        })
+    return result
 
