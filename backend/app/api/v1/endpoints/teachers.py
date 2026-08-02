@@ -12,6 +12,8 @@ from app.schemas.teacher import (
 )
 from app.models.student import StudentProfile
 from app.core.storage import upload_file, delete_file
+from app.models.package import Enrollment
+from app.models.material import Material, MaterialAssignment
 
 router = APIRouter()
 
@@ -147,5 +149,90 @@ def get_my_students(
             "surname": u.surname,
             "avatar": u.avatar or sp.profile_photo_url,
         })
+    return result
+
+@router.get("/me/students-full")
+def get_my_students_full(
+    current_user: User = Depends(get_current_teacher),
+    db: Session = Depends(get_db),
+):
+    """
+    Devuelve la info completa de los estudiantes vinculados al profesor:
+    datos de contacto, progreso de paquetes (enrollments) y materiales
+    asignados. Pensado para la página de gestión de Estudiantes.
+    """
+    profile = current_user.teacher_profile
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil no encontrado")
+
+    student_ids = profile.students or []
+    if not student_ids:
+        return []
+
+    students = db.query(StudentProfile).filter(StudentProfile.id.in_(student_ids)).all()
+
+    result = []
+    for sp in students:
+        u = sp.user
+        if not u:
+            continue
+
+        enrollments = db.query(Enrollment).filter(
+            Enrollment.student_id == sp.id,
+            Enrollment.teacher_id == profile.id,
+        ).order_by(Enrollment.created_at.desc()).all()
+
+        enrollment_list = []
+        for e in enrollments:
+            pkg = e.package
+            enrollment_list.append({
+                "id": e.id,
+                "package_name": pkg.name if pkg else "N/A",
+                "subject": pkg.subject if pkg else None,
+                "classes_used": e.classes_used,
+                "classes_total": e.classes_total,
+                "status": e.status,
+                "created_at": e.created_at,
+            })
+
+        material_assignments = (
+            db.query(MaterialAssignment)
+            .join(Material, Material.id == MaterialAssignment.material_id)
+            .filter(
+                MaterialAssignment.student_id == sp.id,
+                Material.teacher_id == profile.id,
+            )
+            .all()
+        )
+
+        materials_list = [
+            {
+                "id": ma.id,
+                "material_id": ma.material_id,
+                "title": ma.material.title,
+                "category": ma.material.category,
+                "level": ma.material.level,
+                "progress": ma.progress,
+                "assigned_at": ma.assigned_at,
+            }
+            for ma in material_assignments
+        ]
+
+        result.append({
+            "id": sp.id,
+            "user_id": u.id,
+            "username": u.username,
+            "name": u.name,
+            "surname": u.surname,
+            "email": u.email,
+            "phone_number": u.phone_number,
+            "avatar": u.avatar or sp.profile_photo_url,
+            "timezone": sp.timezone,
+            "goal": sp.goal,
+            "created_at": u.created_at,
+            "enrollments": enrollment_list,
+            "materials": materials_list,
+        })
+
     return result
 

@@ -57,6 +57,60 @@ export interface CalendarStatus {
   calendar_id: string | null
 }
 
+// ─── Estudiantes del profesor (detalle completo) ─────────────────────────────
+export interface StudentEnrollmentSummary {
+  id: number
+  package_name: string
+  subject: string | null
+  classes_used: number
+  classes_total: number | null
+  status: string
+  created_at: string
+}
+
+export interface StudentMaterialSummary {
+  id: number
+  material_id: number
+  title: string
+  category: string
+  level: string | null
+  progress: string
+  assigned_at: string
+}
+
+export interface TeacherStudentFull {
+  id: number
+  user_id: number
+  username: string
+  name: string
+  surname: string
+  email: string
+  phone_number: string | null
+  avatar: string | null
+  timezone: string | null
+  goal: string | null
+  created_at: string
+  enrollments: StudentEnrollmentSummary[]
+  materials: StudentMaterialSummary[]
+}
+
+export function useTeacherStudentsFull() {
+  const [students, setStudents] = useState<TeacherStudentFull[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetch = useCallback(async () => {
+    try {
+      setLoading(true)
+      const res = await api.get('/teachers/me/students-full')
+      setStudents(res.data)
+    } catch { }
+    finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => { fetch() }, [fetch])
+  return { students, loading, refetch: fetch }
+}
+
 // ─── Clases del profesor ─────────────────────────────────────────────────────
 export function useTeacherClasses(filters?: {
   date?: string
