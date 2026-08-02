@@ -9,18 +9,20 @@ import {
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 
+// 1. Interfaz actualizada
 interface Material {
   id: number;
   title: string;
   category: string;
   level: string;
-  content: string;
-  date_up: string;
-  tags: { words?: string[] } | null;
+  file_url: string | null;
+  file_type: string | null;
+  created_at: string;
+  vocabulary_words: string[] | null;
 }
 
 interface Student {
-  id: number;          // StudentProfile.id — es lo que se envía al asignar
+  id: number;
   user_id?: number;
   username: string;
   name: string;
@@ -32,8 +34,12 @@ const CATEGORIES = ["Grammar", "Reading", "Exercises", "Vocabulary"];
 const LEVELS     = ["A1", "A2", "B1", "B2", "C1", "C2"];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function getFileIcon(filename: string, category: string) {
-  if (category === "Vocabulary")
+
+// 2. Función auxiliar para saber si es vocabulario
+const isVocab = (m: Material) => m.vocabulary_words !== null && m.vocabulary_words.length > 0;
+
+function getFileIcon(filename: string | null, category: string) {
+  if (category?.toLowerCase() === "vocabulary")
     return <Volume2 className="w-6 h-6 text-purple-500" />;
   const ext = filename?.split(".").pop()?.toLowerCase();
   if (["jpg","jpeg","png","gif","webp"].includes(ext || ""))
@@ -269,7 +275,8 @@ function VocabModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const words = material.tags?.words ?? [];
+  // 3. Modificado para leer de vocabulary_words
+  const words = material.vocabulary_words ?? [];
   const [list, setList]       = useState<string[]>(words);
   const [input, setInput]     = useState("");
   const [saving, setSaving]   = useState(false);
@@ -400,7 +407,8 @@ export default function MaterialsPage() {
   // Form nuevo vocabulario
   const [vocabTitle, setVocabTitle] = useState("");
   const [vocabLevel, setVocabLevel] = useState(LEVELS[0]);
-  const [vocabWords, setVocabWords] = useState("");
+  const [vocabWords, setVocabWords] = useState<string[]>([]);
+  const [vocabWordInput, setVocabWordInput] = useState("");
 
   const fetchMaterials = useCallback(async () => {
     try {
@@ -434,27 +442,50 @@ export default function MaterialsPage() {
     } finally { setUploading(false); }
   };
 
-  const createVocab = async () => {
-    if (!vocabTitle || !vocabWords.trim()) return;
-    setUploading(true);
-    try {
-      const res = await api.post("/materials/", new FormData(), {
-        headers: { "Content-Type": "multipart/form-data" },
-        params: { title: vocabTitle, category: "Vocabulary", level: vocabLevel }
+  const addVocabWord = (text?: string) => {
+    const raw = (text ?? vocabWordInput).trim();
+      if (!raw) return;
+      // permite pegar varias palabras separadas por coma de una vez
+      const parts = raw.split(",").map(w => w.trim()).filter(Boolean);
+      setVocabWords(prev => {
+        const next = [...prev];
+        parts.forEach(p => {
+          const w = p.charAt(0).toUpperCase() + p.slice(1);
+          if (!next.includes(w)) next.push(w);
+        });
+        return next;
       });
-      const words = vocabWords
-        .split(/[\n,]+/)
-        .map(w => w.trim())
-        .filter(Boolean)
-        .map(w => w.charAt(0).toUpperCase() + w.slice(1));
+      setVocabWordInput("");
+    };
 
-      await api.post(`/materials/${res.data.id}/vocabulary`, { words });
-      setVocabTitle(""); setVocabWords("");
-      fetchMaterials();
-    } catch (e: any) {
-      alert(e.response?.data?.detail || "Error creando vocabulario");
-    } finally { setUploading(false); }
-  };
+  const removeVocabWord = (w: string) =>
+    setVocabWords(prev => prev.filter(x => x !== w));
+
+  const createVocab = async () => {
+  if (!vocabTitle || vocabWords.length === 0) return;
+  setUploading(true);
+  try {
+    const form = new FormData();
+    form.append("title", vocabTitle);
+    form.append("category", "Vocabulary");
+    form.append("level", vocabLevel);
+
+    const res = await api.post("/materials/", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    await api.post(`/materials/${res.data.id}/vocabulary`, { words: vocabWords });
+
+    setVocabTitle("");
+    setVocabWords([]);
+    setVocabWordInput("");
+    fetchMaterials();
+  } catch (e: any) {
+    alert(e.response?.data?.detail || "Error creando vocabulario");
+  } finally {
+    setUploading(false);
+  }
+};
 
   const deleteMaterial = async (id: number) => {
     if (!confirm("¿Eliminar este material?")) return;
@@ -464,16 +495,15 @@ export default function MaterialsPage() {
     } catch { }
   };
 
+  // 4. Modificado para usar isVocab
   const filtered = materials.filter(m => {
     const inSearch = m.title.toLowerCase().includes(search.toLowerCase());
-    const inTab = tab === "vocab"
-      ? m.category === "Vocabulary"
-      : m.category !== "Vocabulary";
+    const inTab = tab === "vocab" ? isVocab(m) : !isVocab(m);
     return inSearch && inTab;
   });
 
-  const docsCount  = materials.filter(m => m.category !== "Vocabulary").length;
-  const vocabCount = materials.filter(m => m.category === "Vocabulary").length;
+  const docsCount  = materials.filter(m => !isVocab(m)).length;
+  const vocabCount = materials.filter(m => isVocab(m)).length;
 
   return (
     <div className="min-h-screen bg-slate-50 relative overflow-hidden">
@@ -769,32 +799,68 @@ export default function MaterialsPage() {
                 <div className="sm:col-span-2">
                   <label className="text-[10px] font-black text-slate-400
                                     uppercase tracking-widest block mb-1.5">
-                    Palabras (separadas por coma o salto de línea)
+                    Palabras
                   </label>
-                  <textarea
-                    value={vocabWords}
-                    onChange={e => setVocabWords(e.target.value)}
-                    rows={4}
-                    placeholder="apple, banana, car&#10;dog, elephant..."
-                    className="w-full bg-slate-50 border-2 border-transparent
-                               rounded-xl text-sm font-bold text-slate-800
-                               placeholder:text-slate-400 px-4 py-3.5
-                               focus:outline-none focus:bg-white
-                               focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                               transition-all duration-300 resize-none"
-                  />
+                  <div className="flex gap-2 mb-3">
+                    <input
+                      value={vocabWordInput}
+                      onChange={e => setVocabWordInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") { e.preventDefault(); addVocabWord(); }
+                      }}
+                      placeholder="Escribe una palabra y presiona Enter..."
+                      className="flex-1 bg-slate-50 border-2 border-transparent
+                                rounded-xl text-sm font-bold text-slate-800
+                                placeholder:text-slate-400 px-4 py-3.5
+                                focus:outline-none focus:bg-white
+                                focus:border-pink-500 focus:ring-4 focus:ring-pink-50
+                                transition-all duration-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => addVocabWord()}
+                      className="px-5 bg-pink-50 text-pink-600 hover:bg-pink-100
+                                font-bold rounded-xl transition-colors flex-shrink-0"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 min-h-[52px] bg-slate-50
+                                  rounded-2xl p-4">
+                    {vocabWords.length === 0 ? (
+                      <p className="text-slate-400 text-sm">Aún no has añadido palabras</p>
+                    ) : vocabWords.map(w => (
+                      <span key={w}
+                        className="inline-flex items-center gap-1.5 bg-white
+                                  border border-slate-200 text-slate-700 text-sm
+                                  font-bold px-3 py-1.5 rounded-xl shadow-sm">
+                        {w}
+                        <button
+                          type="button"
+                          onClick={() => removeVocabWord(w)}
+                          className="text-slate-300 hover:text-rose-400 transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1.5">
+                    También puedes pegar varias palabras separadas por comas y presionar Enter.
+                  </p>
                 </div>
 
                 <button
                   onClick={createVocab}
-                  disabled={!vocabTitle || !vocabWords || uploading}
+                  disabled={!vocabTitle || vocabWords.length === 0 || uploading}
                   className="sm:col-span-2 py-3.5 text-sm font-bold text-white
-                             rounded-xl bg-gradient-to-r from-pink-500 to-rose-400
-                             hover:from-pink-600 hover:to-rose-500
-                             shadow-lg shadow-pink-200 active:scale-[0.98]
-                             transition-all duration-300 disabled:opacity-50
-                             disabled:cursor-not-allowed
-                             flex items-center justify-center gap-2"
+                            rounded-xl bg-gradient-to-r from-pink-500 to-rose-400
+                            hover:from-pink-600 hover:to-rose-500
+                            shadow-lg shadow-pink-200 active:scale-[0.98]
+                            transition-all duration-300 disabled:opacity-50
+                            disabled:cursor-not-allowed
+                            flex items-center justify-center gap-2"
                 >
                   {uploading ? (
                     <div className="w-4 h-4 border-2 border-white/40
@@ -890,7 +956,8 @@ export default function MaterialsPage() {
                   <div className="flex items-start gap-3 mb-4">
                     <div className="w-11 h-11 bg-slate-50 rounded-xl
                                     flex items-center justify-center flex-shrink-0">
-                      {getFileIcon(m.content, m.category)}
+                      {/* 5. Modificado para usar file_url */}
+                      {getFileIcon(m.file_url || "", m.category)}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-slate-800
@@ -907,9 +974,10 @@ export default function MaterialsPage() {
                     </div>
                   </div>
 
-                  {m.category === "Vocabulary" && (
+                  {/* 6. Modificado para usar isVocab */}
+                  {isVocab(m) && (
                     <p className="text-xs text-slate-500 mb-3">
-                      {m.tags?.words?.length ?? 0} palabras
+                      {m.vocabulary_words?.length ?? 0} palabras
                     </p>
                   )}
 
@@ -925,7 +993,8 @@ export default function MaterialsPage() {
                       Asignar
                     </button>
 
-                    {m.category === "Vocabulary" && (
+                    {/* 7. Mostrar botón editar sólo si es vocabulario */}
+                    {isVocab(m) && (
                       <button
                         onClick={() => setVocabTarget(m)}
                         className="flex-1 flex items-center justify-center gap-1.5

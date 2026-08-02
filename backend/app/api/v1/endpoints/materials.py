@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Body
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -88,7 +88,7 @@ async def create_material(
 @router.post("/{material_id}/vocabulary")
 def set_vocabulary_words(
     material_id: int,
-    words: List[str],
+    words: List[str] = Body(..., embed=True),
     current_user: User = Depends(get_current_teacher),
     db: Session = Depends(get_db)
 ):
@@ -107,7 +107,6 @@ def set_vocabulary_words(
             detail="Material no encontrado"
         )
 
-    # Capitalizar y limpiar duplicados manteniendo orden
     seen = set()
     clean_words = []
     for word in words:
@@ -121,7 +120,6 @@ def set_vocabulary_words(
     db.commit()
 
     return {"message": f"{len(clean_words)} palabras guardadas", "words": clean_words}
-
 
 @router.post("/{material_id}/assign")
 def assign_material(
