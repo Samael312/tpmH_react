@@ -44,7 +44,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Incluimos 'pending_trial' para que las clases de prueba pendientes aparezcan en los listados próximos
 UPCOMING_STATUSES = ["pending", "pending_trial", "pending_payment", "confirmed"]
 DAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
@@ -56,9 +55,8 @@ def _get_class_or_404(
     student_id: Optional[int] = None,
     teacher_id: Optional[int] = None
 ) -> Class:
-    """Busca una clase garantizando existencia y pertenencia según el rol."""
     query = db.query(Class).filter(Class.id == class_id)
-    
+
     if student_id is not None:
         query = query.filter(Class.student_id == student_id)
     if teacher_id is not None:
@@ -73,8 +71,56 @@ def _get_class_or_404(
     return class_
 
 
+def _build_class_responses(classes: list[Class], db: Session) -> list[ClassResponse]:
+    """
+    Convierte una lista de Class (ORM) en ClassResponse enriquecidos con
+    nombre/avatar del profesor y del estudiante. Batch-query para no hacer
+    N+1 consultas.
+    """
+    if not classes:
+        return []
+
+    teacher_ids = {c.teacher_id for c in classes}
+    student_ids = {c.student_id for c in classes}
+
+    teachers = db.query(TeacherProfile).filter(TeacherProfile.id.in_(teacher_ids)).all()
+    students = db.query(StudentProfile).filter(StudentProfile.id.in_(student_ids)).all()
+    teacher_map = {t.id: t for t in teachers}
+    student_map = {s.id: s for s in students}
+
+    result = []
+    for c in classes:
+        teacher = teacher_map.get(c.teacher_id)
+        student = student_map.get(c.student_id)
+        teacher_user = teacher.user if teacher else None
+        student_user = student.user if student else None
+
+        data = ClassResponse.model_validate(c).model_dump()
+        data["teacher_name"] = (
+            f"{teacher_user.name} {teacher_user.surname}" if teacher_user else None
+        )
+        data["teacher_avatar"] = (
+            (teacher_user.avatar if teacher_user else None)
+            or (teacher.profile_photo_url if teacher else None)
+        )
+        data["student_name"] = (
+            f"{student_user.name} {student_user.surname}" if student_user else None
+        )
+        data["student_avatar"] = (
+            (student_user.avatar if student_user else None)
+            or (student.profile_photo_url if student else None)
+        )
+        result.append(ClassResponse(**data))
+
+    return result
+
+
+def _build_class_response(class_: Class, db: Session) -> ClassResponse:
+    """Versión de un solo elemento de _build_class_responses."""
+    return _build_class_responses([class_], db)[0]
+
+
 def _sync_google_calendar_created(new_class: Class, db: Session) -> None:
-    """Intenta sincronizar la creación con Google Calendar sin romper la API si falla."""
     try:
         event_id = sync_class_created(new_class, db)
         if event_id:
@@ -85,7 +131,6 @@ def _sync_google_calendar_created(new_class: Class, db: Session) -> None:
 
 
 def _sync_google_calendar_updated(class_: Class, db: Session) -> None:
-    """Intenta sincronizar la actualización con Google Calendar."""
     try:
         sync_class_updated(class_, class_.google_event_id, db)
     except Exception as e:
@@ -93,7 +138,6 @@ def _sync_google_calendar_updated(class_: Class, db: Session) -> None:
 
 
 def _sync_google_calendar_cancelled(teacher_id: int, event_id: Optional[str], db: Session) -> None:
-    """Intenta sincronizar la cancelación con Google Calendar."""
     if not event_id:
         return
     try:
@@ -114,10 +158,6 @@ def book_class(
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    """
-    Reserva una clase regular.
-    El slot queda en 'pending' y BLOQUEA el calendario inmediatamente.
-    """
     student_id = current_user.student_profile.id
 
     enrollment = db.query(Enrollment).filter(
@@ -175,7 +215,7 @@ def book_class(
     db.refresh(new_class)
 
     _sync_google_calendar_created(new_class, db)
-    return new_class
+    return _build_class_response(new_class, db)
 
 
 @router.get("/my-classes", response_model=ClassListResponse)
@@ -184,8 +224,7 @@ def get_my_classes_student(
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    """Clases del estudiante — próximas e historial"""
-    finalize_past_classes(db)  # Aseguramos que las clases pasadas se finalicen antes de listar
+    finalize_past_classes(db)
     now = utc_now()
     student_id = current_user.student_profile.id
 
@@ -206,7 +245,7 @@ def get_my_classes_student(
     completed = sum(1 for c in all_classes if c.status in ("completed", "finalized"))
 
     return ClassListResponse(
-        classes=all_classes,
+        classes=_build_class_responses(all_classes, db),
         total=len(all_classes),
         upcoming=upcoming,
         completed=completed
@@ -219,7 +258,6 @@ def cancel_class_student(
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    """Cancelar clase — mínimo 12h de antelación"""
     class_ = _get_class_or_404(db, class_id, student_id=current_user.student_profile.id)
 
     can_cancel, error_msg = can_cancel_class(class_, current_user.id)
@@ -243,7 +281,6 @@ def reschedule_class_student(
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    """Reagendar clase — mínimo 12h de antelación"""
     student_id = current_user.student_profile.id
     class_ = _get_class_or_404(db, class_id, student_id=student_id)
 
@@ -270,14 +307,12 @@ def reschedule_class_student(
 
     class_.start_time_utc = data.start_time_utc
     class_.end_time_utc = data.end_time_utc
-    # Si era trial, puede mantener 'pending_trial', o pasar a 'pending' según tu lógica de negocio. 
-    # Lo dejamos en pending_trial si es trial, o pending si es regular.
     class_.status = "pending_trial" if class_.class_type == ClassType.trial else "pending"
     db.commit()
     db.refresh(class_)
 
     _sync_google_calendar_updated(class_, db)
-    return class_
+    return _build_class_response(class_, db)
 
 
 # ─── STAFF — Clase de prueba ─────────────────────────────────────────────────
@@ -292,7 +327,6 @@ def book_trial_class(
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db)
 ):
-    """El staff crea una clase de prueba para un estudiante con estado 'pending_trial'."""
     teacher = db.query(TeacherProfile).filter(
         TeacherProfile.user_username == data.teacher_username
     ).first()
@@ -348,7 +382,7 @@ def book_trial_class(
     db.refresh(trial_class)
 
     _sync_google_calendar_created(trial_class, db)
-    return trial_class
+    return _build_class_response(trial_class, db)
 
 
 # ─── STAFF / PROFESOR — Gestión ──────────────────────────────────────────────
@@ -363,8 +397,7 @@ def get_my_classes_teacher(
     current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
-    """Clases del profesor con filtros"""
-    finalize_past_classes(db)  # Aseguramos que las clases pasadas se finalicen antes de listar
+    finalize_past_classes(db)
     now = utc_now()
     teacher_id = current_user.teacher_profile.id
 
@@ -407,7 +440,7 @@ def get_my_classes_teacher(
     completed = sum(1 for c in all_classes if c.status == "completed")
 
     return ClassListResponse(
-        classes=all_classes,
+        classes=_build_class_responses(all_classes, db),
         total=len(all_classes),
         upcoming=upcoming,
         completed=completed
@@ -421,7 +454,6 @@ def update_class_status(
     current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
-    """Actualizar estado de una clase por parte del profesor."""
     class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
 
     old_status = class_.status
@@ -443,7 +475,7 @@ def update_class_status(
     db.refresh(class_)
 
     _sync_google_calendar_updated(class_, db)
-    return class_
+    return _build_class_response(class_, db)
 
 
 @router.patch("/teacher/{class_id}/reschedule", response_model=ClassResponse)
@@ -453,7 +485,6 @@ def reschedule_class_teacher(
     current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
-    """El profesor reagenda sin restricción de tiempo"""
     class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
 
     can_reschedule, error_msg = can_reschedule_class(class_, role="teacher")
@@ -485,7 +516,7 @@ def reschedule_class_teacher(
     db.refresh(class_)
 
     _sync_google_calendar_updated(class_, db)
-    return class_
+    return _build_class_response(class_, db)
 
 
 @router.patch("/admin/{class_id}/reschedule", response_model=ClassResponse)
@@ -495,7 +526,6 @@ def reschedule_class_admin(
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db)
 ):
-    """El staff reagenda cualquier clase sin restricciones"""
     class_ = _get_class_or_404(db, class_id)
 
     can_book, error_msg = can_book_slot(
@@ -519,4 +549,4 @@ def reschedule_class_admin(
     db.refresh(class_)
 
     _sync_google_calendar_updated(class_, db)
-    return class_
+    return _build_class_response(class_, db)

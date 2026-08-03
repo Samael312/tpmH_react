@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useTeacherClasses, useWallet, type TeacherClass } from '@/hooks/useTeacherData'
-import ClassCard from '@/components/teacher/ClassCard'
+import ClassCard from '@/components/classes/ClassCard'
 import StatCard from '@/components/ui/StatCard'
 import Card from '@/components/ui/Card'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
@@ -362,7 +362,7 @@ export default function TeacherDashboard() {
           ) : (
             <div className="space-y-4">
               {selectedDateClasses.map(c => (
-                <ClassCard key={c.id} class_={c} onUpdate={refetch} />
+                <ClassCard key={c.id} class_={c} role="teacher" onUpdate={refetch} />
               ))}
             </div>
           )
@@ -377,7 +377,7 @@ export default function TeacherDashboard() {
           ) : (
             <div className="space-y-4">
               {historyList.map(c => (
-                <ClassCard key={c.id} class_={c} onUpdate={refetch} />
+                <ClassCard key={c.id} class_={c} role="teacher" onUpdate={refetch} />
               ))}
             </div>
           )

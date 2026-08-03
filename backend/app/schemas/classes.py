@@ -87,6 +87,10 @@ class ClassResponse(BaseModel):
     teacher_timezone: Optional[str]
     student_timezone: Optional[str]
     created_at: datetime
+    teacher_name: Optional[str] = None
+    teacher_avatar: Optional[str] = None
+    student_name: Optional[str] = None
+    student_avatar: Optional[str] = None
 
     class Config:
         from_attributes = True

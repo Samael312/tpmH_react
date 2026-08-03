@@ -1,0 +1,267 @@
+"use client";
+
+import { useState } from "react";
+import { User, Video, X, Clock, RotateCcw, Check, AlertCircle } from "lucide-react";
+import api from "@/lib/api";
+
+export interface ClassCardData {
+  id: number;
+  class_type: string;
+  subject?: string | null;
+  start_time_utc: string;
+  end_time_utc?: string | null;
+  duration_minutes?: number;
+  status: string;
+  meet_link?: string | null;
+  notes?: string | null;
+  teacher_name?: string | null;
+  teacher_avatar?: string | null;
+  student_name?: string | null;
+  student_avatar?: string | null;
+}
+
+type Role = "student" | "teacher";
+
+interface ClassCardProps {
+  class_: ClassCardData;
+  role: Role;
+  readOnly?: boolean;
+  onUpdate?: () => void;
+  onReschedule?: () => void;
+  onCancel?: () => void;
+}
+
+const STATUS_CONFIG: Record<string, { theme: string; label: string; border: string }> = {
+  pending:         { theme: "bg-amber-100 text-amber-700",   label: "Pendiente pago", border: "border-l-amber-400" },
+  pending_trial:   { theme: "bg-purple-100 text-purple-700", label: "Prueba pdte",    border: "border-l-purple-400" },
+  pending_payment: { theme: "bg-blue-100 text-blue-700",     label: "En revisión",    border: "border-l-blue-400" },
+  confirmed:       { theme: "bg-emerald-100 text-emerald-700",label: "Confirmada",    border: "border-l-emerald-400" },
+  completed:       { theme: "bg-slate-100 text-slate-700",   label: "Completada",     border: "border-l-slate-300" },
+  cancelled:       { theme: "bg-red-100 text-red-700",       label: "Cancelada",      border: "border-l-red-400" },
+  no_show:         { theme: "bg-red-100 text-red-700",       label: "No asistió",     border: "border-l-red-600" },
+  rescheduled:     { theme: "bg-orange-100 text-orange-700", label: "Reagendada",     border: "border-l-orange-400" },
+  finalized:       { theme: "bg-slate-100 text-slate-700",   label: "Finalizada",     border: "border-l-slate-300" },
+};
+
+const HISTORY_STATUSES = ["completed", "cancelled", "no_show", "finalized"];
+const TEACHER_NEXT_STATUSES: Record<string, string[]> = {
+  pending:         ["cancelled"],
+  pending_trial:   ["cancelled"],
+  pending_payment: ["cancelled"],
+  confirmed:       ["completed", "no_show", "cancelled"],
+  completed:       ["no_show"],
+  cancelled:       ["no_show", "completed"],
+  no_show:         ["completed", "cancelled"],
+  finalized:       ["completed", "no_show", "cancelled"],
+};
+
+const STUDENT_CANCELABLE = ["pending", "pending_trial", "pending_payment", "confirmed"];
+const STUDENT_RESCHEDULABLE = ["pending", "pending_trial", "confirmed"];
+
+function PersonAvatar({ name, url, className }: { name?: string | null; url?: string | null; className?: string }) {
+  if (url) return <img src={url} alt={name ?? ""} className={`${className} object-cover`} />;
+  return (
+    <div className={`${className} bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-[10px]`}>
+      {name ? name.charAt(0).toUpperCase() : <User className="w-3 h-3" />}
+    </div>
+  );
+}
+
+export default function ClassCard({
+  class_, role, readOnly = false, onUpdate, onReschedule, onCancel,
+}: ClassCardProps) {
+  const [updating, setUpdating] = useState(false);
+  const [showInlineReschedule, setShowInlineReschedule] = useState(false);
+  const [newDate, setNewDate] = useState("");
+  const [newTime, setNewTime] = useState("");
+  const [error, setError] = useState("");
+
+  const cfg = STATUS_CONFIG[class_.status] ?? STATUS_CONFIG.pending;
+  const start = new Date(class_.start_time_utc);
+  const duration = class_.duration_minutes || 60;
+  const endDate = class_.end_time_utc ? new Date(class_.end_time_utc) : new Date(start.getTime() + duration * 60000);
+  
+  const isPast = endDate < new Date();
+  const isHistory = HISTORY_STATUSES.includes(class_.status);
+  const dayOfWeek = start.toLocaleDateString("es", { weekday: "short" });
+
+  const personName = role === "student" ? class_.teacher_name : class_.student_name;
+  const personAvatar = role === "student" ? class_.teacher_avatar : class_.student_avatar;
+  const personLabel = role === "student" ? "Prof." : "Est.";
+
+  // --- LÓGICA DE API ---
+  const teacherUpdateStatus = async (newStatus: string) => {
+    setUpdating(true); setError("");
+    try {
+      await api.patch(`/classes/${class_.id}/status`, { status: newStatus });
+      onUpdate?.();
+    } catch (e: any) { setError(e.response?.data?.detail || "Error actualizando"); } 
+    finally { setUpdating(false); }
+  };
+
+  const processReschedule = async () => {
+    if (!newDate || !newTime) return;
+    setUpdating(true); setError("");
+    try {
+      const startUtc = new Date(`${newDate}T${newTime}:00Z`).toISOString();
+      const endUtc = new Date(new Date(startUtc).getTime() + duration * 60000).toISOString();
+      const endpoint = role === "teacher" 
+        ? `/classes/teacher/${class_.id}/reschedule`
+        : `/classes/${class_.id}/reschedule`;
+      
+      await api.patch(endpoint, { start_time_utc: startUtc, end_time_utc: endUtc });
+      setShowInlineReschedule(false); setNewDate(""); setNewTime("");
+      onUpdate?.();
+    } catch (e: any) { setError(e.response?.data?.detail || "Error reagendando"); } 
+    finally { setUpdating(false); }
+  };
+
+  const studentCancelInline = async () => {
+    setUpdating(true); setError("");
+    try {
+      await api.delete(`/classes/${class_.id}`);
+      onUpdate?.();
+    } catch (e: any) { setError(e.response?.data?.detail || "Error al cancelar"); } 
+    finally { setUpdating(false); }
+  };
+
+  // --- HANDLERS ---
+  const handleRescheduleClick = () => {
+    if (onReschedule) { onReschedule(); return; }
+    setShowInlineReschedule(true);
+  };
+  const handleCancelClick = () => {
+    if (onCancel) { onCancel(); return; }
+    role === "teacher" ? teacherUpdateStatus("cancelled") : studentCancelInline();
+  };
+
+  // --- PERMISOS ---
+  const teacherNextActions = TEACHER_NEXT_STATUSES[class_.status] || [];
+  const canReschedule = role === "teacher"
+    ? !["completed", "cancelled", "no_show"].includes(class_.status)
+    : STUDENT_RESCHEDULABLE.includes(class_.status);
+  const canCancel = role === "teacher"
+    ? teacherNextActions.includes("cancelled")
+    : STUDENT_CANCELABLE.includes(class_.status);
+
+  const showTeacherActions = role === "teacher" && !isPast && !readOnly;
+  const hasAnyAction = !readOnly && ((canReschedule && (!isPast || role === "teacher")) || (canCancel && (!isPast || role === "teacher")) || showTeacherActions);
+
+  return (
+    <div className={`group bg-white/90 backdrop-blur-xl rounded-2xl border border-white/80 shadow-lg shadow-slate-100/80 border-l-4 ${cfg.border} p-5 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden ${isHistory ? "opacity-75 hover:opacity-100" : ""}`}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        
+        {/* LADO IZQUIERDO: Info Principal */}
+        <div className="flex items-start gap-4 flex-1 min-w-0">
+          
+          {/* Bloque de Fecha */}
+          <div className="flex flex-col items-center justify-center bg-pink-50/80 text-pink-600 rounded-2xl px-3.5 py-2.5 min-w-[64px] border border-pink-100/60 flex-shrink-0">
+            <span className="text-[10px] font-black uppercase tracking-wider text-pink-400">
+              {dayOfWeek}
+            </span>
+            <span className="text-xl font-black tracking-tight text-slate-800">
+              {start.getDate()}
+            </span>
+            <span className="text-[10px] font-bold text-pink-500 uppercase">
+              {start.toLocaleString("es", { month: "short" }).replace(".", "")}
+            </span>
+          </div>
+
+          {/* Bloque de Contenido */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1.5">
+              <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full ${cfg.theme}`}>
+                {cfg.label}
+              </span>
+              {class_.class_type === "trial" && (
+                <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                  Prueba
+                </span>
+              )}
+            </div>
+
+            {/* ASIGNATURA DESTACADA */}
+            <h3 className="text-base font-black text-slate-800 truncate mb-1">
+              {class_.subject ?? "Clase sin asignatura"}
+            </h3>
+
+            {/* Tiempo y Persona */}
+            <div className="flex items-center gap-3 text-xs font-semibold text-slate-500 flex-wrap mb-2">
+              <span className="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-lg text-slate-600">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                {start.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })} ({duration} min)
+              </span>
+              
+              {personName && (
+                <span className="flex items-center gap-1.5 text-slate-500">
+                  <PersonAvatar name={personName} url={personAvatar} className="w-5 h-5 rounded-full flex-shrink-0" />
+                  {personLabel}: <strong className="text-slate-700 truncate max-w-[120px]">{personName}</strong>
+                </span>
+              )}
+            </div>
+
+            {class_.notes && (
+              <p className="text-xs text-slate-500 italic mb-2 truncate">"{class_.notes}"</p>
+            )}
+            {error && (
+              <p className="text-xs font-bold text-red-500 mb-2 truncate">{error}</p>
+            )}
+
+            {/* Botón Meet */}
+            {class_.meet_link && class_.status === "confirmed" && !showInlineReschedule && (
+              <div className="mt-2">
+                <a
+                  href={class_.meet_link} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 px-3.5 py-2 rounded-xl shadow-sm shadow-emerald-100 transition-all duration-200"
+                >
+                  <Video className="w-3.5 h-3.5" /> Entrar a Google Meet
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* LADO DERECHO: Acciones */}
+        {hasAnyAction && (
+          <div className="flex sm:flex-col gap-2 items-stretch sm:items-end justify-end flex-shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
+            
+            {showInlineReschedule ? (
+              <div className="flex flex-col gap-2 bg-slate-50 p-2 rounded-xl border border-slate-100 w-full sm:w-auto">
+                <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="text-xs px-2 py-1.5 rounded-lg border border-slate-200 bg-white" />
+                <input type="time" value={newTime} onChange={e => setNewTime(e.target.value)} className="text-xs px-2 py-1.5 rounded-lg border border-slate-200 bg-white" />
+                <div className="flex gap-1.5 mt-1">
+                  <button onClick={processReschedule} disabled={updating} className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-1.5 rounded-lg text-xs font-bold transition-colors">OK</button>
+                  <button onClick={() => setShowInlineReschedule(false)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-1.5 rounded-lg text-xs font-bold transition-colors">X</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {showTeacherActions && teacherNextActions.includes("completed") && (
+                  <button onClick={() => teacherUpdateStatus("completed")} disabled={updating} className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3.5 py-2 rounded-xl transition-colors disabled:opacity-50">
+                    <Check className="w-3.5 h-3.5" /> Completar
+                  </button>
+                )}
+                {showTeacherActions && teacherNextActions.includes("no_show") && (
+                  <button onClick={() => teacherUpdateStatus("no_show")} disabled={updating} className="flex items-center justify-center gap-1.5 text-xs font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 px-3.5 py-2 rounded-xl transition-colors disabled:opacity-50">
+                    <AlertCircle className="w-3.5 h-3.5" /> No asistió
+                  </button>
+                )}
+                {canReschedule && (!isPast || role === "teacher") && (
+                  <button onClick={handleRescheduleClick} disabled={updating} className="flex items-center justify-center gap-1.5 text-xs font-bold text-purple-600 bg-purple-50 hover:bg-purple-100 px-3.5 py-2 rounded-xl transition-colors disabled:opacity-50">
+                    <RotateCcw className="w-3.5 h-3.5" /> Reagendar
+                  </button>
+                )}
+                {canCancel && (!isPast || role === "teacher") && (
+                  <button onClick={handleCancelClick} disabled={updating} className="flex items-center justify-center gap-1.5 text-xs font-bold text-red-500 bg-red-50 hover:bg-red-100 px-3.5 py-2 rounded-xl transition-colors disabled:opacity-50">
+                    <X className="w-3.5 h-3.5" /> Cancelar
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}

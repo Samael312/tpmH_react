@@ -10,6 +10,7 @@ export interface StudentClass {
   duration_minutes: number;
   status: string;
   meet_link: string | null;
+  teacher_avatar?: string | null;
   teacher_name: string;
   teacher_username: string;
   package_name: string | null;

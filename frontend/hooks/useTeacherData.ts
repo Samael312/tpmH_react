@@ -17,6 +17,8 @@ export interface TeacherClass {
   teacher_timezone: string | null
   student_timezone: string | null
   created_at: string
+  student_name?: string | null    // NUEVO
+  student_avatar?: string | null 
 }
 
 export interface TeacherProfile {
