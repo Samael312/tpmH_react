@@ -1,40 +1,72 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
   ClipboardList, Plus, Send, Star, Clock,
   CheckCircle, AlertCircle, ChevronDown,
-  X, Search, User, Calendar,
-  Check
+  X, Search, Calendar, Check, Users,
+  BarChart3, FileText,
 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 interface Homework {
   id: number;
+  teacher_id: number;
   title: string;
-  content: string;
-  date_assigned: string;
-  date_due: string;
-  status: string;
+  description: string;
+  due_date_utc: string;
+  is_active: boolean;
+  created_at: string;
 }
 
 interface Submission {
   id: number;
-  student_id: number;
-  student_name: string;
-  student_username: string;
   homework_id: number;
+  student_id: number;
+  status: string; // "pending" | "submitted" | "graded"
   submission: string | null;
-  status: string;
-  grade: { score?: number; feedback?: string; graded_at?: string } | null;
+  submitted_at: string | null;
+  score: number | null;
+  feedback: string | null;
+  graded_at: string | null;
+  assigned_at: string;
+  student_name?: string;
+  student_username?: string;
+  student_avatar?: string | null;
 }
 
 interface Student {
-  id: number;
+  id: number; // StudentProfile.id — es lo que espera student_ids
+  user_id: number;
   username: string;
   name: string;
   surname: string;
+  avatar?: string | null;
+}
+
+function StudentAvatar({ s, className }: { s: Student; className?: string }) {
+  if (s.avatar) {
+    return <img src={s.avatar} alt={s.name} className={`${className} object-cover`} />;
+  }
+  return (
+    <div className={`${className} bg-gradient-to-br from-pink-400 to-rose-400
+                      flex items-center justify-center text-white font-black`}>
+      {s.name?.[0]?.toUpperCase()}{s.surname?.[0]?.toUpperCase()}
+    </div>
+  );
+}
+
+function SubmissionAvatar({ sub, className }: { sub: Submission; className?: string }) {
+  if (sub.student_avatar) {
+    return <img src={sub.student_avatar} alt={sub.student_name ?? ""} className={`${className} object-cover`} />;
+  }
+  return (
+    <div className={`${className} bg-slate-100 flex items-center justify-center
+                      text-xs font-black text-slate-500`}>
+      {sub.student_name?.[0]?.toUpperCase() ?? "?"}
+    </div>
+  );
 }
 
 // ─── Custom Date Picker ───────────────────────────────────────────────────────
@@ -95,11 +127,10 @@ function DatePicker({
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-2 w-72 bg-white/95 backdrop-blur-xl
-                        rounded-2xl shadow-2xl shadow-slate-200/60
-                        border border-white p-4 animate-in fade-in zoom-in-95
-                        duration-150">
-          {/* Navegación mes */}
+        <div className="absolute z-50 bottom-full mb-2 w-72 bg-white/95 backdrop-blur-xl
+                  rounded-2xl shadow-2xl shadow-slate-200/60
+                  border border-white p-4 animate-in fade-in zoom-in-95
+                  duration-150">
           <div className="flex items-center justify-between mb-4">
             <button
               onClick={() => {
@@ -126,7 +157,6 @@ function DatePicker({
             </button>
           </div>
 
-          {/* Días cabecera */}
           <div className="grid grid-cols-7 mb-2">
             {DAYS_HEAD.map(d => (
               <div key={d} className="text-center text-[10px] font-black
@@ -136,7 +166,6 @@ function DatePicker({
             ))}
           </div>
 
-          {/* Celdas */}
           <div className="grid grid-cols-7 gap-0.5">
             {cells.map((day, i) => {
               if (!day) return <div key={i} />;
@@ -180,8 +209,8 @@ function GradeModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [score, setScore]       = useState<number>(submission.grade?.score ?? 0);
-  const [feedback, setFeedback] = useState(submission.grade?.feedback ?? "");
+  const [score, setScore]       = useState<number>(submission.score ?? 0);
+  const [feedback, setFeedback] = useState(submission.feedback ?? "");
   const [saving, setSaving]     = useState(false);
   const [success, setSuccess]   = useState(false);
 
@@ -212,13 +241,16 @@ function GradeModal({
                         rounded-full blur-[80px] pointer-events-none" />
 
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-xl font-black text-slate-800 tracking-tight">
-              Calificar entrega
-            </h2>
-            <p className="text-sm text-slate-500 mt-0.5">
-              {submission.student_name}
-            </p>
+          <div className="flex items-center gap-3">
+            <SubmissionAvatar sub={submission} className="w-10 h-10 rounded-xl flex-shrink-0" />
+            <div>
+              <h2 className="text-xl font-black text-slate-800 tracking-tight">
+                Calificar entrega
+              </h2>
+              <p className="text-sm text-slate-500 mt-0.5">
+                {submission.student_name ?? "Estudiante"}
+              </p>
+            </div>
           </div>
           <button onClick={onClose}
             className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200
@@ -237,7 +269,6 @@ function GradeModal({
           </div>
         ) : (
           <>
-            {/* Respuesta del estudiante */}
             {submission.submission ? (
               <div className="bg-slate-50 rounded-2xl p-4 mb-5 max-h-40
                               overflow-y-auto">
@@ -259,7 +290,6 @@ function GradeModal({
               </div>
             )}
 
-            {/* Score con estrellas */}
             <div className="mb-4">
               <label className="text-[10px] font-black text-slate-400
                                 uppercase tracking-widest block mb-3">
@@ -285,7 +315,6 @@ function GradeModal({
               </div>
             </div>
 
-            {/* Feedback */}
             <div className="mb-6">
               <label className="text-[10px] font-black text-slate-400
                                 uppercase tracking-widest block mb-1.5">
@@ -335,6 +364,7 @@ export default function HomeworkPage() {
   const [activeHw, setActiveHw]       = useState<number | null>(null);
   const [gradeTarget, setGradeTarget] = useState<Submission | null>(null);
   const [search, setSearch]           = useState("");
+  const [studentSearch, setStudentSearch] = useState("");
 
   // Form nueva tarea
   const [hwTitle, setHwTitle]       = useState("");
@@ -342,13 +372,14 @@ export default function HomeworkPage() {
   const [hwDue, setHwDue]           = useState("");
   const [hwStudents, setHwStudents] = useState<number[]>([]);
   const [creating, setCreating]     = useState(false);
+  const [createError, setCreateError] = useState("");
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
       const [hwRes, stuRes] = await Promise.all([
         api.get("/homework/my-homework"),
-        api.get("/admin/users?role=student"),
+        api.get("/teachers/me/students"),
       ]);
       setHomeworks(hwRes.data);
       setStudents(stuRes.data);
@@ -356,7 +387,7 @@ export default function HomeworkPage() {
     finally { setLoading(false); }
   }, []);
 
-  useState(() => { fetchAll(); });
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const fetchSubmissions = async (hwId: number) => {
     if (activeHw === hwId) { setActiveHw(null); return; }
@@ -370,19 +401,27 @@ export default function HomeworkPage() {
   const createHomework = async () => {
     if (!hwTitle || !hwContent || !hwDue || !hwStudents.length) return;
     setCreating(true);
+    setCreateError("");
     try {
+      const dueDateUtc = new Date(`${hwDue}T23:59:59`).toISOString();
       await api.post("/homework/", {
         title: hwTitle,
-        content: hwContent,
-        date_due: hwDue,
+        description: hwContent,
+        due_date_utc: dueDateUtc,
         student_ids: hwStudents,
       });
       setHwTitle(""); setHwContent(""); setHwDue("");
       setHwStudents([]);
+      setStudentSearch("");
       fetchAll();
       setTab("review");
     } catch (e: any) {
-      alert(e.response?.data?.detail || "Error creando tarea");
+      const detail = e.response?.data?.detail;
+      setCreateError(
+        Array.isArray(detail)
+          ? detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ")
+          : detail || "Error creando tarea"
+      );
     } finally { setCreating(false); }
   };
 
@@ -393,22 +432,36 @@ export default function HomeworkPage() {
     h.title.toLowerCase().includes(search.toLowerCase())
   );
 
+  const filteredStudents = useMemo(() => {
+    const q = studentSearch.trim().toLowerCase();
+    if (!q) return students;
+    return students.filter(s =>
+      `${s.name} ${s.surname} ${s.username}`.toLowerCase().includes(q)
+    );
+  }, [students, studentSearch]);
+
   const getStatusIcon = (status: string) => {
-    if (status === "Graded")    return <Star className="w-3.5 h-3.5 text-amber-500" />;
-    if (status === "Submitted") return <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />;
+    if (status === "graded")    return <Star className="w-3.5 h-3.5 text-amber-500" />;
+    if (status === "submitted") return <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />;
     return <Clock className="w-3.5 h-3.5 text-slate-400" />;
   };
 
   const getStatusLabel = (status: string) => {
-    if (status === "Graded")    return { text: "Calificada", cls: "bg-amber-100 text-amber-700" };
-    if (status === "Submitted") return { text: "Entregada",  cls: "bg-emerald-100 text-emerald-700" };
+    if (status === "graded")    return { text: "Calificada", cls: "bg-amber-100 text-amber-700" };
+    if (status === "submitted") return { text: "Entregada",  cls: "bg-emerald-100 text-emerald-700" };
     return { text: "Pendiente", cls: "bg-slate-100 text-slate-500" };
   };
 
-  return (
-    <div className="min-h-screen bg-slate-50 relative overflow-hidden">
+  // ─── Stats ───
+  const activeCount = homeworks.filter(h => h.is_active).length;
+  const dueThisWeek = homeworks.filter(h => {
+    const diff = new Date(h.due_date_utc).getTime() - Date.now();
+    return h.is_active && diff > 0 && diff <= 7 * 24 * 60 * 60 * 1000;
+  }).length;
 
-      {/* Blobs */}
+  return (
+    <div className="min-h-screen bg-slate-50 relative overflow-x-hidden">
+
       <div className="fixed top-[-80px] right-[-80px] w-[450px] h-[450px]
                       bg-pink-300/20 rounded-full blur-[100px] pointer-events-none" />
       <div className="fixed bottom-0 left-[-100px] w-[400px] h-[400px]
@@ -417,13 +470,40 @@ export default function HomeworkPage() {
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
 
         {/* Header */}
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">
-            Tareas
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Crea actividades y califica las entregas de tus estudiantes
-          </p>
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500
+                        flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-black text-slate-800 tracking-tight">
+              Tareas
+            </h1>
+            <p className="text-slate-500 mt-1">
+              Crea actividades y califica las entregas de tus estudiantes
+            </p>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-4 animate-in fade-in slide-in-from-bottom-4
+                        duration-500 delay-75">
+          {[
+            { label: "Total tareas", value: homeworks.length, icon: <ClipboardList className="w-5 h-5" />, bg: "bg-pink-50 text-pink-500" },
+            { label: "Activas", value: activeCount, icon: <BarChart3 className="w-5 h-5" />, bg: "bg-emerald-50 text-emerald-500" },
+            { label: "Vencen esta semana", value: dueThisWeek, icon: <Clock className="w-5 h-5" />, bg: "bg-amber-50 text-amber-500" },
+          ].map(s => (
+            <div key={s.label}
+              className="bg-white/85 backdrop-blur-xl rounded-2xl border border-white
+                        shadow-lg shadow-slate-100 p-5 flex items-center gap-4">
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${s.bg}`}>
+                {s.icon}
+              </div>
+              <div>
+                <p className="text-2xl font-black text-slate-800 leading-none">{s.value}</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                  {s.label}
+                </p>
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* Tabs */}
@@ -454,7 +534,6 @@ export default function HomeworkPage() {
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4
                           duration-500">
 
-            {/* Buscador */}
             <div className="group relative max-w-sm">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2
                                   w-5 h-5 text-slate-400
@@ -483,7 +562,9 @@ export default function HomeworkPage() {
                               border border-white shadow-lg py-16 text-center">
                 <ClipboardList className="w-10 h-10 text-slate-200 mx-auto mb-3" />
                 <p className="text-slate-500 font-bold">
-                  No hay tareas creadas todavía
+                  {homeworks.length === 0
+                    ? "No hay tareas creadas todavía"
+                    : "Ninguna tarea coincide con tu búsqueda"}
                 </p>
               </div>
             ) : (
@@ -494,7 +575,6 @@ export default function HomeworkPage() {
                                border border-white shadow-lg shadow-slate-100
                                overflow-hidden transition-all duration-200">
 
-                    {/* Cabecera de la tarea */}
                     <button
                       onClick={() => fetchSubmissions(hw.id)}
                       className="w-full flex items-center gap-4 p-5 text-left
@@ -511,11 +591,17 @@ export default function HomeworkPage() {
                         <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                           <span className="text-xs text-slate-400 flex items-center gap-1">
                             <Clock className="w-3 h-3" />
-                            Vence: {new Date(hw.date_due + "T00:00:00")
+                            Vence: {new Date(hw.due_date_utc)
                               .toLocaleDateString("es", {
                                 day: "numeric", month: "short"
                               })}
                           </span>
+                          {!hw.is_active && (
+                            <span className="text-[10px] font-black uppercase tracking-widest
+                                            px-2 py-0.5 rounded-full bg-slate-100 text-slate-400">
+                              Archivada
+                            </span>
+                          )}
                         </div>
                       </div>
                       <ChevronDown className={`w-4 h-4 text-slate-400 flex-shrink-0
@@ -523,7 +609,6 @@ export default function HomeworkPage() {
                         ${activeHw === hw.id ? "rotate-180" : ""}`} />
                     </button>
 
-                    {/* Entregas */}
                     {activeHw === hw.id && (
                       <div className="border-t border-slate-100 px-5 pb-4 pt-3
                                       space-y-2">
@@ -537,19 +622,15 @@ export default function HomeworkPage() {
                             <div key={sub.id}
                               className="flex items-center gap-3 py-2.5 px-4
                                          bg-slate-50 rounded-xl">
-                              <div className="w-8 h-8 bg-white rounded-lg
-                                              flex items-center justify-center
-                                              border border-slate-100 flex-shrink-0
-                                              text-xs font-black text-slate-500">
-                                {sub.student_name?.[0] ?? "?"}
-                              </div>
+                              <SubmissionAvatar sub={sub}
+                                className="w-8 h-8 rounded-lg flex-shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <p className="text-xs font-bold text-slate-700 truncate">
-                                  {sub.student_name}
+                                  {sub.student_name ?? "Estudiante"}
                                 </p>
-                                {sub.grade?.score !== undefined && (
+                                {sub.score !== null && sub.score !== undefined && (
                                   <p className="text-[10px] text-amber-600 font-black">
-                                    Nota: {sub.grade.score}/10
+                                    Nota: {sub.score}/10
                                   </p>
                                 )}
                               </div>
@@ -565,7 +646,7 @@ export default function HomeworkPage() {
                                            bg-pink-50 hover:bg-pink-100 px-3 py-1.5
                                            rounded-xl transition-colors flex-shrink-0"
                               >
-                                {sub.status === "Graded" ? "Editar" : "Calificar"}
+                                {sub.status === "graded" ? "Editar" : "Calificar"}
                               </button>
                             </div>
                           );
@@ -581,79 +662,162 @@ export default function HomeworkPage() {
 
         {/* ─── Tab: Crear ─── */}
         {tab === "create" && (
-          <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
-                          border border-white shadow-2xl shadow-slate-200/50
-                          p-6 sm:p-8 animate-in fade-in slide-in-from-bottom-4
-                          duration-500 space-y-5 max-w-2xl">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 animate-in fade-in
+                          slide-in-from-bottom-4 duration-500">
 
-            <div className="absolute top-0 right-0 w-48 h-48 bg-pink-300/10
-                            rounded-full blur-[80px] pointer-events-none" />
+            {/* Columna izquierda: datos de la tarea */}
+            <div className="lg:col-span-2 bg-white/80 backdrop-blur-xl rounded-[2rem]
+                border border-white shadow-2xl shadow-slate-200/50
+                p-6 sm:p-8 space-y-5 relative h-fit">
 
-            {/* Título */}
-            <div className="group">
-              <label className="text-[10px] font-black text-slate-400
-                                uppercase tracking-widest block mb-1.5">
-                Título de la tarea
-              </label>
+              {/* Si quieres evitar que el brillo decorativo sobresalga de los bordes redondeados,
+                  puedes envolverlo en su propio contenedor con overflow-hidden así: */}
+              <div className="absolute inset-0 rounded-[2rem] overflow-hidden pointer-events-none">
+                <div className="absolute top-0 right-0 w-48 h-48 bg-pink-300/10
+                                rounded-full blur-[80px]" />
+              </div>
+
+              <div className="flex items-center gap-2 relative">
+                <FileText className="w-4 h-4 text-pink-500" />
+                <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                  Detalles de la tarea
+                </h2>
+              </div>
+
+              <div className="group relative">
+                <label className="text-[10px] font-black text-slate-400
+                                  uppercase tracking-widest block mb-1.5">
+                  Título de la tarea
+                </label>
+                <div className="relative">
+                  <ClipboardList className="absolute left-3.5 top-1/2 -translate-y-1/2
+                                             w-5 h-5 text-slate-400
+                                             group-focus-within:text-pink-500
+                                             transition-colors" />
+                  <input
+                    value={hwTitle}
+                    onChange={e => setHwTitle(e.target.value)}
+                    placeholder="Ej: Ejercicios de Present Perfect"
+                    className="w-full bg-slate-50 border-2 border-transparent
+                               rounded-xl text-sm font-bold text-slate-800
+                               placeholder:text-slate-400 pl-11 pr-4 py-3.5
+                               focus:outline-none focus:bg-white
+                               focus:border-pink-500 focus:ring-4 focus:ring-pink-50
+                               transition-all duration-300"
+                  />
+                </div>
+              </div>
+
               <div className="relative">
-                <ClipboardList className="absolute left-3.5 top-1/2 -translate-y-1/2
-                                           w-5 h-5 text-slate-400
-                                           group-focus-within:text-pink-500
-                                           transition-colors" />
+                <label className="text-[10px] font-black text-slate-400
+                                  uppercase tracking-widest block mb-1.5">
+                  Instrucciones
+                </label>
+                <textarea
+                  value={hwContent}
+                  onChange={e => setHwContent(e.target.value)}
+                  rows={5}
+                  placeholder="Describe lo que debe hacer el estudiante..."
+                  className="w-full bg-slate-50 border-2 border-transparent
+                             rounded-xl text-sm font-medium text-slate-800
+                             placeholder:text-slate-400 px-4 py-3.5
+                             focus:outline-none focus:bg-white
+                             focus:border-pink-500 focus:ring-4 focus:ring-pink-50
+                             transition-all duration-300 resize-none"
+                />
+              </div>
+
+              <div className="relative">
+                <label className="text-[10px] font-black text-slate-400
+                                  uppercase tracking-widest block mb-1.5">
+                  Fecha límite
+                </label>
+                <DatePicker value={hwDue} onChange={setHwDue} />
+              </div>
+
+              {createError && (
+                <div className="bg-rose-50 border border-rose-100 text-rose-600
+                                px-4 py-3 rounded-xl text-xs font-bold
+                                flex items-center gap-2">
+                  <X className="w-4 h-4 flex-shrink-0" />
+                  {createError}
+                </div>
+              )}
+
+              <button
+                onClick={createHomework}
+                disabled={!hwTitle || !hwContent || !hwDue
+                          || !hwStudents.length || creating}
+                className="w-full py-3.5 text-sm font-bold text-white rounded-xl
+                           bg-gradient-to-r from-pink-500 to-rose-400
+                           hover:from-pink-600 hover:to-rose-500
+                           shadow-lg shadow-pink-200 hover:shadow-pink-300
+                           active:scale-[0.98] transition-all duration-300
+                           disabled:opacity-50 disabled:cursor-not-allowed
+                           flex items-center justify-center gap-2"
+              >
+                {creating ? (
+                  <div className="w-4 h-4 border-2 border-white/40
+                                  border-t-white rounded-full animate-spin" />
+                ) : (
+                  <><Send className="w-4 h-4" /> Crear y asignar tarea</>
+                )}
+              </button>
+            </div>
+
+            {/* Columna derecha: asignar estudiantes con buscador + avatar */}
+            <div className="lg:col-span-3 bg-white/80 backdrop-blur-xl rounded-[2rem]
+                            border border-white shadow-2xl shadow-slate-200/50
+                            p-6 sm:p-8 space-y-4">
+
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-purple-500" />
+                  <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                    Asignar a estudiantes
+                  </h2>
+                </div>
+                {hwStudents.length > 0 && (
+                  <span className="text-xs font-bold text-pink-600 bg-pink-50
+                                   px-3 py-1 rounded-full">
+                    {hwStudents.length} seleccionado{hwStudents.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+
+              <div className="group relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2
+                                    w-4 h-4 text-slate-400
+                                    group-focus-within:text-pink-500
+                                    transition-colors pointer-events-none" />
                 <input
-                  value={hwTitle}
-                  onChange={e => setHwTitle(e.target.value)}
-                  placeholder="Ej: Ejercicios de Present Perfect"
+                  value={studentSearch}
+                  onChange={e => setStudentSearch(e.target.value)}
+                  placeholder="Buscar por nombre o usuario..."
                   className="w-full bg-slate-50 border-2 border-transparent
                              rounded-xl text-sm font-bold text-slate-800
-                             placeholder:text-slate-400 pl-11 pr-4 py-3.5
+                             placeholder:text-slate-400 pl-10 pr-4 py-3
                              focus:outline-none focus:bg-white
                              focus:border-pink-500 focus:ring-4 focus:ring-pink-50
                              transition-all duration-300"
                 />
               </div>
-            </div>
 
-            {/* Instrucciones */}
-            <div>
-              <label className="text-[10px] font-black text-slate-400
-                                uppercase tracking-widest block mb-1.5">
-                Instrucciones
-              </label>
-              <textarea
-                value={hwContent}
-                onChange={e => setHwContent(e.target.value)}
-                rows={5}
-                placeholder="Describe lo que debe hacer el estudiante..."
-                className="w-full bg-slate-50 border-2 border-transparent
-                           rounded-xl text-sm font-medium text-slate-800
-                           placeholder:text-slate-400 px-4 py-3.5
-                           focus:outline-none focus:bg-white
-                           focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                           transition-all duration-300 resize-none"
-              />
-            </div>
-
-            {/* Fecha límite */}
-            <div>
-              <label className="text-[10px] font-black text-slate-400
-                                uppercase tracking-widest block mb-1.5">
-                Fecha límite
-              </label>
-              <DatePicker value={hwDue} onChange={setHwDue} />
-            </div>
-
-            {/* Asignar estudiantes */}
-            <div>
-              <label className="text-[10px] font-black text-slate-400
-                                uppercase tracking-widest block mb-2">
-                Asignar a estudiantes
-              </label>
               {students.length === 0 ? (
-                <p className="text-sm text-slate-400">Cargando estudiantes...</p>
+                <div className="text-center py-10">
+                  <Users className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                  <p className="text-sm text-slate-400 font-bold">
+                    Aún no tienes estudiantes asignados
+                  </p>
+                </div>
+              ) : filteredStudents.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-8">
+                  Sin resultados para "{studentSearch}"
+                </p>
               ) : (
-                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                  {students.map(s => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[420px]
+                                overflow-y-auto pr-1">
+                  {filteredStudents.map(s => (
                     <button
                       key={s.id}
                       onClick={() => toggleStudent(s.id)}
@@ -664,14 +828,7 @@ export default function HomeworkPage() {
                           : "border-slate-100 bg-white hover:border-slate-200"
                         }`}
                     >
-                      <div className={`w-8 h-8 rounded-xl flex items-center
-                        justify-center text-xs font-black flex-shrink-0
-                        ${hwStudents.includes(s.id)
-                          ? "bg-pink-500 text-white"
-                          : "bg-slate-100 text-slate-500"
-                        }`}>
-                        {s.name[0]}{s.surname[0]}
-                      </div>
+                      <StudentAvatar s={s} className="w-9 h-9 rounded-xl flex-shrink-0 text-xs" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-slate-800 truncate">
                           {s.name} {s.surname}
@@ -685,36 +842,11 @@ export default function HomeworkPage() {
                   ))}
                 </div>
               )}
-              {hwStudents.length > 0 && (
-                <p className="text-xs text-pink-600 font-bold mt-2">
-                  {hwStudents.length} estudiante{hwStudents.length !== 1 ? "s" : ""} seleccionado{hwStudents.length !== 1 ? "s" : ""}
-                </p>
-              )}
             </div>
-
-            <button
-              onClick={createHomework}
-              disabled={!hwTitle || !hwContent || !hwDue
-                        || !hwStudents.length || creating}
-              className="w-full py-3.5 text-sm font-bold text-white rounded-xl
-                         bg-gradient-to-r from-pink-500 to-rose-400
-                         hover:from-pink-600 hover:to-rose-500
-                         shadow-lg shadow-pink-200 hover:shadow-pink-300
-                         active:scale-[0.98] transition-all duration-300
-                         disabled:opacity-50 disabled:cursor-not-allowed
-                         flex items-center justify-center gap-2"
-            >
-              {creating ? (
-                <div className="w-4 h-4 border-2 border-white/40
-                                border-t-white rounded-full animate-spin" />
-              ) : (
-                <><Send className="w-4 h-4" /> Crear y asignar tarea</>
-              )}
-            </button>
           </div>
         )}
       </div>
-      <ChipiWidget screenName="homework" />   
+      <ChipiWidget screenName="homework" />
       {gradeTarget && (
         <GradeModal
           submission={gradeTarget}

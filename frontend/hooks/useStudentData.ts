@@ -51,16 +51,23 @@ export interface StudentMaterial {
 export interface StudentHomework {
   id: number;
   homework_id: number;
-  title: string;
-  content: string;
-  date_due: string;
-  status: string;
+  student_id: number;
+  status: string; // "pending" | "submitted" | "graded"
   submission: string | null;
-  grade: {
-    score?: number;
-    feedback?: string;
-    graded_at?: string;
-  } | null;
+  submitted_at: string | null;
+  score: number | null;
+  feedback: string | null;
+  graded_at: string | null;
+  assigned_at: string;
+  homework: {
+    id: number;
+    teacher_id: number;
+    title: string;
+    description: string;
+    due_date_utc: string;
+    is_active: boolean;
+    created_at: string;
+  };
 }
 
 // ─── Resolución del profesor según el modo de la plataforma ──────────────────

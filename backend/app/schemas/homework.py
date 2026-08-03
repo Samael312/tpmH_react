@@ -38,6 +38,9 @@ class HomeworkAssignmentResponse(BaseModel):
     graded_at: Optional[datetime]
     assigned_at: datetime
     homework: HomeworkResponse
+    student_name: Optional[str] = None
+    student_username: Optional[str] = None
+    student_avatar: Optional[str] = None
 
     class Config:
         from_attributes = True

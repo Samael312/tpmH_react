@@ -95,9 +95,33 @@ def get_homework_submissions(
             detail="Tarea no encontrada"
         )
 
-    return db.query(HomeworkAssignment).filter(
+    assignments = db.query(HomeworkAssignment).filter(
         HomeworkAssignment.homework_id == homework_id
     ).all()
+
+    homework_out = HomeworkResponse.model_validate(homework)
+
+    result = []
+    for a in assignments:
+        student_user = a.student.user if a.student else None
+        result.append(HomeworkAssignmentResponse(
+            id=a.id,
+            homework_id=a.homework_id,
+            student_id=a.student_id,
+            status=a.status,
+            submission=a.submission,
+            submitted_at=a.submitted_at,
+            score=a.score,
+            feedback=a.feedback,
+            graded_at=a.graded_at,
+            assigned_at=a.assigned_at,
+            homework=homework_out,
+            student_name=f"{student_user.name} {student_user.surname}" if student_user else None,
+            student_username=student_user.username if student_user else None,
+            student_avatar=(student_user.avatar if student_user else None) or (a.student.profile_photo_url if a.student else None),
+        ))
+
+    return result
 
 
 @router.patch(

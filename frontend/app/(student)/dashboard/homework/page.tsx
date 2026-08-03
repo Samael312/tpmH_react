@@ -16,19 +16,19 @@ const STATUS_CONFIG: Record<string, {
   border: string;
   icon: React.ReactNode;
 }> = {
-  Pending: {
+  pending: {
     label: "Pendiente",
     badge: "bg-amber-100 text-amber-700",
     border: "border-l-amber-400",
     icon: <Clock className="w-3.5 h-3.5" />,
   },
-  Submitted: {
+  submitted: {
     label: "Entregada",
     badge: "bg-blue-100 text-blue-700",
     border: "border-l-blue-400",
     icon: <Send className="w-3.5 h-3.5" />,
   },
-  Graded: {
+  graded: {
     label: "Calificada",
     badge: "bg-emerald-100 text-emerald-700",
     border: "border-l-emerald-400",
@@ -68,7 +68,7 @@ function SubmitModal({
     }
   };
 
-  const dueDate = new Date(hw.date_due + "T00:00:00");
+  const dueDate = new Date(hw.homework.due_date_utc);
   const isOverdue = dueDate < new Date();
 
   return (
@@ -83,20 +83,18 @@ function SubmitModal({
                       border border-white p-8 animate-in fade-in zoom-in-95
                       duration-200 max-h-[90vh] overflow-y-auto"
       >
-        {/* Blob */}
         <div
           className="absolute top-0 right-0 w-48 h-48 bg-pink-300/20
                         rounded-full blur-[80px] pointer-events-none"
         />
 
-        {/* Header */}
         <div className="flex items-start justify-between mb-5">
           <div>
             <h2 className="text-xl font-black text-slate-800 tracking-tight">
-              {hw.status === "Submitted" ? "Editar entrega" : "Entregar tarea"}
+              {hw.status === "submitted" ? "Editar entrega" : "Entregar tarea"}
             </h2>
             <p className="text-sm text-slate-500 mt-0.5 line-clamp-1">
-              {hw.title}
+              {hw.homework.title}
             </p>
           </div>
           <button
@@ -109,7 +107,6 @@ function SubmitModal({
           </button>
         </div>
 
-        {/* Alerta vencida */}
         {isOverdue && (
           <div
             className="mb-5 bg-amber-50 border border-amber-100 rounded-xl
@@ -127,13 +124,12 @@ function SubmitModal({
           </div>
         )}
 
-        {/* Instrucciones */}
         <div className="bg-slate-50 rounded-2xl p-4 mb-5">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
             Instrucciones
           </p>
           <p className="text-sm text-slate-700 leading-relaxed">
-            {hw.content}
+            {hw.homework.description}
           </p>
         </div>
 
@@ -149,7 +145,6 @@ function SubmitModal({
           </div>
         ) : (
           <>
-            {/* Textarea */}
             <div className="mb-5">
               <label
                 className="text-[10px] font-black text-slate-400
@@ -174,7 +169,6 @@ function SubmitModal({
               </p>
             </div>
 
-            {/* Error */}
             {error && (
               <div
                 className="mb-4 bg-rose-50 border border-rose-100 text-rose-600
@@ -205,7 +199,7 @@ function SubmitModal({
               ) : (
                 <>
                   <Send className="w-4 h-4" />
-                  {hw.status === "Submitted"
+                  {hw.status === "submitted"
                     ? "Actualizar entrega"
                     : "Enviar tarea"}
                 </>
@@ -221,8 +215,8 @@ function SubmitModal({
 // ─── Card de tarea calificada (expandible) ────────────────────────────────────
 function GradedCard({ hw }: { hw: any }) {
   const [expanded, setExpanded] = useState(false);
-  const score = hw.grade?.score;
-  const feedback = hw.grade?.feedback;
+  const score = hw.score;
+  const feedback = hw.feedback;
 
   const scoreColor =
     score >= 8
@@ -244,12 +238,10 @@ function GradedCard({ hw }: { hw: any }) {
                     shadow-lg border-l-4 border-l-emerald-400
                     hover:shadow-xl transition-all duration-300"
     >
-      {/* Cabecera */}
       <button
         onClick={() => setExpanded((p) => !p)}
         className="w-full flex items-start gap-4 p-5 text-left"
       >
-        {/* Score */}
         <div
           className={`flex-shrink-0 w-14 h-14 rounded-2xl border-2
                           flex flex-col items-center justify-center ${scoreBg}`}
@@ -262,7 +254,7 @@ function GradedCard({ hw }: { hw: any }) {
 
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-slate-800 mb-1 line-clamp-1">
-            {hw.title}
+            {hw.homework.title}
           </p>
           <div className="flex items-center gap-2 flex-wrap">
             <span
@@ -273,9 +265,9 @@ function GradedCard({ hw }: { hw: any }) {
               <Star className="w-3 h-3" />
               Calificada
             </span>
-            {hw.grade?.graded_at && (
+            {hw.graded_at && (
               <span className="text-[10px] text-slate-400 font-bold">
-                {new Date(hw.grade.graded_at).toLocaleDateString("es", {
+                {new Date(hw.graded_at).toLocaleDateString("es", {
                   day: "numeric",
                   month: "short",
                 })}
@@ -291,14 +283,12 @@ function GradedCard({ hw }: { hw: any }) {
         />
       </button>
 
-      {/* Detalle expandido */}
       {expanded && (
         <div
           className="border-t border-slate-100 px-5 pb-5 pt-4
                         animate-in fade-in slide-in-from-top-2 duration-200"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            {/* Tu respuesta */}
             <div>
               <p
                 className="text-[10px] font-black text-slate-400 uppercase
@@ -313,7 +303,6 @@ function GradedCard({ hw }: { hw: any }) {
               </div>
             </div>
 
-            {/* Feedback */}
             <div>
               <p
                 className="text-[10px] font-black text-slate-400 uppercase
@@ -344,10 +333,10 @@ function HomeworkCard({
 }) {
   const cfg =
     STATUS_CONFIG[hw.status as keyof typeof STATUS_CONFIG] ??
-    STATUS_CONFIG.Pending;
+    STATUS_CONFIG.pending;
 
-  const dueDate = new Date(hw.date_due + "T00:00:00");
-  const isOverdue = dueDate < new Date() && hw.status === "Pending";
+  const dueDate = new Date(hw.homework.due_date_utc);
+  const isOverdue = dueDate < new Date() && hw.status === "pending";
   const daysLeft = Math.ceil(
     (dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   );
@@ -359,7 +348,6 @@ function HomeworkCard({
                     hover:shadow-xl transition-all duration-300`}
     >
       <div className="flex items-start gap-4 p-5">
-        {/* Icono */}
         <div
           className="w-11 h-11 bg-slate-50 rounded-xl flex items-center
                         justify-center flex-shrink-0"
@@ -370,7 +358,7 @@ function HomeworkCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 mb-2">
             <p className="text-sm font-bold text-slate-800 line-clamp-2 leading-snug">
-              {hw.title}
+              {hw.homework.title}
             </p>
           </div>
 
@@ -384,7 +372,6 @@ function HomeworkCard({
               {cfg.label}
             </span>
 
-            {/* Fecha vencimiento */}
             <span
               className={`text-[10px] font-black flex items-center gap-1
                               ${
@@ -406,26 +393,24 @@ function HomeworkCard({
             </span>
           </div>
 
-          {/* Preview instrucciones */}
           <p className="text-xs text-slate-500 line-clamp-2 mb-3 leading-relaxed">
-            {hw.content}
+            {hw.homework.description}
           </p>
 
-          {/* Acciones */}
           <div className="flex gap-2">
-            {hw.status !== "Graded" && (
+            {hw.status !== "graded" && (
               <button
                 onClick={onSubmit}
                 className={`flex items-center gap-1.5 text-xs font-bold
                                px-3.5 py-2 rounded-xl transition-colors
                                ${
-                                 hw.status === "Submitted"
+                                 hw.status === "submitted"
                                    ? "bg-blue-50 text-blue-600 hover:bg-blue-100"
                                    : "bg-pink-50 text-pink-600 hover:bg-pink-100"
                                }`}
               >
                 <Send className="w-3.5 h-3.5" />
-                {hw.status === "Submitted" ? "Editar entrega" : "Entregar"}
+                {hw.status === "submitted" ? "Editar entrega" : "Entregar"}
               </button>
             )}
           </div>
@@ -441,15 +426,14 @@ export default function StudentHomeworkPage() {
   const [tab, setTab] = useState<"pending" | "graded">("pending");
   const [submitTarget, setSubmitTarget] = useState<any | null>(null);
 
-  const pending = homeworks.filter((h) => h.status !== "Graded");
-  const graded  = homeworks.filter((h) => h.status === "Graded");
+  const pending = homeworks.filter((h) => h.status !== "graded");
+  const graded  = homeworks.filter((h) => h.status === "graded");
 
-  const pendingUnsent = pending.filter((h) => h.status === "Pending").length;
+  const pendingUnsent = pending.filter((h) => h.status === "pending").length;
   const displayed     = tab === "pending" ? pending : graded;
 
   return (
     <div className="min-h-screen bg-slate-50 relative overflow-hidden">
-      {/* Blobs */}
       <div
         className="fixed top-[-80px] right-[-80px] w-[500px] h-[500px]
                       bg-pink-300/20 rounded-full blur-[100px] pointer-events-none"
@@ -460,7 +444,6 @@ export default function StudentHomeworkPage() {
       />
 
       <div className="relative space-y-6">
-        {/* Header */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           <h1 className="text-3xl font-black text-slate-800 tracking-tight">
             Mis Tareas
@@ -470,7 +453,6 @@ export default function StudentHomeworkPage() {
           </p>
         </div>
 
-        {/* Stats rápidos */}
         <div
           className="grid grid-cols-3 gap-4 animate-in fade-in
                         slide-in-from-bottom-4 duration-500 delay-100"
@@ -484,7 +466,7 @@ export default function StudentHomeworkPage() {
             },
             {
               label: "Entregadas",
-              value: pending.filter((h) => h.status === "Submitted").length,
+              value: pending.filter((h) => h.status === "submitted").length,
               color: "text-blue-600",
               bg: "bg-blue-50 border-blue-100",
             },
@@ -509,7 +491,6 @@ export default function StudentHomeworkPage() {
           ))}
         </div>
 
-        {/* Tabs */}
         <div
           className="flex gap-1 bg-white/80 backdrop-blur-xl border
                         border-white rounded-2xl p-1 w-fit shadow-lg
@@ -537,7 +518,6 @@ export default function StudentHomeworkPage() {
           ))}
         </div>
 
-        {/* Lista */}
         <div
           className="animate-in fade-in slide-in-from-bottom-4 duration-500
                         delay-200 space-y-3"
@@ -587,7 +567,6 @@ export default function StudentHomeworkPage() {
         <ChipiWidget screenName="homework" />
       </div>
 
-      {/* Modal entregar */}
       {submitTarget && (
         <SubmitModal
           hw={submitTarget}
