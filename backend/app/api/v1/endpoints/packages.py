@@ -220,11 +220,33 @@ def get_my_enrollments(
 ):
     """
     Enrollments del estudiante.
-    Incluye activos, completados y en renovación.
+    Incluye activos, completados y en renovación, junto con el
+    nombre del profesor para mostrarlo en el dashboard.
     """
-    return db.query(Enrollment).filter(
+    enrollments = db.query(Enrollment).filter(
         Enrollment.student_id == current_user.student_profile.id
     ).order_by(Enrollment.created_at.desc()).all()
+
+    result = []
+    for e in enrollments:
+        teacher_user = e.teacher.user if e.teacher and e.teacher.user else None
+
+        result.append(EnrollmentResponse(
+            id=e.id,
+            student_id=e.student_id,
+            package_id=e.package_id,
+            teacher_id=e.teacher_id,
+            classes_used=e.classes_used,
+            classes_total=e.classes_total,
+            status=e.status,
+            renewal_count=e.renewal_count,
+            created_at=e.created_at,
+            package=PackageResponse.model_validate(e.package),
+            teacher_name=f"{teacher_user.name} {teacher_user.surname}" if teacher_user else None,
+            teacher_username=teacher_user.username if teacher_user else None,
+        ))
+
+    return result
 
 
 @router.post("/request-renewal")

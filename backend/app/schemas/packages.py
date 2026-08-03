@@ -63,6 +63,8 @@ class EnrollmentResponse(BaseModel):
     renewal_count: int
     created_at: datetime
     package: PackageResponse
+    teacher_name: Optional[str] = None
+    teacher_username: Optional[str] = None
 
     class Config:
         from_attributes = True

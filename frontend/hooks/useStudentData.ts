@@ -35,6 +35,8 @@ export interface StudentEnrollment {
   status: string;
   start_date: string;
   end_date: string | null;
+  teacher_name: string | null;
+  teacher_username: string | null;
 }
 
 export interface StudentMaterial {
