@@ -2,6 +2,7 @@
 
 import { Star, MessageCircle, Globe, Award, BookOpen, PlayCircle } from "lucide-react";
 import { shadeColor, DEFAULT_THEME_COLOR } from "@/lib/color";
+import { getFlagForNationality } from "@/lib/nationalities";
 
 export interface PublicProfileTeacher {
   user_username: string;
@@ -16,6 +17,7 @@ export interface PublicProfileTeacher {
   skills?: string[] | null;
   certificates?: { title: string; year: string }[] | null;
   social_links?: Record<string, string> | null;
+  nationality?: string | null;
   status?: string;
   theme_color?: string | null;
 }
@@ -135,7 +137,11 @@ export default function PublicProfileView({
                   <p className="text-white/90 text-base font-semibold">{teacher.title}</p>
                 )}
                 <p className="text-white/60 text-xs font-bold">@{teacher.user_username}</p>
-
+                {teacher.nationality && (
+                  <p className="text-white/80 text-xs font-bold flex items-center gap-1.5">
+                    {getFlagForNationality(teacher.nationality)} {teacher.nationality}
+                  </p>
+                )}
                 <div className="flex items-center gap-3 flex-wrap pt-2">
                   <div className="flex items-center gap-2 bg-white/15 backdrop-blur-md px-3.5 py-1.5 rounded-full shadow-inner">
                     <Star className="w-4 h-4 text-amber-300 fill-amber-300" />

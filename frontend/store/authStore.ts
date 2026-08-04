@@ -9,10 +9,10 @@ export interface User {
   surname: string;
   email: string;
   role: "superadmin" | "teacher" | "teacher_admin" | "student";
-  // Extended fields
   timezone?: string;
   goal?: string;
   phone_number?: string;
+  nationality?: string;
   preferred_payment_methods?: string[];
   onboarding_completed?: boolean;
   avatar_url?: string | null;

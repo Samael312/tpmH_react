@@ -12,6 +12,7 @@ class TeacherPublicResponse(BaseModel):
     user_username: str
     name: Optional[str] = None
     surname: Optional[str] = None
+    nationality: Optional[str] = None
     bio: Optional[str]
     title: Optional[str]
     timezone: Optional[str]

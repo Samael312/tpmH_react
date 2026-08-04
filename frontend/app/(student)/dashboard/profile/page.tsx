@@ -8,6 +8,7 @@ import {
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { COUNTRY_OPTIONS, DEFAULT_COUNTRY, parsePhoneNumber, CountryInfo } from "@/lib/timezones";
+import { NATIONALITIES, getFlagForNationality } from "@/lib/nationalities";
 
 // ─── Helpers & Formateadores de Errores ──────────────────────────────────────
 function formatErrorMessage(error: any, fallbackMessage: string): string {
@@ -148,7 +149,7 @@ function ProfileSkeleton() {
 // ─── Componente Principal ─────────────────────────────────────────────────────
 export default function StudentProfilePage() {
   const { user, setUser, logout } = useAuthStore();
-
+  const [nationality, setNationality] = useState("");
   const [profile, setProfile] = useState<any>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -192,7 +193,7 @@ export default function StudentProfilePage() {
   // Normalizador de datos (Maneja fallbacks de API)
   const populateFields = useCallback((userData: any, studentData: any) => {
     setProfile({ ...userData, studentProfile: studentData });
-
+    setNationality(userData.nationality ?? "");
     setUsername(userData.username ?? studentData.user_username ?? user?.username ?? "");
     setName(userData.name ?? "");
     setSurname(userData.surname ?? "");
@@ -263,7 +264,8 @@ export default function StudentProfilePage() {
           name,
           surname,
           email,
-          phone_number:fullPhone
+          phone_number:fullPhone,
+          nationality,
         }),
         api.patch("/users/me/student-profile", {
           timezone,
@@ -284,7 +286,9 @@ export default function StudentProfilePage() {
           surname: updatedUserData.surname ?? surname,
           email: updatedUserData.email ?? email,
           phone_number: updatedUserData.phone_number ?? fullPhone,
+          nationality: updatedUserData.nationality ?? nationality,
           ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+
         });
       }
 
@@ -489,6 +493,9 @@ export default function StudentProfilePage() {
                     <ReadField icon={<Mail className="w-3.5 h-3.5 text-slate-400" />} label="Correo electrónico" value={email} />
                     <ReadField icon={<Phone className="w-3.5 h-3.5 text-slate-400" />} label="Teléfono" value={phoneRest ? `${phoneCountry.dialCode} ${phoneRest}` : ""} />
                     <div className="sm:col-span-2">
+                      <ReadField label="Nacionalidad" value={nationality ? `${getFlagForNationality(nationality)} ${nationality}` : ""}/>
+                    </div>
+                    <div className="sm:col-span-2">
                       <ReadField icon={<Globe className="w-3.5 h-3.5 text-slate-400" />} label="Zona horaria" value={timezone} />
                     </div>
                   </div>
@@ -543,14 +550,14 @@ export default function StudentProfilePage() {
                   </div>
 
                   <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                    Teléfono
-                  </label>
-                  <div className="flex gap-2">
-                    <div className="relative w-28 flex-shrink-0">
-                      <div className="w-full h-full bg-slate-50 border-2 border-transparent rounded-xl px-3 py-3.5 flex items-center justify-between pointer-events-none font-bold text-slate-800">
-                        <span className="text-lg leading-none">{phoneCountry.flag}</span>
-                        <span className="text-sm font-black text-slate-600">{phoneCountry.dialCode}</span>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                      Teléfono
+                    </label>
+                    <div className="flex gap-2">
+                      <div className="relative w-28 flex-shrink-0">
+                        <div className="w-full h-full bg-slate-50 border-2 border-transparent rounded-xl px-3 py-3.5 flex items-center justify-between pointer-events-none font-bold text-slate-800">
+                          <span className="text-lg leading-none">{phoneCountry.flag}</span>
+                          <span className="text-sm font-black text-slate-600">{phoneCountry.dialCode}</span>
                       </div>
                       <select
                         value={phoneCountry.dialCode}
@@ -575,6 +582,23 @@ export default function StudentProfilePage() {
                       className={inputCls(false)}
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                    Nacionalidad
+                  </label>
+                  <select
+                    value={nationality}
+                    onChange={e => setNationality(e.target.value)}
+                    disabled={savingInfo}
+                    className={`${inputCls(false)} appearance-none cursor-pointer`}
+                  >
+                    <option value="">Seleccionar...</option>
+                    {NATIONALITIES.map(n => (
+                      <option key={n.code} value={n.name}>{n.flag} {n.name}</option>
+                    ))}
+                  </select>
                 </div>
 
                   <Field label="Zona horaria" icon={<Globe className="w-5 h-5" />}>

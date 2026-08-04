@@ -58,3 +58,7 @@ class TeacherProfile(Base):
     @property
     def surname(self) -> str | None:
         return self.user.surname if self.user else None
+
+    @property
+    def nationality(self) -> str | None:   # ← NUEVO
+        return self.user.nationality if self.user else None

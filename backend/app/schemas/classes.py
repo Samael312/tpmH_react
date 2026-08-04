@@ -87,6 +87,8 @@ class ClassResponse(BaseModel):
     teacher_timezone: Optional[str]
     student_timezone: Optional[str]
     created_at: datetime
+    teacher_nationality: Optional[str] = None
+    student_nationality: Optional[str] = None
     teacher_name: Optional[str] = None
     teacher_avatar: Optional[str] = None
     student_name: Optional[str] = None

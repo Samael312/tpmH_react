@@ -16,6 +16,7 @@ export interface User {
   onboarding_completed?: boolean;
   // Foto
   avatar_url?: string | null;
+  nationality?: string;
 }
 
 interface AuthState {

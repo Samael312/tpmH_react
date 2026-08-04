@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { User, Video, X, Clock, RotateCcw, Check, AlertCircle } from "lucide-react";
 import api from "@/lib/api";
+import { getFlagForNationality } from "@/lib/nationalities";
 
 export interface ClassCardData {
   id: number;
@@ -17,6 +18,8 @@ export interface ClassCardData {
   teacher_name?: string | null;
   teacher_avatar?: string | null;
   student_name?: string | null;
+  teacher_nationality?: string | null;
+  student_nationality?: string | null;
   student_avatar?: string | null;
 }
 
@@ -87,6 +90,7 @@ export default function ClassCard({
 
   const personName = role === "student" ? class_.teacher_name : class_.student_name;
   const personAvatar = role === "student" ? class_.teacher_avatar : class_.student_avatar;
+  const personNationality = role === "student" ? class_.teacher_nationality : class_.student_nationality;
   const personLabel = role === "student" ? "Prof." : "Est.";
 
   // --- LÓGICA DE API ---
@@ -199,6 +203,11 @@ export default function ClassCard({
                 <span className="flex items-center gap-1.5 text-slate-500">
                   <PersonAvatar name={personName} url={personAvatar} className="w-5 h-5 rounded-full flex-shrink-0" />
                   {personLabel}: <strong className="text-slate-700 truncate max-w-[120px]">{personName}</strong>
+                  {personNationality && (
+                    <span className="text-[10px] font-bold text-slate-400 ml-0.5">
+                      {getFlagForNationality(personNationality)} {personNationality}
+                    </span>
+                  )}
                 </span>
               )}
             </div>

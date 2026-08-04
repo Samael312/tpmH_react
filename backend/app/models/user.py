@@ -22,6 +22,7 @@ class User(Base):
     surname = Column(String, nullable=False)
     avatar = Column(String, nullable=True)
     phone_number = Column(String, nullable=True, unique=True) # <-- FUENTE ÚNICA DE VERDAD
+    nationality = Column(String, nullable=True) 
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
     google_id = Column(String, nullable=True, unique=True)

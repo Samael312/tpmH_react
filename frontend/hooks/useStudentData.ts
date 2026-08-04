@@ -13,6 +13,7 @@ export interface StudentClass {
   teacher_avatar?: string | null;
   teacher_name: string;
   teacher_username: string;
+  teacher_nationality: string | null;
   package_name: string | null;
   class_count: string | null;
 }

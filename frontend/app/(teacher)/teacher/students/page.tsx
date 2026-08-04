@@ -8,6 +8,7 @@ import {
 import { useTeacherStudentsFull, TeacherStudentFull } from "@/hooks/useTeacherData";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { SUBJECTS, LANGUAGES } from "@/lib/teacherOptions";
+import { getFlagForNationality } from "@/lib/nationalities";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "Todos los estados" },
@@ -88,7 +89,13 @@ function StudentCard({ student }: { student: TeacherStudentFull }) {
                 <Phone className="w-3.5 h-3.5 text-slate-400" /> {student.phone_number}
               </span>
             )}
+            {student.nationality && (
+              <span className="flex items-center gap-1">
+                {getFlagForNationality(student.nationality)} {student.nationality}
+              </span>
+            )}
           </div>
+          
         </div>
 
         {/* Estado + progreso resumen */}

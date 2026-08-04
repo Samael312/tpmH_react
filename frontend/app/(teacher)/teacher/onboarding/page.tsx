@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
+import { NATIONALITIES } from "@/lib/nationalities";
 
 // ─── Constantes ─────────────────────────────────────────────────────────────
 import {
@@ -177,6 +178,8 @@ interface StepProfileProps {
   setBio: (v: string) => void;
   timezone: string;
   setTimezone: (v: string) => void;
+  nationality: string;
+  setNationality: (v: string) => void;
   country: CountryInfo;
   setCountry: (v: CountryInfo) => void;
   phone: string;
@@ -188,10 +191,10 @@ interface StepProfileProps {
 function StepProfile({
   photoPreview, setPhotoPreview, setPhotoFile,
   title_, setTitle_, bio, setBio, timezone, setTimezone,
-  country, setCountry, phone, setPhone,
+  country, setCountry, phone, setPhone, nationality, setNationality,
   onNext, onBack,
 }: StepProfileProps) {
-  const valid = Boolean(title_.trim() && bio.trim() && timezone && phone.trim());
+  const valid = Boolean(title_.trim() && bio.trim() && timezone && phone.trim() && nationality);
 
   const COUNTRY_OPTIONS = useMemo(() => {
     const map = new Map<string, CountryInfo>();
@@ -722,7 +725,7 @@ function StepSuccess({ name }: { name: string }) {
 export default function TeacherOnboardingPage() {
   const router   = useRouter();
   const { user, setUser } = useAuthStore();
-
+  const [nationality, setNationality] = useState("");
   const [step, setStep] = useState(1);
   const TOTAL_STEPS = 6;
 
@@ -775,7 +778,7 @@ export default function TeacherOnboardingPage() {
       const dialCode = country.dialCode || DEFAULT_COUNTRY.dialCode;
       const fullPhone = `${dialCode} ${phone.trim()}`.trim();
 
-      await api.patch("/users/me", { phone_number: fullPhone });
+      await api.patch("/users/me", { phone_number: fullPhone, nationality });
 
       // 2. Guardar perfil del profesor incluyendo el teléfono del paso 2 como whatsapp en social_links
       await api.patch("/teachers/me/profile", {
@@ -846,7 +849,7 @@ export default function TeacherOnboardingPage() {
               timezone={timezone} setTimezone={setTimezone}
               country={country} setCountry={setCountry}
               phone={phone} setPhone={setPhone}
-              onNext={next} onBack={back}
+              onNext={next} onBack={back} nationality={nationality} setNationality={setNationality}
             />
           )}
           {step === 3 && (

@@ -14,6 +14,7 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 import CalendarSync from "./CalendarSync";
 import { SUBJECTS, LANGUAGES, SKILL_SUGGESTIONS } from "@/lib/teacherOptions";
 import { COUNTRY_OPTIONS, DEFAULT_COUNTRY, parsePhoneNumber, CountryInfo, TIMEZONE_OPTIONS } from "@/lib/timezones";
+import { NATIONALITIES, getFlagForNationality } from "@/lib/nationalities";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 function formatErrorMessage(error: any, fallbackMessage: string): string {
@@ -31,10 +32,16 @@ type TeacherProfileWithPhoto = TeacherProfile & {
   video_url?: string | null;
   theme_color?: string | null;
   status?: string;
+  nationality?: string | null;
 };
 
 const inputCls = (withIcon = true) =>
   `w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 ${
+    withIcon ? "pl-11" : "px-4"
+  } pr-4 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed`;
+
+const inputDif = (withIcon = true) =>
+  `w-full bg-slate-200 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 ${
     withIcon ? "pl-11" : "px-4"
   } pr-4 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed`;
 
@@ -413,7 +420,7 @@ export default function TeacherProfilePage() {
   const profile = rawProfile as TeacherProfileWithPhoto | null;
   const { logout } = useAuthStore();
   const user = useAuthStore(state => state.user);
-
+  const [nationality, setNationality] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [infoFeedback, setInfoFeedback] = useState<{ msg: string; type: "success" | "error" } | null>(null);
@@ -455,6 +462,7 @@ export default function TeacherProfilePage() {
     setPhoneCountry(country);
     setPhoneRest(rest);
     setBio(prof.bio ?? "");
+    setNationality(prof.nationality ?? "");
     setTitle_(prof.title ?? "");
     setTimezone(prof.timezone ?? "");
     setLanguages(prof.languages ?? []);
@@ -474,6 +482,7 @@ export default function TeacherProfilePage() {
       const res = await api.get("/users/me");
       if (profile) populateFields(profile, res.data.phone_number ?? "");
       if (res.data.avatar) setPhotoUrl(res.data.avatar);
+      if (res.data.nationality) setNationality(res.data.nationality);
     } catch {
       if (profile) populateFields(profile, "");
     } finally {
@@ -531,6 +540,7 @@ export default function TeacherProfilePage() {
         bio, title: title_, timezone, languages, subjects, skills,
         certificates: certificates.filter(c => c.title.trim()),
         social_links: socialLinks,
+        nationality: nationality || null
       });
       await refetch();
       setInfoFeedback({ msg: "Perfil actualizado correctamente", type: "success" });
@@ -682,6 +692,9 @@ export default function TeacherProfilePage() {
                     <ReadField icon={<Briefcase className="w-3.5 h-3.5 text-slate-400" />} label="Título profesional" value={title_} />
                     <ReadField icon={<Phone className="w-3.5 h-3.5 text-slate-400" />} label="Teléfono" value={phoneRest ? `${phoneCountry.dialCode} ${phoneRest}` : ""} />
                     <div className="sm:col-span-2">
+                    <ReadField label="Nacionalidad" value={nationality ? `${getFlagForNationality(nationality)} ${nationality}` : ""}/>
+                    </div>
+                    <div className="sm:col-span-2">
                       <ReadField icon={<Globe className="w-3.5 h-3.5 text-slate-400" />} label="Zona horaria" value={timezone} />
                     </div>
                   </div>
@@ -807,11 +820,33 @@ export default function TeacherProfilePage() {
                           onChange={e => setPhoneRest(e.target.value)}
                           disabled={saving}
                           placeholder="412 000 0000"
-                          className={inputCls(false)}
+                          className={inputDif(false)}
+                          
                         />
                       </div>
                     </div>
+
                     <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                        Nacionalidad
+                      </label>
+                      <select
+                        value={nationality}
+                        onChange={e => setNationality(e.target.value)}
+                        disabled={saving}
+                        className={`${inputCls(false)} appearance-none cursor-pointer`}
+                      >
+                        <option value="">Seleccionar...</option>
+                        {NATIONALITIES.map(n => (
+                          <option key={n.code} value={n.name}>{n.flag} {n.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                  
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-1 gap-3.5"></div>
+                  <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Zona horaria</label>
                       <div className="relative group">
                         <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -830,9 +865,8 @@ export default function TeacherProfilePage() {
                         </select>
                         <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                       </div>
-                    </div>
+                    
                   </div>
-
                   <div className="pt-2 border-t border-slate-100 space-y-4">
                     <div className="flex items-center gap-2">
                       <BookOpen className="w-4 h-4 text-purple-500" />

@@ -5,6 +5,7 @@ import { AlertCircle, Loader2, BookOpen } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import PublicProfileView, { PublicProfileTeacher, PublicProfileReview } from "@/components/teacher/PublicProfileView";
+import { getFlagForNationality } from "@/lib/nationalities";
 
 export default function TeacherProfilePreviewPage() {
   const [teacher, setTeacher] = useState<PublicProfileTeacher | null>(null);

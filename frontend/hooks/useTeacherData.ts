@@ -17,8 +17,9 @@ export interface TeacherClass {
   teacher_timezone: string | null
   student_timezone: string | null
   created_at: string
-  student_name?: string | null    // NUEVO
+  student_name?: string | null    
   student_avatar?: string | null 
+  student_nationality?: string | null
 }
 
 export interface TeacherProfile {
@@ -94,6 +95,7 @@ export interface TeacherStudentFull {
   phone_number: string | null
   avatar: string | null
   timezone: string | null
+  nationality: string | null
   goal: string | null
   created_at: string
   enrollments: StudentEnrollmentSummary[]

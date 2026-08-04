@@ -103,13 +103,16 @@ def _build_class_responses(classes: list[Class], db: Session) -> list[ClassRespo
             (teacher_user.avatar if teacher_user else None)
             or (teacher.profile_photo_url if teacher else None)
         )
+        data["teacher_nationality"] = teacher_user.nationality if teacher_user else None  
         data["student_name"] = (
             f"{student_user.name} {student_user.surname}" if student_user else None
         )
+        
         data["student_avatar"] = (
             (student_user.avatar if student_user else None)
             or (student.profile_photo_url if student else None)
         )
+        data["student_nationality"] = student_user.nationality if student_user else None
         result.append(ClassResponse(**data))
 
     return result

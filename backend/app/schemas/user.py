@@ -24,6 +24,7 @@ class UserResponse(UserBase):
     timezone: Optional[str] = "UTC"
     goal: Optional[str] = None
     phone_number: Optional[str] = None
+    nationality: Optional[str] = None
     preferred_payment_methods: Optional[List[str]] = []
     onboarding_completed: bool = False
 
@@ -50,6 +51,7 @@ class UserUpdate(BaseModel):
     surname: Optional[str] = None
     phone_number: Optional[str] = None
     email: Optional[EmailStr] = None
+    nationality: Optional[str] = None
     onboarding_completed: Optional[bool] = None
 
 class StudentProfileUpdate(BaseModel):
@@ -57,7 +59,7 @@ class StudentProfileUpdate(BaseModel):
     goal: Optional[str] = None
     phone_number: Optional[str] = None
     preferred_payment_methods: Optional[List[str]] = None
-    
+    nationality: Optional[str] = None
 
 class UpdateProfileRequest(BaseModel):
     """
@@ -71,6 +73,7 @@ class UpdateProfileRequest(BaseModel):
     avatar: Optional[str] = None
     phone_number: Optional[str] = None
     timezone: Optional[str] = None
+    nationality: Optional[str] = None
     onboarding_completed: Optional[bool] = None
 
 class ChangePasswordRequest(BaseModel):

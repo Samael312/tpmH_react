@@ -234,6 +234,7 @@ def get_my_students_full(
             "name": u.name,
             "surname": u.surname,
             "email": u.email,
+            "nationality": u.nationality,
             "phone_number": u.phone_number,
             "avatar": u.avatar or sp.profile_photo_url,
             "timezone": sp.timezone,

@@ -12,6 +12,7 @@ import {
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { TIMEZONE_OPTIONS as TIMEZONES, TIMEZONE_TO_COUNTRY, DEFAULT_COUNTRY } from "@/lib/timezones";
+import { NATIONALITIES } from "@/lib/nationalities";
 
 const GOALS = [
   { text: "Conversaciones cotidianas", desc: "Hablar de temas del día a día", icon: "🗣️" },
@@ -160,6 +161,8 @@ function StepWelcome({ name, onNext }: { name: string; onNext: () => void }) {
 interface StepPreferencesProps {
   timezone: string;
   setTimezone: (tz: string) => void;
+  nationality: string;
+  setNationality: (v: string) => void;
   country: CountryInfo;
   setCountry: (country: CountryInfo) => void;
   goal: string;
@@ -178,12 +181,13 @@ function StepPreferences({
   country, setCountry,
   goal, setGoal,
   phone, setPhone,
+  nationality, setNationality,
   avatarPreview,
   onAvatarChange,
   onRemoveAvatar,
   onNext, onBack,
 }: StepPreferencesProps) {
-  const valid = Boolean(timezone && goal && phone.trim());
+  const valid = Boolean(timezone && goal && phone.trim() && nationality);
 
   const COUNTRY_OPTIONS = useMemo(() => {
     const map = new Map<string, CountryInfo>();
@@ -265,6 +269,25 @@ function StepPreferences({
                 <option key={tz.value} value={tz.value}>
                   {tz.flag} {tz.label} — {tz.value}
                 </option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">
+            Nacionalidad *
+          </label>
+          <div className="relative max-w-md">
+            <select
+              value={nationality}
+              onChange={(e) => setNationality(e.target.value)}
+              className="w-full appearance-none bg-slate-50 border-2 border-slate-100 rounded-xl text-base font-bold text-slate-800 pl-4 pr-10 py-4 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300 cursor-pointer"
+            >
+              <option value="">Seleccionar nacionalidad...</option>
+              {NATIONALITIES.map((n) => (
+                <option key={n.code} value={n.name}>{n.flag} {n.name}</option>
               ))}
             </select>
             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
@@ -639,7 +662,7 @@ function StepSuccess({ name }: { name: string }) {
 export default function OnboardingPage() {
   const router = useRouter();
   const { user, setUser } = useAuthStore();
-
+  const [nationality, setNationality] = useState("");
   const [step, setStep] = useState(1);
   const TOTAL_STEPS = 5;
 
@@ -688,7 +711,7 @@ export default function OnboardingPage() {
       const fullPhone = `${dialCode} ${phone.trim()}`.trim();
 
       // 1. Guardar teléfono
-      await api.patch("/users/me", { phone_number: fullPhone });
+      await api.patch("/users/me", { phone_number: fullPhone, nationality });
       
       // 2. Guardar foto de perfil si fue seleccionada
       if (avatarFile) {
@@ -770,6 +793,8 @@ export default function OnboardingPage() {
               setCountry={setCountry}
               goal={goal}
               setGoal={setGoal}
+              nationality={nationality}
+              setNationality={setNationality}
               phone={phone}
               setPhone={setPhone}
               avatarPreview={avatarPreview}
