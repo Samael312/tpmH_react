@@ -188,9 +188,12 @@ export default function ClassCard({
             {/* Tiempo y Persona */}
             <div className="flex items-center gap-3 text-xs font-semibold text-slate-500 flex-wrap mb-2">
               <span className="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-lg text-slate-600">
-                <Clock className="w-3.5 h-3.5 text-slate-400" />
-                {start.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })} ({duration} min)
-              </span>
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              {start.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
+              {" – "}
+              {endDate.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
+              {" "}({duration} min)
+            </span>
               
               {personName && (
                 <span className="flex items-center gap-1.5 text-slate-500">

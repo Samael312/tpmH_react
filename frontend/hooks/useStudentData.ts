@@ -29,15 +29,23 @@ export interface AvailableSlot {
 export interface StudentEnrollment {
   id: number;
   package_id: number;
-  package_name: string;
-  subject: string;
+  package: {
+    id: number;
+    name: string;
+    subject: string;
+    description: string | null;
+    classes_count: number | null;
+    price: number;
+    duration_minutes: number;
+    is_active: boolean;
+    created_at: string;
+  };
   classes_used: number;
   classes_total: number | null;
   status: string;
-  start_date: string;
-  end_date: string | null;
   teacher_name: string | null;
   teacher_username: string | null;
+  teacher_avatar: string | null;
 }
 
 export interface StudentMaterial {

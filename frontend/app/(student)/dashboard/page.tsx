@@ -124,7 +124,7 @@ export default function StudentDashboard() {
 
   const activeEnrollment = enrollments?.find(e => e.status === "active");
   const assignedTeacher = activeEnrollment?.teacher_name || upcoming[0]?.teacher_name || null;
-  const activeSubject = activeEnrollment?.subject || "Inglés General";
+  const activeSubject = activeEnrollment?.package?.subject || "General";
 
   const isGlobalLoading = stage === "loading" || classesLoading || enrollmentsLoading;
 
@@ -223,17 +223,32 @@ export default function StudentDashboard() {
                   </span>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                  {activeEnrollment.package_name}
+                  {activeEnrollment.package?.name}
                 </h2>
-                <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10 text-xs shadow-inner">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 to-purple-500 flex items-center justify-center font-black text-white shadow-md flex-shrink-0">
-                    {assignedTeacher ? assignedTeacher.charAt(0).toUpperCase() : <UserCheck className="w-4 h-4" />}
-                  </div>
-                  <div>
-                    <span className="text-slate-300 block text-[10px] uppercase font-black tracking-wider">Profesor Asignado</span>
-                    <span className="font-bold text-white text-sm">{assignedTeacher || "Por asignar"}</span>
+                
+                {/* Recuadro dentro de recuadro decorativo */}
+                <div className="p-2 bg-white/5 backdrop-blur-lg rounded-3xl border border-white/10 inline-block shadow-lg">
+                  <div className="w-full sm:w-80 bg-white/10 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/15 shadow-inner flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 shadow-md border-2 border-white/20 bg-gradient-to-tr from-pink-500 to-purple-500 flex items-center justify-center">
+                      {activeEnrollment.teacher_avatar ? (
+                        <img
+                          src={activeEnrollment.teacher_avatar}
+                          alt={assignedTeacher ?? "Profesor"}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="font-black text-white text-lg">
+                          {assignedTeacher ? assignedTeacher.charAt(0).toUpperCase() : <UserCheck className="w-5 h-5" />}
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-slate-300 block text-[10px] uppercase font-black tracking-wider">Profesor Asignado</span>
+                      <span className="font-bold text-white text-base truncate block">{assignedTeacher || "Por asignar"}</span>
+                    </div>
                   </div>
                 </div>
+
               </div>
 
               <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/10 min-w-[260px] space-y-3">

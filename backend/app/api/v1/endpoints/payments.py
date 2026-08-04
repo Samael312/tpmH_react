@@ -272,12 +272,18 @@ def book_class(
         if not can_book:
             raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
 
+        trial_subject = (
+            (teacher.subjects[0] if teacher.subjects else None)
+            or (teacher.languages[0] if teacher.languages else None)
+            or "Clase de prueba"
+        )
+
         trial_class = Class(
             enrollment_id=None,
             teacher_id=teacher.id,
             student_id=student_id,
             class_type=ClassType.trial,
-            subject="Clase de prueba",
+            subject=trial_subject,
             start_time_utc=trial_start,
             end_time_utc=trial_end,
             duration=30,
@@ -331,6 +337,7 @@ def book_class(
         teacher_id=enrollment.teacher_id,
         student_id=student_id,
         class_type=ClassType.regular,
+        subject=enrollment.package.subject,
         start_time_utc=data.start_time_utc,
         end_time_utc=data.end_time_utc,
         duration=data.duration_minutes,

@@ -243,6 +243,8 @@ def get_my_enrollments(
             created_at=e.created_at,
             package=PackageResponse.model_validate(e.package),
             teacher_name=f"{teacher_user.name} {teacher_user.surname}" if teacher_user else None,
+            teacher_avatar=(teacher_user.avatar if teacher_user else None)
+            or (e.teacher.profile_photo_url if e.teacher else None),
             teacher_username=teacher_user.username if teacher_user else None,
         ))
 
