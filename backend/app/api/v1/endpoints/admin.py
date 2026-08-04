@@ -208,6 +208,9 @@ def list_all_teachers(
             total_classes=total_classes,
             total_students=total_students,
             created_at=teacher.created_at,
+            video_url=teacher.video_url,
+            profile_photo_url=teacher.profile_photo_url,
+            theme_color=teacher.theme_color
         ))
 
     return result
@@ -243,6 +246,13 @@ def update_teacher_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Estado inválido: {data.status}"
         )
+
+    if new_status == TeacherStatus.approved and not teacher.video_url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El profesor debe subir su video de presentación antes de poder ser aprobado"
+        )
+
 
     old_status = teacher.status
     teacher.status = new_status

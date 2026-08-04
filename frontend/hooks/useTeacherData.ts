@@ -24,6 +24,8 @@ export interface TeacherClass {
 export interface TeacherProfile {
   id: number
   user_username: string
+  name?: string | null
+  surname?: string | null
   bio: string | null
   title: string | null
   timezone: string | null
@@ -36,6 +38,8 @@ export interface TeacherProfile {
   status: string
   commission_rate: number
   balance: number
+  video_url?: string | null
+  theme_color?: string | null
 }
 
 export interface WeeklySlot {

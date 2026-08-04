@@ -49,8 +49,8 @@ ALL_ALLOWED_TYPES = (
     ALLOWED_AUDIO_TYPES
 )
 
-# Tamaño máximo: 50MB
-MAX_FILE_SIZE = 50 * 1024 * 1024
+# Tamaño máximo: 150MB
+MAX_FILE_SIZE = 150 * 1024 * 1024
 
 def _slugify(text: str) -> str:
     """Convierte un texto en un nombre de archivo seguro para Cloudinary"""
@@ -84,7 +84,7 @@ def upload_file(
         raise ValueError(f"Tipo de archivo no permitido: {content_type}")
 
     if len(file_bytes) > MAX_FILE_SIZE:
-        raise ValueError("El archivo supera el tamaño máximo de 50MB")
+        raise ValueError("El archivo supera el tamaño máximo de 150MB")
 
     ext = filename.rsplit(".", 1)[-1] if "." in filename else ""
     base_name = _slugify(display_name) if display_name else _slugify(filename.rsplit(".", 1)[0])

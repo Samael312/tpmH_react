@@ -36,10 +36,25 @@ class TeacherProfile(Base):
     profile_photo_url = Column(String, nullable=True)
     profile_photo_public_id = Column(String, nullable=True)
 
+    # ─── Video de presentación (obligatorio para aprobación) ───
+    video_url = Column(String, nullable=True)
+    video_public_id = Column(String, nullable=True)
+
+    # ─── Personalización visual del perfil público ───
+    theme_color = Column(String, nullable=True, default="#ec4899")
+
     # Relaciones
     user = relationship("User", back_populates="teacher_profile", foreign_keys="TeacherProfile.user_id")
     packages = relationship("Package", back_populates="teacher")
     availability = relationship("TeacherAvailability", back_populates="teacher")
     availability_exceptions = relationship("TeacherAvailabilityException", back_populates="teacher")
     enrollments = relationship("Enrollment", back_populates="teacher")
-    
+
+    # ─── Propiedades derivadas del usuario, expuestas en los schemas ───
+    @property
+    def name(self) -> str | None:
+        return self.user.name if self.user else None
+
+    @property
+    def surname(self) -> str | None:
+        return self.user.surname if self.user else None

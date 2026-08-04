@@ -50,6 +50,8 @@ class TeacherAdminResponse(BaseModel):
     total_classes: int
     total_students: int
     created_at: datetime
+    video_url: Optional[str] = None
+    theme_color: Optional[str] = None
 
     class Config:
         from_attributes = True

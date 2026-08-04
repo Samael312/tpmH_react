@@ -212,7 +212,7 @@ El profesor puede:
 - Subir PDF, imágenes o documentos
 - Crear sets de vocabulario interactivo
 - Asignar materiales a estudiantes específicos
-Tamaño máximo: 50MB por archivo.
+Tamaño máximo: 150MB por archivo.
 """,
 
     # Superadmin

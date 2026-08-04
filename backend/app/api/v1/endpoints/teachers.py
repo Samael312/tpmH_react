@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, logger, status, Query
+from fastapi import APIRouter, Depends, HTTPException, logger, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional 
 from app.db.base import get_db
@@ -244,4 +244,70 @@ def get_my_students_full(
         })
 
     return result
+
+@router.post("/me/video")
+async def upload_teacher_video(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_teacher),
+    db: Session = Depends(get_db),
+):
+    """
+    Sube (o reemplaza) el video de presentación del profesor.
+    Es un requisito obligatorio para que el superadmin pueda aprobar el perfil.
+    """
+    profile = current_user.teacher_profile
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil no encontrado")
+
+    file_bytes = await file.read()
+    try:
+        result = upload_file(
+            file_bytes=file_bytes,
+            filename=file.filename,
+            content_type=file.content_type,
+            folder=f"teacher_videos/teacher_{profile.id}",
+            display_name=f"presentacion_{profile.user_username}",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    # Borrar el video anterior de Cloudinary si existía
+    if profile.video_public_id:
+        try:
+            delete_file(profile.video_public_id, resource_type="video")
+        except Exception:
+            pass
+
+    profile.video_url = result["url"]
+    profile.video_public_id = result["public_id"]
+    db.commit()
+    db.refresh(profile)
+
+    return {
+        "message": "Video subido correctamente. Tu perfil está en revisión por el equipo.",
+        "video_url": profile.video_url,
+    }
+
+
+@router.delete("/me/video")
+def delete_teacher_video(
+    current_user: User = Depends(get_current_teacher),
+    db: Session = Depends(get_db),
+):
+    """Elimina el video de presentación del profesor."""
+    profile = current_user.teacher_profile
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil no encontrado")
+
+    if profile.video_public_id:
+        try:
+            delete_file(profile.video_public_id, resource_type="video")
+        except Exception:
+            pass
+
+    profile.video_url = None
+    profile.video_public_id = None
+    db.commit()
+
+    return {"message": "Video eliminado"}
 

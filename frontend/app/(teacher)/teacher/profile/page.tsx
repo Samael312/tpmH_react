@@ -4,16 +4,16 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   User, Briefcase, Globe, MapPin, Link2, MessageCircle, Plus,
   X, Check, Save, Upload, Award, BookOpen, ChevronDown, ExternalLink,
-  AlertTriangle, Phone, Lock, Eye, EyeOff, Trash2, Edit2, RefreshCw, Calendar,
+  AlertTriangle, Phone, Lock, Eye, EyeOff, Trash2, Edit2, RefreshCw, Calendar, Video, Palette
 } from "lucide-react";
+import { THEME_PRESETS, DEFAULT_THEME_COLOR } from "@/lib/color";
 import api from "@/lib/api";
 import { useTeacherProfile, TeacherProfile } from "@/hooks/useTeacherData";
 import { useAuthStore } from "@/store/authStore";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import CalendarSync from "./CalendarSync";
-import {SUBJECTS, LANGUAGES, SKILL_SUGGESTIONS} from "@/lib/teacherOptions";
+import { SUBJECTS, LANGUAGES, SKILL_SUGGESTIONS } from "@/lib/teacherOptions";
 import { COUNTRY_OPTIONS, DEFAULT_COUNTRY, parsePhoneNumber, CountryInfo, TIMEZONE_OPTIONS } from "@/lib/timezones";
-
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 function formatErrorMessage(error: any, fallbackMessage: string): string {
@@ -26,13 +26,17 @@ function formatErrorMessage(error: any, fallbackMessage: string): string {
   return fallbackMessage;
 }
 
-type TeacherProfileWithPhoto = TeacherProfile & { photo_url?: string | null };
+type TeacherProfileWithPhoto = TeacherProfile & { 
+  photo_url?: string | null;
+  video_url?: string | null;
+  theme_color?: string | null;
+  status?: string;
+};
 
 const inputCls = (withIcon = true) =>
   `w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 ${
     withIcon ? "pl-11" : "px-4"
   } pr-4 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed`;
-
 
 // ─── Iconos redes sociales ────────────────────────────────────────────────
 const InstagramIcon = () => (
@@ -231,11 +235,184 @@ function FreeChipInput({
   );
 }
 
+function VideoUploadSection({
+  teacherStatus,
+  videoUrl,
+  onUploaded,
+}: {
+  teacherStatus?: string;
+  videoUrl?: string | null;
+  onUploaded: () => void;
+}) {
+  const videoRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [feedback, setFeedback] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setFeedback(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await api.post("/teachers/me/video", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setFeedback({ msg: res.data.message || "Video subido con éxito", type: "success" });
+      onUploaded();
+    } catch (e: any) {
+      setFeedback({ msg: e.response?.data?.detail || "Error subiendo el video", type: "error" });
+    } finally {
+      setUploading(false);
+      if (videoRef.current) videoRef.current.value = "";
+    }
+  };
+
+  const removeVideo = async () => {
+    if (!confirm("¿Eliminar tu video de presentación?")) return;
+    try {
+      await api.delete("/teachers/me/video");
+      onUploaded();
+    } catch (e: any) {
+      setFeedback({ msg: e.response?.data?.detail || "Error eliminando el video", type: "error" });
+    }
+  };
+
+  return (
+    <Section
+      title="Video de presentación"
+      subtitle="Obligatorio para que tu perfil sea aprobado"
+      icon={<Video className="w-5 h-5" />}
+    >
+      <div className="space-y-4">
+        {!videoUrl && (
+          <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex gap-3 items-start">
+            <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <p className="text-xs font-bold text-amber-700 leading-relaxed">
+              Aún no has subido tu video de presentación. Es obligatorio para que el equipo
+              pueda aprobar tu perfil y hacerlo visible a los estudiantes.
+            </p>
+          </div>
+        )}
+
+        {videoUrl && teacherStatus !== "approved" && (
+          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex gap-3 items-start">
+            <AlertTriangle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+            <p className="text-xs font-bold text-blue-700 leading-relaxed">
+              Tu video fue recibido y tu perfil está siendo revisado por el equipo.
+            </p>
+          </div>
+        )}
+
+        {videoUrl && (
+          <div className="rounded-2xl overflow-hidden bg-slate-900 aspect-video max-w-md">
+            <video src={videoUrl} controls className="w-full h-full object-contain" />
+          </div>
+        )}
+
+        {feedback && <Toast msg={feedback.msg} type={feedback.type} />}
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => videoRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-2 px-4 py-2.5 bg-pink-50 hover:bg-pink-100 text-pink-600 rounded-xl font-bold text-xs border border-pink-100 transition-colors disabled:opacity-60"
+          >
+            {uploading ? (
+              <div className="w-3.5 h-3.5 border-2 border-pink-300 border-t-pink-600 rounded-full animate-spin" />
+            ) : (
+              <Upload className="w-3.5 h-3.5" />
+            )}
+            {videoUrl ? "Reemplazar video" : "Subir video"}
+          </button>
+          {videoUrl && (
+            <button
+              type="button"
+              onClick={removeVideo}
+              className="flex items-center gap-2 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-500 rounded-xl font-bold text-xs border border-rose-100 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Eliminar
+            </button>
+          )}
+          <input ref={videoRef} type="file" accept="video/mp4,video/quicktime" className="hidden" onChange={handleUpload} />
+        </div>
+        <p className="text-[11px] text-slate-400 font-bold">Formatos aceptados: MP4, MOV. Máximo 150MB.</p>
+      </div>
+    </Section>
+  );
+}
+
+function ThemeColorSection({ initialColor, onSaved }: { initialColor?: string | null; onSaved: () => void }) {
+  const [color, setColor] = useState(initialColor || DEFAULT_THEME_COLOR);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+
+  useEffect(() => {
+    if (initialColor) setColor(initialColor);
+  }, [initialColor]);
+
+  const save = async (newColor: string) => {
+    setColor(newColor);
+    setSaving(true);
+    setFeedback(null);
+    try {
+      await api.patch("/teachers/me/profile", { theme_color: newColor });
+      setFeedback({ msg: "Estilo actualizado", type: "success" });
+      onSaved();
+    } catch (e: any) {
+      setFeedback({ msg: e.response?.data?.detail || "Error guardando el estilo", type: "error" });
+    } finally {
+      setSaving(false);
+      setTimeout(() => setFeedback(null), 2500);
+    }
+  };
+
+  return (
+    <Section
+      title="Estilo de perfil público"
+      subtitle="El color que verán los estudiantes en tu perfil"
+      icon={<Palette className="w-5 h-5" />}
+    >
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-3">
+          {THEME_PRESETS.map(p => (
+            <button
+              key={p.value}
+              type="button"
+              onClick={() => save(p.value)}
+              disabled={saving}
+              title={p.label}
+              className={`w-10 h-10 rounded-2xl border-2 transition-all ${color === p.value ? "border-slate-800 scale-110 shadow-md" : "border-white shadow-sm hover:scale-105"}`}
+              style={{ backgroundColor: p.value }}
+            />
+          ))}
+        </div>
+
+        <div className="flex items-center gap-3">
+          <input
+            type="color"
+            value={color}
+            onChange={e => save(e.target.value)}
+            disabled={saving}
+            className="w-12 h-10 rounded-xl border-2 border-slate-200 cursor-pointer bg-transparent"
+          />
+          <span className="text-xs font-bold text-slate-500">Color personalizado: {color}</span>
+        </div>
+
+        {feedback && <Toast msg={feedback.msg} type={feedback.type} />}
+      </div>
+    </Section>
+  );
+}
+
 // ─── Componente principal ──────────────────────────────────────────────────
 export default function TeacherProfilePage() {
   const { profile: rawProfile, loading, refetch } = useTeacherProfile();
   const profile = rawProfile as TeacherProfileWithPhoto | null;
   const { logout } = useAuthStore();
+  const user = useAuthStore(state => state.user);
 
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -322,11 +499,11 @@ export default function TeacherProfilePage() {
       const form = new FormData();
       form.append("file", f);
 
-      const resPhoto = await api.post("/users/me/photo", form, {   // antes: "/teacher/me/photo"
+      const resPhoto = await api.post("/users/me/photo", form, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       if (resPhoto.data?.avatar_url || resPhoto.data?.url) {
-        setPhotoUrl(resPhoto.data.avatar_url || resPhoto.data.url);   // antes: resPhoto.data.avatar || resPhoto.data.photo_url
+        setPhotoUrl(resPhoto.data.avatar_url || resPhoto.data.url);
       }
 
       refetch();
@@ -350,7 +527,7 @@ export default function TeacherProfilePage() {
     try {
       const fullPhone = phoneRest.trim() ? `${phoneCountry.dialCode} ${phoneRest.trim()}` : "";
       await api.patch("/users/me", { phone_number: fullPhone });
-      await api.patch("/teachers/me/profile", {   // antes: "/teacher/me/profile"
+      await api.patch("/teachers/me/profile", {
         bio, title: title_, timezone, languages, subjects, skills,
         certificates: certificates.filter(c => c.title.trim()),
         social_links: socialLinks,
@@ -443,9 +620,10 @@ export default function TeacherProfilePage() {
 
             <div className="min-w-0">
               <h1 className="text-2xl font-black text-slate-800 tracking-tight truncate">
-                {title_ || "Perfil de Profesor"}
+                {`${user?.name ?? ""} ${user?.surname ?? ""}`.trim() || "Perfil de Profesor"}
               </h1>
-              <p className="text-slate-500 text-sm mt-0.5 truncate">@{profile?.user_username}</p>
+              {title_ && <p className="text-slate-600 text-sm font-bold mt-0.5 truncate">{title_}</p>}
+              <p className="text-slate-400 text-xs mt-0.5 truncate">@{profile?.user_username}</p>
               <span className="inline-block mt-2 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-pink-50 text-pink-600 border border-pink-100">
                 Profesor
               </span>
@@ -454,14 +632,14 @@ export default function TeacherProfilePage() {
 
           {profile && (
             <a
-            href="/teacher/profile/preview"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:border-pink-300 hover:text-pink-600 transition-all shadow-sm"
-          >
-            <ExternalLink className="w-4 h-4" />
-            Ver perfil público
-          </a>
+              href="/teacher/profile/preview"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:border-pink-300 hover:text-pink-600 transition-all shadow-sm flex-shrink-0"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Ver perfil público
+            </a>
           )}
         </div>
 
@@ -470,8 +648,8 @@ export default function TeacherProfilePage() {
         {/* ─── Grid Principal ─── */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-          {/* Columna izquierda: Perfil profesional editable */}
-          <div className="lg:col-span-7">
+          {/* Columna izquierda: Perfil profesional + Video + Estilo */}
+          <div className="lg:col-span-7 space-y-6">
             <Section
               title="Perfil Profesional"
               subtitle="Cómo te ven los estudiantes en la plataforma"
@@ -498,7 +676,7 @@ export default function TeacherProfilePage() {
               }
             >
               {!isEditing ? (
-                // ─── Vista de solo lectura ───
+                // Vista de solo lectura
                 <div className="space-y-5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <ReadField icon={<Briefcase className="w-3.5 h-3.5 text-slate-400" />} label="Título profesional" value={title_} />
@@ -569,7 +747,7 @@ export default function TeacherProfilePage() {
                   </div>
                 </div>
               ) : (
-                // ─── Vista de edición ───
+                // Vista de edición
                 <div className="space-y-5 animate-in fade-in duration-300">
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Título profesional</label>
@@ -644,11 +822,11 @@ export default function TeacherProfilePage() {
                           className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-10 pr-10 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all cursor-pointer disabled:opacity-60"
                         >
                           <option value="">Seleccionar zona horaria...</option>
-                            {TIMEZONE_OPTIONS.map(tz => (
-                                <option key={tz.value} value={tz.value}>
-                                  {tz.flag} {tz.label} — {tz.value}
-                                </option> 
-                            ))}
+                          {TIMEZONE_OPTIONS.map(tz => (
+                            <option key={tz.value} value={tz.value}>
+                              {tz.flag} {tz.label} — {tz.value}
+                            </option>
+                          ))}
                         </select>
                         <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                       </div>
@@ -772,6 +950,19 @@ export default function TeacherProfilePage() {
                 </div>
               )}
             </Section>
+
+            {/* Video de presentación */}
+            <VideoUploadSection
+              teacherStatus={profile?.status}
+              videoUrl={profile?.video_url}
+              onUploaded={refetch}
+            />
+
+            {/* Estilo del perfil público */}
+            <ThemeColorSection
+              initialColor={profile?.theme_color}
+              onSaved={refetch}
+            />
           </div>
 
           {/* Columna derecha: Seguridad + Sincronización + Zona de peligro */}
@@ -852,11 +1043,12 @@ export default function TeacherProfilePage() {
               </div>
             </Section>
 
-            {/* Sincronización de calendario reubicada de forma sutil en la columna derecha */}
+            {/* Sincronización de calendario */}
             <Section title="Calendario" subtitle="Sincroniza tus clases y eventos" icon={<Calendar className="w-5 h-5" />}>
               <CalendarSync />
             </Section>
 
+            {/* Zona de peligro */}
             <Section title="Zona de peligro" subtitle="Acciones irreversibles sobre tu cuenta" icon={<AlertTriangle className="w-5 h-5" />}>
               {!confirmDelete ? (
                 <div className="bg-rose-50/80 border-2 border-rose-100 rounded-2xl p-4 flex flex-col gap-3">

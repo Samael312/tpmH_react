@@ -92,8 +92,11 @@ export interface TeacherResolution {
 export interface TeacherPublicProfile {
   username: string;
   name: string;
+  surname?: string | null;
   bio: string | null;
   title: string | null;
+  video_url?: string | null;
+  theme_color?: string | null;
   photo_url: string | null;
   languages: string[];
   subjects: string[];

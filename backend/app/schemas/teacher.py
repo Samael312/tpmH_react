@@ -23,6 +23,8 @@ class TeacherPublicResponse(BaseModel):
     social_links: Optional[Dict[str, str]]
     status: str
     profile_photo_url: Optional[str] = None
+    video_url: Optional[str] = None
+    theme_color: Optional[str] = "#ec4899"
 
     class Config:
         from_attributes = True
@@ -37,6 +39,7 @@ class TeacherProfileResponse(TeacherPublicResponse):
     balance: float
     stripe_account_id: Optional[str]
     created_at: datetime
+    video_public_id: Optional[str] = None
 
 
 class UpdateTeacherProfileRequest(BaseModel):
@@ -50,3 +53,4 @@ class UpdateTeacherProfileRequest(BaseModel):
     certificates: Optional[List[Dict[str, Any]]] = None
     gallery: Optional[List[str]] = None
     social_links: Optional[Dict[str, str]] = None
+    theme_color: Optional[str] = None
