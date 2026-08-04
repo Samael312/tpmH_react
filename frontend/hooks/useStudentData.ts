@@ -318,6 +318,8 @@ export function useFeaturedTeacher() {
 // ─── Directorio de profesores y config de plataforma ──────────────────────
 export interface TeacherDirectoryItem {
   user_username: string;
+  name?: string;
+  surname?: string;
   bio: string | null;
   title: string | null;
   profile_photo_url: string | null;

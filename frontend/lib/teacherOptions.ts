@@ -8,7 +8,7 @@ export const SUBJECTS = [
 ];
 
 export const LANGUAGES = [
-  "Español", "English", "Français", "Italiano", "Português", "Deutsch",
+  "Español", "Ingles", "Frances", "Italiano", "Portugues", "Aleman",
 ];
 
 export const SKILL_SUGGESTIONS = [

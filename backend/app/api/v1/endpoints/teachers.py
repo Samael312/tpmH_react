@@ -17,6 +17,15 @@ from app.models.material import Material, MaterialAssignment
 
 router = APIRouter()
 
+def _to_public(t: TeacherProfile) -> TeacherPublicResponse:
+    """Convierte un TeacherProfile a su respuesta pública, incluyendo
+    nombre y apellido que viven en el User relacionado (no en TeacherProfile)."""
+    resp = TeacherPublicResponse.model_validate(t)
+    if t.user:
+        resp.name = t.user.name
+        resp.surname = t.user.surname
+    return resp
+
 # Dejamos solo esta versión de la ruta raíz ("/") que ya maneja los filtros opcionales
 @router.get("/", response_model=List[TeacherPublicResponse])
 def list_approved_teachers(
@@ -51,7 +60,7 @@ def list_approved_teachers(
             ]
         ]
 
-    return teachers
+    return [_to_public(t) for t in teachers]
 
 
 @router.get("/{username}", response_model=TeacherPublicResponse)
@@ -76,7 +85,7 @@ def get_teacher_profile(username: str, db: Session = Depends(get_db)):
             detail="Profesor no disponible"
         )
 
-    return teacher
+    return _to_public(teacher)
 
 
 @router.get("/me/profile", response_model=TeacherProfileResponse)

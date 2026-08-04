@@ -10,6 +10,8 @@ class TeacherPublicResponse(BaseModel):
     """
     id: int
     user_username: str
+    name: Optional[str] = None
+    surname: Optional[str] = None
     bio: Optional[str]
     title: Optional[str]
     timezone: Optional[str]

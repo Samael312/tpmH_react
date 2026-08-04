@@ -96,7 +96,7 @@ export default function ChooseTeacherPage() {
 
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map(i => <div key={i} className="h-64 bg-white rounded-[1.75rem] animate-pulse" />)}
+            {[1, 2, 3].map(i => <div key={i} className="h-[420px] bg-white rounded-[2rem] animate-pulse" />)}
           </div>
         ) : teachers.length === 0 ? (
           <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg py-16 text-center">

@@ -11,7 +11,8 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { useTeacherResolution } from "@/hooks/useStudentData";
 
 function displayName(t: any) {
-  return t?.name || t?.user_username?.replace(/[_.]/g, " ") || "Profesor";
+  const full = [t?.name, t?.surname].filter(Boolean).join(" ").trim();
+  return full || t?.user_username?.replace(/[_.]/g, " ") || "Profesor";
 }
 
 export default function TeacherBrowsePage() {
