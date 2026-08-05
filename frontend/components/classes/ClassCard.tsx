@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { User, Video, X, Clock, RotateCcw, Check, AlertCircle } from "lucide-react";
+import { User, Video, X, Clock, RotateCcw, Check, AlertCircle, Phone } from "lucide-react";
 import api from "@/lib/api";
 import { getFlagForNationality } from "@/lib/nationalities";
 
@@ -17,10 +17,14 @@ export interface ClassCardData {
   notes?: string | null;
   teacher_name?: string | null;
   teacher_avatar?: string | null;
+  teacher_timezone?: string | null;
+  teacher_phone?: string | null;
   student_name?: string | null;
   teacher_nationality?: string | null;
   student_nationality?: string | null;
   student_avatar?: string | null;
+  student_timezone?: string | null;
+  student_phone?: string | null;
 }
 
 type Role = "student" | "teacher";
@@ -70,6 +74,44 @@ function PersonAvatar({ name, url, className }: { name?: string | null; url?: st
   );
 }
 
+// ─── Diferencia de zona horaria entre dos IANA timezones ────────────────────
+function getUtcOffsetMinutes(timeZone: string, date = new Date()): number | null {
+  try {
+    const dtf = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour12: false,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+    });
+    const parts = dtf.formatToParts(date).reduce((acc, p) => {
+      acc[p.type] = p.value;
+      return acc;
+    }, {} as Record<string, string>);
+    const asUTC = Date.UTC(
+      Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+      Number(parts.hour) % 24, Number(parts.minute), Number(parts.second)
+    );
+    return (asUTC - date.getTime()) / 60000;
+  } catch {
+    return null;
+  }
+}
+
+/** Devuelve la diferencia horaria de `otherTz` respecto a `myTz`, ej. "+3h" o "-1.5h" */
+function getTimezoneDiffLabel(otherTz?: string | null, myTz?: string | null): string | null {
+  if (!otherTz || !myTz) return null;
+  const offOther = getUtcOffsetMinutes(otherTz);
+  const offMy = getUtcOffsetMinutes(myTz);
+  if (offOther === null || offMy === null) return null;
+
+  const diffHours = (offOther - offMy) / 60;
+  if (diffHours === 0) return "Mismo huso horario";
+
+  const sign = diffHours > 0 ? "+" : "";
+  const rounded = Math.abs(diffHours % 1) < 0.01 ? diffHours.toFixed(0) : diffHours.toFixed(1);
+  return `${sign}${rounded}h respecto a ti`;
+}
+
 export default function ClassCard({
   class_, role, readOnly = false, onUpdate, onReschedule, onCancel,
 }: ClassCardProps) {
@@ -92,6 +134,13 @@ export default function ClassCard({
   const personAvatar = role === "student" ? class_.teacher_avatar : class_.student_avatar;
   const personNationality = role === "student" ? class_.teacher_nationality : class_.student_nationality;
   const personLabel = role === "student" ? "Prof." : "Est.";
+
+  // Teléfono y diferencia horaria de la otra persona — solo visibles
+  // para quien tiene la clase asignada (profesor ve datos del estudiante y viceversa)
+  const personPhone = role === "student" ? class_.teacher_phone : class_.student_phone;
+  const myTimezone = role === "teacher" ? class_.teacher_timezone : class_.student_timezone;
+  const otherTimezone = role === "teacher" ? class_.student_timezone : class_.teacher_timezone;
+  const tzDiffLabel = getTimezoneDiffLabel(otherTimezone, myTimezone);
 
   // --- LÓGICA DE API ---
   const teacherUpdateStatus = async (newStatus: string) => {
@@ -182,6 +231,11 @@ export default function ClassCard({
                   Prueba
                 </span>
               )}
+              {tzDiffLabel && (
+                <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-700">
+                  <Clock className="w-2.5 h-2.5" /> {tzDiffLabel}
+                </span>
+              )}
             </div>
 
             {/* ASIGNATURA DESTACADA */}
@@ -210,6 +264,13 @@ export default function ClassCard({
                   )}
                 </span>
               )}
+
+              {personPhone && (
+                <span className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-lg font-bold">
+                  <Phone className="w-3.5 h-3.5 text-emerald-500" />
+                  {personPhone}
+                </span>
+              )}
             </div>
 
             {class_.notes && (
@@ -217,18 +278,6 @@ export default function ClassCard({
             )}
             {error && (
               <p className="text-xs font-bold text-red-500 mb-2 truncate">{error}</p>
-            )}
-
-            {/* Botón Meet */}
-            {class_.meet_link && class_.status === "confirmed" && !showInlineReschedule && (
-              <div className="mt-2">
-                <a
-                  href={class_.meet_link} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 px-3.5 py-2 rounded-xl shadow-sm shadow-emerald-100 transition-all duration-200"
-                >
-                  <Video className="w-3.5 h-3.5" /> Entrar a Google Meet
-                </a>
-              </div>
             )}
           </div>
         </div>

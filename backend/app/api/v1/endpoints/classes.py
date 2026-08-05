@@ -107,7 +107,8 @@ def _build_class_responses(classes: list[Class], db: Session) -> list[ClassRespo
         data["student_name"] = (
             f"{student_user.name} {student_user.surname}" if student_user else None
         )
-        
+        data["teacher_phone"] = teacher_user.phone_number if teacher_user else None
+        data["student_phone"] = student_user.phone_number if student_user else None
         data["student_avatar"] = (
             (student_user.avatar if student_user else None)
             or (student.profile_photo_url if student else None)

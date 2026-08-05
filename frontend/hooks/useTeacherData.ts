@@ -20,6 +20,7 @@ export interface TeacherClass {
   student_name?: string | null    
   student_avatar?: string | null 
   student_nationality?: string | null
+  student_phone?: string | null
 }
 
 export interface TeacherProfile {

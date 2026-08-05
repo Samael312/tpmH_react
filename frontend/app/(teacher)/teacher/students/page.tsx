@@ -65,7 +65,6 @@ function StudentCard({ student }: { student: TeacherStudentFull }) {
     <div className="bg-white/85 backdrop-blur-xl rounded-2xl border border-white
                     shadow-lg shadow-slate-100 overflow-hidden
                     hover:shadow-xl transition-all duration-300">
-      {/* Cabecera clicable */}
       <button
         onClick={() => setExpanded(p => !p)}
         className="w-full flex items-center gap-4 p-5 text-left"
@@ -78,6 +77,13 @@ function StudentCard({ student }: { student: TeacherStudentFull }) {
               {student.name} {student.surname}
             </p>
             <span className="text-xs text-slate-400 font-bold">@{student.username}</span>
+            {student.nationality && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-black
+                               text-pink-600 bg-pink-50 border border-pink-100
+                               px-2.5 py-0.5 rounded-full">
+                {getFlagForNationality(student.nationality)} {student.nationality}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-3 flex-wrap text-xs text-slate-500 font-medium">
@@ -89,13 +95,7 @@ function StudentCard({ student }: { student: TeacherStudentFull }) {
                 <Phone className="w-3.5 h-3.5 text-slate-400" /> {student.phone_number}
               </span>
             )}
-            {student.nationality && (
-              <span className="flex items-center gap-1">
-                {getFlagForNationality(student.nationality)} {student.nationality}
-              </span>
-            )}
           </div>
-          
         </div>
 
         {/* Estado + progreso resumen */}

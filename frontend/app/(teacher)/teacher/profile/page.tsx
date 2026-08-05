@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+// arriba del archivo, en el import de lucide-react, agrega: AtSign, Mail
 import {
   User, Briefcase, Globe, MapPin, Link2, MessageCircle, Plus,
   X, Check, Save, Upload, Award, BookOpen, ChevronDown, ExternalLink,
-  AlertTriangle, Phone, Lock, Eye, EyeOff, Trash2, Edit2, RefreshCw, Calendar, Video, Palette
+  AlertTriangle, Phone, Lock, Eye, EyeOff, Trash2, Edit2, RefreshCw,
+  Calendar, Video, Palette, AtSign, Mail
 } from "lucide-react";
 import { THEME_PRESETS, DEFAULT_THEME_COLOR } from "@/lib/color";
 import api from "@/lib/api";
@@ -424,7 +426,8 @@ export default function TeacherProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [infoFeedback, setInfoFeedback] = useState<{ msg: string; type: "success" | "error" } | null>(null);
-
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const photoRef = useRef<HTMLInputElement>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -483,6 +486,8 @@ export default function TeacherProfilePage() {
       if (profile) populateFields(profile, res.data.phone_number ?? "");
       if (res.data.avatar) setPhotoUrl(res.data.avatar);
       if (res.data.nationality) setNationality(res.data.nationality);
+      setUsername(res.data.username ?? "");  
+      setEmail(res.data.email ?? "");           
     } catch {
       if (profile) populateFields(profile, "");
     } finally {
@@ -535,12 +540,12 @@ export default function TeacherProfilePage() {
     setInfoFeedback(null);
     try {
       const fullPhone = phoneRest.trim() ? `${phoneCountry.dialCode} ${phoneRest.trim()}` : "";
-      await api.patch("/users/me", { phone_number: fullPhone });
+      await api.patch("/users/me", { username, email, phone_number: fullPhone });
       await api.patch("/teachers/me/profile", {
         bio, title: title_, timezone, languages, subjects, skills,
         certificates: certificates.filter(c => c.title.trim()),
         social_links: socialLinks,
-        nationality: nationality || null
+        nationality: nationality || null,
       });
       await refetch();
       setInfoFeedback({ msg: "Perfil actualizado correctamente", type: "success" });
@@ -689,6 +694,8 @@ export default function TeacherProfilePage() {
                 // Vista de solo lectura
                 <div className="space-y-5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <ReadField icon={<AtSign className="w-3.5 h-3.5 text-slate-400" />} label="Usuario" value={username} />
+                    <ReadField icon={<Mail className="w-3.5 h-3.5 text-slate-400" />} label="Correo electrónico" value={email} />
                     <ReadField icon={<Briefcase className="w-3.5 h-3.5 text-slate-400" />} label="Título profesional" value={title_} />
                     <ReadField icon={<Phone className="w-3.5 h-3.5 text-slate-400" />} label="Teléfono" value={phoneRest ? `${phoneCountry.dialCode} ${phoneRest}` : ""} />
                     <div className="sm:col-span-2">
@@ -762,6 +769,35 @@ export default function TeacherProfilePage() {
               ) : (
                 // Vista de edición
                 <div className="space-y-5 animate-in fade-in duration-300">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Nombre de usuario</label>
+                      <div className="relative group">
+                        <AtSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors pointer-events-none" />
+                        <input
+                          value={username}
+                          onChange={e => setUsername(e.target.value)}
+                          disabled={saving}
+                          placeholder="usuario123"
+                          className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Correo electrónico</label>
+                      <div className="relative group">
+                        <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors pointer-events-none" />
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={e => setEmail(e.target.value)}
+                          disabled={saving}
+                          placeholder="correo@ejemplo.com"
+                          className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
+                        />
+                      </div>
+                    </div>
+                  </div>
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Título profesional</label>
                     <div className="relative group">

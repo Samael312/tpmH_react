@@ -16,6 +16,7 @@ export interface StudentClass {
   teacher_nationality: string | null;
   package_name: string | null;
   class_count: string | null;
+  teacher_phone?: string | null;
 }
 
 export interface AvailableSlot {
@@ -332,6 +333,7 @@ export interface TeacherDirectoryItem {
   skills: string[];
   average_rating?: number;
   total_reviews?: number;
+  nationality?: string | null; 
 }
 
 export function useTeacherDirectory() {

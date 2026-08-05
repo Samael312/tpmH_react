@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Star, Globe, ArrowRight } from "lucide-react";
+import { getFlagForNationality } from "@/lib/nationalities";
 
 export interface TeacherSummary {
   user_username: string;
@@ -10,6 +11,7 @@ export interface TeacherSummary {
   title: string | null;
   bio?: string | null;
   profile_photo_url?: string | null;
+  nationality?: string | null;
   languages: string[];
   subjects: string[];
   average_rating?: number;
@@ -73,10 +75,21 @@ export default function TeacherCard({
           </div>
         )}
 
+        {/* Nacionalidad — presencia importante, esquina opuesta al rating */}
+        {teacher.nationality && (
+          <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-white/95 backdrop-blur-md
+                          px-3 py-1.5 rounded-full shadow-md">
+            <span className="text-base leading-none">{getFlagForNationality(teacher.nationality)}</span>
+            <span className="text-xs font-black text-slate-800">{teacher.nationality}</span>
+          </div>
+        )}
+
         <div className="absolute bottom-0 left-0 right-0 p-5">
-          <h3 className="font-black text-white text-xl leading-tight drop-shadow-md truncate">
-            {name}
-          </h3>
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <h3 className="font-black text-white text-xl leading-tight drop-shadow-md truncate">
+              {name}
+            </h3>
+          </div>
           {teacher.title && (
             <p className="text-white/85 text-xs font-semibold mt-0.5 line-clamp-1 drop-shadow-sm">
               {teacher.title}

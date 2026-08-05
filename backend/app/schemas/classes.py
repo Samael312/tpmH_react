@@ -89,10 +89,12 @@ class ClassResponse(BaseModel):
     created_at: datetime
     teacher_nationality: Optional[str] = None
     student_nationality: Optional[str] = None
+    teacher_phone: Optional[str] = None
     teacher_name: Optional[str] = None
     teacher_avatar: Optional[str] = None
     student_name: Optional[str] = None
     student_avatar: Optional[str] = None
+    student_phone: Optional[str] = None 
 
     class Config:
         from_attributes = True
