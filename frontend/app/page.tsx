@@ -6,37 +6,23 @@ import Image from "next/image";
 import {
   Star, Check, Globe, Award,
   MessageCircle, ChevronDown, Menu, X,
-  BookOpen, Clock, Users
+  BookOpen, Clock, Users, Video as VideoIcon
 } from "lucide-react";
 import { useLandingData, displayName } from "@/hooks/useLandingData";
 import HeroScene from "@/components/landing/HeroScene";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import PackagesCarousel from "@/components/landing/PackagesCarousel";
+import TeacherVideosCarousel from "@/components/landing/TeacherVideosCarousel";
+import Carousel from "@/components/landing/Carousel";
 
-const PACKAGES = [
-  {
-    name: "Básico", price: "$57", period: "/mes", classes: 4,
-    border: "border-slate-200", accent: "text-slate-700",
-    features: ["4 clases al mes", "Modalidad 100% online", "Material incluido", "Clases conversacionales", "Ritmo sin presión"],
-  },
-  {
-    name: "Personalizado", price: "$96", period: "/mes", classes: 8, popular: true,
-    border: "border-pink-300", accent: "text-pink-600",
-    features: ["8 clases al mes", "Modalidad 100% online", "Material incluido", "100% personalizadas", "Progreso y flexibilidad"],
-  },
-  {
-    name: "Intensivo", price: "$138", period: "/mes", classes: 12,
-    border: "border-purple-200", accent: "text-purple-700",
-    features: ["12 clases al mes", "Modalidad 100% online", "Material incluido", "Preparación exámenes", "Avance acelerado"],
-  },
-  {
-    name: "Flexible", price: "$12", period: "/clase", classes: 1,
-    border: "border-emerald-200", accent: "text-emerald-700",
-    features: ["Paga por clase", "Modalidad 100% online", "Sin compromiso mensual", "Horario flexible", "Ideal para empezar"],
-  },
-];
+
+interface NavItem {
+  id: string;
+  label: string;
+}
 
 // ─── Navbar ─────────────────────────────────────────────────────────────────
-function Navbar({ platformName }: { platformName: string }) {
+function Navbar({ platformName, navItems }: { platformName: string; navItems: NavItem[] }) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -63,7 +49,7 @@ function Navbar({ platformName }: { platformName: string }) {
         </div>
 
         <div className="hidden md:flex items-center gap-1">
-          {[{ id: "about", label: "Sobre nosotros" }, { id: "plans", label: "Planes" }, { id: "reviews", label: "Reseñas" }].map(item => (
+          {navItems.map(item => (
             <button key={item.id} onClick={() => scrollTo(item.id)}
               className="px-4 py-2 text-sm font-bold text-slate-600 hover:text-pink-600 rounded-xl hover:bg-pink-50 transition-all duration-150">
               {item.label}
@@ -87,7 +73,7 @@ function Navbar({ platformName }: { platformName: string }) {
 
       {mobileOpen && (
         <div className="md:hidden bg-white/95 backdrop-blur-xl border-t border-slate-100 px-4 py-4 space-y-1 animate-in slide-in-from-top-2 duration-200">
-          {[{ id: "about", label: "Sobre nosotros" }, { id: "plans", label: "Planes" }, { id: "reviews", label: "Reseñas" }].map(item => (
+          {navItems.map(item => (
             <button key={item.id} onClick={() => scrollTo(item.id)} className="w-full text-left px-4 py-3 text-sm font-bold text-slate-600 hover:bg-pink-50 hover:text-pink-600 rounded-xl transition-colors">
               {item.label}
             </button>
@@ -105,8 +91,9 @@ function Navbar({ platformName }: { platformName: string }) {
 // ─── Avatar con fallback a iniciales ──────────────────────────────────────────
 function TeacherAvatar({ teacher, className }: { teacher: any; className?: string }) {
   const name = displayName(teacher);
-  if (teacher?.photo_url) {
-    return <img src={teacher.photo_url} alt={name} className={className} />;
+  const photo = teacher?.profile_photo_url;
+  if (photo) {
+    return <img src={photo} alt={name} className={className} />;
   }
   return (
     <div className={`${className} bg-gradient-to-br from-pink-200 to-rose-300 flex items-center justify-center`}>
@@ -117,7 +104,7 @@ function TeacherAvatar({ teacher, className }: { teacher: any; className?: strin
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function LandingPage() {
-  const { loading, isSingleTenant, teachers, reviews, platformName, platformTagline } = useLandingData();
+  const { loading, isSingleTenant, teachers, reviews, packages, platformName, platformTagline } = useLandingData();
 
   const mainTeacher = teachers[0];
   const avgRating = reviews.length > 0
@@ -133,9 +120,27 @@ export default function LandingPage() {
   const combinedSubjects = Array.from(new Set(teachers.flatMap(t => t.subjects ?? [])));
   const combinedLanguages = Array.from(new Set(teachers.flatMap(t => t.languages ?? [])));
 
+  // Profesores con video de presentación, listos para el carrusel
+  const videoTeachers = teachers
+    .filter((t): t is typeof t & { video_url: string } => Boolean(t.video_url))
+    .map(t => ({
+      user_username: t.user_username,
+      name: displayName(t),
+      title: t.title,
+      video_url: t.video_url as string,
+      photo_url: t.profile_photo_url ?? null,
+    }));
+
+  const navItems: NavItem[] = [
+    { id: "about", label: "Sobre nosotros" },
+    ...(videoTeachers.length > 0 ? [{ id: "videos", label: "Videos" }] : []),
+    { id: "plans", label: "Planes" },
+    { id: "reviews", label: "Reseñas" },
+  ];
+
   return (
     <div className="min-h-screen bg-slate-50 overflow-x-hidden">
-      <Navbar platformName={platformName} />
+      <Navbar platformName={platformName} navItems={navItems} />
 
       {/* ─── Hero con Three.js ─── */}
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
@@ -221,21 +226,30 @@ export default function LandingPage() {
                 </div>
               </div>
             ) : (
-              <div className="relative w-80 h-80">
-                {teachers.slice(0, 5).map((t, i) => {
-                  const positions = [
-                    "top-0 left-8", "top-4 right-0", "bottom-8 left-0",
-                    "bottom-0 right-8", "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
-                  ];
-                  const sizes = i === 4 ? "w-28 h-28 z-10" : "w-20 h-20";
-                  return (
-                    <div key={t.user_username} className={`absolute ${positions[i]} ${sizes} rounded-3xl overflow-hidden border-4 border-white shadow-xl shadow-pink-200/60`}>
-                      <TeacherAvatar teacher={t} className="w-full h-full object-cover" />
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+  <div className="w-full max-w-md animate-in fade-in duration-500">
+    <Carousel ariaLabel="Profesores destacados">
+      {teachers.slice(0, 8).map(t => (
+        <Link
+          key={t.user_username}
+          href={`/dashboard/teachers/${t.user_username}`}
+          className="snap-start flex-shrink-0 w-[220px] sm:w-[250px] group"
+        >
+          <div className="relative w-full aspect-[4/5] rounded-[2rem] overflow-hidden border-4 border-white shadow-2xl shadow-pink-200/60">
+            <TeacherAvatar
+              teacher={t}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/10 to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 p-4">
+              <p className="text-white font-black text-sm truncate drop-shadow">{displayName(t)}</p>
+              {t.title && <p className="text-white/80 text-[11px] font-semibold truncate">{t.title}</p>}
+            </div>
+          </div>
+        </Link>
+      ))}
+    </Carousel>
+  </div>
+          )}
           </div>
         </div>
 
@@ -352,56 +366,125 @@ export default function LandingPage() {
         </section>
       )}
 
-      {/* ─── Planes ─── */}
-      <section id="plans" className="py-24 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-pink-300/20 rounded-full blur-[120px] pointer-events-none" />
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-16">
-            <p className="text-[10px] font-black text-pink-500 uppercase tracking-widest mb-3">Planes y precios</p>
-            <h2 className="text-4xl sm:text-5xl font-black text-slate-800 tracking-tight mb-4">Elige tu plan</h2>
-            <p className="text-slate-500 max-w-xl mx-auto">Sin contratos. Sin letra pequeña. Solo aprendizaje.</p>
-          </div>
+      {/* ─── Videos de presentación ─── */}
+      {(loading || videoTeachers.length > 0) && (
+        <section id="videos" className="py-16 relative overflow-hidden">
+          <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-pink-300/10 rounded-full blur-[100px] pointer-events-none" />
+          <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
+            <div className="text-center mb-12">
+              <p className="text-[10px] font-black text-pink-500 uppercase tracking-widest mb-3 flex items-center justify-center gap-1.5">
+                <VideoIcon className="w-3.5 h-3.5" /> Presentaciones
+              </p>
+              <h2 className="text-3xl sm:text-4xl font-black text-slate-800 tracking-tight mb-3">
+                {isSingleTenant ? "Conoce a tu profesora en video" : "Conoce a nuestros profesores en video"}
+              </h2>
+              <p className="text-slate-500 max-w-lg mx-auto">
+                Antes de reservar tu clase, mira quién estará al otro lado de la pantalla.
+              </p>
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {PACKAGES.map(pkg => (
-              <div key={pkg.name} className={`relative bg-white/80 backdrop-blur-xl rounded-[2rem] border-2 ${pkg.border} shadow-xl flex flex-col p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${pkg.popular ? "shadow-pink-200/60" : "shadow-slate-200/50"}`}>
-                {pkg.popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="bg-gradient-to-r from-pink-500 to-rose-400 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-md shadow-pink-200">Más popular</span>
-                  </div>
-                )}
-                <div className="mb-5">
-                  <h3 className={`text-lg font-black mb-1 ${pkg.accent}`}>{pkg.name}</h3>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-4xl font-black text-slate-800">{pkg.price}</span>
-                    <span className="text-slate-500 text-sm font-medium">{pkg.period}</span>
-                  </div>
-                </div>
-                <div className="flex-1 space-y-3 mb-6">
-                  {pkg.features.map(f => (
-                    <div key={f} className="flex items-start gap-2">
-                      <Check className={`w-4 h-4 flex-shrink-0 mt-0.5 ${pkg.popular ? "text-pink-500" : "text-emerald-500"}`} />
-                      <span className="text-sm text-slate-600 font-medium">{f}</span>
-                    </div>
-                  ))}
-                </div>
-                <Link href="/register" className={`w-full py-3.5 text-sm font-bold text-center rounded-xl transition-all duration-200 block active:scale-[0.97] ${pkg.popular ? "bg-gradient-to-r from-pink-500 to-rose-400 text-white shadow-lg shadow-pink-200 hover:shadow-pink-300" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
-                  Elegir {pkg.name}
-                </Link>
+            {loading ? (
+              <div className="flex gap-5 overflow-hidden">
+                {[1,2,3].map(i => (
+                  <div key={i} className="w-[210px] aspect-[9/12] bg-white/60 rounded-[1.75rem] animate-pulse flex-shrink-0" />
+                ))}
               </div>
-            ))}
+            ) : (
+              <TeacherVideosCarousel teachers={videoTeachers} />
+            )}
           </div>
+        </section>
+      )}
 
-          {isSingleTenant && mainTeacher?.social_links?.whatsapp && (
-            <p className="text-center text-xs text-slate-400 font-bold mt-8">
-              ¿Tienes dudas?{" "}
-              <button onClick={openWhatsApp} className="text-pink-500 hover:text-pink-600 underline transition-colors">
-                Escríbeme por WhatsApp
-              </button>
-            </p>
-          )}
-        </div>
-      </section>
+      {/* ─── Planes / Paquetes reales de los profesores ─── */}
+      {/* ─── Planes ─── */}
+<section id="plans" className="py-24 relative overflow-hidden">
+  <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-pink-300/20 rounded-full blur-[120px] pointer-events-none" />
+  <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
+    <div className="text-center mb-16">
+      <p className="text-[10px] font-black text-pink-500 uppercase tracking-widest mb-3">Planes y precios</p>
+      <h2 className="text-4xl sm:text-5xl font-black text-slate-800 tracking-tight mb-4">Elige tu plan</h2>
+      <p className="text-slate-500 max-w-xl mx-auto">Sin contratos. Sin letra pequeña. Solo aprendizaje.</p>
+    </div>
+
+    {loading ? (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} className="h-96 bg-white/60 rounded-[2rem] animate-pulse" />
+        ))}
+      </div>
+    ) : packages.length === 0 ? (
+      <div className="text-center py-12">
+        <p className="text-slate-400 font-bold">Aún no hay paquetes disponibles</p>
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {packages.slice(0, 8).map(pkg => {
+          const accent = pkg.color || "#ec4899";
+          const priceSuffix =
+            pkg.classes_count === 1 ? "/clase" :
+            pkg.classes_count === null ? "/ilimitado" :
+            "/paquete";
+          const priceDisplay = Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2);
+
+          const bullets: string[] =
+            pkg.description_type === "list" && pkg.description_items?.length
+              ? pkg.description_items
+              : [
+                  pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
+                  `${pkg.duration_minutes} min por clase`,
+                  "Modalidad 100% online",
+                  ...(pkg.description ? [pkg.description] : []),
+                ];
+
+          return (
+            <div
+              key={pkg.id}
+              className="relative bg-white/80 backdrop-blur-xl rounded-[2rem] border-2 shadow-xl flex flex-col p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl"
+              style={{ borderColor: `${accent}33` }}
+            >
+              <div className="mb-5">
+                <h3 className="text-lg font-black mb-1" style={{ color: accent }}>
+                  {pkg.name}
+                </h3>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl font-black text-slate-800">${priceDisplay}</span>
+                  <span className="text-slate-500 text-sm font-medium">{priceSuffix}</span>
+                </div>
+              </div>
+
+              <div className="flex-1 space-y-3 mb-6">
+                {bullets.slice(0, 6).map((f, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <Check className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }} />
+                    <span className="text-sm text-slate-600 font-medium">{f}</span>
+                  </div>
+                ))}
+              </div>
+
+              <Link
+                href="/register"
+                className="w-full py-3.5 text-sm font-bold text-center rounded-xl transition-all duration-200 block active:scale-[0.97] text-white shadow-lg hover:shadow-xl"
+                style={{ background: `linear-gradient(135deg, ${accent}, ${accent}cc)` }}
+              >
+                Elegir {pkg.name}
+              </Link>
+            </div>
+          );
+        })}
+      </div>
+    )}
+
+    {isSingleTenant && mainTeacher?.social_links?.whatsapp && (
+      <p className="text-center text-xs text-slate-400 font-bold mt-8">
+        ¿Tienes dudas?{" "}
+        <button onClick={openWhatsApp} className="text-pink-500 hover:text-pink-600 underline transition-colors">
+          Escríbeme por WhatsApp
+        </button>
+      </p>
+    )}
+  </div>
+</section>
 
       {/* ─── Reseñas ─── */}
       <section id="reviews" className="py-24 relative overflow-hidden">

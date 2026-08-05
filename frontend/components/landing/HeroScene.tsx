@@ -93,11 +93,12 @@ export default function HeroScene() {
     window.addEventListener("mousemove", handleMouseMove);
 
     // ─── Loop de animación ───
-    const clock = new THREE.Clock();
+    // ─── Loop de animación ───
+    const startTime = performance.now();
     let frameId: number;
 
     const animate = () => {
-      const t = clock.getElapsedTime();
+      const t = (performance.now() - startTime) / 1000;
 
       // Ondulación orgánica de las partículas
       const posAttr = geometry.attributes.position as THREE.BufferAttribute;
