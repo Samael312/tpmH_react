@@ -8,12 +8,18 @@ import {
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { SUBJECTS, LANGUAGES } from "@/lib/teacherOptions";
+import { getSuggestedTheme, ICON_PICKER_OPTIONS, DEFAULT_PACKAGE_THEME } from "@/lib/packageThemes";
+import { THEME_PRESETS } from "@/lib/color";
 
 interface Package {
   id: number;
   name: string;
   subject: string;
   description: string | null;
+  description_type: "paragraph" | "list";
+  description_items: string[] | null;
+  icon: string;
+  color: string;
   classes_count: number | null;
   price: number;
   duration_minutes: number;
@@ -41,6 +47,10 @@ const DURATIONS = [30, 60];
 
 const emptyForm = {
   name: "", subject: "", description: "",
+  description_type: "paragraph" as "paragraph" | "list",
+  description_items: [] as string[],
+  icon: DEFAULT_PACKAGE_THEME.icon,
+  color: DEFAULT_PACKAGE_THEME.color,
   classes_count: "4", price: "10", duration_minutes: 60,
 };
 
@@ -67,7 +77,8 @@ export default function TeacherPackagesPage() {
   const [saving, setSaving] = useState(false);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [error, setError] = useState("");
-
+const [descItemInput, setDescItemInput] = useState("");
+const [themeTouched, setThemeTouched] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -97,19 +108,24 @@ export default function TeacherPackagesPage() {
   };
 
   const openEdit = (pkg: Package) => {
-    setEditingId(pkg.id);
-    setUnlimited(pkg.classes_count === null);
-    setKind(LANGUAGES.includes(pkg.subject) ? "language" : "subject");
-    setForm({
-      name: pkg.name,
-      subject: pkg.subject,
-      description: pkg.description ?? "",
-      classes_count: String(pkg.classes_count),
-      price: String(pkg.price),
-      duration_minutes: pkg.duration_minutes,
-    });
-    setShowForm(true);
-  };
+  setEditingId(pkg.id);
+  setUnlimited(pkg.classes_count === null);
+  setKind(LANGUAGES.includes(pkg.subject) ? "language" : "subject");
+  setThemeTouched(true); // al editar, no autosugerir hasta que pidan "Sugerir según materia"
+  setForm({
+    name: pkg.name,
+    subject: pkg.subject,
+    description: pkg.description ?? "",
+    description_type: pkg.description_type ?? "paragraph",
+    description_items: pkg.description_items ?? [],
+    icon: pkg.icon || DEFAULT_PACKAGE_THEME.icon,
+    color: pkg.color || DEFAULT_PACKAGE_THEME.color,
+    classes_count: String(pkg.classes_count),
+    price: String(pkg.price),
+    duration_minutes: pkg.duration_minutes,
+  });
+  setShowForm(true);
+};
 
   const savePackage = async () => {
     if (!form.name.trim() || !form.subject.trim()) return;
@@ -132,7 +148,11 @@ export default function TeacherPackagesPage() {
       const payload = {
         name: form.name,
         subject: form.subject,
-        description: form.description,
+        description: form.description_type === "paragraph" ? form.description : null,
+        description_type: form.description_type,
+        description_items: form.description_type === "list" ? form.description_items : null,
+        icon: form.icon,
+        color: form.color,
         classes_count: classesCountNum,
         price: priceNum,
         duration_minutes: form.duration_minutes,
@@ -281,15 +301,26 @@ export default function TeacherPackagesPage() {
                   </div>
                   <div className="relative">
                     <select
-                      value={form.subject}
-                      onChange={e => setForm({ ...form, subject: e.target.value })}
-                      className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl
-                                text-sm font-bold text-slate-800 px-4 py-3 focus:outline-none focus:bg-white
-                                focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all cursor-pointer"
-                    >
-                      <option value="">{kind === "subject" ? "Selecciona una materia..." : "Selecciona un idioma..."}</option>
-                      {(kind === "subject" ? SUBJECTS : LANGUAGES).map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                        value={form.subject}
+                        onChange={e => {
+                          const subject = e.target.value;
+                          setForm(prev => {
+                            const next = { ...prev, subject };
+                            if (!editingId && !themeTouched) {
+                              const suggested = getSuggestedTheme(subject);
+                              next.icon = suggested.icon;
+                              next.color = suggested.color;
+                            }
+                            return next;
+                          });
+                        }}
+                        className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl
+                                  text-sm font-bold text-slate-800 px-4 py-3 focus:outline-none focus:bg-white
+                                  focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all cursor-pointer"
+                      >
+                        <option value="">{kind === "subject" ? "Selecciona una materia..." : "Selecciona un idioma..."}</option>
+                        {(kind === "subject" ? SUBJECTS : LANGUAGES).map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
@@ -345,21 +376,164 @@ export default function TeacherPackagesPage() {
                 />
               </div>
 
-              <div className="sm:col-span-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                  Descripción (opcional)
-                </label>
-                <textarea
-                  value={form.description}
-                  onChange={e => setForm({ ...form, description: e.target.value })}
-                  rows={3}
-                  placeholder="Qué incluye este paquete..."
-                  className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-medium
-                             text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none
-                             focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                             transition-all resize-none"
-                />
-              </div>
+              {/* ─── Tipo de descripción ─── */}
+<div className="sm:col-span-2 space-y-3">
+  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+    Formato de la descripción
+  </label>
+  <div className="flex gap-2">
+    {[
+      { key: "paragraph", label: "Párrafo" },
+      { key: "list", label: "Lista de puntos" },
+    ].map(opt => (
+      <button
+        key={opt.key}
+        type="button"
+        onClick={() => setForm({ ...form, description_type: opt.key as "paragraph" | "list" })}
+        className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all
+          ${form.description_type === opt.key ? "border-pink-400 bg-pink-50 text-pink-600" : "border-slate-100 bg-slate-50 text-slate-500"}`}
+      >
+        {opt.label}
+      </button>
+    ))}
+  </div>
+
+  {form.description_type === "paragraph" ? (
+    <textarea
+      value={form.description}
+      onChange={e => setForm({ ...form, description: e.target.value })}
+      rows={3}
+      placeholder="Qué incluye este paquete..."
+      className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-medium
+                 text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none
+                 focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50
+                 transition-all resize-none"
+    />
+  ) : (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <input
+          value={descItemInput}
+          onChange={e => setDescItemInput(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              const v = descItemInput.trim();
+              if (v) {
+                setForm({ ...form, description_items: [...form.description_items, v] });
+                setDescItemInput("");
+              }
+            }
+          }}
+          placeholder="Ej: Material incluido — presiona Enter"
+          className="flex-1 bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold
+                     text-slate-800 placeholder:text-slate-400 px-4 py-2.5 focus:outline-none
+                     focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
+        />
+        <button
+          type="button"
+          onClick={() => {
+            const v = descItemInput.trim();
+            if (v) {
+              setForm({ ...form, description_items: [...form.description_items, v] });
+              setDescItemInput("");
+            }
+          }}
+          className="px-4 bg-pink-50 text-pink-600 hover:bg-pink-100 font-bold rounded-xl transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
+      </div>
+      {form.description_items.length > 0 && (
+        <ul className="space-y-1.5">
+          {form.description_items.map((item, idx) => (
+            <li key={idx} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+              <span className="text-xs font-bold text-slate-700 flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-emerald-500" /> {item}
+              </span>
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, description_items: form.description_items.filter((_, i) => i !== idx) })}
+                className="text-slate-300 hover:text-rose-400"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )}
+</div>
+              {/* ─── Personalización visual ─── */}
+<div className="sm:col-span-2 space-y-4 pt-2 border-t border-slate-100">
+  <div className="flex items-center justify-between">
+    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+      Personalización visual
+    </label>
+    <button
+      type="button"
+      onClick={() => {
+        const suggested = getSuggestedTheme(form.subject);
+        setForm({ ...form, icon: suggested.icon, color: suggested.color });
+        setThemeTouched(false);
+      }}
+      className="text-[10px] font-bold text-pink-500 hover:text-pink-600"
+    >
+      Sugerir según materia
+    </button>
+  </div>
+
+  {/* Icono */}
+  <div>
+    <p className="text-xs font-bold text-slate-500 mb-2">Icono</p>
+    <div className="flex flex-wrap gap-1.5">
+      {ICON_PICKER_OPTIONS.map(ic => (
+        <button
+          key={ic}
+          type="button"
+          onClick={() => { setForm({ ...form, icon: ic }); setThemeTouched(true); }}
+          className={`w-9 h-9 rounded-xl text-base flex items-center justify-center border-2 transition-all
+            ${form.icon === ic ? "border-pink-400 bg-pink-50 scale-110" : "border-transparent bg-slate-50 hover:bg-slate-100"}`}
+        >
+          {ic}
+        </button>
+      ))}
+    </div>
+  </div>
+
+  {/* Color */}
+  <div>
+    <p className="text-xs font-bold text-slate-500 mb-2">Color</p>
+    <div className="flex flex-wrap gap-2">
+      {THEME_PRESETS.map(p => (
+        <button
+          key={p.value}
+          type="button"
+          title={p.label}
+          onClick={() => { setForm({ ...form, color: p.value }); setThemeTouched(true); }}
+          className={`w-8 h-8 rounded-xl border-2 transition-all
+            ${form.color === p.value ? "border-slate-800 scale-110" : "border-white shadow-sm hover:scale-105"}`}
+          style={{ backgroundColor: p.value }}
+        />
+      ))}
+      <input
+        type="color"
+        value={form.color}
+        onChange={e => { setForm({ ...form, color: e.target.value }); setThemeTouched(true); }}
+        className="w-8 h-8 rounded-xl border-2 border-slate-200 cursor-pointer bg-transparent"
+      />
+    </div>
+  </div>
+
+  {/* Vista previa del badge */}
+  <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 w-fit">
+    <span className="text-lg">{form.icon}</span>
+    <span className="text-xs font-bold" style={{ color: form.color }}>Vista previa</span>
+  </div>
+</div>
+
+
             </div>
 
             <button
@@ -395,20 +569,34 @@ export default function TeacherPackagesPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {packages.map(pkg => (
                 <div key={pkg.id} className={`bg-white/80 backdrop-blur-xl rounded-2xl border border-white
-                                shadow-lg shadow-slate-100 p-5 flex flex-col ${!pkg.is_active ? "opacity-50" : ""}`}>
-                  <div className="w-10 h-10 bg-pink-50 rounded-xl flex items-center justify-center mb-3">
-                    <PackageIcon className="w-5 h-5 text-pink-500" />
-                  </div>
-                  <h3 className="text-base font-black text-slate-800 mb-1">{pkg.name}</h3>
-                  <p className="text-xs text-slate-400 font-bold mb-3">
-                    {pkg.subject} · {pkg.classes_count === null ? "Ilimitadas" : `${pkg.classes_count} clases`} · {pkg.duration_minutes} min c/u
-                  </p>
-                  {pkg.description && (
-                    <p className="text-xs text-slate-500 mb-3 line-clamp-2">{pkg.description}</p>
-                  )}
-                  <p className="text-xl font-black text-pink-600 mb-4 mt-auto">
-                    ${pkg.price.toFixed(2)}
-                  </p>
+                shadow-lg shadow-slate-100 p-5 flex flex-col ${!pkg.is_active ? "opacity-50" : ""}`}>
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 text-lg"
+                style={{ backgroundColor: `${pkg.color || "#ec4899"}1a` }}
+              >
+                {pkg.icon || "📦"}
+              </div>
+              <h3 className="text-base font-black text-slate-800 mb-1">{pkg.name}</h3>
+              <p className="text-xs text-slate-400 font-bold mb-3">
+                {pkg.subject} · {pkg.classes_count === null ? "Ilimitadas" : `${pkg.classes_count} clases`} · {pkg.duration_minutes} min c/u
+              </p>
+
+              {pkg.description_type === "list" && pkg.description_items?.length ? (
+                <ul className="text-xs text-slate-500 mb-3 space-y-1">
+                  {pkg.description_items.slice(0, 4).map((item, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <Check className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: pkg.color || "#ec4899" }} />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              ) : pkg.description ? (
+                <p className="text-xs text-slate-500 mb-3 line-clamp-2">{pkg.description}</p>
+              ) : null}
+
+              <p className="text-xl font-black mb-4 mt-auto" style={{ color: pkg.color || "#ec4899" }}>
+                ${pkg.price.toFixed(2)}
+              </p>
                   <div className="flex gap-2">
                     <button
                       onClick={() => openEdit(pkg)}

@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
 import enum
+from sqlalchemy.dialects.postgresql import JSONB
 
 
 class EnrollmentStatus(str, enum.Enum):
@@ -27,10 +28,16 @@ class Package(Base):
     classes_count = Column(Integer, nullable=True)
     price = Column(Float, nullable=False)
     duration_minutes = Column(Integer, default=60)
-    # Duración estándar de cada clase en este paquete: 30, 60 o 90
-
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    icon = Column(String, nullable=True, default="📦")
+    color = Column(String, nullable=True, default="#ec4899")
+    description_type = Column(String, default="paragraph")  # "paragraph" | "list"
+    description_items = Column(JSONB, nullable=True)  # ["Punto 1", "Punto 2", ...]
+
+
+
+
 
     teacher = relationship("TeacherProfile", back_populates="packages")
 

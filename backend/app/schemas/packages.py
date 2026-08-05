@@ -4,12 +4,16 @@ from datetime import datetime
 
 
 ALLOWED_DURATIONS = [30, 60]
-
+ALLOWED_DESCRIPTION_TYPES = ["paragraph", "list"]
 
 class PackageCreate(BaseModel):
     name: str
     subject: str
     description: Optional[str] = None
+    description_type: str = "paragraph"
+    description_items: Optional[List[str]] = None
+    icon: Optional[str] = "📦"
+    color: Optional[str] = "#ec4899"
     classes_count: Optional[int] = None
     price: float
     duration_minutes: int = 60
@@ -35,6 +39,13 @@ class PackageCreate(BaseModel):
             raise ValueError("El precio debe ser mayor que 0")
         return v
 
+    @field_validator("description_type")
+    @classmethod
+    def validate_description_type(cls, v):
+        if v not in ALLOWED_DESCRIPTION_TYPES:
+            raise ValueError(f"Tipo de descripción inválido. Opciones: {ALLOWED_DESCRIPTION_TYPES}")
+        return v
+
 
 class PackageResponse(BaseModel):
     id: int
@@ -42,6 +53,10 @@ class PackageResponse(BaseModel):
     name: str
     subject: str
     description: Optional[str]
+    description_type: str = "paragraph"
+    description_items: Optional[List[str]] = None
+    icon: Optional[str] = "📦"
+    color: Optional[str] = "#ec4899"
     classes_count: Optional[int] 
     price: float
     duration_minutes: int
