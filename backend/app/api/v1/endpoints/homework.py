@@ -15,12 +15,39 @@ from app.schemas.homework import (
     HomeworkAssignmentResponse,
     SubmitHomeworkRequest,
     GradeHomeworkRequest,
+    HomeworkUpdate
 )
 
 router = APIRouter()
 
 
 # ─── ENDPOINTS DEL PROFESOR ─────────────────────────────────────────────────
+@router.patch("/{homework_id}", response_model=HomeworkResponse)
+def update_homework(
+    homework_id: int,
+    data: HomeworkUpdate,
+    current_user: User = Depends(get_current_teacher),
+    db: Session = Depends(get_db)
+):
+    """El profesor edita el enunciado, descripción o fecha límite de una tarea ya creada."""
+    homework = db.query(Homework).filter(
+        Homework.id == homework_id,
+        Homework.teacher_id == current_user.teacher_profile.id
+    ).first()
+
+    if not homework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tarea no encontrada"
+        )
+
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(homework, field, value)
+
+    db.commit()
+    db.refresh(homework)
+    return homework
 
 @router.post("/", response_model=HomeworkResponse, status_code=status.HTTP_201_CREATED)
 def create_homework(

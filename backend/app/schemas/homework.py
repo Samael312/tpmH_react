@@ -24,6 +24,12 @@ class HomeworkResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class HomeworkUpdate(BaseModel):
+    """Todos opcionales porque es PATCH"""
+    title: Optional[str] = None
+    description: Optional[str] = None
+    due_date_utc: Optional[datetime] = None
+
 
 class HomeworkAssignmentResponse(BaseModel):
     """Lo que ve el estudiante de una tarea"""

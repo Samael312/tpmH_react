@@ -37,7 +37,7 @@ interface Submission {
 }
 
 interface Student {
-  id: number; // StudentProfile.id — es lo que espera student_ids
+  id: number;
   user_id: number;
   username: string;
   name: string;
@@ -214,7 +214,10 @@ function GradeModal({
   const [saving, setSaving]     = useState(false);
   const [success, setSuccess]   = useState(false);
 
+  const hasSubmission = Boolean(submission.submission);
+
   const save = async () => {
+    if (!hasSubmission) return;
     setSaving(true);
     try {
       await api.patch(
@@ -269,7 +272,7 @@ function GradeModal({
           </div>
         ) : (
           <>
-            {submission.submission ? (
+            {hasSubmission ? (
               <div className="bg-slate-50 rounded-2xl p-4 mb-5 max-h-40
                               overflow-y-auto">
                 <p className="text-[10px] font-black text-slate-400
@@ -285,7 +288,7 @@ function GradeModal({
                               p-4 mb-5 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
                 <p className="text-xs font-bold text-amber-600">
-                  El estudiante aún no ha enviado su respuesta
+                  El estudiante aún no ha enviado su respuesta. No es posible calificar.
                 </p>
               </div>
             )}
@@ -300,8 +303,9 @@ function GradeModal({
                   type="range"
                   min={0} max={10} step={0.5}
                   value={score}
+                  disabled={!hasSubmission}
                   onChange={e => setScore(parseFloat(e.target.value))}
-                  className="flex-1 accent-pink-500"
+                  className="flex-1 accent-pink-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <div className="w-14 h-11 bg-slate-50 rounded-xl flex items-center
                                 justify-center border-2 border-transparent
@@ -322,23 +326,26 @@ function GradeModal({
               </label>
               <textarea
                 value={feedback}
+                disabled={!hasSubmission}
                 onChange={e => setFeedback(e.target.value)}
                 rows={3}
-                placeholder="Escribe tu comentario al estudiante..."
+                placeholder={hasSubmission ? "Escribe tu comentario al estudiante..." : "No disponible hasta que el estudiante entregue la tarea."}
                 className="w-full bg-slate-50 border-2 border-transparent
                            rounded-xl text-sm text-slate-800 placeholder:text-slate-400
                            px-4 py-3 focus:outline-none focus:bg-white
                            focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                           transition-all duration-300 resize-none font-medium"
+                           transition-all duration-300 resize-none font-medium
+                           disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
-            <button onClick={save} disabled={saving}
+            <button onClick={save} disabled={saving || !hasSubmission}
               className="w-full py-3.5 text-sm font-bold text-white rounded-xl
                          bg-gradient-to-r from-pink-500 to-rose-400
                          hover:from-pink-600 hover:to-rose-500
                          shadow-lg shadow-pink-200 active:scale-[0.98]
                          transition-all duration-300 disabled:opacity-50
+                         disabled:cursor-not-allowed
                          flex items-center justify-center gap-2">
               {saving ? (
                 <div className="w-4 h-4 border-2 border-white/40
@@ -349,6 +356,75 @@ function GradeModal({
             </button>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function EditHomeworkModal({
+  hw, onClose, onSaved,
+}: { hw: Homework; onClose: () => void; onSaved: () => void }) {
+  const [title, setTitle] = useState(hw.title);
+  const [content, setContent] = useState(hw.description);
+  const [due, setDue] = useState(hw.due_date_utc.slice(0, 10));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    setSaving(true); setError("");
+    try {
+      await api.patch(`/homework/${hw.id}`, {
+        title,
+        description: content,
+        due_date_utc: new Date(`${due}T23:59:59`).toISOString(),
+      });
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      setError(e.response?.data?.detail || "Error actualizando la tarea");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-lg bg-white/95 backdrop-blur-2xl rounded-[2.5rem] shadow-2xl border border-white p-8 space-y-4">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-xl font-black text-slate-800">Editar tarea</h2>
+          <button onClick={onClose} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
+            <X className="w-4 h-4 text-slate-500" />
+          </button>
+        </div>
+
+        <input
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold px-4 py-3 focus:outline-none focus:border-pink-500"
+          placeholder="Título"
+        />
+        <textarea
+          value={content}
+          onChange={e => setContent(e.target.value)}
+          rows={4}
+          className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm px-4 py-3 focus:outline-none focus:border-pink-500 resize-none"
+          placeholder="Instrucciones"
+        />
+        <input
+          type="date"
+          value={due}
+          onChange={e => setDue(e.target.value)}
+          className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold px-4 py-3 focus:outline-none focus:border-pink-500"
+        />
+
+        {error && <div className="bg-rose-50 text-rose-600 text-xs font-bold px-4 py-3 rounded-xl">{error}</div>}
+
+        <button
+          onClick={save}
+          disabled={saving || !title || !content || !due}
+          className="w-full py-3.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {saving ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : "Guardar cambios"}
+        </button>
       </div>
     </div>
   );
@@ -365,6 +441,8 @@ export default function HomeworkPage() {
   const [gradeTarget, setGradeTarget] = useState<Submission | null>(null);
   const [search, setSearch]           = useState("");
   const [studentSearch, setStudentSearch] = useState("");
+
+  const [editTarget, setEditTarget] = useState<Homework | null>(null);
 
   // Form nueva tarea
   const [hwTitle, setHwTitle]       = useState("");
@@ -389,13 +467,18 @@ export default function HomeworkPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  const [loadingSubs, setLoadingSubs] = useState(false);
+
   const fetchSubmissions = async (hwId: number) => {
     if (activeHw === hwId) { setActiveHw(null); return; }
     setActiveHw(hwId);
+    setSubmissions([]);
+    setLoadingSubs(true);
     try {
       const res = await api.get(`/homework/${hwId}/submissions`);
       setSubmissions(res.data);
     } catch { }
+    finally { setLoadingSubs(false); }
   };
 
   const createHomework = async () => {
@@ -575,10 +658,10 @@ export default function HomeworkPage() {
                                border border-white shadow-lg shadow-slate-100
                                overflow-hidden transition-all duration-200">
 
-                    <button
+                    <div
                       onClick={() => fetchSubmissions(hw.id)}
                       className="w-full flex items-center gap-4 p-5 text-left
-                                 hover:bg-slate-50/50 transition-colors"
+                                 hover:bg-slate-50/50 transition-colors cursor-pointer"
                     >
                       <div className="w-10 h-10 bg-pink-50 rounded-xl
                                       flex items-center justify-center flex-shrink-0">
@@ -604,53 +687,64 @@ export default function HomeworkPage() {
                           )}
                         </div>
                       </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditTarget(hw); }}
+                        className="text-xs font-bold text-slate-400 hover:text-pink-500 px-2 py-1 rounded-lg hover:bg-pink-50 transition-colors flex-shrink-0"
+                      >
+                        Editar
+                      </button>
                       <ChevronDown className={`w-4 h-4 text-slate-400 flex-shrink-0
                         transition-transform duration-200
                         ${activeHw === hw.id ? "rotate-180" : ""}`} />
-                    </button>
+                    </div>
 
                     {activeHw === hw.id && (
-                      <div className="border-t border-slate-100 px-5 pb-4 pt-3
-                                      space-y-2">
-                        {submissions.length === 0 ? (
+                      <div className="border-t border-slate-100 px-5 pb-4 pt-3 space-y-2">
+                        {loadingSubs ? (
+                          <div className="flex justify-center py-4">
+                            <div className="w-5 h-5 border-2 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
+                          </div>
+                        ) : submissions.length === 0 ? (
                           <p className="text-xs text-slate-400 py-3 text-center">
                             Sin entregas todavía
                           </p>
-                        ) : submissions.map(sub => {
-                          const st = getStatusLabel(sub.status);
-                          return (
-                            <div key={sub.id}
-                              className="flex items-center gap-3 py-2.5 px-4
-                                         bg-slate-50 rounded-xl">
-                              <SubmissionAvatar sub={sub}
-                                className="w-8 h-8 rounded-lg flex-shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-bold text-slate-700 truncate">
-                                  {sub.student_name ?? "Estudiante"}
-                                </p>
-                                {sub.score !== null && sub.score !== undefined && (
-                                  <p className="text-[10px] text-amber-600 font-black">
-                                    Nota: {sub.score}/10
+                        ) : (
+                          submissions.map((sub) => {
+                            const st = getStatusLabel(sub.status);
+                            const hasSubmission = Boolean(sub.submission) || sub.status === "submitted" || sub.status === "graded";
+                            
+                            return (
+                              <div key={sub.id} className="flex items-center gap-3 py-2.5 px-4 bg-slate-50 rounded-xl">
+                                <SubmissionAvatar sub={sub} className="w-8 h-8 rounded-lg flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-bold text-slate-700 truncate">
+                                    {sub.student_name ?? "Estudiante"}
                                   </p>
-                                )}
+                                  {sub.score !== null && sub.score !== undefined && (
+                                    <p className="text-[10px] text-amber-600 font-black">
+                                      Nota: {sub.score}/10
+                                    </p>
+                                  )}
+                                </div>
+                                <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full flex items-center gap-1 ${st.cls}`}>
+                                  {getStatusIcon(sub.status)}
+                                  {st.text}
+                                </span>
+                                <button
+                                  onClick={() => setGradeTarget(sub)}
+                                  disabled={!hasSubmission}
+                                  className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-colors flex-shrink-0 ${
+                                    hasSubmission
+                                      ? "text-pink-600 bg-pink-50 hover:bg-pink-100 cursor-pointer"
+                                      : "text-slate-300 bg-slate-100 cursor-not-allowed opacity-60"
+                                  }`}
+                                >
+                                  {sub.status === "graded" ? "Editar" : "Calificar"}
+                                </button>
                               </div>
-                              <span className={`text-[10px] font-black uppercase
-                                tracking-widest px-2.5 py-1 rounded-full
-                                flex items-center gap-1 ${st.cls}`}>
-                                {getStatusIcon(sub.status)}
-                                {st.text}
-                              </span>
-                              <button
-                                onClick={() => setGradeTarget(sub)}
-                                className="text-xs font-bold text-pink-600
-                                           bg-pink-50 hover:bg-pink-100 px-3 py-1.5
-                                           rounded-xl transition-colors flex-shrink-0"
-                              >
-                                {sub.status === "graded" ? "Editar" : "Calificar"}
-                              </button>
-                            </div>
-                          );
-                        })}
+                            );
+                          })
+                        )}
                       </div>
                     )}
                   </div>
@@ -665,13 +759,10 @@ export default function HomeworkPage() {
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 animate-in fade-in
                           slide-in-from-bottom-4 duration-500">
 
-            {/* Columna izquierda: datos de la tarea */}
             <div className="lg:col-span-2 bg-white/80 backdrop-blur-xl rounded-[2rem]
                 border border-white shadow-2xl shadow-slate-200/50
                 p-6 sm:p-8 space-y-5 relative h-fit">
 
-              {/* Si quieres evitar que el brillo decorativo sobresalga de los bordes redondeados,
-                  puedes envolverlo en su propio contenedor con overflow-hidden así: */}
               <div className="absolute inset-0 rounded-[2rem] overflow-hidden pointer-events-none">
                 <div className="absolute top-0 right-0 w-48 h-48 bg-pink-300/10
                                 rounded-full blur-[80px]" />
@@ -765,7 +856,6 @@ export default function HomeworkPage() {
               </button>
             </div>
 
-            {/* Columna derecha: asignar estudiantes con buscador + avatar */}
             <div className="lg:col-span-3 bg-white/80 backdrop-blur-xl rounded-[2rem]
                             border border-white shadow-2xl shadow-slate-200/50
                             p-6 sm:p-8 space-y-4">
@@ -852,6 +942,13 @@ export default function HomeworkPage() {
           submission={gradeTarget}
           onClose={() => setGradeTarget(null)}
           onSaved={() => activeHw && fetchSubmissions(activeHw)}
+        />
+      )}
+      {editTarget && (
+        <EditHomeworkModal
+          hw={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={fetchAll}
         />
       )}
     </div>
