@@ -51,8 +51,15 @@ function SubmitModal({
   const [success, setSuccess] = useState(false);
   const [error, setError]     = useState("");
 
+  const dueDate = new Date(hw.homework.due_date_utc);
+  const isOverdue = dueDate < new Date();
+  // Si ya fue entregada (submitted/graded) antes de vencer, seguimos permitiendo
+  // editar la entrega existente aunque la fecha ya haya pasado — el bloqueo es
+  // solo para el primer envío de tareas nunca entregadas.
+  const canSubmit = !isOverdue || hw.status !== "pending";
+
   const submit = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() || !canSubmit) return;
     setSending(true);
     setError("");
     try {
@@ -67,9 +74,6 @@ function SubmitModal({
       setSending(false);
     }
   };
-
-  const dueDate = new Date(hw.homework.due_date_utc);
-  const isOverdue = dueDate < new Date();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -107,19 +111,20 @@ function SubmitModal({
           </button>
         </div>
 
-        {isOverdue && (
+        {isOverdue && hw.status === "pending" && (
           <div
-            className="mb-5 bg-amber-50 border border-amber-100 rounded-xl
+            className="mb-5 bg-rose-50 border border-rose-100 rounded-xl
                           px-4 py-3 flex items-center gap-2"
           >
-            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
-            <p className="text-xs font-bold text-amber-600">
+            <AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0" />
+            <p className="text-xs font-bold text-rose-600">
               Esta tarea venció el{" "}
               {dueDate.toLocaleDateString("es", {
                 day: "numeric",
                 month: "long",
               })}
-              . Aún puedes entregarla.
+              . Ya no se puede entregar — ponte en contacto con tu profesor
+              para que amplíe la fecha límite.
             </p>
           </div>
         )}
@@ -156,13 +161,15 @@ function SubmitModal({
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 rows={6}
+                disabled={!canSubmit}
                 placeholder="Escribe tu respuesta aquí..."
                 className="w-full bg-slate-50 border-2 border-transparent
                              rounded-xl text-sm font-medium text-slate-800
                              placeholder:text-slate-400 px-4 py-3.5
                              focus:outline-none focus:bg-white
                              focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                             transition-all duration-300 resize-none"
+                             transition-all duration-300 resize-none
+                             disabled:opacity-60 disabled:cursor-not-allowed"
               />
               <p className="text-xs text-slate-400 text-right mt-1">
                 {text.length} caracteres
@@ -182,7 +189,7 @@ function SubmitModal({
 
             <button
               onClick={submit}
-              disabled={!text.trim() || sending}
+              disabled={!text.trim() || sending || !canSubmit}
               className="w-full py-3.5 text-sm font-bold text-white rounded-xl
                            bg-gradient-to-r from-pink-500 to-rose-400
                            hover:from-pink-600 hover:to-rose-500
@@ -196,6 +203,8 @@ function SubmitModal({
                   className="w-4 h-4 border-2 border-white/40
                                 border-t-white rounded-full animate-spin"
                 />
+              ) : !canSubmit ? (
+                "Contacta a tu profesor"
               ) : (
                 <>
                   <Send className="w-4 h-4" />
