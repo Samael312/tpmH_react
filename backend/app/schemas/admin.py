@@ -37,7 +37,6 @@ class PlatformStatsResponse(BaseModel):
 # ─── Gestión de profesores ───────────────────────────────────────────────────
 
 class TeacherAdminResponse(BaseModel):
-    """Vista del profesor para el superadmin"""
     id: int
     user_id: int
     username: str
@@ -52,6 +51,9 @@ class TeacherAdminResponse(BaseModel):
     created_at: datetime
     video_url: Optional[str] = None
     theme_color: Optional[str] = None
+    profile_photo_url: Optional[str] = None
+    phone_number: Optional[str] = None
+    nationality: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -82,6 +84,7 @@ class UserAdminResponse(BaseModel):
     name: str
     surname: str
     phone_number: Optional[str] = None
+    nationality: Optional[str] = None
     role: str
     is_active: bool
     is_verified: bool
@@ -97,7 +100,7 @@ class UpdateUserStatusRequest(BaseModel):
 
 class AdminUserUpdate(BaseModel):
     role:            Optional[str]   = None
-    status:          Optional[str]   = None
+    is_active:       Optional[bool]  = None
     package_name:    Optional[str]   = None
     phone_number:    Optional[str]   = None
-    price_per_class: Optional[float] = None
+    nationality:    Optional[str]   = None

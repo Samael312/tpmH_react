@@ -209,8 +209,10 @@ def list_all_teachers(
             total_students=total_students,
             created_at=teacher.created_at,
             video_url=teacher.video_url,
+            theme_color=teacher.theme_color,
             profile_photo_url=teacher.profile_photo_url,
-            theme_color=teacher.theme_color
+            phone_number=teacher.user.phone_number,
+            nationality=teacher.nationality,
         ))
 
     return result
@@ -440,6 +442,8 @@ def get_pending_withdrawals(
             "teacher_username": teacher.user.username if teacher else "unknown",
             "teacher_name": f"{teacher.user.name} {teacher.user.surname}" if teacher else "unknown",
             "amount": w.amount,
+            "destination_method": w.destination_method,
+            "destination_details": w.destination_details,
             "created_at": w.created_at,
             "status": w.status,
         })
@@ -564,7 +568,7 @@ def admin_update_user(
     user_id: int,
     data: AdminUserUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin),
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -572,12 +576,18 @@ def admin_update_user(
 
     if data.role is not None:
         user.role = data.role
-    if data.status is not None:
-        user.status = data.status
+
+    if data.is_active is not None:
+        if user.id == current_user.id:
+            raise HTTPException(400, "No puedes desactivar tu propia cuenta")
+        if user.role == UserRole.superadmin:
+            raise HTTPException(403, "No puedes modificar el estado de otro superadmin")
+        user.is_active = data.is_active
+
     if data.phone_number is not None:
         user.phone_number = data.phone_number
+
     if data.package_name is not None:
-        # Cascada: actualizar enrollment activo
         enrollment = (
             db.query(Enrollment)
             .filter(
@@ -593,10 +603,8 @@ def admin_update_user(
                 .first()
             )
             if package:
-                enrollment.package_id     = package.id
-                enrollment.classes_total  = package.total_classes
-    if data.price_per_class is not None:
-        user.price_per_class = data.price_per_class
+                enrollment.package_id    = package.id
+                enrollment.classes_total = package.classes_count
 
     db.commit()
     return {"ok": True}

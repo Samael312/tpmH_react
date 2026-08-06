@@ -118,6 +118,7 @@ def get_payment_config(db: Session = Depends(get_db)):
         binance_address=config.binance_address if config.binance_enabled else None,
         binance_network=config.binance_network if config.binance_enabled else None,
         whatsapp_number=config.whatsapp_number,
+        default_commission_rate=config.default_commission_rate or 0.15,
         has_any_method=has_any,
     )
 

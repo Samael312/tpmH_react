@@ -12,7 +12,8 @@ class PaymentConfigResponse(BaseModel):
     binance_address: Optional[str]
     binance_network: Optional[str]
     whatsapp_number: Optional[str]
-    has_any_method: bool  # False = mostrar solo WhatsApp
+    default_commission_rate: float
+    has_any_method: bool
 
     class Config:
         from_attributes = True

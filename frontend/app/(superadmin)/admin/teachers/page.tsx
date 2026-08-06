@@ -5,6 +5,7 @@ import { useTeachers } from '@/hooks/useAdminData'
 import { Card, Badge, Button } from '@/components/ui'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
+import { getFlagForNationality } from '@/lib/nationalities'
 
 const STATUS_TABS = [
   { key: undefined,   label: 'Todos' },
@@ -126,11 +127,16 @@ export default function TeachersPage() {
                 <div className="flex flex-col md:flex-row md:items-center gap-6">
 
                   {/* Avatar & Basic Info */}
+                  {/* Avatar & Basic Info */}
                   <div className="flex items-center gap-4 flex-1 min-w-0">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-100 to-rose-50 border border-pink-200 flex items-center justify-center flex-shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                      <span className="text-pink-600 font-black text-xl">
-                        {teacher.name[0]}{teacher.surname[0]}
-                      </span>
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-100 to-rose-50 border border-pink-200 flex items-center justify-center flex-shrink-0 shadow-inner group-hover:scale-105 transition-transform overflow-hidden">
+                      {teacher.profile_photo_url ? (
+                        <img src={teacher.profile_photo_url} alt={teacher.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-pink-600 font-black text-xl">
+                          {teacher.name[0]}{teacher.surname[0]}
+                        </span>
+                      )}
                     </div>
 
                     <div className="min-w-0">
@@ -138,12 +144,18 @@ export default function TeachersPage() {
                         <span className="text-slate-800 font-bold text-lg truncate">
                           {teacher.name} {teacher.surname}
                         </span>
+                        {teacher.nationality && (
+                          <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
+                            {getFlagForNationality(teacher.nationality)} {teacher.nationality}
+                          </span>
+                        )}
                         <Badge variant={statusBadge[teacher.status] || 'neutral'} className="shadow-sm">
                           {statusLabel[teacher.status] || teacher.status}
                         </Badge>
                       </div>
                       <div className="text-sm font-medium text-slate-400 truncate">
                         @{teacher.username} • {teacher.email}
+                        {teacher.phone_number && <span> • {teacher.phone_number}</span>}
                       </div>
                     </div>
                   </div>

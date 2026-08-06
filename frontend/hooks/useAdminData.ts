@@ -38,6 +38,8 @@ interface Teacher {
   name: string
   surname: string
   phone_number?: string
+  nationality?: string | null
+  profile_photo_url?: string | null
   email: string
   status: string
   commission_rate: number
@@ -48,11 +50,12 @@ interface Teacher {
 }
 
 interface Student {
-  id: number
+    id: number
   username: string
   name: string
   surname: string
   phone_number?: string
+  nationality?: string | null
   email: string
   role: string
   is_active: boolean
@@ -82,6 +85,8 @@ interface WithdrawalRecord {
   teacher_username: string
   teacher_name: string
   amount: number
+  destination_method: string | null
+  destination_details: string | null
   status: string
   created_at: string
 }

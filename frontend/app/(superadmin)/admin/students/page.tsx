@@ -7,6 +7,7 @@ import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 import { useRouter } from 'next/navigation'
 import { Users } from 'lucide-react'
+import { getFlagForNationality } from '@/lib/nationalities'
 
 export default function StudentsPage() {
   const [search, setSearch] = useState('')
@@ -155,27 +156,30 @@ export default function StudentsPage() {
                 </div>
 
                 {/* Estado */}
-                <div className="flex gap-2 items-center">
-                  <Badge variant={student.is_active ? 'success' : 'neutral'} className="shadow-sm">
-                    {student.is_active ? 'Activo' : 'Inactivo'}
-                  </Badge>
-                  {student.is_verified && (
-                    <Badge variant="info" className="shadow-sm">Verificado</Badge>
-                  )}
+                {/* Contacto */}
+                <div className="min-w-0">
+                  <p className="text-slate-600 text-sm font-medium truncate">
+                    {student.email}
+                  </p>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    {student.phone_number && (
+                      <span className="text-slate-400 text-[11px] font-bold">
+                        {student.phone_number}
+                      </span>
+                    )}
+                    {student.nationality && (
+                      <span className="text-slate-400 text-[11px] font-bold">
+                        {getFlagForNationality(student.nationality)} {student.nationality}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-slate-400 text-[11px] font-bold mt-1 uppercase tracking-wide">
+                    Desde {new Date(student.created_at).toLocaleDateString('es', {
+                      day: 'numeric', month: 'short', year: 'numeric'
+                    })}
+                  </p>
                 </div>
 
-                {/* Acción */}
-                <div className="flex justify-end mt-2 md:mt-0">
-                  <Button
-                    size="sm"
-                    variant={student.is_active ? 'danger' : 'secondary'}
-                    loading={actioning === student.id}
-                    onClick={() => toggleStatus(student.id, student.is_active)}
-                    className="w-full md:w-auto"
-                  >
-                    {student.is_active ? 'Desactivar' : 'Activar'}
-                  </Button>
-                </div>
               </div>
             ))}
           </div>
