@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Save, Search, ChevronDown,
@@ -17,30 +17,21 @@ interface StudentRow {
   surname: string;
   email: string;
   role: string;
-  status: string;
+  is_active: boolean;
   package_name: string | null;
-  price_per_class: number;
   classes_used: number;
   classes_total: number;
   // Estado local de edición
   _dirty: boolean;
   _original: {
     role: string;
-    status: string;
+    is_active: boolean;
     package_name: string | null;
-    price_per_class: number;
   };
 }
 
 const ROLES    = ["student", "teacher", "superadmin"];
-const STATUSES = ["active", "inactive", "suspended"];
 const PACKAGES = ["Básico", "Personalizado", "Intensivo", "Flexible", "Trial"];
-
-const STATUS_BADGE: Record<string, string> = {
-  active:    "bg-emerald-100 text-emerald-700",
-  inactive:  "bg-slate-100 text-slate-500",
-  suspended: "bg-red-100 text-red-600",
-};
 
 // ─── Celda editable con select ────────────────────────────────────────────────
 function SelectCell({
@@ -81,32 +72,34 @@ function SelectCell({
   );
 }
 
-// ─── Celda editable numérica ──────────────────────────────────────────────────
-function NumberCell({
+// ─── Celda toggle para is_active ──────────────────────────────────────────────
+function ActiveToggleCell({
   value,
   dirty,
   onChange,
 }: {
-  value: number;
+  value: boolean;
   dirty: boolean;
-  onChange: (v: number) => void;
+  onChange: (v: boolean) => void;
 }) {
   return (
-    <input
-      type="number"
-      min={0}
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
       className={`
-        w-20 text-xs font-bold px-2.5 py-1.5 rounded-lg border-2
-        text-right transition-all duration-200
-        focus:outline-none focus:ring-2 focus:ring-pink-200
+        w-full flex items-center justify-center gap-1.5 text-xs font-bold px-2.5 py-1.5
+        rounded-lg border-2 transition-all duration-200
         ${dirty
           ? "border-amber-300 bg-amber-50 text-amber-800"
-          : "border-transparent bg-slate-100 text-slate-700 hover:bg-slate-200"
+          : value
+            ? "border-transparent bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+            : "border-transparent bg-slate-100 text-slate-500 hover:bg-slate-200"
         }
       `}
-    />
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${value ? "bg-emerald-500" : "bg-slate-400"}`} />
+      {value ? "Activo" : "Inactivo"}
+    </button>
   );
 }
 
@@ -123,7 +116,7 @@ export default function BulkEditStudentsPage() {
 
   const [search, setSearch]       = useState("");
   const [filterRole, setFilterRole]     = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterActive, setFilterActive] = useState("all"); // all | active | inactive
   const [selectedIds, setSelectedIds]   = useState<Set<number>>(new Set());
 
   // ── Carga inicial ──
@@ -140,17 +133,15 @@ export default function BulkEditStudentsPage() {
           surname:        u.surname,
           email:          u.email,
           role:           u.role,
-          status:         u.status ?? "active",
+          is_active:      u.is_active ?? true,
           package_name:   u.package_name ?? null,
-          price_per_class: u.price_per_class ?? 0,
           classes_used:   u.classes_used ?? 0,
           classes_total:  u.classes_total ?? 0,
           _dirty: false,
           _original: {
             role:           u.role,
-            status:         u.status ?? "active",
+            is_active:      u.is_active ?? true,
             package_name:   u.package_name ?? null,
-            price_per_class: u.price_per_class ?? 0,
           },
         })
       );
@@ -180,30 +171,26 @@ export default function BulkEditStudentsPage() {
     if (filterRole !== "all") {
       result = result.filter((r) => r.role === filterRole);
     }
-    if (filterStatus !== "all") {
-      result = result.filter((r) => r.status === filterStatus);
+    if (filterActive !== "all") {
+      result = result.filter((r) => (filterActive === "active" ? r.is_active : !r.is_active));
     }
     setFiltered(result);
-  }, [rows, search, filterRole, filterStatus]);
+  }, [rows, search, filterRole, filterActive]);
 
   // ── Editar celda ──
   const updateRow = (
     id: number,
-    field: keyof Pick<
-      StudentRow,
-      "role" | "status" | "package_name" | "price_per_class"
-    >,
-    value: string | number | null
+    field: keyof Pick<StudentRow, "role" | "is_active" | "package_name">,
+    value: string | boolean | null
   ) => {
     setRows((prev) =>
       prev.map((r) => {
         if (r.id !== id) return r;
         const updated = { ...r, [field]: value };
         const dirty =
-          updated.role            !== r._original.role ||
-          updated.status          !== r._original.status ||
-          updated.package_name    !== r._original.package_name ||
-          updated.price_per_class !== r._original.price_per_class;
+          updated.role         !== r._original.role ||
+          updated.is_active    !== r._original.is_active ||
+          updated.package_name !== r._original.package_name;
         return { ...updated, _dirty: dirty };
       })
     );
@@ -231,20 +218,17 @@ export default function BulkEditStudentsPage() {
   const [showBulk, setShowBulk]     = useState(false);
 
   const applyBulk = () => {
-    if (!bulkField || !bulkValue || selectedIds.size === 0) return;
+    if (!bulkField || bulkValue === "" || selectedIds.size === 0) return;
     setRows((prev) =>
       prev.map((r) => {
         if (!selectedIds.has(r.id)) return r;
-        const field = bulkField as
-          "role" | "status" | "package_name" | "price_per_class";
-        const value =
-          field === "price_per_class" ? Number(bulkValue) : bulkValue;
+        const field = bulkField as "role" | "is_active" | "package_name";
+        const value = field === "is_active" ? bulkValue === "true" : bulkValue;
         const updated = { ...r, [field]: value };
         const dirty =
-          updated.role            !== r._original.role ||
-          updated.status          !== r._original.status ||
-          updated.package_name    !== r._original.package_name ||
-          updated.price_per_class !== r._original.price_per_class;
+          updated.role         !== r._original.role ||
+          updated.is_active    !== r._original.is_active ||
+          updated.package_name !== r._original.package_name;
         return { ...updated, _dirty: dirty };
       })
     );
@@ -260,10 +244,9 @@ export default function BulkEditStudentsPage() {
         if (r.id !== id) return r;
         return {
           ...r,
-          role:            r._original.role,
-          status:          r._original.status,
-          package_name:    r._original.package_name,
-          price_per_class: r._original.price_per_class,
+          role:         r._original.role,
+          is_active:    r._original.is_active,
+          package_name: r._original.package_name,
           _dirty: false,
         };
       })
@@ -281,14 +264,12 @@ export default function BulkEditStudentsPage() {
       await Promise.all(
         dirtyRows.map((r) =>
           api.patch(`/admin/users/${r.id}`, {
-            role:            r.role,
-            status:          r.status,
-            package_name:    r.package_name,
-            price_per_class: r.price_per_class,
+            role:         r.role,
+            is_active:    r.is_active,
+            package_name: r.package_name,
           })
         )
       );
-      // Limpiar dirty flags
       setRows((prev) =>
         prev.map((r) =>
           r._dirty
@@ -296,10 +277,9 @@ export default function BulkEditStudentsPage() {
                 ...r,
                 _dirty: false,
                 _original: {
-                  role:            r.role,
-                  status:          r.status,
-                  package_name:    r.package_name,
-                  price_per_class: r.price_per_class,
+                  role:         r.role,
+                  is_active:    r.is_active,
+                  package_name: r.package_name,
                 },
               }
             : r
@@ -319,7 +299,6 @@ export default function BulkEditStudentsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 relative overflow-hidden">
-      {/* Blobs */}
       <div
         className="fixed top-[-80px] right-[-80px] w-[400px] h-[400px]
                       bg-pink-300/15 rounded-full blur-[100px] pointer-events-none"
@@ -364,7 +343,6 @@ export default function BulkEditStudentsPage() {
               />
             </button>
 
-            {/* Guardar */}
             <button
               onClick={saveAll}
               disabled={dirtyRows.length === 0 || saving}
@@ -462,11 +440,11 @@ export default function BulkEditStudentsPage() {
               />
             </div>
 
-            {/* Filtro estado */}
+            {/* Filtro activo/inactivo */}
             <div className="relative">
               <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
+                value={filterActive}
+                onChange={(e) => setFilterActive(e.target.value)}
                 className="appearance-none bg-slate-100 border-2 border-transparent
                              rounded-xl text-sm font-bold text-slate-700
                              pl-3 pr-8 py-2.5 cursor-pointer
@@ -474,9 +452,8 @@ export default function BulkEditStudentsPage() {
                              transition-colors"
               >
                 <option value="all">Todos los estados</option>
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
+                <option value="active">Activos</option>
+                <option value="inactive">Inactivos</option>
               </select>
               <ChevronDown
                 className="absolute right-2.5 top-1/2 -translate-y-1/2
@@ -512,7 +489,7 @@ export default function BulkEditStudentsPage() {
                   <div className="relative">
                     <select
                       value={bulkField}
-                      onChange={(e) => setBulkField(e.target.value)}
+                      onChange={(e) => { setBulkField(e.target.value); setBulkValue(""); }}
                       className="appearance-none bg-white border-2
                                    border-slate-200 rounded-xl text-xs
                                    font-bold text-slate-700 pl-2.5 pr-7 py-2
@@ -521,9 +498,8 @@ export default function BulkEditStudentsPage() {
                     >
                       <option value="">Seleccionar campo...</option>
                       <option value="role">Rol</option>
-                      <option value="status">Estado</option>
+                      <option value="is_active">Estado (activo/inactivo)</option>
                       <option value="package_name">Paquete</option>
-                      <option value="price_per_class">Precio/clase</option>
                     </select>
                     <ChevronDown
                       className="absolute right-2 top-1/2 -translate-y-1/2
@@ -555,7 +531,7 @@ export default function BulkEditStudentsPage() {
                     </div>
                   )}
 
-                  {bulkField === "status" && (
+                  {bulkField === "is_active" && (
                     <div className="relative">
                       <select
                         value={bulkValue}
@@ -567,9 +543,8 @@ export default function BulkEditStudentsPage() {
                                      focus:border-pink-400"
                       >
                         <option value="">Valor...</option>
-                        {STATUSES.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
+                        <option value="true">Activo</option>
+                        <option value="false">Inactivo</option>
                       </select>
                       <ChevronDown
                         className="absolute right-2 top-1/2 -translate-y-1/2
@@ -601,23 +576,9 @@ export default function BulkEditStudentsPage() {
                     </div>
                   )}
 
-                  {bulkField === "price_per_class" && (
-                    <input
-                      type="number"
-                      min={0}
-                      value={bulkValue}
-                      onChange={(e) => setBulkValue(e.target.value)}
-                      placeholder="0"
-                      className="w-20 bg-white border-2 border-slate-200
-                                   rounded-xl text-xs font-bold text-slate-700
-                                   px-2.5 py-2 focus:outline-none
-                                   focus:border-pink-400"
-                    />
-                  )}
-
                   <button
                     onClick={applyBulk}
-                    disabled={!bulkField || !bulkValue}
+                    disabled={!bulkField || bulkValue === ""}
                     className="px-3 py-2 bg-pink-500 text-white text-xs
                                  font-bold rounded-xl disabled:opacity-40
                                  hover:bg-pink-600 transition-colors"
@@ -662,11 +623,10 @@ export default function BulkEditStudentsPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[900px]">
+              <table className="w-full text-sm min-w-[820px]">
                 {/* Cabecera */}
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/60">
-                    {/* Checkbox todo */}
                     <th className="w-10 px-4 py-3.5">
                       <button
                         onClick={toggleAll}
@@ -691,7 +651,6 @@ export default function BulkEditStudentsPage() {
                       "Rol",
                       "Estado",
                       "Paquete",
-                      "Precio/clase",
                       "Clases",
                       "",
                     ].map((h) => (
@@ -784,15 +743,12 @@ export default function BulkEditStudentsPage() {
                         />
                       </td>
 
-                      {/* Estado editable */}
+                      {/* Estado (is_active) editable */}
                       <td className="px-3 py-2.5">
-                        <SelectCell
-                          value={row.status}
-                          options={STATUSES}
-                          dirty={
-                            row._dirty && row.status !== row._original.status
-                          }
-                          onChange={(v) => updateRow(row.id, "status", v)}
+                        <ActiveToggleCell
+                          value={row.is_active}
+                          dirty={row._dirty && row.is_active !== row._original.is_active}
+                          onChange={(v) => updateRow(row.id, "is_active", v)}
                         />
                       </td>
 
@@ -807,21 +763,6 @@ export default function BulkEditStudentsPage() {
                           }
                           onChange={(v) =>
                             updateRow(row.id, "package_name", v || null)
-                          }
-                        />
-                      </td>
-
-                      {/* Precio editable */}
-                      <td className="px-3 py-2.5">
-                        <NumberCell
-                          value={row.price_per_class}
-                          dirty={
-                            row._dirty &&
-                            row.price_per_class !==
-                              row._original.price_per_class
-                          }
-                          onChange={(v) =>
-                            updateRow(row.id, "price_per_class", v)
                           }
                         />
                       </td>

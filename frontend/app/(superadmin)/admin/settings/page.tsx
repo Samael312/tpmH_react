@@ -12,6 +12,7 @@ interface PaymentConfig {
   binance_address: string | null
   binance_network: string | null
   whatsapp_number: string | null
+  default_commission_rate: number
 }
 
 interface PlatformConfig {
@@ -228,6 +229,36 @@ export default function SettingsPage() {
                   placeholder="+58 412 0000000"
                   className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300 transition-all"
                 />
+              </div>
+
+              {/* Comisión por defecto */}
+              <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">💰</span>
+                  <div>
+                    <p className="text-slate-800 text-sm font-bold">Comisión por defecto</p>
+                    <p className="text-slate-500 text-xs font-medium mt-0.5">
+                      Se aplica a profesores nuevos. Puedes personalizarla por profesor desde "Profesores".
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 max-w-xs">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="1"
+                    value={paymentConfig.default_commission_rate}
+                    onChange={e => setPaymentConfig({
+                      ...paymentConfig,
+                      default_commission_rate: parseFloat(e.target.value) || 0
+                    })}
+                    className="w-24 bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300 transition-all"
+                  />
+                  <span className="text-sm font-bold text-slate-500">
+                    = {(paymentConfig.default_commission_rate * 100).toFixed(0)}%
+                  </span>
+                </div>
               </div>
 
               <div className="pt-4 flex justify-end">

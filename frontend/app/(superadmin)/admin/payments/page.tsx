@@ -327,6 +327,17 @@ export default function PaymentsPage() {
                     </span>
                   </div>
 
+                  {withdrawal.destination_method && (
+                    <div className="flex flex-col max-w-[220px]">
+                      <span className="text-[10px] uppercase font-black text-slate-400 tracking-widest">
+                        Enviar a ({withdrawal.destination_method})
+                      </span>
+                      <span className="text-xs font-bold text-slate-700 truncate" title={withdrawal.destination_details ?? ""}>
+                        {withdrawal.destination_details || "Sin datos"}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex gap-2 w-full md:w-auto">
                     <Button
                       variant="primary"
