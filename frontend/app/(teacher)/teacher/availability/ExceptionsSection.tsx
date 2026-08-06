@@ -20,6 +20,7 @@ interface Exception {
 export default function ExceptionsSection() {
   const [exceptions, setExceptions] = useState<Exception[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -120,6 +121,7 @@ export default function ExceptionsSection() {
     // 1. Limpiamos alertas previas
     setError("");
     setSuccess("");
+    setDeletingId(id);
     
     try {
       // 2. Ejecutamos el borrado en la API
@@ -378,13 +380,19 @@ export default function ExceptionsSection() {
                   </div>
                 </div>
                 <button
-                  onClick={() => remove(exc.id)}
-                  className="text-slate-300 hover:text-rose-500 hover:bg-rose-50
-                             p-2 rounded-lg transition-colors flex-shrink-0"
-                  title="Eliminar excepción"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                    onClick={() => remove(exc.id)}
+                    disabled={deletingId === exc.id}
+                    className="text-slate-300 hover:text-rose-500 hover:bg-rose-50
+                              p-2 rounded-lg transition-colors flex-shrink-0
+                              disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                    title="Eliminar excepción"
+                  >
+                    {deletingId === exc.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                  </button>
               </div>
             ))}
           </div>
