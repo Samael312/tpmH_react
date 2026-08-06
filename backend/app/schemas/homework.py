@@ -25,10 +25,28 @@ class HomeworkResponse(BaseModel):
         from_attributes = True
 
 class HomeworkUpdate(BaseModel):
-    """Todos opcionales porque es PATCH"""
+    """
+    Edición de una tarea ya creada: nombre, contenido y/o fecha límite.
+    Todos los campos son opcionales porque es un PATCH parcial.
+    No permite cambiar a quién está asignada — eso requiere crear una nueva.
+    """
     title: Optional[str] = None
     description: Optional[str] = None
     due_date_utc: Optional[datetime] = None
+ 
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError("El título no puede estar vacío")
+        return v
+ 
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError("Las instrucciones no pueden estar vacías")
+        return v
 
 
 class HomeworkAssignmentResponse(BaseModel):

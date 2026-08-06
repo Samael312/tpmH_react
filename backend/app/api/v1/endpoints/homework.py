@@ -85,6 +85,31 @@ def create_homework(
 
     return homework
 
+@router.delete("/{homework_id}")
+def delete_homework(
+    homework_id: int,
+    current_user: User = Depends(get_current_teacher),
+    db: Session = Depends(get_db)
+):
+    """
+    Elimina una tarea. Se desactiva en lugar de borrarse de la BD
+    para conservar el historial de entregas ya calificadas.
+    """
+    homework = db.query(Homework).filter(
+        Homework.id == homework_id,
+        Homework.teacher_id == current_user.teacher_profile.id
+    ).first()
+ 
+    if not homework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tarea no encontrada"
+        )
+ 
+    homework.is_active = False
+    db.commit()
+ 
+    return {"message": "Tarea eliminada"}
 
 @router.get(
     "/my-homework",

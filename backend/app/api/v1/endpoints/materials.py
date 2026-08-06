@@ -11,6 +11,7 @@ from app.models.material import Material, MaterialAssignment
 from app.models.student import StudentProfile
 from app.schemas.materials import (
     MaterialCreate,
+    MaterialUpdate,
     MaterialResponse,
     AssignMaterialRequest,
     MaterialAssignmentResponse,
@@ -79,6 +80,39 @@ async def create_material(
     )
 
     db.add(material)
+    db.commit()
+    db.refresh(material)
+
+    return material
+
+
+@router.patch("/{material_id}", response_model=MaterialResponse)
+def update_material(
+    material_id: int,
+    data: MaterialUpdate,
+    current_user: User = Depends(get_current_teacher),
+    db: Session = Depends(get_db)
+):
+    """
+    Edita los datos de un material existente: título, descripción,
+    categoría y/o nivel. No reemplaza el archivo ni las palabras de
+    vocabulario — eso se maneja desde sus propios endpoints.
+    """
+    material = db.query(Material).filter(
+        Material.id == material_id,
+        Material.teacher_id == current_user.teacher_profile.id
+    ).first()
+
+    if not material:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Material no encontrado"
+        )
+
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(material, field, value)
+
     db.commit()
     db.refresh(material)
 

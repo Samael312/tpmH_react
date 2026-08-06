@@ -4,15 +4,17 @@ import { useState, useRef, useCallback } from "react";
 import {
   Upload, FileText, Image, Trash2,
   Users, Plus, BookOpen, Search, X, Check,
-  Volume2, ChevronDown, FolderOpen, Sparkles
+  Volume2, ChevronDown, FolderOpen, Sparkles,
+  Edit2, AlertTriangle, Loader2
 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 
-// 1. Interfaz actualizada
+// 1. Interfaz actualizada (incluye descripción)
 interface Material {
   id: number;
   title: string;
+  description?: string | null;
   category: string;
   level: string;
   file_url: string | null;
@@ -265,7 +267,7 @@ function AssignModal({
   );
 }
 
-// ─── Modal Vocabulario ────────────────────────────────────────────────────────
+// ─── Modal Vocabulario (palabras) ─────────────────────────────────────────────
 function VocabModal({
   material,
   onClose,
@@ -275,7 +277,6 @@ function VocabModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  // 3. Modificado para leer de vocabulary_words
   const words = material.vocabulary_words ?? [];
   const [list, setList]       = useState<string[]>(words);
   const [input, setInput]     = useState("");
@@ -314,7 +315,7 @@ function VocabModal({
 
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-black text-slate-800 tracking-tight">
-            Editar vocabulario
+            Editar palabras
           </h2>
           <button onClick={onClose}
             className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200
@@ -323,7 +324,6 @@ function VocabModal({
           </button>
         </div>
 
-        {/* Añadir palabra */}
         <div className="flex gap-2 mb-4">
           <div className="group relative flex-1">
             <input
@@ -346,7 +346,6 @@ function VocabModal({
           </button>
         </div>
 
-        {/* Lista */}
         <div className="flex flex-wrap gap-2 min-h-[80px] bg-slate-50
                         rounded-2xl p-4 mb-6 max-h-48 overflow-y-auto">
           {list.length === 0 ? (
@@ -386,6 +385,298 @@ function VocabModal({
   );
 }
 
+// ─── Modal Editar detalles ───────────────────────────────────────────────────
+function EditMaterialModal({
+  material,
+  onClose,
+  onSaved,
+}: {
+  material: Material;
+  onClose: () => void;
+  onSaved: (updated: Material) => void;
+}) {
+  const [title, setTitle]             = useState(material.title);
+  const [description, setDescription] = useState(material.description ?? "");
+  const [category, setCategory]       = useState(material.category);
+  const [level, setLevel]             = useState(material.level ?? LEVELS[0]);
+  const [saving, setSaving]           = useState(false);
+  const [error, setError]             = useState("");
+
+  const materialIsVocab = isVocab(material);
+
+  const save = async () => {
+    if (!title.trim()) {
+      setError("El título no puede estar vacío");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const res = await api.patch(`/materials/${material.id}`, {
+        title,
+        description: description.trim() || null,
+        category: materialIsVocab ? material.category : category,
+        level,
+      });
+      onSaved(res.data);
+      onClose();
+    } catch (e: any) {
+      setError(e.response?.data?.detail || "Error guardando los cambios");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+           onClick={onClose} />
+      <div className="relative w-full max-w-lg bg-white/90 backdrop-blur-2xl
+                      rounded-[2.5rem] shadow-2xl shadow-slate-200/60
+                      border border-white p-8 animate-in fade-in zoom-in-95
+                      duration-200">
+        <div className="absolute top-0 right-0 w-48 h-48 bg-blue-300/15
+                        rounded-full blur-[80px] pointer-events-none" />
+
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h2 className="text-xl font-black text-slate-800 tracking-tight">
+              Editar detalles
+            </h2>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Actualiza la información de este material
+            </p>
+          </div>
+          <button onClick={onClose}
+            className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200
+                       flex items-center justify-center transition-colors flex-shrink-0">
+            <X className="w-4 h-4 text-slate-500" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-[10px] font-black text-slate-400
+                              uppercase tracking-widest block mb-1.5">
+              Título
+            </label>
+            <input
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="Título del material"
+              className="w-full bg-slate-50 border-2 border-transparent
+                         rounded-xl text-sm font-bold text-slate-800
+                         placeholder:text-slate-400 px-4 py-3
+                         focus:outline-none focus:bg-white
+                         focus:border-pink-500 focus:ring-4 focus:ring-pink-50
+                         transition-all duration-300"
+            />
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black text-slate-400
+                              uppercase tracking-widest block mb-1.5">
+              Descripción
+            </label>
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              rows={3}
+              placeholder="Breve descripción de qué trata este material..."
+              className="w-full bg-slate-50 border-2 border-transparent
+                         rounded-xl text-sm font-medium text-slate-800
+                         placeholder:text-slate-400 px-4 py-3
+                         focus:outline-none focus:bg-white
+                         focus:border-pink-500 focus:ring-4 focus:ring-pink-50
+                         transition-all duration-300 resize-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-[10px] font-black text-slate-400
+                                uppercase tracking-widest block mb-1.5">
+                Categoría
+              </label>
+              {materialIsVocab ? (
+                <div className="w-full bg-slate-100 rounded-xl text-sm font-bold
+                                text-slate-400 px-4 py-3">
+                  Vocabulary
+                </div>
+              ) : (
+                <div className="relative">
+                  <select
+                    value={category}
+                    onChange={e => setCategory(e.target.value)}
+                    className="w-full appearance-none bg-slate-50 border-2
+                               border-transparent rounded-xl text-sm font-bold
+                               text-slate-800 px-4 py-3 focus:outline-none
+                               focus:bg-white focus:border-pink-500
+                               focus:ring-4 focus:ring-pink-50
+                               transition-all duration-300 cursor-pointer"
+                  >
+                    {CATEGORIES.filter(c => c !== "Vocabulary").map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2
+                                          w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="text-[10px] font-black text-slate-400
+                                uppercase tracking-widest block mb-1.5">
+                Nivel
+              </label>
+              <div className="relative">
+                <select
+                  value={level}
+                  onChange={e => setLevel(e.target.value)}
+                  className="w-full appearance-none bg-slate-50 border-2
+                             border-transparent rounded-xl text-sm font-bold
+                             text-slate-800 px-4 py-3 focus:outline-none
+                             focus:bg-white focus:border-pink-500
+                             focus:ring-4 focus:ring-pink-50
+                             transition-all duration-300 cursor-pointer"
+                >
+                  {LEVELS.map(l => (
+                    <option key={l} value={l}>{l}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2
+                                        w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-rose-50 border border-rose-100 text-rose-600
+                            px-4 py-3 rounded-xl text-xs font-bold
+                            flex items-center gap-2">
+              <X className="w-4 h-4 flex-shrink-0" />
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={save}
+            disabled={saving || !title.trim()}
+            className="w-full py-3.5 text-sm font-bold text-white rounded-xl
+                       bg-gradient-to-r from-pink-500 to-rose-400
+                       hover:from-pink-600 hover:to-rose-500
+                       shadow-lg shadow-pink-200 active:scale-[0.98]
+                       transition-all duration-300 disabled:opacity-50
+                       disabled:cursor-not-allowed flex items-center
+                       justify-center gap-2"
+          >
+            {saving ? (
+              <div className="w-4 h-4 border-2 border-white/40
+                              border-t-white rounded-full animate-spin" />
+            ) : (
+              <><Check className="w-4 h-4" /> Guardar cambios</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal Confirmar eliminación ──────────────────────────────────────────────
+function DeleteMaterialModal({
+  material,
+  onClose,
+  onDeleted,
+}: {
+  material: Material;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError]       = useState("");
+
+  const confirmDelete = async () => {
+    setDeleting(true);
+    setError("");
+    try {
+      await api.delete(`/materials/${material.id}`);
+      onDeleted();
+      onClose();
+    } catch (e: any) {
+      setError(e.response?.data?.detail || "Error eliminando el material");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+           onClick={onClose} />
+      <div className="relative w-full max-w-sm bg-white/95 backdrop-blur-2xl
+                      rounded-[2.5rem] shadow-2xl shadow-slate-200/60
+                      border border-white p-8
+                      animate-in fade-in zoom-in-95 duration-200">
+
+        <div className="absolute top-0 right-0 w-40 h-40 bg-red-300/20
+                        rounded-full blur-[60px] pointer-events-none" />
+
+        <div className="flex flex-col items-center text-center mb-6">
+          <div className="w-14 h-14 bg-red-100 rounded-full flex items-center
+                          justify-center mb-4">
+            <AlertTriangle className="w-7 h-7 text-red-500" />
+          </div>
+          <h2 className="text-xl font-black text-slate-800 tracking-tight mb-2">
+            ¿Eliminar material?
+          </h2>
+          <p className="text-sm text-slate-500">
+            <span className="font-bold text-slate-700">“{material.title}”</span> se
+            eliminará y dejará de estar visible para tus estudiantes. Esta acción no se puede deshacer.
+          </p>
+        </div>
+
+        {error && (
+          <div className="mb-4 bg-rose-50 border border-rose-100 text-rose-600
+                          px-4 py-3 rounded-xl text-xs font-bold
+                          flex items-center gap-2">
+            <X className="w-4 h-4 flex-shrink-0" />
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            disabled={deleting}
+            className="flex-1 py-3 text-sm font-bold text-slate-600
+                       bg-slate-100 hover:bg-slate-200 rounded-xl
+                       transition-colors disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={confirmDelete}
+            disabled={deleting}
+            className="flex-1 py-3 text-sm font-bold text-white bg-red-500
+                       hover:bg-red-600 rounded-xl shadow-md shadow-red-100
+                       active:scale-[0.98] transition-all duration-200
+                       disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {deleting ? (
+              <div className="w-4 h-4 border-2 border-white/40
+                              border-t-white rounded-full animate-spin" />
+            ) : (
+              <><Trash2 className="w-4 h-4" /> Eliminar</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function MaterialsPage() {
   const [materials, setMaterials]   = useState<Material[]>([]);
@@ -396,19 +687,22 @@ export default function MaterialsPage() {
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [assignTarget, setAssignTarget] = useState<Material | null>(null);
   const [vocabTarget, setVocabTarget]   = useState<Material | null>(null);
+  const [editTarget, setEditTarget]     = useState<Material | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Material | null>(null);
+  const [justDeleted, setJustDeleted]   = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Form nuevo material
-  const [title, setTitle]       = useState("");
-  const [category, setCategory] = useState(CATEGORIES[0]);
-  const [level, setLevel]       = useState(LEVELS[0]);
-  const [file, setFile]         = useState<File | null>(null);
+  const [title, setTitle]             = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory]       = useState(CATEGORIES[0]);
+  const [level, setLevel]             = useState(LEVELS[0]);
+  const [file, setFile]               = useState<File | null>(null);
 
-  // Form nuevo vocabulario
-  const [vocabTitle, setVocabTitle] = useState("");
-  const [vocabLevel, setVocabLevel] = useState(LEVELS[0]);
-  const [vocabWords, setVocabWords] = useState<string[]>([]);
-  const [vocabWordInput, setVocabWordInput] = useState("");
+  const [vocabTitle, setVocabTitle]             = useState("");
+  const [vocabDescription, setVocabDescription] = useState("");
+  const [vocabLevel, setVocabLevel]             = useState(LEVELS[0]);
+  const [vocabWords, setVocabWords]             = useState<string[]>([]);
+  const [vocabWordInput, setVocabWordInput]     = useState("");
 
   const fetchMaterials = useCallback(async () => {
     try {
@@ -419,7 +713,6 @@ export default function MaterialsPage() {
     finally { setLoading(false); }
   }, []);
 
-  // Cargar al montar
   useState(() => { fetchMaterials(); });
 
   const uploadFile = async () => {
@@ -430,11 +723,12 @@ export default function MaterialsPage() {
       form.append("title", title);
       form.append("category", category);
       form.append("level", level);
+      if (description.trim()) form.append("description", description.trim());
       form.append("file", file);
       await api.post("/materials/", form, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setTitle(""); setFile(null); setCategory(CATEGORIES[0]);
+      setTitle(""); setDescription(""); setFile(null); setCategory(CATEGORIES[0]);
       if (fileRef.current) fileRef.current.value = "";
       fetchMaterials();
     } catch (e: any) {
@@ -445,7 +739,6 @@ export default function MaterialsPage() {
   const addVocabWord = (text?: string) => {
     const raw = (text ?? vocabWordInput).trim();
       if (!raw) return;
-      // permite pegar varias palabras separadas por coma de una vez
       const parts = raw.split(",").map(w => w.trim()).filter(Boolean);
       setVocabWords(prev => {
         const next = [...prev];
@@ -469,6 +762,7 @@ export default function MaterialsPage() {
     form.append("title", vocabTitle);
     form.append("category", "Vocabulary");
     form.append("level", vocabLevel);
+    if (vocabDescription.trim()) form.append("description", vocabDescription.trim());
 
     const res = await api.post("/materials/", form, {
       headers: { "Content-Type": "multipart/form-data" },
@@ -477,6 +771,7 @@ export default function MaterialsPage() {
     await api.post(`/materials/${res.data.id}/vocabulary`, { words: vocabWords });
 
     setVocabTitle("");
+    setVocabDescription("");
     setVocabWords([]);
     setVocabWordInput("");
     fetchMaterials();
@@ -487,15 +782,16 @@ export default function MaterialsPage() {
   }
 };
 
-  const deleteMaterial = async (id: number) => {
-    if (!confirm("¿Eliminar este material?")) return;
-    try {
-      await api.delete(`/materials/${id}`);
-      fetchMaterials();
-    } catch { }
+  const handleMaterialSaved = (updated: Material) => {
+    setMaterials(prev => prev.map(m => (m.id === updated.id ? { ...m, ...updated } : m)));
   };
 
-  // 4. Modificado para usar isVocab
+  const handleMaterialDeleted = (deletedId: number) => {
+    setMaterials(prev => prev.filter(m => m.id !== deletedId));
+    setJustDeleted(true);
+    setTimeout(() => setJustDeleted(false), 3000);
+  };
+
   const filtered = materials.filter(m => {
     const inSearch = m.title.toLowerCase().includes(search.toLowerCase());
     const inTab = tab === "vocab" ? isVocab(m) : !isVocab(m);
@@ -508,7 +804,6 @@ export default function MaterialsPage() {
   return (
     <div className="min-h-screen bg-slate-50 relative overflow-hidden">
 
-      {/* Blobs fondo */}
       <div className="fixed top-[-100px] right-[-100px] w-[500px] h-[500px]
                       bg-pink-300/20 rounded-full blur-[100px] pointer-events-none" />
       <div className="fixed bottom-[-100px] left-[-100px] w-[400px] h-[400px]
@@ -516,7 +811,6 @@ export default function MaterialsPage() {
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
 
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4
                         animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div>
@@ -539,7 +833,15 @@ export default function MaterialsPage() {
           </button>
         </div>
 
-        {/* Stats rápidos */}
+        {justDeleted && (
+          <div className="bg-emerald-50 border border-emerald-100 text-emerald-700
+                          px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2
+                          animate-in fade-in slide-in-from-top-2 duration-300">
+            <Check className="w-4 h-4 flex-shrink-0" />
+            Material eliminado correctamente
+          </div>
+        )}
+
         <div className="grid grid-cols-3 gap-4 animate-in fade-in slide-in-from-bottom-4
                         duration-500 delay-75">
           {[
@@ -563,7 +865,6 @@ export default function MaterialsPage() {
           ))}
         </div>
 
-        {/* Formulario de carga (colapsable) */}
         {showUploadForm && (
           <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
                           border border-white shadow-2xl shadow-slate-200/50 p-6 sm:p-8
@@ -572,7 +873,6 @@ export default function MaterialsPage() {
             <div className="absolute top-0 right-0 w-48 h-48 bg-pink-300/10
                             rounded-full blur-[80px] pointer-events-none" />
 
-            {/* Tabs Subir / Vocabulario */}
             <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit mb-6 relative">
               {[
                 { key: "files", label: "Subir documento" },
@@ -595,7 +895,6 @@ export default function MaterialsPage() {
 
             {tab === "files" ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
-                {/* Título */}
                 <div className="group sm:col-span-2">
                   <label className="text-[10px] font-black text-slate-400
                                     uppercase tracking-widest block mb-1.5">
@@ -620,7 +919,25 @@ export default function MaterialsPage() {
                   </div>
                 </div>
 
-                {/* Categoría */}
+                <div className="sm:col-span-2">
+                  <label className="text-[10px] font-black text-slate-400
+                                    uppercase tracking-widest block mb-1.5">
+                    Descripción <span className="normal-case text-slate-300 font-bold">(opcional)</span>
+                  </label>
+                  <textarea
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    rows={2}
+                    placeholder="Breve descripción de qué trata este material..."
+                    className="w-full bg-slate-50 border-2 border-transparent
+                               rounded-xl text-sm font-medium text-slate-800
+                               placeholder:text-slate-400 px-4 py-3
+                               focus:outline-none focus:bg-white
+                               focus:border-pink-500 focus:ring-4 focus:ring-pink-50
+                               transition-all duration-300 resize-none"
+                  />
+                </div>
+
                 <div>
                   <label className="text-[10px] font-black text-slate-400
                                     uppercase tracking-widest block mb-1.5">
@@ -646,7 +963,6 @@ export default function MaterialsPage() {
                   </div>
                 </div>
 
-                {/* Nivel */}
                 <div>
                   <label className="text-[10px] font-black text-slate-400
                                     uppercase tracking-widest block mb-1.5">
@@ -672,7 +988,6 @@ export default function MaterialsPage() {
                   </div>
                 </div>
 
-                {/* File drop zone */}
                 <div
                   onClick={() => fileRef.current?.click()}
                   className={`sm:col-span-2 border-2 border-dashed rounded-2xl
@@ -747,7 +1062,6 @@ export default function MaterialsPage() {
                 </button>
               </div>
             ) : (
-              /* ─── Form Vocabulario ─── */
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
                 <div className="group sm:col-span-2">
                   <label className="text-[10px] font-black text-slate-400
@@ -771,6 +1085,25 @@ export default function MaterialsPage() {
                                  transition-all duration-300"
                     />
                   </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="text-[10px] font-black text-slate-400
+                                    uppercase tracking-widest block mb-1.5">
+                    Descripción <span className="normal-case text-slate-300 font-bold">(opcional)</span>
+                  </label>
+                  <textarea
+                    value={vocabDescription}
+                    onChange={e => setVocabDescription(e.target.value)}
+                    rows={2}
+                    placeholder="Breve descripción de este set de vocabulario..."
+                    className="w-full bg-slate-50 border-2 border-transparent
+                               rounded-xl text-sm font-medium text-slate-800
+                               placeholder:text-slate-400 px-4 py-3
+                               focus:outline-none focus:bg-white
+                               focus:border-pink-500 focus:ring-4 focus:ring-pink-50
+                               transition-all duration-300 resize-none"
+                  />
                 </div>
 
                 <div className="sm:col-span-2">
@@ -874,12 +1207,10 @@ export default function MaterialsPage() {
           </div>
         )}
 
-        {/* Buscador y lista */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500
                         delay-100 space-y-4">
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            {/* Buscador */}
             <div className="group relative max-w-sm w-full">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2
                                   w-5 h-5 text-slate-400
@@ -897,7 +1228,6 @@ export default function MaterialsPage() {
               />
             </div>
 
-            {/* Filtros tab */}
             <div className="flex gap-2">
               {[
                 { key: "files", label: "Documentos" },
@@ -919,10 +1249,9 @@ export default function MaterialsPage() {
             </div>
           </div>
 
-          {/* Grid de materiales */}
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[1,2,3].map(i => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[1,2,3,4].map(i => (
                 <div key={i} className="h-32 bg-white rounded-2xl animate-pulse" />
               ))}
             </div>
@@ -945,18 +1274,18 @@ export default function MaterialsPage() {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            // CAMBIO PRINCIPAL: Se ajustó el grid a 4 columnas y las acciones de las tarjetas (incluyendo trash2)
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {filtered.map(m => (
                 <div key={m.id}
                   className="bg-white/80 backdrop-blur-xl rounded-2xl
                              border border-white shadow-lg shadow-slate-100
                              hover:shadow-xl hover:-translate-y-0.5
-                             transition-all duration-300 p-5">
+                             transition-all duration-300 p-5 flex flex-col">
 
-                  <div className="flex items-start gap-3 mb-4">
+                  <div className="flex items-start gap-3 mb-3">
                     <div className="w-11 h-11 bg-slate-50 rounded-xl
                                     flex items-center justify-center flex-shrink-0">
-                      {/* 5. Modificado para usar file_url */}
                       {getFileIcon(m.file_url || "", m.category)}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -974,17 +1303,27 @@ export default function MaterialsPage() {
                     </div>
                   </div>
 
-                  {/* 6. Modificado para usar isVocab */}
+                  {m.description ? (
+                    <p className="text-xs text-slate-500 mb-3 line-clamp-2 leading-relaxed">
+                      {m.description}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-300 italic mb-3">
+                      Sin descripción
+                    </p>
+                  )}
+
                   {isVocab(m) && (
                     <p className="text-xs text-slate-500 mb-3">
                       {m.vocabulary_words?.length ?? 0} palabras
                     </p>
                   )}
 
-                  <div className="flex gap-2">
+                  {/* ─── Fila de Botones (4 columnas visuales distribuidas equitativamente) ─── */}
+                  <div className="grid grid-cols-2 gap-2 mt-auto">
                     <button
                       onClick={() => setAssignTarget(m)}
-                      className="flex-1 flex items-center justify-center gap-1.5
+                      className="flex items-center justify-center gap-1.5
                                  bg-pink-50 text-pink-600 hover:bg-pink-100
                                  text-xs font-bold py-2.5 rounded-xl
                                  transition-colors"
@@ -993,27 +1332,39 @@ export default function MaterialsPage() {
                       Asignar
                     </button>
 
-                    {/* 7. Mostrar botón editar sólo si es vocabulario */}
+                    <button
+                      onClick={() => setEditTarget(m)}
+                      className="flex items-center justify-center gap-1.5
+                                 bg-blue-50 text-blue-600 hover:bg-blue-100
+                                 text-xs font-bold py-2.5 rounded-xl
+                                 transition-colors"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      Detalles
+                    </button>
+
                     {isVocab(m) && (
                       <button
                         onClick={() => setVocabTarget(m)}
-                        className="flex-1 flex items-center justify-center gap-1.5
+                        className="flex items-center justify-center gap-1.5
                                    bg-purple-50 text-purple-600 hover:bg-purple-100
                                    text-xs font-bold py-2.5 rounded-xl
                                    transition-colors"
                       >
                         <Volume2 className="w-3.5 h-3.5" />
-                        Editar
+                        Palabras
                       </button>
                     )}
 
                     <button
-                      onClick={() => deleteMaterial(m.id)}
-                      className="w-10 flex items-center justify-center
-                                 bg-red-50 text-red-400 hover:bg-red-100
-                                 rounded-xl transition-colors flex-shrink-0"
+                      onClick={() => setDeleteTarget(m)}
+                      className={`flex items-center justify-center gap-1.5
+                                 bg-red-50 text-red-500 hover:bg-red-100
+                                 text-xs font-bold py-2.5 rounded-xl
+                                 transition-colors ${!isVocab(m) ? 'col-span-2' : ''}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
+                      Eliminar
                     </button>
                   </div>
                 </div>
@@ -1023,7 +1374,7 @@ export default function MaterialsPage() {
         </div>
       </div>
       <ChipiWidget screenName="materials" /> 
-      {/* Modals */}
+
       {assignTarget && (
         <AssignModal
           material={assignTarget}
@@ -1035,6 +1386,20 @@ export default function MaterialsPage() {
           material={vocabTarget}
           onClose={() => setVocabTarget(null)}
           onSaved={fetchMaterials}
+        />
+      )}
+      {editTarget && (
+        <EditMaterialModal
+          material={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={handleMaterialSaved}
+        />
+      )}
+      {deleteTarget && (
+        <DeleteMaterialModal
+          material={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => handleMaterialDeleted(deleteTarget.id)}
         />
       )}
     </div>

@@ -5,7 +5,7 @@ import {
   ClipboardList, Plus, Send, Star, Clock,
   CheckCircle, AlertCircle, ChevronDown,
   X, Search, Calendar, Check, Users,
-  BarChart3, FileText,
+  BarChart3, FileText, Edit2, Trash2, AlertTriangle,
 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
@@ -361,6 +361,7 @@ function GradeModal({
   );
 }
 
+// ─── Modal Editar tarea ───────────────────────────────────────────────────────
 function EditHomeworkModal({
   hw, onClose, onSaved,
 }: { hw: Homework; onClose: () => void; onSaved: () => void }) {
@@ -390,31 +391,45 @@ function EditHomeworkModal({
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-lg bg-white/95 backdrop-blur-2xl rounded-[2.5rem] shadow-2xl border border-white p-8 space-y-4">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-xl font-black text-slate-800">Editar tarea</h2>
+          <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+            <Edit2 className="w-4 h-4 text-pink-500" /> Editar tarea
+          </h2>
           <button onClick={onClose} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
             <X className="w-4 h-4 text-slate-500" />
           </button>
         </div>
 
-        <input
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold px-4 py-3 focus:outline-none focus:border-pink-500"
-          placeholder="Título"
-        />
-        <textarea
-          value={content}
-          onChange={e => setContent(e.target.value)}
-          rows={4}
-          className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm px-4 py-3 focus:outline-none focus:border-pink-500 resize-none"
-          placeholder="Instrucciones"
-        />
-        <input
-          type="date"
-          value={due}
-          onChange={e => setDue(e.target.value)}
-          className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold px-4 py-3 focus:outline-none focus:border-pink-500"
-        />
+        <div>
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+            Título
+          </label>
+          <input
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold px-4 py-3 focus:outline-none focus:border-pink-500"
+            placeholder="Título"
+          />
+        </div>
+
+        <div>
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+            Instrucciones
+          </label>
+          <textarea
+            value={content}
+            onChange={e => setContent(e.target.value)}
+            rows={4}
+            className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm px-4 py-3 focus:outline-none focus:border-pink-500 resize-none"
+            placeholder="Instrucciones"
+          />
+        </div>
+
+        <div>
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+            Fecha límite
+          </label>
+          <DatePicker value={due} onChange={setDue} />
+        </div>
 
         {error && <div className="bg-rose-50 text-rose-600 text-xs font-bold px-4 py-3 rounded-xl">{error}</div>}
 
@@ -425,6 +440,93 @@ function EditHomeworkModal({
         >
           {saving ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : "Guardar cambios"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal Confirmar eliminación de tarea ─────────────────────────────────────
+function DeleteHomeworkModal({
+  hw, onClose, onDeleted,
+}: { hw: Homework; onClose: () => void; onDeleted: () => void }) {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+
+  const confirmDelete = async () => {
+    setDeleting(true);
+    setError("");
+    try {
+      await api.delete(`/homework/${hw.id}`);
+      onDeleted();
+      onClose();
+    } catch (e: any) {
+      setError(e.response?.data?.detail || "Error eliminando la tarea");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-sm bg-white/95 backdrop-blur-2xl
+                      rounded-[2.5rem] shadow-2xl shadow-slate-200/60
+                      border border-white p-8
+                      animate-in fade-in zoom-in-95 duration-200">
+
+        <div className="absolute top-0 right-0 w-40 h-40 bg-red-300/20
+                        rounded-full blur-[60px] pointer-events-none" />
+
+        <div className="flex flex-col items-center text-center mb-6">
+          <div className="w-14 h-14 bg-red-100 rounded-full flex items-center
+                          justify-center mb-4">
+            <AlertTriangle className="w-7 h-7 text-red-500" />
+          </div>
+          <h2 className="text-xl font-black text-slate-800 tracking-tight mb-2">
+            ¿Eliminar tarea?
+          </h2>
+          <p className="text-sm text-slate-500">
+            <span className="font-bold text-slate-700">“{hw.title}”</span> se eliminará
+            y ningún estudiante podrá seguir viéndola. Las entregas ya calificadas
+            quedan guardadas en tu historial.
+          </p>
+        </div>
+
+        {error && (
+          <div className="mb-4 bg-rose-50 border border-rose-100 text-rose-600
+                          px-4 py-3 rounded-xl text-xs font-bold
+                          flex items-center gap-2">
+            <X className="w-4 h-4 flex-shrink-0" />
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={deleting}
+            className="flex-1 py-3 text-sm font-bold text-slate-600
+                       bg-slate-100 hover:bg-slate-200 rounded-xl
+                       transition-colors disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={confirmDelete}
+            disabled={deleting}
+            className="flex-1 py-3 text-sm font-bold text-white bg-red-500
+                       hover:bg-red-600 rounded-xl shadow-md shadow-red-100
+                       active:scale-[0.98] transition-all duration-200
+                       disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {deleting ? (
+              <div className="w-4 h-4 border-2 border-white/40
+                              border-t-white rounded-full animate-spin" />
+            ) : (
+              <><Trash2 className="w-4 h-4" /> Eliminar</>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -442,7 +544,9 @@ export default function HomeworkPage() {
   const [search, setSearch]           = useState("");
   const [studentSearch, setStudentSearch] = useState("");
 
-  const [editTarget, setEditTarget] = useState<Homework | null>(null);
+  const [editTarget, setEditTarget]     = useState<Homework | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Homework | null>(null);
+  const [justDeleted, setJustDeleted]   = useState(false);
 
   // Form nueva tarea
   const [hwTitle, setHwTitle]       = useState("");
@@ -535,6 +639,13 @@ export default function HomeworkPage() {
     return { text: "Pendiente", cls: "bg-slate-100 text-slate-500" };
   };
 
+  const handleDeleted = () => {
+    setActiveHw(null);
+    fetchAll();
+    setJustDeleted(true);
+    setTimeout(() => setJustDeleted(false), 3000);
+  };
+
   // ─── Stats ───
   const activeCount = homeworks.filter(h => h.is_active).length;
   const dueThisWeek = homeworks.filter(h => {
@@ -564,6 +675,16 @@ export default function HomeworkPage() {
             </p>
           </div>
         </div>
+
+        {/* Confirmación de eliminado */}
+        {justDeleted && (
+          <div className="bg-emerald-50 border border-emerald-100 text-emerald-700
+                          px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2
+                          animate-in fade-in slide-in-from-top-2 duration-300">
+            <Check className="w-4 h-4 flex-shrink-0" />
+            Tarea eliminada correctamente
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 animate-in fade-in slide-in-from-bottom-4
@@ -689,9 +810,17 @@ export default function HomeworkPage() {
                       </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); setEditTarget(hw); }}
-                        className="text-xs font-bold text-slate-400 hover:text-pink-500 px-2 py-1 rounded-lg hover:bg-pink-50 transition-colors flex-shrink-0"
+                        className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-pink-500 px-2.5 py-1.5 rounded-lg hover:bg-pink-50 transition-colors flex-shrink-0"
                       >
-                        Editar
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Editar</span>
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(hw); }}
+                        className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-red-500 px-2.5 py-1.5 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Eliminar</span>
                       </button>
                       <ChevronDown className={`w-4 h-4 text-slate-400 flex-shrink-0
                         transition-transform duration-200
@@ -699,7 +828,26 @@ export default function HomeworkPage() {
                     </div>
 
                     {activeHw === hw.id && (
-                      <div className="border-t border-slate-100 px-5 pb-4 pt-3 space-y-2">
+                      <div className="border-t border-slate-100 px-5 pb-5 pt-4 space-y-4">
+
+                        {/* Vista previa: instrucciones completas + fecha límite */}
+                        <div className="bg-slate-50 rounded-2xl p-4 space-y-2">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                              Instrucciones completas
+                            </p>
+                            <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-slate-100">
+                              <Calendar className="w-3 h-3" />
+                              Vence el {new Date(hw.due_date_utc).toLocaleDateString("es", {
+                                day: "numeric", month: "long", year: "numeric",
+                              })}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                            {hw.description}
+                          </p>
+                        </div>
+
                         {loadingSubs ? (
                           <div className="flex justify-center py-4">
                             <div className="w-5 h-5 border-2 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
@@ -709,41 +857,43 @@ export default function HomeworkPage() {
                             Sin entregas todavía
                           </p>
                         ) : (
-                          submissions.map((sub) => {
-                            const st = getStatusLabel(sub.status);
-                            const hasSubmission = Boolean(sub.submission) || sub.status === "submitted" || sub.status === "graded";
-                            
-                            return (
-                              <div key={sub.id} className="flex items-center gap-3 py-2.5 px-4 bg-slate-50 rounded-xl">
-                                <SubmissionAvatar sub={sub} className="w-8 h-8 rounded-lg flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-bold text-slate-700 truncate">
-                                    {sub.student_name ?? "Estudiante"}
-                                  </p>
-                                  {sub.score !== null && sub.score !== undefined && (
-                                    <p className="text-[10px] text-amber-600 font-black">
-                                      Nota: {sub.score}/10
+                          <div className="space-y-2">
+                            {submissions.map((sub) => {
+                              const st = getStatusLabel(sub.status);
+                              const hasSubmission = Boolean(sub.submission) || sub.status === "submitted" || sub.status === "graded";
+
+                              return (
+                                <div key={sub.id} className="flex items-center gap-3 py-2.5 px-4 bg-slate-50 rounded-xl">
+                                  <SubmissionAvatar sub={sub} className="w-8 h-8 rounded-lg flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-slate-700 truncate">
+                                      {sub.student_name ?? "Estudiante"}
                                     </p>
-                                  )}
+                                    {sub.score !== null && sub.score !== undefined && (
+                                      <p className="text-[10px] text-amber-600 font-black">
+                                        Nota: {sub.score}/10
+                                      </p>
+                                    )}
+                                  </div>
+                                  <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full flex items-center gap-1 ${st.cls}`}>
+                                    {getStatusIcon(sub.status)}
+                                    {st.text}
+                                  </span>
+                                  <button
+                                    onClick={() => setGradeTarget(sub)}
+                                    disabled={!hasSubmission}
+                                    className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-colors flex-shrink-0 ${
+                                      hasSubmission
+                                        ? "text-pink-600 bg-pink-50 hover:bg-pink-100 cursor-pointer"
+                                        : "text-slate-300 bg-slate-100 cursor-not-allowed opacity-60"
+                                    }`}
+                                  >
+                                    {sub.status === "graded" ? "Editar" : "Calificar"}
+                                  </button>
                                 </div>
-                                <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full flex items-center gap-1 ${st.cls}`}>
-                                  {getStatusIcon(sub.status)}
-                                  {st.text}
-                                </span>
-                                <button
-                                  onClick={() => setGradeTarget(sub)}
-                                  disabled={!hasSubmission}
-                                  className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-colors flex-shrink-0 ${
-                                    hasSubmission
-                                      ? "text-pink-600 bg-pink-50 hover:bg-pink-100 cursor-pointer"
-                                      : "text-slate-300 bg-slate-100 cursor-not-allowed opacity-60"
-                                  }`}
-                                >
-                                  {sub.status === "graded" ? "Editar" : "Calificar"}
-                                </button>
-                              </div>
-                            );
-                          })
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
                     )}
@@ -949,6 +1099,13 @@ export default function HomeworkPage() {
           hw={editTarget}
           onClose={() => setEditTarget(null)}
           onSaved={fetchAll}
+        />
+      )}
+      {deleteTarget && (
+        <DeleteHomeworkModal
+          hw={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={handleDeleted}
         />
       )}
     </div>

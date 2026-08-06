@@ -76,3 +76,21 @@ class UpdateProgressRequest(BaseModel):
         if v not in allowed:
             raise ValueError(f"Estado inválido. Opciones: {allowed}")
         return v
+
+class MaterialUpdate(BaseModel):
+    """
+    Edición de los datos de un material ya existente.
+    Todos los campos son opcionales porque es un PATCH parcial.
+    No permite reemplazar el archivo — para eso se sube un material nuevo.
+    """
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    level: Optional[str] = None
+ 
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError("El título no puede estar vacío")
+        return v
