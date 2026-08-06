@@ -569,69 +569,78 @@ export default function TeacherPackagesPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {packages.map(pkg => (
-                <div
-                  key={pkg.id}
-                  className={`relative overflow-hidden rounded-2xl border border-slate-100
-                              shadow-lg shadow-slate-100 p-5 flex flex-col transition-all duration-300
-                              hover:-translate-y-0.5 hover:shadow-xl
-                              ${!pkg.is_active ? "opacity-50" : ""}`}
-                  style={{
-                    background: `linear-gradient(165deg, ${pkg.color || "#ec4899"}22 0%, ${pkg.color || "#ec4899"}08 35%, #ffffff 70%)`,
-                    borderTop: `5px solid ${pkg.color || "#ec4899"}`,
-                  }}
-                >
-                  <div
-                    className="w-11 h-11 rounded-xl flex items-center justify-center mb-3 text-xl shadow-sm"
-                    style={{ backgroundColor: `${pkg.color || "#ec4899"}26` }}
-                  >
-                    {pkg.icon || "📦"}
-                  </div>
-                  <h3 className="text-base font-black text-slate-800 mb-1">{pkg.name}</h3>
-                  <p className="text-xs text-slate-500 font-bold mb-3">
-                    {pkg.subject} · {pkg.classes_count === null ? "Ilimitadas" : `${pkg.classes_count} clases`} · {pkg.duration_minutes} min c/u
-                  </p>
+  {packages.map(pkg => {
+    const accent = pkg.color || "#ec4899";
+    const priceSuffix =
+      pkg.classes_count === 1 ? "/clase" :
+      pkg.classes_count === null ? "/ilimitado" :
+      "/clase";
+    const priceDisplay = Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2);
+    const bullets: string[] =
+      pkg.description_type === "list" && pkg.description_items?.length
+        ? pkg.description_items
+        : [
+            pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
+            `${pkg.duration_minutes} min por clase`,
+            "Modalidad 100% online",
+            ...(pkg.description ? [pkg.description] : []),
+          ];
 
-                  {pkg.description_type === "list" && pkg.description_items?.length ? (
-                    <ul className="text-xs text-slate-600 mb-3 space-y-1">
-                      {pkg.description_items.slice(0, 4).map((item, i) => (
-                        <li key={i} className="flex items-start gap-1.5">
-                          <Check className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: pkg.color || "#ec4899" }} />
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : pkg.description ? (
-                    <p className="text-xs text-slate-600 mb-3 line-clamp-2">{pkg.description}</p>
-                  ) : null}
+    return (
+      <div
+        key={pkg.id}
+        className={`relative bg-white rounded-[2rem] border border-slate-100
+                    shadow-lg shadow-slate-100 p-6 flex flex-col transition-all duration-300
+                    hover:-translate-y-0.5 hover:shadow-xl
+                    ${!pkg.is_active ? "opacity-50" : ""}`}
+      >
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-lg">{pkg.icon || "📦"}</span>
+            <h3 className="text-base font-black" style={{ color: accent }}>
+              {pkg.name}
+            </h3>
+          </div>
+          <p className="text-[11px] text-slate-400 font-bold mb-2">{pkg.subject}</p>
+          <div className="flex items-baseline gap-1">
+            <span className="text-3xl font-black text-slate-800">${priceDisplay}</span>
+            <span className="text-slate-500 text-xs font-medium">{priceSuffix}</span>
+          </div>
+        </div>
 
-                  <p className="text-xl font-black mb-4 mt-auto" style={{ color: pkg.color || "#ec4899" }}>
-                    ${pkg.price.toFixed(2)}
-                  </p>
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => openEdit(pkg)}
-                      className="flex-1 flex items-center justify-center gap-1.5 bg-white/70 backdrop-blur-sm
-                                 hover:bg-white text-slate-700 text-xs font-bold py-2.5 rounded-xl transition-colors
-                                 border border-slate-200"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" /> Editar
-                    </button>
-                    {pkg.is_active && (
-                      <button
-                        onClick={() => deactivatePackage(pkg.id)}
-                        className="w-10 flex items-center justify-center bg-white/70 backdrop-blur-sm text-red-400
-                                   hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors flex-shrink-0
-                                   border border-slate-200"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
+        <div className="flex-1 space-y-2 mb-5">
+          {bullets.slice(0, 4).map((item, i) => (
+            <div key={i} className="flex items-start gap-1.5">
+              <Check className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: accent }} />
+              <span className="text-xs text-slate-600 font-medium">{item}</span>
             </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2 pt-4 border-t border-slate-100">
+          <button
+            onClick={() => openEdit(pkg)}
+            className="flex-1 flex items-center justify-center gap-1.5 bg-slate-50
+                       hover:bg-slate-100 text-slate-700 text-xs font-bold py-2.5 rounded-xl transition-colors
+                       border border-slate-200"
+          >
+            <Edit2 className="w-3.5 h-3.5" /> Editar
+          </button>
+          {pkg.is_active && (
+            <button
+              onClick={() => deactivatePackage(pkg.id)}
+              className="w-10 flex items-center justify-center bg-slate-50 text-red-400
+                         hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors flex-shrink-0
+                         border border-slate-200"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  })}
+</div>
           )}
         </div>
 

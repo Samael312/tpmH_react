@@ -836,57 +836,71 @@ function NeedsPackageScreen({ onSelected }: { onSelected: () => void }) {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {packages.map(pkg => (
-            <div
-              key={pkg.id}
-              className="bg-white/80 backdrop-blur-xl rounded-[1.75rem]
-                        border border-white shadow-xl shadow-slate-200/50
-                        p-6 flex flex-col hover:-translate-y-1 hover:shadow-2xl
-                        transition-all duration-300"
-            >
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center mb-4 text-lg"
-                style={{ backgroundColor: `${pkg.color || "#ec4899"}1a` }}
-              >
-                {pkg.icon || "📦"}
-              </div>
-              <h3 className="text-lg font-black text-slate-800 mb-1">{pkg.name}</h3>
-                  <p className="text-xs text-slate-400 font-bold mb-3">
-                    {pkg.subject} · {pkg.classes_count == null ? "Ilimitadas" : `${pkg.classes_count} clases`} · {pkg.duration_minutes} min c/u
-                  </p>
-                  {pkg.description_type === "list" && pkg.description_items?.length ? (
-                    <ul className="text-xs text-slate-500 mb-4 space-y-1">
-                      {pkg.description_items.map((item: string, i: number) => (
-                        <li key={i} className="flex items-start gap-1.5">
-                          <span style={{ color: pkg.color || "#ec4899" }}>✓</span> {item}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : pkg.description ? (
-                    <p className="text-xs text-slate-500 mb-4">{pkg.description}</p>
-                  ) : null}
-                  <p className="text-2xl font-black mb-5" style={{ color: pkg.color || "#ec4899" }}>
-                    ${pkg.price?.toFixed ? pkg.price.toFixed(2) : pkg.price}
-                  </p>
-              <button
-                onClick={() => choose(pkg.id)}
-                disabled={selecting !== null}
-                className="mt-auto w-full py-3 text-sm font-bold text-white
-                           rounded-xl bg-gradient-to-r from-pink-500 to-rose-400
-                           hover:from-pink-600 hover:to-rose-500
-                           shadow-md shadow-pink-200 active:scale-[0.98]
-                           transition-all duration-300 disabled:opacity-50
-                           flex items-center justify-center gap-2"
-              >
-                {selecting === pkg.id ? (
-                  <div className="w-4 h-4 border-2 border-white/40
-                                  border-t-white rounded-full animate-spin" />
-                ) : (
-                  "Elegir este paquete"
-                )}
-              </button>
-            </div>
-          ))}
+          {packages.map(pkg => {
+  const accent = pkg.color || "#ec4899";
+  const priceSuffix =
+    pkg.classes_count === 1 ? "/clase" :
+    pkg.classes_count == null ? "/ilimitado" :
+    "/clase";
+  const priceDisplay = pkg.price?.toFixed
+    ? (Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2))
+    : pkg.price;
+  const bullets: string[] =
+    pkg.description_type === "list" && pkg.description_items?.length
+      ? pkg.description_items
+      : [
+          pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
+          `${pkg.duration_minutes} min por clase`,
+          "Modalidad 100% online",
+          ...(pkg.description ? [pkg.description] : []),
+        ];
+
+  return (
+    <div
+      key={pkg.id}
+      className="bg-white rounded-[2rem] border border-slate-100
+                shadow-lg shadow-slate-100 p-6 flex flex-col
+                hover:-translate-y-1 hover:shadow-xl
+                transition-all duration-300"
+    >
+      <div className="mb-4">
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="text-lg">{pkg.icon || "📦"}</span>
+          <h3 className="text-lg font-black" style={{ color: accent }}>{pkg.name}</h3>
+        </div>
+        <p className="text-xs text-slate-400 font-bold mb-2">{pkg.subject}</p>
+        <div className="flex items-baseline gap-1">
+          <span className="text-4xl font-black text-slate-800">${priceDisplay}</span>
+          <span className="text-slate-500 text-sm font-medium">{priceSuffix}</span>
+        </div>
+      </div>
+
+      <div className="flex-1 space-y-2.5 mb-5">
+        {bullets.slice(0, 6).map((item, i) => (
+          <div key={i} className="flex items-start gap-2">
+            <Check className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: accent }} />
+            <span className="text-sm text-slate-600 font-medium">{item}</span>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={() => choose(pkg.id)}
+        disabled={selecting !== null}
+        className="mt-auto w-full py-3.5 text-sm font-bold text-center rounded-xl
+                   transition-all duration-200 active:scale-[0.97] text-white shadow-lg
+                   hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
+        style={{ background: `linear-gradient(135deg, ${accent}, ${accent}cc)` }}
+      >
+        {selecting === pkg.id ? (
+          <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+        ) : (
+          "Elegir este paquete"
+        )}
+      </button>
+    </div>
+  );
+})}
         </div>
       )}
     </div>
@@ -983,50 +997,65 @@ function NeedsRenewalScreen({ onRequested }: { onRequested: () => void }) {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {packages.map(pkg => (
-            <div key={pkg.id} className="bg-white/80 backdrop-blur-xl rounded-[1.75rem]
-                            border border-white shadow-xl shadow-slate-200/50 p-6 flex flex-col
-                            hover:-translate-y-1 hover:shadow-2xl transition-all duration-300">
-              <div className="w-10 h-10 bg-pink-50 rounded-xl flex items-center justify-center mb-4">
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center mb-4 text-lg"
-                  style={{ backgroundColor: `${pkg.color || "#ec4899"}1a` }}
-                >
-                  {pkg.icon || "📦"}
-                </div>
-                <h3 className="text-lg font-black text-slate-800 mb-1">{pkg.name}</h3>
-                <p className="text-xs text-slate-400 font-bold mb-3">
-                  {pkg.subject} · {pkg.classes_count == null ? "Ilimitadas" : `${pkg.classes_count} clases`} · {pkg.duration_minutes} min c/u
-                </p>
-                {pkg.description_type === "list" && pkg.description_items?.length ? (
-                  <ul className="text-xs text-slate-500 mb-4 space-y-1">
-                    {pkg.description_items.map((item: string, i: number) => (
-                      <li key={i} className="flex items-start gap-1.5">
-                        <span style={{ color: pkg.color || "#ec4899" }}>✓</span> {item}
-                      </li>
-                    ))}
-                  </ul>
-                ) : pkg.description ? (
-                  <p className="text-xs text-slate-500 mb-4">{pkg.description}</p>
-                ) : null}
-                <p className="text-2xl font-black mb-5" style={{ color: pkg.color || "#ec4899" }}>
-                  ${pkg.price?.toFixed ? pkg.price.toFixed(2) : pkg.price}
-                </p>
-              </div>
-              <button
-                onClick={() => requestRenewal(pkg.id)}
-                disabled={requesting !== null}
-                className="mt-auto w-full py-3 text-sm font-bold text-white rounded-xl
-                           bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500
-                           shadow-md shadow-pink-200 active:scale-[0.98] transition-all duration-300
-                           disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {requesting === pkg.id ? (
-                  <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                ) : "Solicitar este paquete"}
-              </button>
-            </div>
-          ))}
+          {packages.map(pkg => {
+  const accent = pkg.color || "#ec4899";
+  const priceSuffix =
+    pkg.classes_count === 1 ? "/clase" :
+    pkg.classes_count == null ? "/ilimitado" :
+    "/clase";
+  const priceDisplay = pkg.price?.toFixed
+    ? (Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2))
+    : pkg.price;
+  const bullets: string[] =
+    pkg.description_type === "list" && pkg.description_items?.length
+      ? pkg.description_items
+      : [
+          pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
+          `${pkg.duration_minutes} min por clase`,
+          "Modalidad 100% online",
+          ...(pkg.description ? [pkg.description] : []),
+        ];
+
+  return (
+    <div key={pkg.id} className="bg-white rounded-[2rem]
+                    border border-slate-100 shadow-lg shadow-slate-100 p-6 flex flex-col
+                    hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
+      <div className="mb-4">
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="text-lg">{pkg.icon || "📦"}</span>
+          <h3 className="text-lg font-black" style={{ color: accent }}>{pkg.name}</h3>
+        </div>
+        <p className="text-xs text-slate-400 font-bold mb-2">{pkg.subject}</p>
+        <div className="flex items-baseline gap-1">
+          <span className="text-4xl font-black text-slate-800">${priceDisplay}</span>
+          <span className="text-slate-500 text-sm font-medium">{priceSuffix}</span>
+        </div>
+      </div>
+
+      <div className="flex-1 space-y-2.5 mb-5">
+        {bullets.slice(0, 6).map((item, i) => (
+          <div key={i} className="flex items-start gap-2">
+            <Check className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: accent }} />
+            <span className="text-sm text-slate-600 font-medium">{item}</span>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={() => requestRenewal(pkg.id)}
+        disabled={requesting !== null}
+        className="mt-auto w-full py-3.5 text-sm font-bold text-center rounded-xl
+                   transition-all duration-200 active:scale-[0.97] text-white shadow-lg
+                   hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
+        style={{ background: `linear-gradient(135deg, ${accent}, ${accent}cc)` }}
+      >
+        {requesting === pkg.id ? (
+          <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+        ) : "Solicitar este paquete"}
+      </button>
+    </div>
+  );
+})}
         </div>
       )}
     </div>

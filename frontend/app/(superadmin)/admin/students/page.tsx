@@ -156,6 +156,11 @@ export default function StudentsPage() {
                 </div>
 
                 {/* Estado */}
+                <div className="flex items-center gap-2">
+                  <span className="inline-block w-3 h-3 rounded-full bg-emerald-400" />
+                  <span className="text-sm font-bold text-slate-600">Activo</span>
+                </div>
+
                 {/* Contacto */}
                 <div className="min-w-0">
                   <p className="text-slate-600 text-sm font-medium truncate">

@@ -424,7 +424,7 @@ export default function LandingPage() {
           const priceSuffix =
             pkg.classes_count === 1 ? "/clase" :
             pkg.classes_count === null ? "/ilimitado" :
-            "/paquete";
+            "/clase";
           const priceDisplay = Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2);
 
           const bullets: string[] =
