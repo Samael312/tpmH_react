@@ -8,6 +8,7 @@ import {
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { utcTimeToLocal } from "@/lib/scheduleUtc";
+import { getMyDisplayTimezone } from "@/lib/tzFormat";
 
 const DAYS = [
   { value: 0, label: "Lunes", short: "Lun" },
@@ -46,7 +47,7 @@ export default function StudentPreferencesPage() {
     const res = await api.get("/users/me/preferences");
     setPreferences(res.data);
     
-    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const userTimezone = getMyDisplayTimezone();
     const initialSlots: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
     
     res.data.forEach((pref: any) => {
@@ -160,7 +161,7 @@ export default function StudentPreferencesPage() {
     setError("");
     setSuccessMsg("");
     try {
-      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const userTimezone = getMyDisplayTimezone();
       await api.put("/users/me/preferences", {
         timezone: userTimezone,
         slots: blocks,

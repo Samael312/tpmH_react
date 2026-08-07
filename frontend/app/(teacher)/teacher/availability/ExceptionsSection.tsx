@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import CalendarPicker from "@/components/layout/CalendarPicker";
+import { getMyDisplayTimezone } from "@/lib/tzFormat";
 
 interface Exception {
   id: number;
@@ -94,7 +95,7 @@ export default function ExceptionsSection() {
     setError("");
     setSuccess("");
     try {
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const timezone = getMyDisplayTimezone();
       const res = await api.post("/availability/me/exceptions", {
         date: effectiveDate,
         end_date: effectiveEndDate,
@@ -140,13 +141,17 @@ export default function ExceptionsSection() {
     }
   };
 
+  const myTz = getMyDisplayTimezone();
+
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString("es", {
       weekday: "short", day: "numeric", month: "short", year: "numeric",
+      timeZone: myTz,
     });
 
   const fmtTime = (iso: string) =>
-    new Date(iso).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
+    new Date(iso).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", timeZone: myTz });
+  
 
   const sorted = [...exceptions].sort(
     (a, b) => new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime()

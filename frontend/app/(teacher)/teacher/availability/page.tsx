@@ -9,6 +9,7 @@ import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { utcTimeToLocal } from "@/lib/scheduleUtc";
 import ExceptionsSection from "./ExceptionsSection";
+import { getMyDisplayTimezone } from "@/lib/tzFormat";
 
 const DAYS = [
   { value: 0, label: "Lunes", short: "Lun" },
@@ -48,7 +49,7 @@ export default function TeacherAvailabilityPage() {
       const res = await api.get("/availability/me/weekly");
       setAvailability(res.data);
       
-      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const userTimezone = getMyDisplayTimezone();
       const initialSlots: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
       
       res.data.forEach((slot: any) => {
@@ -157,7 +158,7 @@ export default function TeacherAvailabilityPage() {
     setError("");
     setSuccessMsg("");
     try {
-      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const userTimezone = getMyDisplayTimezone();
       
       // Enviamos directamente los bloques locales y la zona horaria tal como el backend lo espera
       await api.put("/availability/me/weekly", {

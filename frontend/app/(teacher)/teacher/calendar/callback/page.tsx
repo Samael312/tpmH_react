@@ -7,6 +7,7 @@ import {
   ExternalLink, Loader2
 } from "lucide-react";
 import api from "@/lib/api";
+import { getMyDisplayTimezone } from "@/lib/tzFormat";
 
 interface CalendarStatus {
   connected: boolean;
@@ -122,6 +123,7 @@ export default function CalendarSync() {
       year:   "numeric",
       hour:   "2-digit",
       minute: "2-digit",
+      timeZone: getMyDisplayTimezone(),
     });
   };
 

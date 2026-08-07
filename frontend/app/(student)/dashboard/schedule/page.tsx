@@ -11,6 +11,7 @@ import {
 import api from "@/lib/api";
 import Link from "next/link";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import { formatTimeTz, formatDateHumanTz, getHourMinuteTz, getMyDisplayTimezone } from "@/lib/tzFormat";
 
 type BookingStage = "loading" | "needs_trial" | "trial_in_progress" | "needs_package" | "needs_renewal" | "renewal_pending" | "ready";
 
@@ -145,19 +146,15 @@ function StepSelectSlot({
   const [duration, setDuration] = useState(isTrial ? 30 : 60);
 
   const { slots, loading } = useAvailableSlots(date, duration);
+  const myTz = getMyDisplayTimezone();
 
-  const formatTime = (utc: string) =>
-    new Date(utc).toLocaleTimeString("es", {
-      hour: "2-digit", minute: "2-digit",
-    });
+  const formatTime = (utc: string) => formatTimeTz(utc, myTz);
 
   // Determina si el slot cae dentro del horario preferencial del usuario (18:00 - 22:00 hora local)
   const isPreferredSlot = (slot: any) => {
     if (slot.is_preferred) return true;
-    const localDate = new Date(slot.start_time_utc);
-    const hour = localDate.getHours();
-    const minutes = localDate.getMinutes();
-    const totalMinutes = hour * 60 + minutes;
+    const { hour, minute } = getHourMinuteTz(slot.start_time_utc, myTz);
+    const totalMinutes = hour * 60 + minute;
     return totalMinutes >= 18 * 60 && totalMinutes < 22 * 60;
   };
 
@@ -316,12 +313,9 @@ function StepConfirmTrial({
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
 
-  const fmtDate = new Date(date + "T00:00:00").toLocaleDateString("es", {
-    weekday: "long", day: "numeric", month: "long",
-  });
-  const fmtTime = new Date(slot.start_time_utc).toLocaleTimeString("es", {
-    hour: "2-digit", minute: "2-digit",
-  });
+  const myTz = getMyDisplayTimezone();
+  const fmtDate = formatDateHumanTz(date + "T00:00:00", myTz); 
+  const fmtTime = formatTimeTz(slot.start_time_utc, myTz);
 
   const confirmTrial = async () => {
     setBooking(true);
@@ -511,12 +505,9 @@ function StepPayment({
     }
   };
 
-  const fmtDate = new Date(date + "T00:00:00").toLocaleDateString("es", {
-    weekday: "long", day: "numeric", month: "long",
-  });
-  const fmtTime = new Date(slot.start_time_utc).toLocaleTimeString("es", {
-    hour: "2-digit", minute: "2-digit",
-  });
+  const myTz = getMyDisplayTimezone();
+  const fmtDate = formatDateHumanTz(date + "T00:00:00", myTz);
+  const fmtTime = formatTimeTz(slot.start_time_utc, myTz);
 
   return (
     <div className="max-w-lg mx-auto space-y-5">

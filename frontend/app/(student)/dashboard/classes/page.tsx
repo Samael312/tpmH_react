@@ -10,6 +10,7 @@ import { useStudentClasses, useAvailableSlots } from "@/hooks/useStudentData";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import ClassCard from "@/components/classes/ClassCard";
+import { getMyDisplayTimezone, formatTimeTz, formatDateHumanTz } from "@/lib/tzFormat";
 
 const STATUS_CONFIG: Record<string, {
   label: string;
@@ -148,11 +149,9 @@ function RescheduleModal({
   const currentDuration = classItem?.duration_minutes || 60;
   const { slots, loading } = useAvailableSlots(date, currentDuration);
 
-  // Formateador coherente en hora local para evitar confusiones con la BD
-  const formatTimeLocal = (utc: string) =>
-    new Date(utc).toLocaleTimeString("es", {
-      hour: "2-digit", minute: "2-digit",
-    });
+  // Formateador coherente en la hora local DEL ESTUDIANTE (no del dispositivo)
+  const myTz = getMyDisplayTimezone();
+  const formatTimeLocal = (utc: string) => formatTimeTz(utc, myTz);
 
   const formatDateHuman = (dateStr: string) => {
     if (!dateStr) return "";
@@ -429,9 +428,7 @@ function CancelModal({
     }
   };
 
-  const dateFormatted = new Date(classDate).toLocaleDateString("es", {
-    weekday: "long", day: "numeric", month: "long",
-  });
+  const dateFormatted = formatDateHumanTz(classDate, getMyDisplayTimezone());
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

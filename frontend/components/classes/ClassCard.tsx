@@ -4,6 +4,7 @@ import { useState } from "react";
 import { User, Video, X, Clock, RotateCcw, Check, AlertCircle, Phone } from "lucide-react";
 import api from "@/lib/api";
 import { getFlagForNationality } from "@/lib/nationalities";
+import { formatTimeTz, formatWeekdayShortTz, formatMonthShortTz, getDayOfMonthTz, getMyDisplayTimezone } from "@/lib/tzFormat";
 
 export interface ClassCardData {
   id: number;
@@ -128,7 +129,6 @@ export default function ClassCard({
   
   const isPast = endDate < new Date();
   const isHistory = HISTORY_STATUSES.includes(class_.status);
-  const dayOfWeek = start.toLocaleDateString("es", { weekday: "short" });
 
   const personName = role === "student" ? class_.teacher_name : class_.student_name;
   const personAvatar = role === "student" ? class_.teacher_avatar : class_.student_avatar;
@@ -138,9 +138,13 @@ export default function ClassCard({
   // Teléfono y diferencia horaria de la otra persona — solo visibles
   // para quien tiene la clase asignada (profesor ve datos del estudiante y viceversa)
   const personPhone = role === "student" ? class_.teacher_phone : class_.student_phone;
-  const myTimezone = role === "teacher" ? class_.teacher_timezone : class_.student_timezone;
+  // Zona horaria guardada en la clase al momento de agendar. Si por algún
+  // motivo no vino (clases antiguas), caemos a la del perfil de la cuenta.
+  const myTimezone = (role === "teacher" ? class_.teacher_timezone : class_.student_timezone) || getMyDisplayTimezone();
   const otherTimezone = role === "teacher" ? class_.student_timezone : class_.teacher_timezone;
   const tzDiffLabel = getTimezoneDiffLabel(otherTimezone, myTimezone);
+
+  const dayOfWeek = formatWeekdayShortTz(class_.start_time_utc, myTimezone);
 
   // --- LÓGICA DE API ---
   const teacherUpdateStatus = async (newStatus: string) => {
@@ -213,10 +217,10 @@ export default function ClassCard({
               {dayOfWeek}
             </span>
             <span className="text-xl font-black tracking-tight text-slate-800">
-              {start.getDate()}
+              {getDayOfMonthTz(class_.start_time_utc, myTimezone)}
             </span>
             <span className="text-[10px] font-bold text-pink-500 uppercase">
-              {start.toLocaleString("es", { month: "short" }).replace(".", "")}
+              {formatMonthShortTz(class_.start_time_utc, myTimezone)}
             </span>
           </div>
 
@@ -247,9 +251,9 @@ export default function ClassCard({
             <div className="flex items-center gap-3 text-xs font-semibold text-slate-500 flex-wrap mb-2">
               <span className="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-lg text-slate-600">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
-              {start.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
+              {formatTimeTz(class_.start_time_utc, myTimezone)}
               {" – "}
-              {endDate.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
+              {class_.end_time_utc ? formatTimeTz(class_.end_time_utc, myTimezone) : formatTimeTz(endDate.toISOString(), myTimezone)}
               {" "}({duration} min)
             </span>
               
