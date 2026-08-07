@@ -318,9 +318,6 @@ def get_teacher_available_slots(
         TeacherAvailability.is_available == True
     ).all()
 
-    if not weekly_slots:
-        return []
-
     # Construir rangos UTC para esta fecha concreta
     availability_ranges = []
     for slot in weekly_slots:
@@ -333,9 +330,6 @@ def get_teacher_available_slots(
             availability_ranges.append((start_utc, end_utc))
         except ValueError:
             continue
-
-    if not availability_ranges:
-        return []
 
     # 4. Obtener excepciones para esta fecha
     day_start = dt
