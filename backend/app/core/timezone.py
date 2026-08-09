@@ -147,6 +147,33 @@ def convert_local_time_to_utc_string(
         logger.error(f"Error en convert_local_time_to_utc_string: {e}")
         raise ValueError(f"No se pudo convertir '{time_str}' desde '{tz_str}'")
 
+def convert_utc_time_to_local_string(
+    utc_time_str: str,
+    tz_str: str,
+    day_of_week: int,
+) -> str:
+    """
+    Inversa de convert_local_time_to_utc_string.
+    Dado un "HH:MM" UTC recurrente asociado a un day_of_week, devuelve el
+    "HH:MM" que esa misma hora representa en la zona horaria indicada.
+    Se usa para recuperar la hora LOCAL que un usuario configuró antes de
+    recalcular su horario tras un cambio de zona horaria.
+
+    Example:
+        convert_utc_time_to_local_string("10:00", "America/Caracas", 0)
+        → "06:00"
+    """
+    try:
+        tz = ZoneInfo(tz_str)
+        reference_date = get_next_weekday_date(day_of_week, tz_str)
+        dt_utc = datetime.strptime(
+            f"{reference_date}T{utc_time_str}:00", "%Y-%m-%dT%H:%M:%S"
+        ).replace(tzinfo=UTC)
+        dt_local = dt_utc.astimezone(tz)
+        return dt_local.strftime("%H:%M")
+    except Exception as e:
+        logger.error(f"Error en convert_utc_time_to_local_string: {e}")
+        raise ValueError(f"No se pudo convertir '{utc_time_str}' a '{tz_str}'")
 
 # ─── Cálculo de slots ───────────────────────────────────────────────────────
 

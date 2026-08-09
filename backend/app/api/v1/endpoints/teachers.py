@@ -14,6 +14,7 @@ from app.models.student import StudentProfile
 from app.core.storage import upload_file, delete_file
 from app.models.package import Enrollment
 from app.models.material import Material, MaterialAssignment
+from app.core.schedule_recalc import recalculate_teacher_schedule_timezone
 
 router = APIRouter()
 
@@ -103,13 +104,19 @@ def get_my_teacher_profile(
     return profile
 
 
-@router.patch("/me/profile", response_model=TeacherProfileResponse)
+@router.patch("/me/profile")
 def update_my_teacher_profile(
     data: UpdateTeacherProfileRequest,
     current_user: User = Depends(get_current_teacher),
     db: Session = Depends(get_db)
 ):
-    """Actualiza el perfil del profesor autenticado"""
+    """
+    Actualiza el perfil del profesor autenticado.
+    Si cambia la zona horaria, recalcula de forma síncrona (dentro de la
+    misma request) su disponibilidad semanal y sus excepciones para
+    preservar sus horas locales, y devuelve un resumen para notificar al
+    usuario en el frontend.
+    """
     profile = current_user.teacher_profile
     if not profile:
         raise HTTPException(
@@ -118,12 +125,30 @@ def update_my_teacher_profile(
         )
 
     update_data = data.model_dump(exclude_unset=True)
+
+    old_timezone = profile.timezone
+    new_timezone = update_data.get("timezone")
+    timezone_changed = bool(new_timezone) and new_timezone != old_timezone
+
     for field, value in update_data.items():
         setattr(profile, field, value)
 
+    recalc_summary = {"weekly_changes": [], "exception_changes": []}
+    if timezone_changed:
+        recalc_summary = recalculate_teacher_schedule_timezone(
+            teacher_id=profile.id,
+            old_tz=old_timezone,
+            new_tz=new_timezone,
+            db=db,
+        )
+
     db.commit()
     db.refresh(profile)
-    return profile
+
+    response = TeacherProfileResponse.model_validate(profile).model_dump()
+    response["schedule_recalculated"] = timezone_changed
+    response["schedule_changes"] = recalc_summary
+    return response
 
 @router.get("/me/students")
 def get_my_students(

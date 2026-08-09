@@ -433,6 +433,11 @@ export default function TeacherProfilePage() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
+  // Timezone
+  const [savedTimezone, setSavedTimezone] = useState("");
+  const [recalculating, setRecalculating] = useState(false);
+  const [tzNotice, setTzNotice] = useState<{ weekly: number; exceptions: number } | null>(null);
+
   // Campos de formulario
   const [phoneCountry, setPhoneCountry] = useState<CountryInfo>(DEFAULT_COUNTRY);
   const [phoneRest, setPhoneRest] = useState("");
@@ -468,6 +473,7 @@ export default function TeacherProfilePage() {
     setNationality(prof.nationality ?? "");
     setTitle_(prof.title ?? "");
     setTimezone(prof.timezone ?? "");
+    setSavedTimezone(prof.timezone ?? "");
     setLanguages(prof.languages ?? []);
     setSubjects(prof.subjects ?? []);
     setSkills(prof.skills ?? []);
@@ -536,24 +542,36 @@ export default function TeacherProfilePage() {
   const removeCert = (idx: number) => setCertificates(p => p.filter((_, i) => i !== idx));
 
   const saveInfo = async () => {
+    const timezoneChanging = !!savedTimezone && timezone !== savedTimezone;
     setSaving(true);
+    if (timezoneChanging) setRecalculating(true);
     setInfoFeedback(null);
     try {
       const fullPhone = phoneRest.trim() ? `${phoneCountry.dialCode} ${phoneRest.trim()}` : "";
       await api.patch("/users/me", { username, email, phone_number: fullPhone });
-      await api.patch("/teachers/me/profile", {
+      const res = await api.patch("/teachers/me/profile", {
         bio, title: title_, timezone, languages, subjects, skills,
         certificates: certificates.filter(c => c.title.trim()),
         social_links: socialLinks,
         nationality: nationality || null,
       });
       await refetch();
+      setSavedTimezone(timezone);
+
+      if (res.data?.schedule_recalculated) {
+        setTzNotice({
+          weekly: res.data.schedule_changes?.weekly_changes?.length ?? 0,
+          exceptions: res.data.schedule_changes?.exception_changes?.length ?? 0,
+        });
+      }
+
       setInfoFeedback({ msg: "Perfil actualizado correctamente", type: "success" });
       setIsEditing(false);
     } catch (e: any) {
       setInfoFeedback({ msg: formatErrorMessage(e, "Error guardando el perfil"), type: "error" });
     } finally {
       setSaving(false);
+      setRecalculating(false);
       setTimeout(() => setInfoFeedback(null), 4000);
     }
   };
@@ -602,6 +620,46 @@ export default function TeacherProfilePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 relative overflow-hidden py-8 px-4 sm:px-6 lg:px-8">
+      {recalculating && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl px-8 py-7 shadow-2xl flex flex-col items-center gap-4 max-w-sm text-center">
+            <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
+            <p className="text-sm font-black text-slate-800">Actualizando tu zona horaria…</p>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Estamos recalculando tu disponibilidad y excepciones para que tus horas locales se mantengan igual. No cierres esta pantalla.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {tzNotice && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+          onClick={() => setTzNotice(null)}
+        >
+          <div className="bg-white rounded-3xl p-7 max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 bg-blue-50 rounded-2xl flex items-center justify-center flex-shrink-0">
+                <Globe className="w-5 h-5 text-blue-500" />
+              </div>
+              <h3 className="text-lg font-black text-slate-800">Zona horaria actualizada</h3>
+            </div>
+            <p className="text-sm text-slate-600 leading-relaxed mb-5">
+              Tus horas configuradas se mantienen exactamente iguales. Ajustamos internamente{" "}
+              <strong>{tzNotice.weekly}</strong> franja{tzNotice.weekly !== 1 ? "s" : ""} de tu disponibilidad semanal
+              {tzNotice.exceptions > 0 && (
+                <> y <strong>{tzNotice.exceptions}</strong> excepción{tzNotice.exceptions !== 1 ? "es" : ""} puntual{tzNotice.exceptions !== 1 ? "es" : ""}</>
+              )} para que tus estudiantes sigan viendo tu disponibilidad convertida correctamente a su propio horario.
+            </p>
+            <button
+              onClick={() => setTzNotice(null)}
+              className="w-full py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-sm font-bold transition-colors"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
       <div className="fixed top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/20 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-[-80px] left-[-80px] w-[400px] h-[400px] bg-purple-300/15 rounded-full blur-[100px] pointer-events-none" />
 

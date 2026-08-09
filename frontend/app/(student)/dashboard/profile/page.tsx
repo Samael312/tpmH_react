@@ -156,6 +156,11 @@ export default function StudentProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [timezonesList, setTimezonesList] = useState<string[]>(DEFAULT_TIMEZONES);
 
+  // Timezone
+  const [savedTimezone, setSavedTimezone] = useState("");
+  const [recalculating, setRecalculating] = useState(false);
+  const [tzNotice, setTzNotice] = useState<{ weekly: number } | null>(null);
+
   // Campos de formulario
   const [username, setUsername] = useState("");
   const [name, setName]         = useState("");
@@ -210,6 +215,7 @@ export default function StudentProfilePage() {
       "UTC";
     setTz(detectedTz);
     setTimezonesList(prev => (prev.includes(detectedTz) ? prev : [detectedTz, ...prev]));
+    setSavedTimezone(studentData.timezone || "");
 
     setGoal(studentData.goal ?? "");
     setPay(studentData.preferred_payment_methods ?? []);
@@ -252,10 +258,12 @@ export default function StudentProfilePage() {
     setIsEditing(false);
   }, [profile, populateFields]);
 
-  const fullPhone = phoneRest.trim() ? `${phoneCountry.dialCode} ${phoneRest.trim()}` : "";
   // ─── PATCH: Actualizar Perfil y Student Profile ──────────────────────────────
   const saveInfo = useCallback(async () => {
+    const fullPhone = phoneRest.trim() ? `${phoneCountry.dialCode} ${phoneRest.trim()}` : "";
+    const timezoneChanging = !!savedTimezone && timezone !== savedTimezone;
     setSavingInfo(true);
+    if (timezoneChanging) setRecalculating(true);
     setInfoFeedback(null);
     try {
       const [userRes, studentRes] = await Promise.all([
@@ -264,7 +272,7 @@ export default function StudentProfilePage() {
           name,
           surname,
           email,
-          phone_number:fullPhone,
+          phone_number: fullPhone,
           nationality,
         }),
         api.patch("/users/me/student-profile", {
@@ -278,6 +286,10 @@ export default function StudentProfilePage() {
       const updatedStudentData = studentRes.data || {};
       populateFields(updatedUserData, updatedStudentData);
 
+      if (updatedStudentData?.schedule_recalculated) {
+        setTzNotice({ weekly: updatedStudentData.schedule_changes?.weekly_changes?.length ?? 0 });
+      }
+
       if (setUser && user) {
         setUser({
           ...user,
@@ -288,7 +300,6 @@ export default function StudentProfilePage() {
           phone_number: updatedUserData.phone_number ?? fullPhone,
           nationality: updatedUserData.nationality ?? nationality,
           ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
-
         });
       }
 
@@ -301,9 +312,10 @@ export default function StudentProfilePage() {
       });
     } finally {
       setSavingInfo(false);
+      setRecalculating(false);
       setTimeout(() => setInfoFeedback(null), 4000);
     }
-  }, [username, name, surname, email, fullPhone, timezone, goal, payMethods, populateFields, user, setUser, avatarUrl]);
+  }, [savedTimezone, timezone, username, name, surname, email, phoneCountry.dialCode, phoneRest, nationality, goal, payMethods, populateFields, user, setUser, avatarUrl]);
 
   // ─── POST: Cambiar Contraseña ────────────────────────────────────────────────
   const savePw = useCallback(async () => {
@@ -411,6 +423,45 @@ export default function StudentProfilePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 relative overflow-hidden py-8 px-4 sm:px-6 lg:px-8">
+      {/* ─── Modales de Zona Horaria ─── */}
+      {recalculating && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl px-8 py-7 shadow-2xl flex flex-col items-center gap-4 max-w-sm text-center">
+            <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
+            <p className="text-sm font-black text-slate-800">Actualizando tu zona horaria…</p>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Estamos recalculando tus horarios preferidos para que se mantengan igual en tu hora local. No cierres esta pantalla.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {tzNotice && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+          onClick={() => setTzNotice(null)}
+        >
+          <div className="bg-white rounded-3xl p-7 max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 bg-blue-50 rounded-2xl flex items-center justify-center flex-shrink-0">
+                <Globe className="w-5 h-5 text-blue-500" />
+              </div>
+              <h3 className="text-lg font-black text-slate-800">Zona horaria actualizada</h3>
+            </div>
+            <p className="text-sm text-slate-600 leading-relaxed mb-5">
+              Tus horarios preferidos configurados se mantienen exactamente iguales. Ajustamos internamente{" "}
+              <strong>{tzNotice.weekly}</strong> franja{tzNotice.weekly !== 1 ? "s" : ""} de tus preferencias para reflejar correctamente tu nueva zona horaria.
+            </p>
+            <button
+              onClick={() => setTzNotice(null)}
+              className="w-full py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-sm font-bold transition-colors"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="fixed top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/25 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-[-80px] left-[-80px] w-[400px] h-[400px] bg-purple-300/20 rounded-full blur-[100px] pointer-events-none" />
 
@@ -558,48 +609,48 @@ export default function StudentProfilePage() {
                         <div className="w-full h-full bg-slate-50 border-2 border-transparent rounded-xl px-3 py-3.5 flex items-center justify-between pointer-events-none font-bold text-slate-800">
                           <span className="text-lg leading-none">{phoneCountry.flag}</span>
                           <span className="text-sm font-black text-slate-600">{phoneCountry.dialCode}</span>
+                        </div>
+                        <select
+                          value={phoneCountry.dialCode}
+                          onChange={e => {
+                            const sel = COUNTRY_OPTIONS.find(c => c.dialCode === e.target.value);
+                            if (sel) setPhoneCountry(sel);
+                          }}
+                          disabled={savingInfo}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                        >
+                          {COUNTRY_OPTIONS.map((c, i) => (
+                            <option key={i} value={c.dialCode}>{c.flag} {c.dialCode}</option>
+                          ))}
+                        </select>
                       </div>
-                      <select
-                        value={phoneCountry.dialCode}
-                        onChange={e => {
-                          const sel = COUNTRY_OPTIONS.find(c => c.dialCode === e.target.value);
-                          if (sel) setPhoneCountry(sel);
-                        }}
+                      <input
+                        type="tel"
+                        value={phoneRest}
+                        onChange={e => setPhoneRest(e.target.value)}
                         disabled={savingInfo}
-                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                      >
-                        {COUNTRY_OPTIONS.map((c, i) => (
-                          <option key={i} value={c.dialCode}>{c.flag} {c.dialCode}</option>
-                        ))}
-                      </select>
+                        placeholder="412 000 0000"
+                        className={inputCls(false)}
+                      />
                     </div>
-                    <input
-                      type="tel"
-                      value={phoneRest}
-                      onChange={e => setPhoneRest(e.target.value)}
-                      disabled={savingInfo}
-                      placeholder="412 000 0000"
-                      className={inputCls(false)}
-                    />
                   </div>
-                </div>
 
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                    Nacionalidad
-                  </label>
-                  <select
-                    value={nationality}
-                    onChange={e => setNationality(e.target.value)}
-                    disabled={savingInfo}
-                    className={`${inputCls(false)} appearance-none cursor-pointer`}
-                  >
-                    <option value="">Seleccionar...</option>
-                    {NATIONALITIES.map(n => (
-                      <option key={n.code} value={n.name}>{n.flag} {n.name}</option>
-                    ))}
-                  </select>
-                </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                      Nacionalidad
+                    </label>
+                    <select
+                      value={nationality}
+                      onChange={e => setNationality(e.target.value)}
+                      disabled={savingInfo}
+                      className={`${inputCls(false)} appearance-none cursor-pointer`}
+                    >
+                      <option value="">Seleccionar...</option>
+                      {NATIONALITIES.map(n => (
+                        <option key={n.code} value={n.name}>{n.flag} {n.name}</option>
+                      ))}
+                    </select>
+                  </div>
 
                   <Field label="Zona horaria" icon={<Globe className="w-5 h-5" />}>
                     <select

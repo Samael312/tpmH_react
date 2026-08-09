@@ -107,6 +107,14 @@ def _build_class_responses(classes: list[Class], db: Session) -> list[ClassRespo
         data["student_name"] = (
             f"{student_user.name} {student_user.surname}" if student_user else None
         )
+        # IMPORTANTE: usamos la zona horaria ACTUAL del perfil, no la que
+        # quedó guardada en la fila de Class al momento de reservar. Así,
+        # si el profesor o el estudiante cambian su zona horaria después,
+        # todas sus clases (pasadas y futuras) se muestran correctamente
+        # sin tener que tocar la base de datos.
+        data["teacher_timezone"] = teacher.timezone if teacher else data.get("teacher_timezone")
+        data["student_timezone"] = student.timezone if student else data.get("student_timezone")
+        
         data["teacher_phone"] = teacher_user.phone_number if teacher_user else None
         data["student_phone"] = student_user.phone_number if student_user else None
         data["student_avatar"] = (
