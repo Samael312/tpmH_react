@@ -148,56 +148,65 @@ export function useStudentClasses(includeHistory = false) {
   return { classes, loading, refetch: fetch };
 }
 
-export function useTeacherResolution() {
-  const [state, setState] = useState<TeacherResolution>({
-    loading: true,
-    isSingleTenant: true,
-    teacherUsername: null,
-    hasChosenTeacher: false,
-  });
+// ─── Profesores vinculados al estudiante (single o multi-tenant) ────────────
+export interface MyTeacherInfo {
+  teacher_username: string;
+  name: string | null;
+  surname: string | null;
+  title: string | null;
+  profile_photo_url: string | null;
+  theme_color: string | null;
+  stage: "needs_trial" | "trial_in_progress" | "needs_package" | "needs_renewal" | "renewal_pending" | "ready";
+  active_enrollment: {
+    id: number;
+    package_name: string | null;
+    classes_used: number;
+    classes_total: number | null;
+    status: string;
+  } | null;
+}
+
+/**
+ * Reemplaza al antiguo useTeacherResolution. Funciona igual en ambos modos:
+ * - single-tenant: siempre devuelve como máximo 1 profesor (el featured).
+ * - multi-tenant: devuelve todos los profesores vinculados al estudiante.
+ * El componente decide qué hacer según teachers.length (0, 1, o 2+).
+ */
+export function useMyTeachers() {
+  const [teachers, setTeachers] = useState<MyTeacherInfo[]>([]);
+  const [isSingleTenant, setIsSingleTenant] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
-    setState(s => ({ ...s, loading: true }));
+    setLoading(true);
     try {
-      const cfgRes = await api.get("/admin/platform-config");
-      const cfg = cfgRes.data;
-
-      if (cfg.is_single_tenant) {
-        setState({
-          loading: false,
-          isSingleTenant: true,
-          teacherUsername: cfg.featured_teacher?.username ?? null,
-          hasChosenTeacher: true, // no aplica bloqueo en single-tenant
-        });
-      } else {
-        const spRes = await api
-          .get("/users/me/student-profile")
-          .catch(() => ({ data: {} }));
-        const chosen = spRes.data?.teacher_username ?? null;
-        setState({
-          loading: false,
-          isSingleTenant: false,
-          teacherUsername: chosen,
-          hasChosenTeacher: !!chosen,
-        });
-      }
-    } catch {
-      setState({
-        loading: false,
-        isSingleTenant: true,
-        teacherUsername: null,
-        hasChosenTeacher: false,
-      });
+      const [cfgRes, teachersRes] = await Promise.all([
+        api.get("/admin/platform-config"),
+        api.get("/users/me/teachers"),
+      ]);
+      setIsSingleTenant(!!cfgRes.data?.is_single_tenant);
+      setTeachers(Array.isArray(teachersRes.data) ? teachersRes.data : []);
+    } catch (error) {
+      console.error("Error fetching my teachers:", error);
+      setTeachers([]);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => { fetch(); }, [fetch]);
-  return { ...state, refetch: fetch };
+
+  return {
+    loading,
+    isSingleTenant,
+    teachers,
+    hasAnyTeacher: teachers.length > 0,
+    refetch: fetch,
+  };
 }
 
 // ─── Slots disponibles ────────────────────────────────────────────────────────
-export function useAvailableSlots(date: string, duration: number) {
-  const { teacherUsername, loading: resolvingTeacher } = useTeacherResolution();
+export function useAvailableSlots(date: string, duration: number, teacherUsername: string | null) {
   const [slots, setSlots]     = useState<AvailableSlot[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -221,7 +230,7 @@ export function useAvailableSlots(date: string, duration: number) {
   }, [date, duration, teacherUsername]);
 
   useEffect(() => { fetch(); }, [fetch]);
-  return { slots, loading: loading || resolvingTeacher, refetch: fetch, teacherUsername };
+  return { slots, loading, refetch: fetch };
 }
 
 // ─── Enrollments ──────────────────────────────────────────────────────────────

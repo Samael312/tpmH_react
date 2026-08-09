@@ -80,5 +80,4 @@ class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
 
-class ChooseTeacherRequest(BaseModel):
-    teacher_username: str
+

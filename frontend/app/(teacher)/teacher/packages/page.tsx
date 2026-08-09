@@ -40,6 +40,7 @@ interface EnrollmentCompliance {
   no_show_count: number;
   cancelled_late_count: number;
   renewal_requested_package_name: string | null;
+  change_requested_package_name: string | null;
   created_at: string;
 }
 
@@ -58,13 +59,14 @@ const STATUS_BADGE: Record<string, string> = {
   active: "bg-emerald-100 text-emerald-700",
   completed: "bg-slate-100 text-slate-500",
   pending_renewal: "bg-amber-100 text-amber-700",
+  pending_package_change: "bg-blue-100 text-blue-700",
   cancelled: "bg-red-100 text-red-600",
 };
-
 const STATUS_LABEL: Record<string, string> = {
   active: "Activo",
   completed: "Agotado",
   pending_renewal: "Renovación pendiente",
+  pending_package_change: "Cambio de paquete pendiente",
   cancelled: "Cancelado",
 };
 
@@ -207,6 +209,18 @@ export default function TeacherPackagesPage() {
       setApprovingId(null);
     }
   };
+
+  const approvePackageChange = async (enrollmentId: number) => {
+  setApprovingId(enrollmentId);
+  try {
+    await api.post(`/packages/${enrollmentId}/approve-package-change`);
+    fetchAll();
+  } catch (e: any) {
+    alert(e.response?.data?.detail || "Error aprobando el cambio de paquete");
+  } finally {
+    setApprovingId(null);
+  }
+};
 
   const pendingRenewals = enrollments.filter(e => e.status === "pending_renewal");
 
@@ -721,6 +735,28 @@ export default function TeacherPackagesPage() {
                           </button>
                         </div>
                       )}
+                      {e.status === "pending_package_change" && (
+  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+    {e.change_requested_package_name && (
+      <span className="text-[10px] text-slate-400 font-bold">
+        Quiere cambiar a: {e.change_requested_package_name}
+      </span>
+    )}
+    <button
+      onClick={() => approvePackageChange(e.id)}
+      disabled={approvingId === e.id}
+      className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-500
+                 to-indigo-400 text-white text-xs font-bold rounded-xl shadow-sm
+                 hover:shadow-md active:scale-[0.98] transition-all disabled:opacity-50"
+    >
+      {approvingId === e.id ? (
+        <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+      ) : (
+        <><Check className="w-3.5 h-3.5" /> Aprobar cambio de paquete</>
+      )}
+    </button>
+  </div>
+)}
                     </div>
                   );
                 })}

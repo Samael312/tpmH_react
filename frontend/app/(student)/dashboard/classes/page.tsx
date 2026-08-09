@@ -147,8 +147,8 @@ function RescheduleModal({
   const [selected, setSelected] = useState<any>(null);
 
   const currentDuration = classItem?.duration_minutes || 60;
-  const { slots, loading } = useAvailableSlots(date, currentDuration);
-
+  const { slots, loading } = useAvailableSlots(date, currentDuration, classItem?.teacher_username ?? null);
+  
   // Formateador coherente en la hora local DEL ESTUDIANTE (no del dispositivo)
   const myTz = getMyDisplayTimezone();
   const formatTimeLocal = (utc: string) => formatTimeTz(utc, myTz);

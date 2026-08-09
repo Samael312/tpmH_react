@@ -68,11 +68,11 @@ def _sync_student_teacher_username(current_user: User, teacher: TeacherProfile, 
         student_profile.teacher_username = teacher.user_username
         db.commit()
 
-def _get_trial_teacher(current_user: User, db: Session):
+def _resolve_booking_teacher(current_user: User, teacher_username: Optional[str], db: Session):
     """
-    Determina con qué profesor se agenda la clase de prueba.
-    - Modo single-tenant activo: siempre el profesor featured.
-    - Modo multi-tenant: el profesor que el estudiante haya elegido.
+    Determina con qué profesor se agenda (trial o clase sin enrollment
+    todavía). Single-tenant: siempre el featured teacher, se ignora
+    teacher_username. Multi-tenant: teacher_username es obligatorio.
     """
     from app.models.payment_config import PlatformConfig
     config = db.query(PlatformConfig).first()
@@ -80,15 +80,41 @@ def _get_trial_teacher(current_user: User, db: Session):
     if not config or config.is_single_tenant:
         return _get_featured_teacher(db)
 
-    student_profile = current_user.student_profile
-    username = student_profile.teacher_username if student_profile else None
-    if not username:
-        return None
+    if not teacher_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debes especificar con qué profesor deseas agendar (teacher_username)"
+        )
 
     return db.query(TeacherProfile).filter(
-        TeacherProfile.user_username == username,
+        TeacherProfile.user_username == teacher_username,
         TeacherProfile.status == TeacherStatus.approved
     ).first()
+
+
+def _ensure_teacher_linked(current_user: User, teacher: TeacherProfile, db: Session):
+    """
+    Garantiza el vínculo estudiante-profesor. Single-tenant: no hace
+    nada (ya cubierto por _sync_student_teacher_username). Multi-tenant:
+    crea el StudentTeacherLink y agrega al estudiante a
+    teacher_profiles.students si no existía, de forma idempotente.
+    """
+    from app.models.payment_config import PlatformConfig
+    from app.models.student_teacher_link import StudentTeacherLink
+
+    config = db.query(PlatformConfig).first()
+    if not config or config.is_single_tenant:
+        return
+
+    profile = current_user.student_profile
+    existing = db.query(StudentTeacherLink).filter(
+        StudentTeacherLink.student_id == profile.id,
+        StudentTeacherLink.teacher_id == teacher.id,
+    ).first()
+    if not existing:
+        db.add(StudentTeacherLink(student_id=profile.id, teacher_id=teacher.id))
+        db.commit()
+        link_student_to_teacher(db, profile, teacher, old_teacher_username=None)
 
 
 # ─── CONFIGURACIÓN DE PAGOS ──────────────────────────────────────────────────
@@ -234,34 +260,50 @@ def book_class(
     db: Session = Depends(get_db)
 ):
     student_id = current_user.student_profile.id
-    stage = get_student_booking_stage(student_id, db)
+
+    # Resolver profesor: si viene enrollment_id, el profesor es implícito
+    # en el enrollment; si no (caso trial), se resuelve por
+    # teacher_username (obligatorio en multi-tenant) o featured (single).
+    if data.enrollment_id:
+        enrollment_for_teacher = db.query(Enrollment).filter(
+            Enrollment.id == data.enrollment_id,
+            Enrollment.student_id == student_id,
+        ).first()
+        if not enrollment_for_teacher:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado")
+        teacher = db.query(TeacherProfile).filter(
+            TeacherProfile.id == enrollment_for_teacher.teacher_id
+        ).first()
+    else:
+        teacher = _resolve_booking_teacher(current_user, data.teacher_username, db)
+
+    if not teacher:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se pudo determinar con qué profesor deseas agendar"
+        )
+
+    stage = get_student_booking_stage(student_id, teacher.id, db)
 
     if stage == "trial_in_progress":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ya tienes una clase de prueba pendiente. Complétala antes de agendar otra."
+            detail="Ya tienes una clase de prueba pendiente con este profesor. Complétala antes de agendar otra."
         )
 
     if stage == "needs_package":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Debes elegir un paquete de clases para poder seguir agendando."
+            detail="Debes elegir un paquete de clases con este profesor para poder seguir agendando."
         )
 
-    # ─── Primera clase del estudiante: SIEMPRE es de prueba, sin paquete ───
+    # ─── Primera clase con este profesor: SIEMPRE es de prueba, sin paquete ───
     if stage == "needs_trial":
-        teacher = _get_trial_teacher(current_user, db)
-        if not teacher:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Debes elegir un profesor antes de reservar tu clase de prueba"
-            )
-
+        _ensure_teacher_linked(current_user, teacher, db)
         _sync_student_teacher_username(current_user, teacher, db)
 
         trial_start = data.start_time_utc
         trial_end = trial_start + timedelta(minutes=30)
-
         day_of_week = DAYS_ES[trial_start.weekday()]
 
         can_book, error_msg = can_book_slot(
@@ -290,7 +332,7 @@ def book_class(
             duration=30,
             teacher_timezone=teacher.timezone,
             student_timezone=current_user.student_profile.timezone,
-            status="pending_trial", 
+            status="pending_trial",
             day_of_week=day_of_week,
         )
         db.add(trial_class)
@@ -311,7 +353,7 @@ def book_class(
     enrollment = db.query(Enrollment).filter(
         Enrollment.id == data.enrollment_id,
         Enrollment.student_id == student_id,
-        Enrollment.status == "active"
+        Enrollment.status.in_(["active", "pending_package_change"]),
     ).first()
 
     if not enrollment:
@@ -661,12 +703,58 @@ def process_withdrawal(
 
 @router.get("/booking-status")
 def get_booking_status(
+    teacher_username: Optional[str] = None,
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    """El frontend usa esto para saber qué flujo de reserva mostrar."""
-    stage = get_student_booking_stage(current_user.student_profile.id, db)
-    return {"stage": stage}
+    """
+    El frontend usa esto para saber qué flujo de reserva mostrar.
+    Single-tenant: siempre resuelve al featured teacher (se ignora el
+    parámetro). Multi-tenant: si el estudiante tiene un solo profesor
+    vinculado se resuelve automático; si tiene 0, devuelve "needs_teacher";
+    si tiene 2+, se requiere teacher_username explícito.
+    """
+    from app.models.payment_config import PlatformConfig
+    from app.models.student_teacher_link import StudentTeacherLink
+
+    config = db.query(PlatformConfig).first()
+    student_id = current_user.student_profile.id
+
+    if not config or config.is_single_tenant:
+        teacher = _get_featured_teacher(db)
+        if not teacher:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No hay profesora featured configurada")
+        stage = get_student_booking_stage(student_id, teacher.id, db)
+        return {"stage": stage, "teacher_username": teacher.user_username}
+
+    if teacher_username:
+        teacher = db.query(TeacherProfile).filter(
+            TeacherProfile.user_username == teacher_username,
+            TeacherProfile.status == TeacherStatus.approved
+        ).first()
+        if not teacher:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesor no encontrado")
+        stage = get_student_booking_stage(student_id, teacher.id, db)
+        return {"stage": stage, "teacher_username": teacher.user_username}
+
+    linked_teacher_ids = [
+        l.teacher_id for l in db.query(StudentTeacherLink).filter(
+            StudentTeacherLink.student_id == student_id
+        ).all()
+    ]
+
+    if len(linked_teacher_ids) == 0:
+        return {"stage": "needs_teacher", "teacher_username": None}
+
+    if len(linked_teacher_ids) == 1:
+        teacher = db.query(TeacherProfile).filter(TeacherProfile.id == linked_teacher_ids[0]).first()
+        stage = get_student_booking_stage(student_id, teacher.id, db)
+        return {"stage": stage, "teacher_username": teacher.user_username}
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Tienes más de un profesor vinculado. Especifica teacher_username."
+    )
 
 def _sync_student_teacher_username(current_user: User, teacher: TeacherProfile, db: Session):
     """

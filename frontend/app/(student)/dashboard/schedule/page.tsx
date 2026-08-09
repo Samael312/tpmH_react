@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAvailableSlots, useEnrollments, useTeacherResolution } from "@/hooks/useStudentData";
+import { useAvailableSlots, useEnrollments, useMyTeachers } from "@/hooks/useStudentData";
 import {
   Calendar, Clock, CreditCard,
   Upload, Check, X, ChevronLeft,
-  ChevronRight, AlertCircle, Video, AlertTriangle,
+  ChevronRight, AlertCircle, AlertTriangle,
   Sparkles, Package as PackageIcon, Hourglass,
 } from "lucide-react";
 import api from "@/lib/api";
@@ -134,23 +134,23 @@ function MiniCalendar({
   );
 }
 
-// ─── Paso: Seleccionar slot (muestra todos y destaca los preferidos de 18:00 a 22:00 localmente) ─────
+// ─── Paso: Seleccionar slot ───────────────────────────────────────────────────
 function StepSelectSlot({
   onSelect,
+  teacherUsername,
   isTrial = false,
 }: {
   onSelect: (date: string, slot: any, duration: number) => void;
+  teacherUsername: string | null;
   isTrial?: boolean;
 }) {
   const [date, setDate] = useState("");
   const [duration, setDuration] = useState(isTrial ? 30 : 60);
-
-  const { slots, loading } = useAvailableSlots(date, duration);
+  const { slots, loading } = useAvailableSlots(date, duration, teacherUsername);
   const myTz = getMyDisplayTimezone();
 
   const formatTime = (utc: string) => formatTimeTz(utc, myTz);
 
-  // Determina si el slot cae dentro del horario preferencial del usuario (18:00 - 22:00 hora local)
   const isPreferredSlot = (slot: any) => {
     if (slot.is_preferred) return true;
     const { hour, minute } = getHourMinuteTz(slot.start_time_utc, myTz);
@@ -160,12 +160,9 @@ function StepSelectSlot({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-      {/* Columna izquierda: calendario + duración */}
       <div className="space-y-5">
         <MiniCalendar value={date} onChange={setDate} />
 
-        {/* Duración — fija en 30min para la clase de prueba */}
         {!isTrial && (
           <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
                           border border-white shadow-xl shadow-slate-200/50 p-6">
@@ -204,12 +201,10 @@ function StepSelectSlot({
         )}
       </div>
 
-      {/* Columna derecha: todos los slots con los preferidos destacados */}
       <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
                       border border-white shadow-2xl shadow-slate-200/50 p-6">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-          <p className="text-[10px] font-black text-slate-400 uppercase
-                        tracking-widest">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
             Horarios disponibles
             {date && (
               <span className="ml-2 text-slate-300 normal-case font-bold">
@@ -230,8 +225,7 @@ function StepSelectSlot({
           </div>
         ) : loading ? (
           <div className="flex justify-center py-16">
-            <div className="w-8 h-8 border-4 border-pink-200 border-t-pink-500
-                            rounded-full animate-spin" />
+            <div className="w-8 h-8 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
           </div>
         ) : slots.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
@@ -241,8 +235,7 @@ function StepSelectSlot({
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4
-                          max-h-[400px] overflow-y-auto pr-1 pt-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-[400px] overflow-y-auto pr-1 pt-3">
             {slots.map((slot, i) => {
               const preferred = isPreferredSlot(slot);
               const blocked = !slot.is_available || slot.is_past;
@@ -263,33 +256,27 @@ function StepSelectSlot({
                             : "border-slate-100 bg-white hover:border-pink-300")
                       }
                     `}
-                  >
-                    {preferred && !blocked && (
-                      <div className="absolute -top-2 left-1/2 -translate-x-1/2
-                                      bg-purple-500 text-white text-[8px] font-black
-                                      uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm">
-                        Preferido
-                      </div>
-                    )}
-                    {blocked && (
-                      <div className="absolute -top-2 left-1/2 -translate-x-1/2
-                                      bg-slate-400 text-white text-[8px] font-black
-                                      uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm">
-                        {slot.is_past ? "Pasado" : "Ocupado"}
-                      </div>
-                    )}
-                    <Clock className={`w-4 h-4 mx-auto mb-1.5
-                      ${blocked ? "text-slate-300" : preferred ? "text-purple-500" : "text-slate-400"}`} />
-                    <p className={`text-base font-black
-                      ${blocked ? "text-slate-400" : preferred ? "text-purple-800" : "text-slate-800"}`}>
-                      {formatTime(slot.start_time_utc)}
-                    </p>
-                    <p className="text-[10px] text-slate-400 font-bold mt-0.5">
-                      hasta {formatTime(slot.end_time_utc)}
-                    </p>
-                  </button>
-                );
-              })}
+                >
+                  {preferred && !blocked && (
+                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-purple-500 text-white text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm">
+                      Preferido
+                    </div>
+                  )}
+                  {blocked && (
+                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-slate-400 text-white text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm">
+                      {slot.is_past ? "Pasado" : "Ocupado"}
+                    </div>
+                  )}
+                  <Clock className={`w-4 h-4 mx-auto mb-1.5 ${blocked ? "text-slate-300" : preferred ? "text-purple-500" : "text-slate-400"}`} />
+                  <p className={`text-base font-black ${blocked ? "text-slate-400" : preferred ? "text-purple-800" : "text-slate-800"}`}>
+                    {formatTime(slot.start_time_utc)}
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                    hasta {formatTime(slot.end_time_utc)}
+                  </p>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -297,15 +284,17 @@ function StepSelectSlot({
   );
 }
 
-// ─── Paso: Confirmar clase de prueba (sin pago, reserva directa) ─────────────
+// ─── Paso: Confirmar clase de prueba ──────────────────────────────────────────
 function StepConfirmTrial({
   date,
   slot,
+  teacherUsername,
   onBack,
   onBooked,
 }: {
   date: string;
   slot: any;
+  teacherUsername: string | null;
   onBack: () => void;
   onBooked: () => void;
 }) {
@@ -322,6 +311,7 @@ function StepConfirmTrial({
     setError("");
     try {
       await api.post("/payments/book", {
+        teacher_username: teacherUsername,
         start_time_utc: slot.start_time_utc,
         end_time_utc: slot.end_time_utc,
         duration_minutes: 30,
@@ -338,18 +328,14 @@ function StepConfirmTrial({
   return (
     <div className="max-w-lg mx-auto space-y-5">
       <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-[2rem]
-                      p-6 text-white relative overflow-hidden shadow-xl
-                      shadow-purple-200">
-        <div className="absolute top-[-30px] right-[-30px] w-32 h-32
-                        bg-white/10 rounded-full blur-xl" />
-        <p className="text-[10px] font-black uppercase tracking-widest
-                      text-white/70 mb-2 flex items-center gap-1.5">
+                      p-6 text-white relative overflow-hidden shadow-xl shadow-purple-200">
+        <div className="absolute top-[-30px] right-[-30px] w-32 h-32 bg-white/10 rounded-full blur-xl" />
+        <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-2 flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5" /> Clase de prueba gratuita
         </p>
         <p className="text-2xl font-black capitalize">{fmtDate}</p>
         <div className="flex items-center gap-3 mt-2 flex-wrap">
-          <span className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5
-                           rounded-full text-sm font-bold">
+          <span className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5 rounded-full text-sm font-bold">
             <Clock className="w-3.5 h-3.5" />
             {fmtTime}
           </span>
@@ -360,32 +346,22 @@ function StepConfirmTrial({
       </div>
 
       {error && (
-        <div className="bg-rose-50 border border-rose-100 text-rose-600
-                        px-4 py-3 rounded-xl text-xs font-bold
-                        flex items-center gap-2">
+        <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
           <X className="w-4 h-4 flex-shrink-0" />
           {error}
         </div>
       )}
 
       {done ? (
-        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
-                        border border-white shadow-2xl p-10 text-center">
-          <div className="w-16 h-16 bg-emerald-100 rounded-full
-                          flex items-center justify-center mx-auto mb-4">
+        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl p-10 text-center">
+          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Check className="w-8 h-8 text-emerald-600" />
           </div>
-          <h3 className="text-xl font-black text-slate-800 mb-2">
-            ¡Prueba reservada!
-          </h3>
-          <p className="text-slate-500 text-sm">
-            Prepárate para tu clase de prueba gratuita.
-          </p>
+          <h3 className="text-xl font-black text-slate-800 mb-2">¡Prueba reservada!</h3>
+          <p className="text-slate-500 text-sm">Prepárate para tu clase de prueba gratuita.</p>
         </div>
       ) : (
-        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
-                        border border-white shadow-2xl shadow-slate-200/50 p-6
-                        space-y-4">
+        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6 space-y-4">
           <p className="text-sm text-slate-500 leading-relaxed">
             Esta clase de prueba es completamente gratuita y no requiere pago.
             Solo confirma el horario para reservarla.
@@ -393,25 +369,17 @@ function StepConfirmTrial({
           <div className="flex gap-3">
             <button
               onClick={onBack}
-              className="flex-1 py-3.5 text-sm font-bold text-slate-600
-                         bg-slate-100 hover:bg-slate-200 rounded-xl
-                         transition-colors"
+              className="flex-1 py-3.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
             >
               Volver
             </button>
             <button
               onClick={confirmTrial}
               disabled={booking}
-              className="flex-1 py-3.5 text-sm font-bold text-white rounded-xl
-                         bg-gradient-to-r from-purple-500 to-pink-500
-                         hover:from-purple-600 hover:to-pink-600
-                         shadow-lg shadow-purple-200 active:scale-[0.98]
-                         transition-all duration-300 disabled:opacity-50
-                         flex items-center justify-center gap-2"
+              className="flex-1 py-3.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 shadow-lg shadow-purple-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {booking ? (
-                <div className="w-4 h-4 border-2 border-white/40
-                                border-t-white rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
               ) : (
                 <><Sparkles className="w-4 h-4" /> Confirmar clase de prueba</>
               )}
@@ -423,12 +391,13 @@ function StepConfirmTrial({
   );
 }
 
-// ─── Paso: Confirmar y pagar (clase regular contra un paquete) ───────────────
+// ─── Paso: Confirmar y pagar ──────────────────────────────────────────────────
 function StepPayment({
   date,
   slot,
   duration,
   enrollmentId,
+  teacherUsername,
   onBack,
   onSuccess,
 }: {
@@ -436,6 +405,7 @@ function StepPayment({
   slot: any;
   duration: number;
   enrollmentId?: number;
+  teacherUsername: string | null;
   onBack: () => void;
   onSuccess: () => void;
 }) {
@@ -454,7 +424,7 @@ function StepPayment({
   const [error, setError] = useState("");
 
   const bookSlot = async () => {
-    if (!enrollmentId) {
+    if (!enrollmentId && !teacherUsername) {
       setError("No se encontró un paquete activo para reservar esta clase.");
       return;
     }
@@ -462,7 +432,7 @@ function StepPayment({
     setError("");
     try {
       const res = await api.post("/payments/book", {
-        enrollment_id: enrollmentId,
+        ...(enrollmentId ? { enrollment_id: enrollmentId } : { teacher_username: teacherUsername }),
         start_time_utc: slot.start_time_utc,
         end_time_utc: slot.end_time_utc,
         duration_minutes: duration,
@@ -511,20 +481,14 @@ function StepPayment({
 
   return (
     <div className="max-w-lg mx-auto space-y-5">
-
-      <div className="bg-gradient-to-r from-pink-500 to-rose-400 rounded-[2rem]
-                      p-6 text-white relative overflow-hidden shadow-xl
-                      shadow-pink-200">
-        <div className="absolute top-[-30px] right-[-30px] w-32 h-32
-                        bg-white/10 rounded-full blur-xl" />
-        <p className="text-[10px] font-black uppercase tracking-widest
-                      text-white/70 mb-2">
+      <div className="bg-gradient-to-r from-pink-500 to-rose-400 rounded-[2rem] p-6 text-white relative overflow-hidden shadow-xl shadow-pink-200">
+        <div className="absolute top-[-30px] right-[-30px] w-32 h-32 bg-white/10 rounded-full blur-xl" />
+        <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-2">
           Clase seleccionada
         </p>
         <p className="text-2xl font-black capitalize">{fmtDate}</p>
         <div className="flex items-center gap-3 mt-2 flex-wrap">
-          <span className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5
-                           rounded-full text-sm font-bold">
+          <span className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5 rounded-full text-sm font-bold">
             <Clock className="w-3.5 h-3.5" />
             {fmtTime}
           </span>
@@ -535,34 +499,25 @@ function StepPayment({
       </div>
 
       {error && (
-        <div className="bg-rose-50 border border-rose-100 text-rose-600
-                        px-4 py-3 rounded-xl text-xs font-bold
-                        flex items-center gap-2">
+        <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
           <X className="w-4 h-4 flex-shrink-0" />
           {error}
         </div>
       )}
 
       {done ? (
-        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
-                        border border-white shadow-2xl p-10 text-center">
-          <div className="w-16 h-16 bg-emerald-100 rounded-full
-                          flex items-center justify-center mx-auto mb-4">
+        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl p-10 text-center">
+          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Check className="w-8 h-8 text-emerald-600" />
           </div>
-          <h3 className="text-xl font-black text-slate-800 mb-2">
-            ¡Comprobante enviado!
-          </h3>
+          <h3 className="text-xl font-black text-slate-800 mb-2">¡Comprobante enviado!</h3>
           <p className="text-slate-500 text-sm">
             La profesora revisará tu pago y confirmará la clase
           </p>
         </div>
       ) : !payInfo ? (
-        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
-                        border border-white shadow-2xl shadow-slate-200/50 p-6
-                        space-y-5">
-          <p className="text-[10px] font-black text-slate-400 uppercase
-                        tracking-widest">
+        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6 space-y-5">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
             Método de pago
           </p>
 
@@ -571,26 +526,18 @@ function StepPayment({
               <button
                 key={pm.value}
                 onClick={() => setMethod(pm.value)}
-                className={`w-full flex items-center gap-3 px-4 py-4
-                  rounded-2xl border-2 transition-all duration-200
-                  ${method === pm.value
+                className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl border-2 transition-all duration-200 ${
+                  method === pm.value
                     ? "border-pink-400 bg-pink-50"
                     : "border-slate-100 bg-white hover:border-slate-200"
-                  }`}
+                }`}
               >
-                <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0
-                  flex items-center justify-center
-                  ${method === pm.value
-                    ? "border-pink-500 bg-pink-500"
-                    : "border-slate-300"
-                  }`}>
-                  {method === pm.value && (
-                    <div className="w-2 h-2 bg-white rounded-full" />
-                  )}
+                <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                  method === pm.value ? "border-pink-500 bg-pink-500" : "border-slate-300"
+                }`}>
+                  {method === pm.value && <div className="w-2 h-2 bg-white rounded-full" />}
                 </div>
-                <span className="text-sm font-bold text-slate-700">
-                  {pm.label}
-                </span>
+                <span className="text-sm font-bold text-slate-700">{pm.label}</span>
               </button>
             ))}
           </div>
@@ -598,25 +545,17 @@ function StepPayment({
           <div className="flex gap-3">
             <button
               onClick={onBack}
-              className="flex-1 py-3.5 text-sm font-bold text-slate-600
-                         bg-slate-100 hover:bg-slate-200 rounded-xl
-                         transition-colors"
+              className="flex-1 py-3.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
             >
               Volver
             </button>
             <button
               onClick={bookSlot}
               disabled={booking}
-              className="flex-1 py-3.5 text-sm font-bold text-white rounded-xl
-                         bg-gradient-to-r from-pink-500 to-rose-400
-                         hover:from-pink-600 hover:to-rose-500
-                         shadow-lg shadow-pink-200 active:scale-[0.98]
-                         transition-all duration-300 disabled:opacity-50
-                         flex items-center justify-center gap-2"
+              className="flex-1 py-3.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {booking ? (
-                <div className="w-4 h-4 border-2 border-white/40
-                                border-t-white rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
               ) : (
                 <><CreditCard className="w-4 h-4" /> Reservar</>
               )}
@@ -624,62 +563,44 @@ function StepPayment({
           </div>
         </div>
       ) : (
-        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
-                        border border-white shadow-2xl shadow-slate-200/50 p-6
-                        space-y-5">
-
+        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6 space-y-5">
           <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
-            <p className="text-[10px] font-black text-amber-600 uppercase
-                          tracking-widest mb-2">
+            <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2">
               Instrucciones de pago
             </p>
             <p className="text-2xl font-black text-amber-700 mb-2">
               ${payInfo.amount?.toFixed ? payInfo.amount.toFixed(2) : payInfo.amount}
             </p>
-            <p className="text-sm text-amber-700 font-bold mb-1">
-              Enviar a:
-            </p>
-            <p className="text-xs font-mono bg-amber-100 px-3 py-2 rounded-xl
-                          text-amber-800 break-all">
+            <p className="text-sm text-amber-700 font-bold mb-1">Enviar a:</p>
+            <p className="text-xs font-mono bg-amber-100 px-3 py-2 rounded-xl text-amber-800 break-all">
               {payInfo.payment_address || "Contacta al staff para los datos de pago"}
             </p>
             {payInfo.instructions && (
-              <p className="text-xs text-amber-600 mt-2">
-                {payInfo.instructions}
-              </p>
+              <p className="text-xs text-amber-600 mt-2">{payInfo.instructions}</p>
             )}
           </div>
 
           <div className="group">
-            <label className="text-[10px] font-black text-slate-400
-                              uppercase tracking-widest block mb-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
               ID de transacción (opcional)
             </label>
             <input
               value={txId}
               onChange={e => setTxId(e.target.value)}
               placeholder="Ej: TXN123456789"
-              className="w-full bg-slate-50 border-2 border-transparent
-                         rounded-xl text-sm font-bold text-slate-800
-                         placeholder:text-slate-400 px-4 py-3.5
-                         focus:outline-none focus:bg-white
-                         focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                         transition-all duration-300"
+              className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 px-4 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
             />
           </div>
 
           <div>
-            <label className="text-[10px] font-black text-slate-400
-                              uppercase tracking-widest block mb-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
               Comprobante de pago
             </label>
-            <label className={`flex flex-col items-center justify-center
-              gap-3 p-6 rounded-2xl border-2 border-dashed cursor-pointer
-              transition-all duration-200
-              ${receipt
+            <label className={`flex flex-col items-center justify-center gap-3 p-6 rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-200 ${
+              receipt
                 ? "border-emerald-300 bg-emerald-50"
                 : "border-slate-200 bg-slate-50 hover:border-pink-300 hover:bg-pink-50/50"
-              }`}>
+            }`}>
               <input
                 type="file"
                 accept="image/*,.pdf"
@@ -688,28 +609,20 @@ function StepPayment({
               />
               {receipt ? (
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-emerald-100 rounded-xl
-                                  flex items-center justify-center">
+                  <div className="w-9 h-9 bg-emerald-100 rounded-xl flex items-center justify-center">
                     <Check className="w-5 h-5 text-emerald-600" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-slate-800">
-                      {receipt.name}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {(receipt.size / 1024).toFixed(0)} KB
-                    </p>
+                    <p className="text-sm font-bold text-slate-800">{receipt.name}</p>
+                    <p className="text-xs text-slate-500">{(receipt.size / 1024).toFixed(0)} KB</p>
                   </div>
                 </div>
               ) : (
                 <>
-                  <div className="w-10 h-10 bg-slate-100 rounded-xl
-                                  flex items-center justify-center">
+                  <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
                     <Upload className="w-5 h-5 text-slate-400" />
                   </div>
-                  <p className="text-sm font-bold text-slate-500">
-                    Subir captura o PDF
-                  </p>
+                  <p className="text-sm font-bold text-slate-500">Subir captura o PDF</p>
                 </>
               )}
             </label>
@@ -718,17 +631,10 @@ function StepPayment({
           <button
             onClick={submitReceipt}
             disabled={!receipt || submitting}
-            className="w-full py-3.5 text-sm font-bold text-white rounded-xl
-                       bg-gradient-to-r from-pink-500 to-rose-400
-                       hover:from-pink-600 hover:to-rose-500
-                       shadow-lg shadow-pink-200 active:scale-[0.98]
-                       transition-all duration-300 disabled:opacity-50
-                       disabled:cursor-not-allowed flex items-center
-                       justify-center gap-2"
+            className="w-full py-3.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {submitting ? (
-              <div className="w-4 h-4 border-2 border-white/40
-                              border-t-white rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
             ) : (
               <><Check className="w-4 h-4" /> Enviar comprobante</>
             )}
@@ -739,23 +645,17 @@ function StepPayment({
   );
 }
 
-// ─── Pantalla: prueba pendiente de completar ─────────────────────────────────
+// ─── Pantalla: prueba pendiente ──────────────────────────────────────────────
 function TrialInProgressScreen() {
   return (
     <div className="max-w-lg mx-auto">
-      <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
-                      border border-white shadow-2xl shadow-slate-200/50
-                      p-10 text-center">
-        <div className="w-16 h-16 bg-amber-100 rounded-full
-                        flex items-center justify-center mx-auto mb-4">
+      <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-10 text-center">
+        <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <Hourglass className="w-8 h-8 text-amber-500" />
         </div>
-        <h3 className="text-xl font-black text-slate-800 mb-2">
-          Tienes una clase de prueba pendiente
-        </h3>
+        <h3 className="text-xl font-black text-slate-800 mb-2">Tienes una clase de prueba pendiente</h3>
         <p className="text-slate-500 text-sm leading-relaxed">
-          Ya reservaste tu clase de prueba gratuita. Una vez que se complete,
-          podrás elegir tu paquete y agendar más clases.
+          Ya reservaste tu clase de prueba gratuita. Una vez que se complete, podrás elegir tu paquete y agendar más clases.
         </p>
       </div>
     </div>
@@ -763,12 +663,11 @@ function TrialInProgressScreen() {
 }
 
 // ─── Pantalla: elegir paquete inicial ────────────────────────────────────────
-function NeedsPackageScreen({ onSelected }: { onSelected: () => void }) {
+function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: string | null; onSelected: () => void }) {
   const [packages, setPackages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selecting, setSelecting] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const { teacherUsername } = useTeacherResolution();
 
   useEffect(() => {
     if (!teacherUsername) { setLoading(false); return; }
@@ -793,19 +692,15 @@ function NeedsPackageScreen({ onSelected }: { onSelected: () => void }) {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5
-                      flex gap-3 items-start">
+      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 flex gap-3 items-start">
         <Check className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
         <p className="text-sm font-bold text-emerald-700 leading-relaxed">
-          ¡Completaste tu clase de prueba! Elige un paquete para seguir
-          agendando tus próximas clases.
+          ¡Completaste tu clase de prueba! Elige un paquete para seguir agendando tus próximas clases.
         </p>
       </div>
 
       {error && (
-        <div className="bg-rose-50 border border-rose-100 text-rose-600
-                        px-4 py-3 rounded-xl text-xs font-bold
-                        flex items-center gap-2">
+        <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
           <X className="w-4 h-4 flex-shrink-0" />
           {error}
         </div>
@@ -818,95 +713,86 @@ function NeedsPackageScreen({ onSelected }: { onSelected: () => void }) {
           ))}
         </div>
       ) : packages.length === 0 ? (
-        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
-                        border border-white shadow-lg py-16 text-center">
+        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg py-16 text-center">
           <PackageIcon className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-          <p className="text-slate-500 font-bold">
-            No hay paquetes disponibles. Contacta al staff.
-          </p>
+          <p className="text-slate-500 font-bold">No hay paquetes disponibles. Contacta al staff.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {packages.map(pkg => {
-  const accent = pkg.color || "#ec4899";
-  const priceSuffix =
-    pkg.classes_count === 1 ? "/clase" :
-    pkg.classes_count == null ? "/ilimitado" :
-    "/clase";
-  const priceDisplay = pkg.price?.toFixed
-    ? (Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2))
-    : pkg.price;
-  const bullets: string[] =
-    pkg.description_type === "list" && pkg.description_items?.length
-      ? pkg.description_items
-      : [
-          pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
-          `${pkg.duration_minutes} min por clase`,
-          "Modalidad 100% online",
-          ...(pkg.description ? [pkg.description] : []),
-        ];
+            const accent = pkg.color || "#ec4899";
+            const priceSuffix =
+              pkg.classes_count === 1 ? "/clase" :
+              pkg.classes_count == null ? "/ilimitado" :
+              "/clase";
+            const priceDisplay = pkg.price?.toFixed
+              ? (Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2))
+              : pkg.price;
+            const bullets: string[] =
+              pkg.description_type === "list" && pkg.description_items?.length
+                ? pkg.description_items
+                : [
+                    pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
+                    `${pkg.duration_minutes} min por clase`,
+                    "Modalidad 100% online",
+                    ...(pkg.description ? [pkg.description] : []),
+                  ];
 
-  return (
-    <div
-      key={pkg.id}
-      className="bg-white rounded-[2rem] border border-slate-100
-                shadow-lg shadow-slate-100 p-6 flex flex-col
-                hover:-translate-y-1 hover:shadow-xl
-                transition-all duration-300"
-    >
-      <div className="mb-4">
-        <div className="flex items-center gap-2 mb-1.5">
-          <span className="text-lg">{pkg.icon || "📦"}</span>
-          <h3 className="text-lg font-black" style={{ color: accent }}>{pkg.name}</h3>
-        </div>
-        <p className="text-xs text-slate-400 font-bold mb-2">{pkg.subject}</p>
-        <div className="flex items-baseline gap-1">
-          <span className="text-4xl font-black text-slate-800">${priceDisplay}</span>
-          <span className="text-slate-500 text-sm font-medium">{priceSuffix}</span>
-        </div>
-      </div>
+            return (
+              <div
+                key={pkg.id}
+                className="bg-white rounded-[2rem] border border-slate-100 shadow-lg shadow-slate-100 p-6 flex flex-col hover:-translate-y-1 hover:shadow-xl transition-all duration-300"
+              >
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-lg">{pkg.icon || "📦"}</span>
+                    <h3 className="text-lg font-black" style={{ color: accent }}>{pkg.name}</h3>
+                  </div>
+                  <p className="text-xs text-slate-400 font-bold mb-2">{pkg.subject}</p>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-4xl font-black text-slate-800">${priceDisplay}</span>
+                    <span className="text-slate-500 text-sm font-medium">{priceSuffix}</span>
+                  </div>
+                </div>
 
-      <div className="flex-1 space-y-2.5 mb-5">
-        {bullets.slice(0, 6).map((item, i) => (
-          <div key={i} className="flex items-start gap-2">
-            <Check className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: accent }} />
-            <span className="text-sm text-slate-600 font-medium">{item}</span>
-          </div>
-        ))}
-      </div>
+                <div className="flex-1 space-y-2.5 mb-5">
+                  {bullets.slice(0, 6).map((item, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <Check className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: accent }} />
+                      <span className="text-sm text-slate-600 font-medium">{item}</span>
+                    </div>
+                  ))}
+                </div>
 
-      <button
-        onClick={() => choose(pkg.id)}
-        disabled={selecting !== null}
-        className="mt-auto w-full py-3.5 text-sm font-bold text-center rounded-xl
-                   transition-all duration-200 active:scale-[0.97] text-white shadow-lg
-                   hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
-        style={{ background: `linear-gradient(135deg, ${accent}, ${accent}cc)` }}
-      >
-        {selecting === pkg.id ? (
-          <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-        ) : (
-          "Elegir este paquete"
-        )}
-      </button>
-    </div>
-  );
-})}
+                <button
+                  onClick={() => choose(pkg.id)}
+                  disabled={selecting !== null}
+                  className="mt-auto w-full py-3.5 text-sm font-bold text-center rounded-xl transition-all duration-200 active:scale-[0.97] text-white shadow-lg hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ background: `linear-gradient(135deg, ${accent}, ${accent}cc)` }}
+                >
+                  {selecting === pkg.id ? (
+                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    "Elegir este paquete"
+                  )}
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
-// ─── Pantalla: agotó un paquete, debe pedir renovación ───────────────────────
-function NeedsRenewalScreen({ onRequested }: { onRequested: () => void }) {
+// ─── Pantalla: renovación requerida ─────────────────────────────────────────
+function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername: string | null; onRequested: () => void }) {
   const [packages, setPackages] = useState<any[]>([]);
   const [lastEnrollmentId, setLastEnrollmentId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
-  const { teacherUsername } = useTeacherResolution();
 
   useEffect(() => {
     if (!teacherUsername) { setLoading(false); return; }
@@ -916,7 +802,6 @@ function NeedsRenewalScreen({ onRequested }: { onRequested: () => void }) {
     ])
       .then(([pkgRes, enrRes]) => {
         setPackages(pkgRes.data);
-        // El más reciente es el que acaba de agotarse
         setLastEnrollmentId(enrRes.data?.[0]?.id ?? null);
       })
       .catch(() => { setPackages([]); setLastEnrollmentId(null); })
@@ -951,8 +836,7 @@ function NeedsRenewalScreen({ onRequested }: { onRequested: () => void }) {
 
   if (done) {
     return (
-      <div className="max-w-lg mx-auto bg-white/80 backdrop-blur-xl rounded-[2rem]
-                      border border-white shadow-2xl p-10 text-center">
+      <div className="max-w-lg mx-auto bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl p-10 text-center">
         <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <Check className="w-8 h-8 text-emerald-600" />
         </div>
@@ -975,8 +859,7 @@ function NeedsRenewalScreen({ onRequested }: { onRequested: () => void }) {
       </div>
 
       {error && (
-        <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3
-                        rounded-xl text-xs font-bold flex items-center gap-2">
+        <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
           <X className="w-4 h-4 flex-shrink-0" /> {error}
         </div>
       )}
@@ -989,76 +872,71 @@ function NeedsRenewalScreen({ onRequested }: { onRequested: () => void }) {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {packages.map(pkg => {
-  const accent = pkg.color || "#ec4899";
-  const priceSuffix =
-    pkg.classes_count === 1 ? "/clase" :
-    pkg.classes_count == null ? "/ilimitado" :
-    "/clase";
-  const priceDisplay = pkg.price?.toFixed
-    ? (Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2))
-    : pkg.price;
-  const bullets: string[] =
-    pkg.description_type === "list" && pkg.description_items?.length
-      ? pkg.description_items
-      : [
-          pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
-          `${pkg.duration_minutes} min por clase`,
-          "Modalidad 100% online",
-          ...(pkg.description ? [pkg.description] : []),
-        ];
+            const accent = pkg.color || "#ec4899";
+            const priceSuffix =
+              pkg.classes_count === 1 ? "/clase" :
+              pkg.classes_count == null ? "/ilimitado" :
+              "/clase";
+            const priceDisplay = pkg.price?.toFixed
+              ? (Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2))
+              : pkg.price;
+            const bullets: string[] =
+              pkg.description_type === "list" && pkg.description_items?.length
+                ? pkg.description_items
+                : [
+                    pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
+                    `${pkg.duration_minutes} min por clase`,
+                    "Modalidad 100% online",
+                    ...(pkg.description ? [pkg.description] : []),
+                  ];
 
-  return (
-    <div key={pkg.id} className="bg-white rounded-[2rem]
-                    border border-slate-100 shadow-lg shadow-slate-100 p-6 flex flex-col
-                    hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
-      <div className="mb-4">
-        <div className="flex items-center gap-2 mb-1.5">
-          <span className="text-lg">{pkg.icon || "📦"}</span>
-          <h3 className="text-lg font-black" style={{ color: accent }}>{pkg.name}</h3>
-        </div>
-        <p className="text-xs text-slate-400 font-bold mb-2">{pkg.subject}</p>
-        <div className="flex items-baseline gap-1">
-          <span className="text-4xl font-black text-slate-800">${priceDisplay}</span>
-          <span className="text-slate-500 text-sm font-medium">{priceSuffix}</span>
-        </div>
-      </div>
+            return (
+              <div key={pkg.id} className="bg-white rounded-[2rem] border border-slate-100 shadow-lg shadow-slate-100 p-6 flex flex-col hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-lg">{pkg.icon || "📦"}</span>
+                    <h3 className="text-lg font-black" style={{ color: accent }}>{pkg.name}</h3>
+                  </div>
+                  <p className="text-xs text-slate-400 font-bold mb-2">{pkg.subject}</p>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-4xl font-black text-slate-800">${priceDisplay}</span>
+                    <span className="text-slate-500 text-sm font-medium">{priceSuffix}</span>
+                  </div>
+                </div>
 
-      <div className="flex-1 space-y-2.5 mb-5">
-        {bullets.slice(0, 6).map((item, i) => (
-          <div key={i} className="flex items-start gap-2">
-            <Check className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: accent }} />
-            <span className="text-sm text-slate-600 font-medium">{item}</span>
-          </div>
-        ))}
-      </div>
+                <div className="flex-1 space-y-2.5 mb-5">
+                  {bullets.slice(0, 6).map((item, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <Check className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: accent }} />
+                      <span className="text-sm text-slate-600 font-medium">{item}</span>
+                    </div>
+                  ))}
+                </div>
 
-      <button
-        onClick={() => requestRenewal(pkg.id)}
-        disabled={requesting !== null}
-        className="mt-auto w-full py-3.5 text-sm font-bold text-center rounded-xl
-                   transition-all duration-200 active:scale-[0.97] text-white shadow-lg
-                   hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
-        style={{ background: `linear-gradient(135deg, ${accent}, ${accent}cc)` }}
-      >
-        {requesting === pkg.id ? (
-          <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-        ) : "Solicitar este paquete"}
-      </button>
-    </div>
-  );
-})}
+                <button
+                  onClick={() => requestRenewal(pkg.id)}
+                  disabled={requesting !== null}
+                  className="mt-auto w-full py-3.5 text-sm font-bold text-center rounded-xl transition-all duration-200 active:scale-[0.97] text-white shadow-lg hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ background: `linear-gradient(135deg, ${accent}, ${accent}cc)` }}
+                >
+                  {requesting === pkg.id ? (
+                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  ) : "Solicitar este paquete"}
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
-// ─── Pantalla: renovación ya solicitada, esperando aprobación ────────────────
+// ─── Pantalla: renovación en revisión ───────────────────────────────────────
 function RenewalPendingScreen() {
   return (
     <div className="max-w-lg mx-auto">
-      <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white
-                      shadow-2xl shadow-slate-200/50 p-10 text-center">
+      <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-10 text-center">
         <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <Hourglass className="w-8 h-8 text-amber-500" />
         </div>
@@ -1079,26 +957,34 @@ export default function SchedulePage() {
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
   const [selectedDuration, setSelectedDuration] = useState(60);
+  const [selectedTeacherUsername, setSelectedTeacherUsername] = useState<string | null>(null);
 
   const { enrollments, refetch: refetchEnrollments } = useEnrollments();
-  const activeEnrollment = enrollments.find(e => e.status === "active");
+  const { teachers: myTeachers, loading: teachersLoading, isSingleTenant } = useMyTeachers();
 
-  const {
-    loading: resolvingTeacher,
-    isSingleTenant,
-    teacherUsername,
-    hasChosenTeacher,
-  } = useTeacherResolution();
+  const needsTeacherSelection = !isSingleTenant && myTeachers.length > 1 && !selectedTeacherUsername;
+  const teacherBlocked = !teachersLoading && !isSingleTenant && myTeachers.length === 0;
 
-  const teacherBlocked = !resolvingTeacher && !isSingleTenant && !hasChosenTeacher;
+  // Auto-selección cuando hay 0 o 1 profesor
+  useEffect(() => {
+    if (teachersLoading) return;
+    if (isSingleTenant) { setSelectedTeacherUsername(null); return; }
+    if (myTeachers.length === 1) setSelectedTeacherUsername(myTeachers[0].teacher_username);
+  }, [teachersLoading, isSingleTenant, myTeachers]);
+
+  const activeEnrollment = selectedTeacherUsername
+    ? enrollments.find(e => e.status === "active" && e.teacher_username === selectedTeacherUsername)
+    : enrollments.find(e => e.status === "active");
 
   const loadStage = () => {
-    api.get("/payments/booking-status")
+    if (!isSingleTenant && !selectedTeacherUsername) { setStage("loading"); return; }
+    const params = selectedTeacherUsername ? `?teacher_username=${selectedTeacherUsername}` : "";
+    api.get(`/payments/booking-status${params}`)
       .then(res => setStage(res.data.stage))
       .catch(() => setStage("ready"));
   };
 
-  useEffect(() => { loadStage(); }, []);
+  useEffect(() => { loadStage(); }, [selectedTeacherUsername, isSingleTenant]);
 
   const handleSlotSelect = (
     date: string, slot: any, duration: number
@@ -1117,26 +1003,18 @@ export default function SchedulePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 relative overflow-hidden">
-
       {/* Blobs */}
-      <div className="fixed top-[-80px] right-[-80px] w-[500px] h-[500px]
-                      bg-pink-300/20 rounded-full blur-[100px]
-                      pointer-events-none" />
-      <div className="fixed bottom-[-80px] left-[-80px] w-[400px] h-[400px]
-                      bg-purple-300/15 rounded-full blur-[100px]
-                      pointer-events-none" />
+      <div className="fixed top-[-80px] right-[-80px] w-[500px] h-[500px] bg-pink-300/20 rounded-full blur-[100px] pointer-events-none" />
+      <div className="fixed bottom-[-80px] left-[-80px] w-[400px] h-[400px] bg-purple-300/15 rounded-full blur-[100px] pointer-events-none" />
 
       <div className="relative space-y-6">
-
         {/* Header */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex items-center gap-4">
             {step === "payment" && stage === "ready" && (
               <button
                 onClick={resetToSelect}
-                className="w-10 h-10 rounded-xl bg-white border border-slate-200
-                           flex items-center justify-center shadow-sm
-                           hover:border-pink-300 transition-colors"
+                className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm hover:border-pink-300 transition-colors"
               >
                 <ChevronLeft className="w-5 h-5 text-slate-600" />
               </button>
@@ -1174,26 +1052,21 @@ export default function SchedulePage() {
               ].map((s, i) => (
                 <div key={s.n} className="flex items-center gap-3">
                   {i > 0 && (
-                    <div className={`h-px w-8 transition-colors
-                      ${step === "payment" ? "bg-pink-300" : "bg-slate-200"}`} />
+                    <div className={`h-px w-8 transition-colors ${step === "payment" ? "bg-pink-300" : "bg-slate-200"}`} />
                   )}
                   <div className="flex items-center gap-2">
-                    <div className={`w-7 h-7 rounded-full flex items-center
-                      justify-center text-xs font-black transition-all duration-300
-                      ${(step === "select" && s.n === 1) ||
-                        (step === "payment" && s.n <= 2)
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black transition-all duration-300 ${
+                      (step === "select" && s.n === 1) || (step === "payment" && s.n <= 2)
                         ? "bg-gradient-to-br from-pink-500 to-rose-400 text-white shadow-md"
                         : "bg-slate-200 text-slate-500"
-                      }`}>
+                    }`}>
                       {s.n}
                     </div>
-                    <span className={`text-xs font-bold hidden sm:block
-                      transition-colors
-                      ${(step === "select" && s.n === 1) ||
-                        (step === "payment" && s.n === 2)
+                    <span className={`text-xs font-bold hidden sm:block transition-colors ${
+                      (step === "select" && s.n === 1) || (step === "payment" && s.n === 2)
                         ? "text-pink-600"
                         : "text-slate-400"
-                      }`}>
+                    }`}>
                       {s.label}
                     </span>
                   </div>
@@ -1204,9 +1077,7 @@ export default function SchedulePage() {
         </div>
 
         {teacherBlocked && (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4
-                          flex items-center justify-between gap-4 max-w-2xl
-                          animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 flex items-center justify-between gap-4 max-w-2xl animate-in fade-in slide-in-from-top-2 duration-300">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
               <div>
@@ -1220,9 +1091,7 @@ export default function SchedulePage() {
             </div>
             <Link
               href="/dashboard/teachers"
-              className="flex-shrink-0 px-4 py-2.5 bg-amber-500 hover:bg-amber-600
-                         text-white text-xs font-bold rounded-xl shadow-sm
-                         transition-colors whitespace-nowrap"
+              className="flex-shrink-0 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-sm transition-colors whitespace-nowrap"
             >
               Elegir profesor
             </Link>
@@ -1230,68 +1099,102 @@ export default function SchedulePage() {
         )}
 
         {stage === "ready" && step === "payment" && !activeEnrollment && (
-          <div className="bg-rose-50 border border-rose-100 text-rose-600
-                          px-4 py-3 rounded-xl text-xs font-bold
-                          flex items-center gap-2 max-w-lg mx-auto">
+          <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 max-w-lg mx-auto">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            No tienes un paquete activo. Contacta al staff para adquirir uno
-            antes de reservar una clase.
+            No tienes un paquete activo. Contacta al staff para adquirir uno antes de reservar una clase.
           </div>
         )}
 
-        <div className={`animate-in fade-in duration-300 ${teacherBlocked ? "opacity-40 pointer-events-none select-none" : ""}`}>
-          {stage === "loading" && (
-            <div className="flex justify-center py-24">
-              <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500
-                              rounded-full animate-spin" />
+        {!isSingleTenant && myTeachers.length > 1 && (
+          <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-white shadow-lg p-5 max-w-2xl">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+              ¿Con cuál de tus profesores quieres agendar?
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {myTeachers.map(t => (
+                <button
+                  key={t.teacher_username}
+                  onClick={() => { setSelectedTeacherUsername(t.teacher_username); resetToSelect(); }}
+                  className={`px-4 py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
+                    selectedTeacherUsername === t.teacher_username
+                      ? "border-pink-400 bg-pink-50 text-pink-600"
+                      : "border-slate-100 bg-white text-slate-600 hover:border-pink-200"
+                  }`}
+                >
+                  {t.name} {t.surname}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
+        )}
 
-          {stage === "needs_trial" && step === "select" && (
-            <StepSelectSlot onSelect={handleSlotSelect} isTrial />
-          )}
+        {!needsTeacherSelection && !teacherBlocked && (
+          <div className="animate-in fade-in duration-300">
+            {stage === "loading" && (
+              <div className="flex justify-center py-24">
+                <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
+              </div>
+            )}
 
-          {stage === "needs_trial" && step === "payment" && (
-            <StepConfirmTrial
-              date={selectedDate}
-              slot={selectedSlot}
-              onBack={resetToSelect}
-              onBooked={loadStage}
-            />
-          )}
+            {stage === "needs_trial" && step === "select" && (
+              <StepSelectSlot
+                onSelect={handleSlotSelect}
+                teacherUsername={selectedTeacherUsername}
+                isTrial
+              />
+            )}
 
-          {stage === "trial_in_progress" && <TrialInProgressScreen />}
+            {stage === "needs_trial" && step === "payment" && (
+              <StepConfirmTrial
+                date={selectedDate}
+                slot={selectedSlot}
+                teacherUsername={selectedTeacherUsername}
+                onBack={resetToSelect}
+                onBooked={loadStage}
+              />
+            )}
 
-          {stage === "needs_package" && (
-            <NeedsPackageScreen
-              onSelected={() => {
-                loadStage();
-                refetchEnrollments();
-              }}
-            />
-          )}
+            {stage === "trial_in_progress" && <TrialInProgressScreen />}
 
-          {stage === "needs_renewal" && (
-            <NeedsRenewalScreen onRequested={loadStage} />
-          )}
+            {stage === "needs_package" && (
+              <NeedsPackageScreen
+                teacherUsername={selectedTeacherUsername}
+                onSelected={() => {
+                  loadStage();
+                  refetchEnrollments();
+                }}
+              />
+            )}
 
-          {stage === "renewal_pending" && <RenewalPendingScreen />}
+            {stage === "needs_renewal" && (
+              <NeedsRenewalScreen
+                teacherUsername={selectedTeacherUsername}
+                onRequested={loadStage}
+              />
+            )}
 
-          {stage === "ready" && step === "select" && (
-            <StepSelectSlot onSelect={handleSlotSelect} />
-          )}
+            {stage === "renewal_pending" && <RenewalPendingScreen />}
 
-          {stage === "ready" && step === "payment" && (
-            <StepPayment
-              date={selectedDate}
-              slot={selectedSlot}
-              duration={selectedDuration}
-              enrollmentId={activeEnrollment?.id}
-              onBack={resetToSelect}
-              onSuccess={resetToSelect}
-            />
-          )}
-        </div>
+            {stage === "ready" && step === "select" && (
+              <StepSelectSlot
+                onSelect={handleSlotSelect}
+                teacherUsername={selectedTeacherUsername}
+              />
+            )}
+
+            {stage === "ready" && step === "payment" && (
+              <StepPayment
+                date={selectedDate}
+                slot={selectedSlot}
+                duration={selectedDuration}
+                enrollmentId={activeEnrollment?.id}
+                teacherUsername={selectedTeacherUsername}
+                onBack={resetToSelect}
+                onSuccess={resetToSelect}
+              />
+            )}
+          </div>
+        )}
       </div>
       <ChipiWidget screenName="schedule" />
     </div>

@@ -155,18 +155,23 @@ def update_enrollment_counter(
 
         db.commit()
 
-def get_student_booking_stage(student_id: int, db: Session) -> str:
+def get_student_booking_stage(student_id: int, teacher_id: int, db: Session) -> str:
     """
-    Determina la etapa de reserva del estudiante:
-    - "needs_trial": no tiene prueba activa ni completada
+    Determina la etapa de reserva del estudiante CON UN PROFESOR ESPECÍFICO.
+    Cada relación estudiante-profesor es independiente: completar la
+    prueba con un profesor no exime de la prueba con otro.
+
+    - "needs_trial": no tiene prueba activa ni completada con este profesor
     - "trial_in_progress": prueba agendada/confirmada pero no realizada
-    - "needs_package": completó la prueba pero nunca tuvo ningún paquete
+    - "needs_package": completó la prueba pero nunca tuvo paquete con él
     - "needs_renewal": agotó un paquete anterior y no tiene uno activo
     - "renewal_pending": ya solicitó renovación, esperando aprobación
-    - "ready": tiene paquete activo
+    - "ready": tiene paquete activo (incluye "pending_package_change":
+      sigue siendo utilizable mientras se aprueba el cambio)
     """
     trial_pending = db.query(Class).filter(
         Class.student_id == student_id,
+        Class.teacher_id == teacher_id,
         Class.class_type == ClassType.trial,
         Class.status.in_(["pending", "pending_trial", "pending_payment", "confirmed"])
     ).first()
@@ -175,6 +180,7 @@ def get_student_booking_stage(student_id: int, db: Session) -> str:
 
     trial_completed = db.query(Class).filter(
         Class.student_id == student_id,
+        Class.teacher_id == teacher_id,
         Class.class_type == ClassType.trial,
         Class.status == "completed"
     ).first()
@@ -183,20 +189,33 @@ def get_student_booking_stage(student_id: int, db: Session) -> str:
 
     active_enrollment = db.query(Enrollment).filter(
         Enrollment.student_id == student_id,
+        Enrollment.teacher_id == teacher_id,
         Enrollment.status == EnrollmentStatus.active
     ).first()
     if active_enrollment:
         return "ready"
 
+    package_change_pending = db.query(Enrollment).filter(
+        Enrollment.student_id == student_id,
+        Enrollment.teacher_id == teacher_id,
+        Enrollment.status == EnrollmentStatus.pending_package_change
+    ).first()
+    if package_change_pending:
+        # El paquete actual sigue siendo utilizable mientras se aprueba
+        # el cambio — el estudiante puede seguir agendando normalmente.
+        return "ready"
+
     pending_renewal = db.query(Enrollment).filter(
         Enrollment.student_id == student_id,
+        Enrollment.teacher_id == teacher_id,
         Enrollment.status == EnrollmentStatus.pending_renewal
     ).first()
     if pending_renewal:
         return "renewal_pending"
 
     any_enrollment_ever = db.query(Enrollment).filter(
-        Enrollment.student_id == student_id
+        Enrollment.student_id == student_id,
+        Enrollment.teacher_id == teacher_id,
     ).first()
     if any_enrollment_ever:
         return "needs_renewal"

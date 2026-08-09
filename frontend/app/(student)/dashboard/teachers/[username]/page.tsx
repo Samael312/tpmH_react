@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Check, Loader2, AlertCircle, Calendar, UserCheck, MessageCircle, Star, X } from "lucide-react";
+import { Check, Loader2, AlertCircle, Calendar, UserCheck, MessageCircle, Star } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
-import { useTeacherResolution } from "@/hooks/useStudentData";
+import { useMyTeachers } from "@/hooks/useStudentData";
 import PublicProfileView, { PublicProfileTeacher, PublicProfileReview } from "@/components/teacher/PublicProfileView";
 
 export default function TeacherBrowsePage() {
@@ -13,7 +13,14 @@ export default function TeacherBrowsePage() {
   const router = useRouter();
   const username = params?.username as string;
 
-  const { isSingleTenant } = useTeacherResolution();
+  const { teachers: myTeachers, isSingleTenant, refetch: refetchMyTeachers } = useMyTeachers();
+  const isMine = myTeachers.some(t => t.teacher_username === username);
+
+  const [unlinking, setUnlinking] = useState(false);
+  const [unlinkError, setUnlinkError] = useState("");
+  const [choosing, setChoosing] = useState(false);
+  const [chooseError, setChooseError] = useState("");
+  const [chosen, setChosen] = useState(false);
 
   const [teacher, setTeacher] = useState<PublicProfileTeacher | null>(null);
   const [reviews, setReviews] = useState<PublicProfileReview[]>([]);
@@ -21,15 +28,40 @@ export default function TeacherBrowsePage() {
   const [isStudent, setIsStudent] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [choosing, setChoosing] = useState(false);
-  const [chooseError, setChooseError] = useState("");
-  const [chosen, setChosen] = useState(false);
 
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewError, setReviewError] = useState("");
+
+  const linkTeacher = async () => {
+    setChoosing(true);
+    setChooseError("");
+    try {
+      await api.post(`/users/me/teachers/${username}`);
+      setChosen(true);
+      refetchMyTeachers();
+      setTimeout(() => setChosen(false), 3000);
+    } catch (e: any) {
+      setChooseError(e.response?.data?.detail || "Error añadiendo profesor");
+    } finally {
+      setChoosing(false);
+    }
+  };
+
+  const unlinkTeacher = async () => {
+    setUnlinking(true);
+    setUnlinkError("");
+    try {
+      await api.delete(`/users/me/teachers/${username}`);
+      refetchMyTeachers();
+    } catch (e: any) {
+      setUnlinkError(e.response?.data?.detail || "No se pudo terminar la relación");
+    } finally {
+      setUnlinking(false);
+    }
+  };
 
   useEffect(() => {
     if (!username) return;
@@ -49,27 +81,6 @@ export default function TeacherBrowsePage() {
       .catch(() => setError("No se pudo cargar el perfil de este profesor."))
       .finally(() => setLoading(false));
   }, [username]);
-
-  const isMine = myTeacherUsername === username;
-
-  const chooseTeacher = async () => {
-    setChoosing(true);
-    setChooseError("");
-    try {
-      if (myTeacherUsername) {
-        await api.put("/users/me/choose-teacher", { teacher_username: username });
-      } else {
-        await api.post("/users/me/choose-teacher", { teacher_username: username });
-      }
-      setMyTeacherUsername(username);
-      setChosen(true);
-      setTimeout(() => setChosen(false), 3000);
-    } catch (e: any) {
-      setChooseError(e.response?.data?.detail || "Error seleccionando profesor");
-    } finally {
-      setChoosing(false);
-    }
-  };
 
   const submitReview = async () => {
     if (reviewRating === 0) {
@@ -131,21 +142,32 @@ export default function TeacherBrowsePage() {
             {!isSingleTenant && (
               !isMine ? (
                 <button
-                  onClick={chooseTeacher}
+                  onClick={linkTeacher}
                   disabled={choosing}
                   className="flex items-center justify-center gap-2 bg-white text-pink-600 hover:bg-pink-50 px-5 py-3 rounded-2xl text-sm font-bold transition-all duration-200 shadow-lg disabled:opacity-60"
                 >
                   {choosing ? <Loader2 className="w-4 h-4 animate-spin" /> : chosen ? (
-                    <><Check className="w-4 h-4" /> ¡Profesor elegido!</>
+                    <><Check className="w-4 h-4" /> ¡Profesor añadido!</>
                   ) : (
-                    <><UserCheck className="w-4 h-4" /> {myTeacherUsername ? "Cambiar a este profesor" : "Elegir este profesor"}</>
+                    <><UserCheck className="w-4 h-4" /> Elegir este profesor</>
                   )}
                 </button>
               ) : (
-                <span className="flex items-center justify-center gap-2 bg-white/20 text-white px-5 py-3 rounded-2xl text-sm font-bold">
-                  <Check className="w-4 h-4" /> Ya es tu profesor
-                </span>
+                <button
+                  onClick={unlinkTeacher}
+                  disabled={unlinking}
+                  className="flex items-center justify-center gap-2 bg-white/20 text-white hover:bg-white/30 px-5 py-3 rounded-2xl text-sm font-bold transition-all duration-200 shadow-lg disabled:opacity-60"
+                  title="Solo posible si no tienes paquete activo ni solicitudes pendientes con él"
+                >
+                  {unlinking ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check className="w-4 h-4" /> Ya es tu profesor · Terminar relación</>}
+                </button>
               )
+            )}
+
+            {(chooseError || unlinkError) && (
+              <div className="bg-white/90 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {chooseError || unlinkError}
+              </div>
             )}
 
             <button
@@ -162,12 +184,6 @@ export default function TeacherBrowsePage() {
               >
                 <MessageCircle className="w-4 h-4 text-emerald-300" /> WhatsApp
               </button>
-            )}
-
-            {chooseError && (
-              <div className="bg-white/90 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {chooseError}
-              </div>
             )}
           </>
         }

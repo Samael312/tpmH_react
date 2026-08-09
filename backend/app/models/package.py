@@ -12,6 +12,7 @@ class EnrollmentStatus(str, enum.Enum):
     cancelled = "cancelled"
     # pending_renewal → estudiante solicitó renovar, esperando pago del staff
     pending_renewal = "pending_renewal"
+    pending_package_change = "pending_package_change"
 
 
 class Package(Base):
@@ -62,38 +63,20 @@ class Enrollment(Base):
     classes_used = Column(Integer, default=0)
     classes_total = Column(Integer, nullable=True)
 
-    status = Column(
-        Enum(EnrollmentStatus),
-        default=EnrollmentStatus.active
-    )
+    status = Column(Enum(EnrollmentStatus),default=EnrollmentStatus.active)
 
     # Renovación
     renewal_count = Column(Integer, default=0)
-    previous_enrollment_id = Column(
-        Integer, ForeignKey("enrollments.id"), nullable=True
-    )
-    # Referencia al enrollment anterior para historial de renovaciones
+    previous_enrollment_id = Column(Integer, ForeignKey("enrollments.id"), nullable=True)
     renewal_requested_package_id = Column(Integer, ForeignKey("packages.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
     student = relationship("StudentProfile", back_populates="enrollments")
+    change_requested_package_id = Column(Integer, ForeignKey("packages.id"), nullable=True)
 
-    # Explícito: esta relación usa package_id, no renewal_requested_package_id
-    package = relationship(
-        "Package",
-        back_populates="enrollments",
-        foreign_keys=[package_id],
-    )
 
-    # Relación auxiliar de solo lectura hacia el paquete que el estudiante
-    # pidió al solicitar la renovación (sin back_populates — Package no
-    # necesita una lista inversa de esto).
-    renewal_requested_package = relationship(
-        "Package",
-        foreign_keys=[renewal_requested_package_id],
-        viewonly=True,
-    )
-
+    package = relationship("Package", back_populates="enrollments",foreign_keys=[package_id],)
+    renewal_requested_package = relationship("Package", foreign_keys=[renewal_requested_package_id], viewonly=True,)
+    change_requested_package = relationship("Package", foreign_keys=[change_requested_package_id],viewonly=True,)
     classes = relationship("Class", back_populates="enrollment")
     payment = relationship("Payment", back_populates="enrollment", uselist=False)
     teacher = relationship("TeacherProfile", back_populates="enrollments")

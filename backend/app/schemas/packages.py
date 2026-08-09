@@ -113,7 +113,26 @@ class EnrollmentComplianceResponse(BaseModel):
     no_show_count: int
     cancelled_late_count: int
     renewal_requested_package_name: Optional[str] = None
+    change_requested_package_name: Optional[str] = None  # NUEVO
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+class PackageChangeRequest(BaseModel):
+    """
+    El estudiante solicita cambiar de paquete (mismo profesor) mientras
+    el paquete actual sigue activo (no agotado). Distinto de renovación:
+    aquí NO se crea un enrollment nuevo, se actualiza el mismo in-place
+    una vez aprobado.
+    """
+    current_enrollment_id: int
+    new_package_id: int
+
+
+class PackageChangeApprovalResponse(BaseModel):
+    message: str
+    enrollment_id: int
+    package: str
+    classes_total: Optional[int]
+    classes_used: int
