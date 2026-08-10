@@ -19,15 +19,11 @@ class UserResponse(UserBase):
     is_active: bool
     is_verified: bool
     created_at: datetime
-    
-    # Campos adicionales (opcionales) que tenías en tu primera versión
-    timezone: Optional[str] = "UTC"
-    goal: Optional[str] = None
+
     phone_number: Optional[str] = None
     nationality: Optional[str] = None
-    preferred_payment_methods: Optional[List[str]] = []
     onboarding_completed: bool = False
-
+    
     class Config:
         from_attributes = True
 

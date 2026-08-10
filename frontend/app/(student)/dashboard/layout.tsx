@@ -47,33 +47,35 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       return;
     }
 
-    // Fetch fresh user data from API to get correct onboarding_completed
-    api.get("/users/me").then(res => {
-      const userData = res.data;
-      const onboardingCompleted = userData.onboarding_completed ?? false;
+    Promise.all([
+    api.get("/users/me"),
+    api.get("/users/me/student-profile").catch(() => ({ data: {} })),
+  ]).then(([meRes, spRes]) => {
+    const userData = meRes.data;
+    const studentData = spRes.data;
+    const onboardingCompleted = userData.onboarding_completed ?? false;
 
-      // Update store with fresh data
-      setUser({
-        ...user,
-        onboarding_completed: onboardingCompleted,
-        timezone: userData.student_profile?.timezone || userData.timezone || user.timezone,
-        goal: userData.student_profile?.goal || userData.goal,
-      });
-
-      if (!onboardingCompleted) {
-        router.push("/dashboard/onboarding");
-      } else {
-        setChecked(true);
-      }
-    }).catch(() => {
-      // Fallback to store value if API fails
-      if (!user.onboarding_completed) {
-        router.push("/dashboard/onboarding");
-      } else {
-        setChecked(true);
-      }
+    setUser({
+      ...user,
+      onboarding_completed: onboardingCompleted,
+      // solo sobreescribe si el perfil trae un valor real — nunca con "UTC" falso
+      timezone: studentData?.timezone || user.timezone,
+      goal: studentData?.goal ?? user.goal,
     });
-  }, [pathname, hasHydrated]);
+
+    if (!onboardingCompleted) {
+      router.push("/dashboard/onboarding");
+    } else {
+      setChecked(true);
+    }
+  }).catch(() => {
+    if (!user.onboarding_completed) {
+      router.push("/dashboard/onboarding");
+    } else {
+      setChecked(true);
+    }
+  });
+}, [pathname, hasHydrated]);
 
   const handleLogout = () => {
     logout();

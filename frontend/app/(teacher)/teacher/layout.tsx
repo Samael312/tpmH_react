@@ -41,34 +41,33 @@ export default function TeacherLayout({
       return
     }
 
-    // Consultar la API para obtener el valor real de onboarding_completed
-    api.get('/users/me')
-      .then(res => {
-        const data = res.data
-        const done = data.onboarding_completed ?? false
+    Promise.all([
+    api.get('/users/me'),
+    api.get('/teachers/me/profile').catch(() => ({ data: {} })),
+  ]).then(([meRes, tpRes]) => {
+    const data = meRes.data;
+    const teacherData = tpRes.data;
+    const done = data.onboarding_completed ?? false;
 
-        setUser({
-          ...user,
-          onboarding_completed: done,
-          timezone: data.teacher_profile?.timezone ?? data.timezone ?? user.timezone,
-        })
+    setUser({
+      ...user,
+      onboarding_completed: done,
+      timezone: teacherData?.timezone ?? user.timezone,
+    });
 
-        if (!done) {
-          // Reemplazar en el historial para que el botón atrás no vuelva al dashboard
-          router.replace('/teacher/onboarding')
-        } else {
-          setReady(true)
-        }
-      })
-      .catch(() => {
-        // Fallback: usar el valor del store
-        if (!user.onboarding_completed) {
-          router.replace('/teacher/onboarding')
-        } else {
-          setReady(true)
-        }
-      })
-  }, [pathname, hasHydrated])
+    if (!done) {
+      router.replace('/teacher/onboarding');
+    } else {
+      setReady(true);
+    }
+  }).catch(() => {
+    if (!user.onboarding_completed) {
+      router.replace('/teacher/onboarding');
+    } else {
+      setReady(true);
+    }
+  });
+}, [pathname, hasHydrated]);
 
   // Mientras se verifica la API, mostrar spinner en lugar del dashboard
   if (!ready) {

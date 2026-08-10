@@ -46,6 +46,26 @@ export default function LoginPage() {
           headers: { Authorization: `Bearer ${access_token}` }
         });
         const userData = meRes.data;
+
+        let timezone: string | undefined;
+        let goal: string | undefined;
+        try {
+          if (role === "student") {
+            const spRes = await api.get("/users/me/student-profile", {
+              headers: { Authorization: `Bearer ${access_token}` }
+            });
+            timezone = spRes.data?.timezone;
+            goal = spRes.data?.goal;
+          } else if (["teacher", "teacher_admin"].includes(role)) {
+            const tpRes = await api.get("/teachers/me/profile", {
+              headers: { Authorization: `Bearer ${access_token}` }
+            });
+            timezone = tpRes.data?.timezone;
+          }
+        } catch {
+          // sin perfil todavía (onboarding pendiente) — se usa fallback del navegador
+        }
+
         login(access_token, {
           username,
           name,
@@ -53,8 +73,8 @@ export default function LoginPage() {
           email: userData.email || email,
           surname: userData.surname || surname,
           onboarding_completed: userData.onboarding_completed ?? false,
-          timezone: userData.student_profile?.timezone || userData.timezone,
-          goal: userData.student_profile?.goal || userData.goal,
+          timezone,
+          goal,
         });
 
         if (role === "superadmin") {
