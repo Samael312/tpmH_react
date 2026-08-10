@@ -1,9 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useWallet } from '@/hooks/useTeacherData'
-import { Card, Button, Badge, StatCard } from '@/components/ui'
-import api from '@/lib/api'
+import { useWallet, useRequestWithdrawal } from '@/hooks/useTeacherData'
+import { Card, Button, Badge, StatCard, RefreshButton, Skeleton } from '@/components/ui'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 
 const DESTINATION_METHODS = [
@@ -13,79 +12,87 @@ const DESTINATION_METHODS = [
 ]
 
 export default function WalletPage() {
-  const { wallet, loading, refetch } = useWallet()
+  const { wallet, loading, isFetching, refetch } = useWallet()
+  const withdrawal = useRequestWithdrawal()
+
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState('paypal')
   const [details, setDetails] = useState('')
-  const [requesting, setRequesting] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [formError, setFormError] = useState('')
 
-  const requestWithdrawal = async () => {
+  const requestWithdrawal = () => {
     const amt = parseFloat(amount)
     if (!amt || amt < 10) {
-      alert('El monto mínimo es $10')
+      setFormError('El monto mínimo es $10')
       return
     }
     if (!details.trim()) {
-      alert('Introduce los datos de destino')
+      setFormError('Introduce los datos de destino')
       return
     }
-    setRequesting(true)
-    try {
-      await api.post('/payments/request-withdrawal', {
-        amount: amt,
-        destination_method: method,
-        destination_details: details,
-      })
-      setSuccess(true)
-      setAmount('')
-      setDetails('')
-      refetch()
-      setTimeout(() => setSuccess(false), 5000)
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error solicitando retiro')
-    } finally {
-      setRequesting(false)
-    }
+    setFormError('')
+
+    withdrawal.mutate(
+      { amount: amt, destination_method: method, destination_details: details },
+      {
+        onSuccess: () => {
+          setSuccess(true)
+          setAmount('')
+          setDetails('')
+          setTimeout(() => setSuccess(false), 5000)
+        },
+        onError: (e: any) => {
+          setFormError(e.response?.data?.detail || 'Error solicitando retiro')
+        },
+      }
+    )
   }
 
   return (
-    <div className="space-y-8 animate-fade-up max-w-4xl mx-auto pb-12">
-      
+    <div className="space-y-8 animate-fade-up max-w-4xl mx-auto pb-12 px-4 sm:px-0">
+
       {/* Header */}
-      <div>
-        <h1 className="font-display text-4xl font-black text-slate-800 mb-2 tracking-tight">
-          Mis Ganancias
-        </h1>
-        <p className="text-slate-500 font-medium">
-          Gestiona tus ingresos acumulados y solicita tus pagos de forma segura.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="font-display text-3xl sm:text-4xl font-black text-slate-800 mb-2 tracking-tight">
+            Mis Ganancias
+          </h1>
+          <p className="text-slate-500 font-medium text-sm sm:text-base">
+            Gestiona tus ingresos acumulados y solicita tus pagos de forma segura.
+          </p>
+        </div>
+        <RefreshButton onRefresh={refetch} isFetching={isFetching} className="mt-1" />
       </div>
 
       {/* Stats Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
         {loading ? (
           [1, 2, 3].map(i => (
-            <div key={i} className="h-32 bg-white rounded-[2rem] animate-pulse border border-slate-100 shadow-sm" />
+            <div key={i} className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6 space-y-3">
+              <Skeleton className="w-11 h-11 rounded-2xl" />
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-7 w-28" />
+            </div>
           ))
         ) : wallet && (
           <>
-            <StatCard 
-              label="Disponible" 
+            <StatCard
+              label="Disponible"
               value={`$${wallet.available_balance.toFixed(2)}`}
               change="Listo para retirar"
               changeType="up"
               icon={<WalletIcon />}
             />
-            <StatCard 
-              label="Total Ganado" 
+            <StatCard
+              label="Total Ganado"
               value={`$${wallet.total_earned.toFixed(2)}`}
               change="Histórico total"
               changeType="neutral"
               icon={<TrendingUpIcon />}
             />
-            <StatCard 
-              label="Total Retirado" 
+            <StatCard
+              label="Total Retirado"
               value={`$${wallet.total_withdrawn.toFixed(2)}`}
               change="Procesado"
               changeType="neutral"
@@ -95,12 +102,11 @@ export default function WalletPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-1 gap-8">
+      <div className="grid grid-cols-1 gap-8">
         {/* Formulario de Retiro */}
-        <Card className="p-8 md:p-10 relative overflow-hidden">
-          {/* Decoración de fondo */}
+        <Card className="p-5 sm:p-8 md:p-10 relative overflow-hidden">
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-pink-50 rounded-full blur-3xl opacity-50" />
-          
+
           <div className="relative z-10 space-y-8">
             <div className="flex items-center gap-3">
               <div className="w-1.5 h-6 bg-emerald-500 rounded-full" />
@@ -110,8 +116,8 @@ export default function WalletPage() {
             </div>
 
             {success && (
-              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl px-6 py-4 flex items-center gap-4 animate-in zoom-in duration-300">
-                <div className="bg-emerald-500 text-white rounded-full p-1">
+              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl px-4 sm:px-6 py-4 flex items-center gap-4 animate-in zoom-in duration-300">
+                <div className="bg-emerald-500 text-white rounded-full p-1 flex-shrink-0">
                   <CheckIcon className="w-4 h-4" />
                 </div>
                 <p className="text-emerald-700 font-bold text-sm">
@@ -120,7 +126,13 @@ export default function WalletPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+            {formError && (
+              <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 sm:px-6 py-4 text-sm font-bold">
+                {formError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10">
               <div className="space-y-6">
                 {/* Monto */}
                 <div className="space-y-3">
@@ -132,15 +144,15 @@ export default function WalletPage() {
                       value={amount}
                       onChange={e => setAmount(e.target.value)}
                       placeholder="0.00"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-[1.5rem] pl-12 pr-6 py-5 text-2xl font-black text-slate-800 outline-none focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-[1.5rem] pl-12 pr-6 py-4 sm:py-5 text-xl sm:text-2xl font-black text-slate-800 outline-none focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
                     />
                   </div>
                   {wallet && (
                     <button
                       onClick={() => setAmount(wallet.available_balance.toString())}
-                      className="text-xs font-bold text-pink-500 hover:text-pink-600 ml-1 transition-colors flex items-center gap-1"
+                      className="text-xs font-bold text-pink-500 hover:text-pink-600 ml-1 transition-colors flex items-center gap-1 flex-wrap"
                     >
-                      <span className="underline underline-offset-4">Retirar saldo máximo</span> 
+                      <span className="underline underline-offset-4">Retirar saldo máximo</span>
                       <Badge variant="pink" className="ml-2">${wallet.available_balance.toFixed(2)}</Badge>
                     </button>
                   )}
@@ -156,8 +168,8 @@ export default function WalletPage() {
                         onClick={() => setMethod(m.value)}
                         className={`
                           flex items-center justify-between px-6 py-4 rounded-2xl border font-bold text-sm transition-all
-                          ${method === m.value 
-                            ? 'bg-pink-500 border-pink-500 text-white shadow-lg shadow-pink-200 scale-[1.02]' 
+                          ${method === m.value
+                            ? 'bg-pink-500 border-pink-500 text-white shadow-lg shadow-pink-200 scale-[1.02]'
                             : 'bg-white border-slate-100 text-slate-600 hover:border-pink-200'
                           }
                         `}
@@ -174,7 +186,6 @@ export default function WalletPage() {
               </div>
 
               <div className="space-y-6 flex flex-col justify-between">
-                {/* Datos de destino */}
                 <div className="space-y-3">
                   <label className="text-xs font-black text-slate-500 uppercase ml-1 tracking-tight">
                     {method === 'paypal'  && 'Email de cuenta PayPal'}
@@ -186,8 +197,8 @@ export default function WalletPage() {
                     value={details}
                     onChange={e => setDetails(e.target.value)}
                     placeholder={
-                      method === 'paypal' ? 'ejemplo@correo.com' : 
-                      method === 'binance' ? 'Txxxx...' : 
+                      method === 'paypal' ? 'ejemplo@correo.com' :
+                      method === 'binance' ? 'Txxxx...' :
                       'Banco:\nCuenta:\nTitular:\nSwift/IBAN:'
                     }
                     className="w-full bg-slate-50 border border-slate-200 rounded-[1.5rem] px-6 py-4 text-sm font-bold text-slate-700 outline-none focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all placeholder:text-slate-300"
@@ -198,7 +209,7 @@ export default function WalletPage() {
                   <Button
                     variant="primary"
                     size="lg"
-                    loading={requesting}
+                    loading={withdrawal.isPending}
                     onClick={requestWithdrawal}
                     className="w-full py-6 !rounded-[1.5rem]"
                   >
@@ -213,12 +224,11 @@ export default function WalletPage() {
           </div>
         </Card>
       </div>
-      <ChipiWidget screenName="wallet" /> {/* Widget de billetera */}
+      <ChipiWidget screenName="wallet" />
     </div>
   )
 }
 
-// Iconos
 const WalletIcon = () => (
   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />

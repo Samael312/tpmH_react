@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import api from '@/lib/api'
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 
 export interface TeacherClass {
   id: number
@@ -191,20 +192,39 @@ export function useWeeklyAvailability() {
 
 // ─── Wallet ──────────────────────────────────────────────────────────────────
 export function useWallet() {
-  const [wallet, setWallet] = useState<WalletData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const query = useQuery({
+    queryKey: ["teacher", "wallet"],
+    queryFn: async () => {
+      const res = await api.get("/payments/my-wallet")
+      return res.data as WalletData
+    },
+  })
 
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
-      const res = await api.get('/payments/my-wallet')
-      setWallet(res.data)
-    } catch { }
-    finally { setLoading(false) }
-  }, [])
+  return {
+    wallet: query.data ?? null,
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
 
-  useEffect(() => { fetch() }, [fetch])
-  return { wallet, loading, refetch: fetch }
+interface WithdrawalPayload {
+  amount: number
+  destination_method: string
+  destination_details: string
+}
+
+export function useRequestWithdrawal() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: WithdrawalPayload) =>
+      api.post("/payments/request-withdrawal", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teacher", "wallet"] })
+    },
+  })
 }
 
 // ─── Google Calendar status ──────────────────────────────────────────────────
