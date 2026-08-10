@@ -19,7 +19,6 @@ from app.core.storage import upload_file, delete_file
 from app.models.teacher import TeacherProfile, TeacherStatus
 from app.schemas.user import ChooseTeacherRequest
 from app.core.teacher_students import link_student_to_teacher
-from app.core.schedule_recalc import recalculate_student_preferences_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -290,9 +289,8 @@ def update_student_profile(
 ):
     """
     Actualiza datos del perfil de estudiante (timezone, goal, etc.).
-    Si cambia la zona horaria, recalcula de forma síncrona sus preferencias
-    de horario para preservar sus horas locales, y devuelve un resumen para
-    notificar al usuario en el frontend.
+    El cambio de zona horaria NO recalcula las preferencias de horario:
+    son fijas en el día, independientes de la zona horaria de la cuenta.
     """
     if current_user.role != "student":
         raise HTTPException(
@@ -308,31 +306,14 @@ def update_student_profile(
         )
 
     allowed_fields = {"timezone", "goal", "preferred_payment_methods"}
-
-    old_timezone = profile.timezone
-    new_timezone = data.get("timezone")
-    timezone_changed = "timezone" in data and bool(new_timezone) and new_timezone != old_timezone
-
     for field, value in data.items():
         if field in allowed_fields:
             setattr(profile, field, value)
 
-    recalc_summary = {"weekly_changes": []}
-    if timezone_changed:
-        recalc_summary = recalculate_student_preferences_timezone(
-            student_id=profile.id,
-            old_tz=old_timezone,
-            new_tz=new_timezone,
-            db=db,
-        )
-
     db.commit()
     db.refresh(profile)
 
-    response = StudentProfileResponse.model_validate(profile).model_dump()
-    response["schedule_recalculated"] = timezone_changed
-    response["schedule_changes"] = recalc_summary
-    return response
+    return StudentProfileResponse.model_validate(profile).model_dump()
 
 
 @router.post("/me/preferences", response_model=List[PreferenceSlotResponse])

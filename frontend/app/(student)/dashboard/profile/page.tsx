@@ -158,8 +158,6 @@ export default function StudentProfilePage() {
 
   // Timezone
   const [savedTimezone, setSavedTimezone] = useState("");
-  const [recalculating, setRecalculating] = useState(false);
-  const [tzNotice, setTzNotice] = useState<{ weekly: number } | null>(null);
 
   // Campos de formulario
   const [username, setUsername] = useState("");
@@ -263,7 +261,6 @@ export default function StudentProfilePage() {
     const fullPhone = phoneRest.trim() ? `${phoneCountry.dialCode} ${phoneRest.trim()}` : "";
     const timezoneChanging = !!savedTimezone && timezone !== savedTimezone;
     setSavingInfo(true);
-    if (timezoneChanging) setRecalculating(true);
     setInfoFeedback(null);
     try {
       const [userRes, studentRes] = await Promise.all([
@@ -286,9 +283,6 @@ export default function StudentProfilePage() {
       const updatedStudentData = studentRes.data || {};
       populateFields(updatedUserData, updatedStudentData);
 
-      if (updatedStudentData?.schedule_recalculated) {
-        setTzNotice({ weekly: updatedStudentData.schedule_changes?.weekly_changes?.length ?? 0 });
-      }
 
       if (setUser && user) {
         setUser({
@@ -312,7 +306,6 @@ export default function StudentProfilePage() {
       });
     } finally {
       setSavingInfo(false);
-      setRecalculating(false);
       setTimeout(() => setInfoFeedback(null), 4000);
     }
   }, [savedTimezone, timezone, username, name, surname, email, phoneCountry.dialCode, phoneRest, nationality, goal, payMethods, populateFields, user, setUser, avatarUrl]);
@@ -423,44 +416,6 @@ export default function StudentProfilePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 relative overflow-hidden py-8 px-4 sm:px-6 lg:px-8">
-      {/* ─── Modales de Zona Horaria ─── */}
-      {recalculating && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl px-8 py-7 shadow-2xl flex flex-col items-center gap-4 max-w-sm text-center">
-            <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
-            <p className="text-sm font-black text-slate-800">Actualizando tu zona horaria…</p>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Estamos recalculando tus horarios preferidos para que se mantengan igual en tu hora local. No cierres esta pantalla.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {tzNotice && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
-          onClick={() => setTzNotice(null)}
-        >
-          <div className="bg-white rounded-3xl p-7 max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-blue-50 rounded-2xl flex items-center justify-center flex-shrink-0">
-                <Globe className="w-5 h-5 text-blue-500" />
-              </div>
-              <h3 className="text-lg font-black text-slate-800">Zona horaria actualizada</h3>
-            </div>
-            <p className="text-sm text-slate-600 leading-relaxed mb-5">
-              Tus horarios preferidos configurados se mantienen exactamente iguales. Ajustamos internamente{" "}
-              <strong>{tzNotice.weekly}</strong> franja{tzNotice.weekly !== 1 ? "s" : ""} de tus preferencias para reflejar correctamente tu nueva zona horaria.
-            </p>
-            <button
-              onClick={() => setTzNotice(null)}
-              className="w-full py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-sm font-bold transition-colors"
-            >
-              Entendido
-            </button>
-          </div>
-        </div>
-      )}
 
       <div className="fixed top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/25 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-[-80px] left-[-80px] w-[400px] h-[400px] bg-purple-300/20 rounded-full blur-[100px] pointer-events-none" />
