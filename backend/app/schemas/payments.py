@@ -37,6 +37,7 @@ class BookAndPayRequest(BaseModel):
     No necesita pagar todavía — el slot queda en 'pending'.
     """
     enrollment_id: Optional[int] = None  
+    teacher_username: Optional[str] = None
     start_time_utc: datetime
     end_time_utc: datetime
     duration_minutes: int

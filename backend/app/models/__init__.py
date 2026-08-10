@@ -12,3 +12,4 @@ from app.models.student_preferences import StudentSchedulePreference
 from app.models.password_reset import PasswordResetToken
 from app.models.payment_config import PaymentConfig
 from app.models.google_calendar import GoogleCalendarToken
+from app.models.student_teacher_link import StudentTeacherLink

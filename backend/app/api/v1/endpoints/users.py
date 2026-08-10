@@ -17,8 +17,11 @@ from app.core.timezone import convert_local_time_to_utc_string, validate_timezon
 from app.schemas.preferences import SetPreferencesRequest, PreferenceSlotResponse
 from app.core.storage import upload_file, delete_file
 from app.models.teacher import TeacherProfile, TeacherStatus
-from app.schemas.user import ChooseTeacherRequest
 from app.core.teacher_students import link_student_to_teacher
+from app.models.payment_config import PlatformConfig
+from app.models.student_teacher_link import StudentTeacherLink
+from app.core.class_logic import get_student_booking_stage
+from app.models.package import Enrollment, EnrollmentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -438,62 +441,161 @@ def update_schedule_preferences(
 
     return new_prefs
 
-@router.post("/me/choose-teacher")
-def choose_teacher(
-    data: ChooseTeacherRequest,
+@router.get("/me/teachers")
+def get_my_teachers(
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    """El estudiante elige su profesor por primera vez."""
-    profile = current_user.student_profile
-    if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil de estudiante no encontrado")
+    """
+    Profesores vinculados al estudiante, cada uno con su relación
+    independiente (stage de reserva propio, enrollment activo si existe).
+    En single-tenant siempre devuelve solo al featured teacher, para que
+    el frontend use la misma forma de respuesta en ambos modos.
+    """
 
-    if profile.teacher_username:
+    config = db.query(PlatformConfig).first()
+    student_id = current_user.student_profile.id
+
+    if config and config.is_single_tenant:
+        teacher_ids = []
+        if config.featured_teacher_id:
+            teacher_ids = [config.featured_teacher_id]
+    else:
+        links = db.query(StudentTeacherLink).filter(
+            StudentTeacherLink.student_id == student_id
+        ).all()
+        teacher_ids = [l.teacher_id for l in links]
+
+    result = []
+    for tid in teacher_ids:
+        teacher = db.query(TeacherProfile).filter(TeacherProfile.id == tid).first()
+        if not teacher:
+            continue
+        stage = get_student_booking_stage(student_id, tid, db)
+        active_enrollment = db.query(Enrollment).filter(
+            Enrollment.student_id == student_id,
+            Enrollment.teacher_id == tid,
+            Enrollment.status.in_([EnrollmentStatus.active, EnrollmentStatus.pending_package_change]),
+        ).first()
+
+        result.append({
+            "teacher_username": teacher.user_username,
+            "name": teacher.user.name if teacher.user else None,
+            "surname": teacher.user.surname if teacher.user else None,
+            "title": teacher.title,
+            "profile_photo_url": teacher.profile_photo_url,
+            "theme_color": teacher.theme_color,
+            "stage": stage,
+            "active_enrollment": {
+                "id": active_enrollment.id,
+                "package_name": active_enrollment.package.name if active_enrollment.package else None,
+                "classes_used": active_enrollment.classes_used,
+                "classes_total": active_enrollment.classes_total,
+                "status": active_enrollment.status,
+            } if active_enrollment else None,
+        })
+
+    return result
+
+
+@router.post("/me/teachers/{teacher_username}")
+def link_teacher(
+    teacher_username: str,
+    current_user: User = Depends(get_current_student),
+    db: Session = Depends(get_db)
+):
+    """
+    Vincula al estudiante con un profesor adicional (solo multi-tenant).
+    Idempotente — si el vínculo ya existe, no falla.
+    """
+    from app.models.payment_config import PlatformConfig
+    from app.models.student_teacher_link import StudentTeacherLink
+
+    config = db.query(PlatformConfig).first()
+    if not config or config.is_single_tenant:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ya tienes un profesor asignado. Usa la opción de cambiar profesor."
+            detail="La plataforma está en modo single-tenant; no aplica elegir profesor."
         )
 
     teacher = db.query(TeacherProfile).filter(
-        TeacherProfile.user_username == data.teacher_username,
+        TeacherProfile.user_username == teacher_username,
         TeacherProfile.status == TeacherStatus.approved
     ).first()
-
     if not teacher:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profesor no encontrado o no disponible")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesor no encontrado o no disponible")
 
-    profile.teacher_username = data.teacher_username
-    db.commit()
+    profile = current_user.student_profile
+    existing = db.query(StudentTeacherLink).filter(
+        StudentTeacherLink.student_id == profile.id,
+        StudentTeacherLink.teacher_id == teacher.id,
+    ).first()
 
-    link_student_to_teacher(db, profile, teacher, old_teacher_username=None)
+    if not existing:
+        db.add(StudentTeacherLink(student_id=profile.id, teacher_id=teacher.id))
+        db.commit()
+        link_student_to_teacher(db, profile, teacher, old_teacher_username=None)
 
-    return {"message": "Profesor asignado correctamente", "teacher_username": data.teacher_username}
+    return {"message": "Profesor añadido correctamente", "teacher_username": teacher_username}
 
 
-@router.put("/me/choose-teacher")
-def change_teacher(
-    data: ChooseTeacherRequest,
+@router.delete("/me/teachers/{teacher_username}")
+def unlink_teacher(
+    teacher_username: str,
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    """El estudiante cambia el profesor que tenía asignado."""
-    profile = current_user.student_profile
-    if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil de estudiante no encontrado")
+    """
+    Termina la relación con un profesor (solo multi-tenant). Bloqueado
+    si hay un enrollment activo o cualquier solicitud pendiente
+    (renovación o cambio de paquete) con ese profesor.
+    """
+    from app.models.payment_config import PlatformConfig
+    from app.models.student_teacher_link import StudentTeacherLink
+    from app.models.package import Enrollment, EnrollmentStatus
+
+    config = db.query(PlatformConfig).first()
+    if not config or config.is_single_tenant:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La plataforma está en modo single-tenant; no aplica terminar relación."
+        )
 
     teacher = db.query(TeacherProfile).filter(
-        TeacherProfile.user_username == data.teacher_username,
-        TeacherProfile.status == TeacherStatus.approved
+        TeacherProfile.user_username == teacher_username
+    ).first()
+    if not teacher:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesor no encontrado")
+
+    profile = current_user.student_profile
+
+    blocking_enrollment = db.query(Enrollment).filter(
+        Enrollment.student_id == profile.id,
+        Enrollment.teacher_id == teacher.id,
+        Enrollment.status.in_([
+            EnrollmentStatus.active,
+            EnrollmentStatus.pending_renewal,
+            EnrollmentStatus.pending_package_change,
+        ]),
     ).first()
 
-    if not teacher:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profesor no encontrado o no disponible")
+    if blocking_enrollment:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No puedes terminar la relación mientras tengas un paquete activo o "
+                   "una solicitud pendiente con este profesor."
+        )
 
-    old_teacher_username = profile.teacher_username
-    profile.teacher_username = data.teacher_username
+    link = db.query(StudentTeacherLink).filter(
+        StudentTeacherLink.student_id == profile.id,
+        StudentTeacherLink.teacher_id == teacher.id,
+    ).first()
+    if link:
+        db.delete(link)
+
+    if teacher.students and profile.id in teacher.students:
+        teacher.students = [sid for sid in teacher.students if sid != profile.id]
+
     db.commit()
 
-    link_student_to_teacher(db, profile, teacher, old_teacher_username=old_teacher_username)
-
-    return {"message": "Profesor actualizado correctamente", "teacher_username": data.teacher_username}
+    return {"message": "Relación terminada correctamente"}

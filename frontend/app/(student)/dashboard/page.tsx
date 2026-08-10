@@ -18,12 +18,98 @@ import {
   UserCheck,
 } from "lucide-react";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import { useMyTeachers } from "@/hooks/useStudentData";
+import { useState as useStateReact } from "react";
 
 type BookingStage = "loading" | "needs_trial" | "trial_in_progress" | "needs_package" | "ready";
 
 function Skeleton({ className }: { className?: string }) {
   return <div className={`animate-pulse bg-slate-200/80 rounded-2xl ${className}`} />;
 }
+
+function ChangePackageModal({
+  enrollment,
+  teacherUsername,
+  onClose,
+  onDone,
+}: {
+  enrollment: any;
+  teacherUsername: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [packages, setPackages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [requesting, setRequesting] = useState<number | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api.get(`/packages/teacher/${teacherUsername}`)
+      .then(res => setPackages((res.data || []).filter((p: any) => p.id !== enrollment.package?.id)))
+      .catch(() => setPackages([]))
+      .finally(() => setLoading(false));
+  }, [teacherUsername]);
+
+  const request = async (packageId: number) => {
+    setRequesting(packageId);
+    setError("");
+    try {
+      await api.post("/packages/request-package-change", {
+        current_enrollment_id: enrollment.id,
+        new_package_id: packageId,
+      });
+      onDone();
+      onClose();
+    } catch (e: any) {
+      setError(e.response?.data?.detail || "Error solicitando el cambio de paquete");
+    } finally {
+      setRequesting(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-lg bg-white rounded-[2rem] shadow-2xl p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+        <h2 className="text-lg font-black text-slate-800">Cambiar de paquete</h2>
+        <p className="text-xs text-slate-500">
+          Tu profesor(a) deberá aprobar el cambio. Solo se permite cambiar a paquetes con
+          cupo suficiente para tus clases ya usadas o agendadas.
+        </p>
+        {error && <div className="bg-rose-50 text-rose-600 text-xs font-bold px-4 py-3 rounded-xl">{error}</div>}
+        {loading ? (
+          <div className="h-24 bg-slate-50 rounded-xl animate-pulse" />
+        ) : packages.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-6">No hay otros paquetes disponibles de este profesor</p>
+        ) : (
+          <div className="space-y-2">
+            {packages.map(p => (
+              <div key={p.id} className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3">
+                <div>
+                  <p className="text-sm font-bold text-slate-800">{p.name}</p>
+                  <p className="text-xs text-slate-400">
+                    {p.classes_count == null ? "Ilimitadas" : `${p.classes_count} clases`} · ${p.price}
+                  </p>
+                </div>
+                <button
+                  onClick={() => request(p.id)}
+                  disabled={requesting !== null}
+                  className="px-4 py-2 bg-pink-500 text-white text-xs font-bold rounded-xl disabled:opacity-50"
+                >
+                  {requesting === p.id ? "..." : "Solicitar"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <button onClick={onClose} className="w-full py-2.5 text-sm font-bold text-slate-500 bg-slate-100 rounded-xl">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 
 function DashboardSkeleton() {
   return (
@@ -105,8 +191,12 @@ function QuickAction({
 export default function StudentDashboard() {
   const { user } = useAuthStore();
   const { classes: classesData, loading: classesLoading } = useStudentClasses();
-  const { enrollments, loading: enrollmentsLoading } = useEnrollments();
+  const { enrollments, loading: enrollmentsLoading, refetch: refetchEnrollments } = useEnrollments();
+  const [changePackageTarget, setChangePackageTarget] = useState<any | null>(null);
 
+  const activeOrChangingEnrollments = enrollments.filter(
+    e => e.status === "active" || e.status === "pending_package_change"
+  );
   const [stage, setStage] = useState<BookingStage>("loading");
 
   useEffect(() => {
@@ -208,84 +298,67 @@ export default function StudentDashboard() {
           </div>
         )}
 
-        {stage === "ready" && activeEnrollment && (
-          <div className="bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 rounded-[2rem] p-6 sm:p-8 text-white relative overflow-hidden shadow-2xl shadow-indigo-950/20 border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="absolute -top-12 -right-12 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute -bottom-12 -left-12 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
-            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              <div className="space-y-4 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest bg-pink-500/20 text-pink-300 border border-pink-500/30">
-                    <Award className="w-3.5 h-3.5" /> Plan Activo
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/10 text-slate-200 border border-white/10 backdrop-blur-md">
-                    <BookOpen className="w-3.5 h-3.5 text-purple-300" /> {activeSubject}
-                  </span>
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                  {activeEnrollment.package?.name}
-                </h2>
-                
-                {/* Recuadro dentro de recuadro decorativo */}
-                <div className="p-2 bg-white/5 backdrop-blur-lg rounded-3xl border border-white/10 inline-block shadow-lg">
-                  <div className="w-full sm:w-80 bg-white/10 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/15 shadow-inner flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 shadow-md border-2 border-white/20 bg-gradient-to-tr from-pink-500 to-purple-500 flex items-center justify-center">
-                      {activeEnrollment.teacher_avatar ? (
-                        <img
-                          src={activeEnrollment.teacher_avatar}
-                          alt={assignedTeacher ?? "Profesor"}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="font-black text-white text-lg">
-                          {assignedTeacher ? assignedTeacher.charAt(0).toUpperCase() : <UserCheck className="w-5 h-5" />}
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="text-slate-300 block text-[10px] uppercase font-black tracking-wider">Profesor Asignado</span>
-                      <span className="font-bold text-white text-base truncate block">{assignedTeacher || "Por asignar"}</span>
-                    </div>
-                  </div>
-                </div>
+        {stage === "ready" && activeOrChangingEnrollments.length > 0 && (
+  <div className={`grid gap-4 ${activeOrChangingEnrollments.length > 1 ? "sm:grid-cols-2" : ""}`}>
+    {activeOrChangingEnrollments.map((enr) => (
+      <div key={enr.id}
+        className="bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 rounded-[2rem] p-6 text-white relative overflow-hidden shadow-2xl shadow-indigo-950/20 border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="absolute -top-12 -right-12 w-56 h-56 bg-pink-500/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 space-y-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-pink-500/20 text-pink-300 border border-pink-500/30">
+              <Award className="w-3 h-3" /> {enr.status === "pending_package_change" ? "Cambio pendiente" : "Plan Activo"}
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-white/10 text-slate-200 border border-white/10">
+              <BookOpen className="w-3 h-3 text-purple-300" /> {enr.package?.subject}
+            </span>
+          </div>
+          <h2 className="text-xl font-black text-white tracking-tight">{enr.package?.name}</h2>
+          <p className="text-slate-300 text-xs font-bold">Con {enr.teacher_name || "tu profesor"}</p>
 
-              </div>
-
-              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/10 min-w-[260px] space-y-3">
-                <div className="flex items-end justify-between">
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-300 block">Progreso del Plan</span>
-                    <p className="text-3xl font-black text-white leading-none mt-1">
-                      {activeEnrollment.classes_used}
-                      <span className="text-lg text-slate-400 font-bold">/{activeEnrollment.classes_total ?? "∞"}</span>
-                    </p>
-                  </div>
-                  <span className="text-xs font-bold text-pink-300 bg-pink-500/20 px-2.5 py-1 rounded-lg border border-pink-500/30">
-                    {activeEnrollment.classes_total
-                      ? `${Math.round((activeEnrollment.classes_used / activeEnrollment.classes_total) * 100)}%`
-                      : "100%"}
-                  </span>
-                </div>
-                <div className="w-full h-2.5 bg-slate-800/80 rounded-full overflow-hidden p-0.5 border border-white/10">
-                  <div
-                    className="h-full bg-gradient-to-r from-pink-500 to-purple-400 rounded-full transition-all duration-700 shadow-sm"
-                    style={{
-                      width: activeEnrollment.classes_total
-                        ? `${Math.min((activeEnrollment.classes_used / activeEnrollment.classes_total) * 100, 100)}%`
-                        : "100%",
-                    }}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-300 pt-1">
-                  <span>Usadas: <strong className="text-white">{activeEnrollment.classes_used}</strong></span>
-                  <span>Restantes: <strong className="text-white">
-                    {activeEnrollment.classes_total ? Math.max(0, activeEnrollment.classes_total - activeEnrollment.classes_used) : "Ilimitadas"}
-                  </strong></span>
-                </div>
-              </div>
+          <div className="bg-white/10 rounded-2xl p-4 space-y-2">
+            <div className="flex items-end justify-between">
+              <p className="text-2xl font-black text-white leading-none">
+                {enr.classes_used}<span className="text-sm text-slate-400 font-bold">/{enr.classes_total ?? "∞"}</span>
+              </p>
+              {enr.classes_total && (
+                <span className="text-[10px] font-bold text-pink-300 bg-pink-500/20 px-2 py-1 rounded-lg">
+                  {Math.round((enr.classes_used / enr.classes_total) * 100)}%
+                </span>
+              )}
+            </div>
+            <div className="w-full h-2 bg-slate-800/80 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-pink-500 to-purple-400 rounded-full transition-all duration-700"
+                style={{ width: enr.classes_total ? `${Math.min((enr.classes_used / enr.classes_total) * 100, 100)}%` : "100%" }} />
             </div>
           </div>
-        )}
+
+          {enr.status === "pending_package_change" ? (
+            <p className="text-xs font-bold text-amber-300">
+              Solicitud de cambio de paquete en revisión por tu profesor(a).
+            </p>
+          ) : (
+            <button
+              onClick={() => setChangePackageTarget(enr)}
+              className="text-xs font-bold text-pink-300 hover:text-pink-200 underline underline-offset-4"
+            >
+              Cambiar de paquete
+            </button>
+          )}
+        </div>
+      </div>
+    ))}
+  </div>
+)}
+
+{changePackageTarget && (
+  <ChangePackageModal
+    enrollment={changePackageTarget}
+    teacherUsername={changePackageTarget.teacher_username}
+    onClose={() => setChangePackageTarget(null)}
+    onDone={refetchEnrollments}
+  />
+)}
 
         {/* ─── Próximas clases: SOLO INFORMATIVO (readOnly) ─── */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150">
