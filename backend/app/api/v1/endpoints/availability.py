@@ -28,6 +28,7 @@ from app.core.timezone import (
     is_slot_in_past,
     validate_timezone,
 )
+from app.core.google_calendar import get_teacher_busy_ranges
 
 router = APIRouter()
 
@@ -367,8 +368,15 @@ def get_teacher_available_slots(
         for c in booked
     ]
 
+    busy_from_google = get_teacher_busy_ranges(
+        teacher_id=teacher.id,
+        time_min=day_start,
+        time_max=day_end,
+        db=db,
+    )
+
     # 6. Calcular slots libres en UTC
-    all_busy = busy_from_exceptions + busy_from_classes
+    all_busy = busy_from_exceptions + busy_from_classes + busy_from_google
 
     all_slots = get_all_slots_utc(
         availability_ranges=availability_ranges,

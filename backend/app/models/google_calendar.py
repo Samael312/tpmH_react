@@ -21,17 +21,22 @@ class GoogleCalendarToken(Base):
         nullable=False
     )
 
-    # Tokens de OAuth2
     access_token = Column(Text, nullable=False)
     refresh_token = Column(Text, nullable=True)
     token_expiry = Column(DateTime(timezone=True), nullable=True)
 
-    # ID del calendario donde se sincronizan las clases
-    # Por defecto es "primary" (calendario principal)
     calendar_id = Column(String, default="primary")
 
     # El profesor puede desactivar la sync sin borrar el token
     is_active = Column(Boolean, default=True)
+
+    # ─── Salud de la conexión ───
+    # True cuando Google rechazó el refresh_token (revocado/expirado) y
+    # el profesor debe reconectar manualmente. La sync automática se
+    # salta cualquier token con needs_reauth=True.
+    needs_reauth = Column(Boolean, default=False)
+    last_synced_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(String, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

@@ -73,6 +73,7 @@ export default function RegisterPage() {
   const [showConfirmPw, setShowConfirmPw] = useState(false);
 
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
@@ -158,17 +159,17 @@ export default function RegisterPage() {
     <>
       <div className="min-h-screen bg-slate-50 flex flex-col relative overflow-hidden font-sans">
         <header className="relative z-20 h-16 px-6 bg-white/70 backdrop-blur-md border-b border-white/50 flex items-center shadow-sm">
-        <Link href="/" className="flex items-center gap-2 group">
-          <div className="p-1.5 bg-pink-50 rounded-lg group-hover:bg-pink-100 transition-colors">
-            <svg className="w-6 h-6 text-pink-600" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 3L1 9L4 10.636V17C4 18.104 7.582 19 12 19C16.418 19 20 18.104 20 17V10.636L23 9L12 3ZM12 17C8.686 17 6 16.328 6 15.5C6 14.672 8.686 14 12 14C15.314 14 18 14.672 18 15.5C18 16.328 15.314 17 12 17ZM20 13V17H22V13H20Z" />
-            </svg>
-          </div>
-          <span className="text-xl font-black tracking-tight text-slate-800 group-hover:text-pink-600 transition-colors">
-            TuProfeMaria
-          </span>
-        </Link>
-      </header>
+          <Link href="/" className="flex items-center gap-2 group">
+            <div className="p-1.5 bg-pink-50 rounded-lg group-hover:bg-pink-100 transition-colors">
+              <svg className="w-6 h-6 text-pink-600" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 3L1 9L4 10.636V17C4 18.104 7.582 19 12 19C16.418 19 20 18.104 20 17V10.636L23 9L12 3ZM12 17C8.686 17 6 16.328 6 15.5C6 14.672 8.686 14 12 14C15.314 14 18 14.672 18 15.5C18 16.328 15.314 17 12 17ZM20 13V17H22V13H20Z" />
+              </svg>
+            </div>
+            <span className="text-xl font-black tracking-tight text-slate-800 group-hover:text-pink-600 transition-colors">
+              TuProfeMaria
+            </span>
+          </Link>
+        </header>
 
         <div className="absolute top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/25 rounded-full blur-[120px] pointer-events-none" />
         <div className="absolute bottom-[-100px] left-[-100px] w-[400px] h-[400px] bg-rose-300/20 rounded-full blur-[100px] pointer-events-none" />
@@ -205,6 +206,7 @@ export default function RegisterPage() {
                   onError={setError}
                   onCredential={async (idToken) => {
                     setError("");
+                    setGoogleLoading(true);
                     try {
                       const res = await api.post("/auth/google", {
                         id_token: idToken,
@@ -250,6 +252,8 @@ export default function RegisterPage() {
                       setError(
                         errorResponse.response?.data?.detail || "Error con Google"
                       );
+                    } finally {
+                      setGoogleLoading(false);
                     }
                   }}
                 />
@@ -318,7 +322,7 @@ export default function RegisterPage() {
 
                   <div className="grid grid-cols-2 gap-1.5">
                     <div className="space-y-0.5">
-                      <label htmlFor="name" className="text-[10px] font-black text-slate-400  tracking-widest block px-0.5">
+                      <label htmlFor="name" className="text-[10px] font-black text-slate-400 tracking-widest block px-0.5">
                         Nombre
                       </label>
                       <div className="relative group">
@@ -336,7 +340,7 @@ export default function RegisterPage() {
                       </div>
                     </div>
                     <div className="space-y-0.5">
-                      <label htmlFor="surname" className="text-[10px] font-black text-slate-400  tracking-widest block px-0.5">
+                      <label htmlFor="surname" className="text-[10px] font-black text-slate-400 tracking-widest block px-0.5">
                         Apellido
                       </label>
                       <div className="relative group">
@@ -356,7 +360,7 @@ export default function RegisterPage() {
                   </div>
 
                   <div className="space-y-0.5">
-                    <label htmlFor="username" className="text-[10px] font-black text-slate-400  tracking-widest block px-0.5">
+                    <label htmlFor="username" className="text-[10px] font-black text-slate-400 tracking-widest block px-0.5">
                       Usuario
                     </label>
                     <div className="relative group">
@@ -381,7 +385,7 @@ export default function RegisterPage() {
                   </div>
 
                   <div className="space-y-0.5">
-                    <label htmlFor="email" className="text-[10px] font-black text-slate-400  tracking-widest block px-0.5">
+                    <label htmlFor="email" className="text-[10px] font-black text-slate-400 tracking-widest block px-0.5">
                       Email
                     </label>
                     <div className="relative group">
@@ -402,9 +406,16 @@ export default function RegisterPage() {
 
                   <button
                     type="submit"
-                    className="w-full py-2.5 text-xs font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 mt-2"
+                    disabled={googleLoading}
+                    className="w-full py-2.5 text-xs font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Siguiente <ArrowRight className="w-4 h-4" />
+                    {googleLoading ? (
+                      <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        Siguiente <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
                   </button>
                 </form>
               ) : (
