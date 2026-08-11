@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+import httpx
+import logging
 from app.db.base import get_db
 from app.models.user import User, UserRole
 from app.models.teacher import TeacherProfile
@@ -18,6 +20,9 @@ from app.models.password_reset import PasswordResetToken
 from app.core.email import send_password_reset_email
 from app.core.timezone import utc_now
 from pydantic import BaseModel, EmailStr
+from app.core.storage import upload_file
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -162,30 +167,35 @@ async def google_login(data: GoogleAuthRequest, db: Session = Depends(get_db)):
 
 @router.post("/google/register", response_model=GoogleAuthResponse)
 async def google_register(data: GoogleRegisterRequest, db: Session = Depends(get_db)):
-    """
-    Paso 2 del flujo Google — solo se llama cuando /auth/google devolvió
-    needs_registration=True. Revalida el id_token (nunca confía en datos
-    que el cliente pudiera enviar sueltos) y crea la cuenta + perfil.
-    """
     try:
         google_data = await verify_google_token(data.id_token)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     if db.query(User).filter(User.email == google_data["email"]).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Este email ya está registrado"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Este email ya está registrado")
 
     if db.query(User).filter(User.username == data.username).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Este nombre de usuario ya está en uso"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Este nombre de usuario ya está en uso")
+
+    avatar_url = None
+    google_picture = google_data.get("avatar")
+    if google_picture:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                img_res = await client.get(google_picture)
+            if img_res.status_code == 200:
+                content_type = img_res.headers.get("content-type", "image/jpeg").split(";")[0].strip()
+                upload_result = upload_file(
+                    file_bytes=img_res.content,
+                    filename=f"google_avatar_{data.username}.jpg",
+                    content_type=content_type,
+                    folder="tpm/avatars",
+                )
+                avatar_url = upload_result["url"]
+        except Exception as e:
+            logger.warning(f"No se pudo re-hospedar la foto de Google para {data.username}: {e}")
+            avatar_url = google_picture  # fallback: usar la URL original de Google
 
     user = User(
         username=data.username,
@@ -193,7 +203,7 @@ async def google_register(data: GoogleRegisterRequest, db: Session = Depends(get
         password_hash=None,
         name=google_data["name"],
         surname=google_data["surname"],
-        avatar=google_data.get("avatar"),
+        avatar=avatar_url,
         google_id=google_data["google_id"],
         is_verified=google_data.get("is_verified") == "true",
         role=data.role,

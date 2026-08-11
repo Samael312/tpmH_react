@@ -173,7 +173,7 @@ export default function RegisterPage() {
         <div className="absolute top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/25 rounded-full blur-[120px] pointer-events-none" />
         <div className="absolute bottom-[-100px] left-[-100px] w-[400px] h-[400px] bg-rose-300/20 rounded-full blur-[100px] pointer-events-none" />
 
-        <main className="flex-1 flex justify-center items-center pt-3 p-3 relative z-10">
+        <main className="flex-1 flex justify-center items-center pt-1 p-3 relative z-10">
           <div className="w-full max-w-[23rem] my-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             
             {/* Header del Formulario */}

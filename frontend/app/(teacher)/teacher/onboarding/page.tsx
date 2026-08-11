@@ -733,6 +733,15 @@ export default function TeacherOnboardingPage() {
   // Step 2
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile]       = useState<File | null>(null);
+  
+  useEffect(() => {
+    api.get("/users/me")
+      .then(res => {
+        if (res.data?.avatar) setPhotoPreview(res.data.avatar);
+      })
+      .catch(() => {});
+  }, []);
+  
   const [title_, setTitle_]             = useState("");
   const [bio, setBio]                   = useState("");
   const [timezone, setTimezone]         = useState(

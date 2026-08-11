@@ -683,6 +683,14 @@ export default function OnboardingPage() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
+  useEffect(() => {
+    api.get("/users/me")
+      .then(res => {
+        if (res.data?.avatar) setAvatarPreview(res.data.avatar);
+      })
+      .catch(() => {});
+  }, []);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
