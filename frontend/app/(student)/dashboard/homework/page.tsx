@@ -442,6 +442,7 @@ export default function StudentHomeworkPage() {
   const displayed     = tab === "pending" ? pending : graded;
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50 relative overflow-hidden">
       <div
         className="fixed top-[-80px] right-[-80px] w-[500px] h-[500px]
@@ -573,7 +574,6 @@ export default function StudentHomeworkPage() {
             )
           )}
         </div>
-        <ChipiWidget screenName="homework" />
       </div>
 
       {submitTarget && (
@@ -584,5 +584,7 @@ export default function StudentHomeworkPage() {
         />
       )}
     </div>
+    <ChipiWidget screenName="homework_student" />
+    </>
   );
 }

@@ -52,6 +52,7 @@ export default function AdminDashboard() {
   }
 
   return (
+   <> 
     <div className="space-y-10 animate-fade-up bg-white min-h-screen p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
 
       {/* ─── Header ──────────────────────────────────────── */}
@@ -350,9 +351,9 @@ export default function AdminDashboard() {
             ))}
           </div>
         )}
-        <ChipiWidget screenName="admin_home" /> 
       </div>
-      
     </div>
+    <ChipiWidget screenName="admin_home" /> 
+  </>
   )
 }

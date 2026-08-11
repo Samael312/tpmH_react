@@ -7,6 +7,8 @@ import {
   Loader2, Circle, SkipForward, Pencil, Sparkles,
 } from "lucide-react";
 import api from "@/lib/api";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
+
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 interface TestResult {
@@ -18,15 +20,12 @@ interface TestResult {
 }
 
 // ─── ENV ──────────────────────────────────────────────────────────────────────
-// NEXT_PUBLIC_API_URL normalmente ya incluye /api/v1 (ver next.config.ts).
-// Lo despojamos aquí porque cada test antepone su propio prefijo /api/v1/...
 const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 const BASE_URL = (RAW_API_URL.replace(/\/api\/v1\/?$/, "") || RAW_API_URL).replace(/\/$/, "");
 const GEMINI_KEY = process.env.GEMINI_API_KEY ?? "";
-const featured_teacher = process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "mar12";  // Fallback a "mar12" si no está definido
+const featured_teacher = process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "mar12";
 
 // ─── SHARED TEST STATE ────────────────────────────────────────────────────────
-// Se reinicia en cada corrida completa para que los tests sean independientes.
 const mkState = () => ({
   studentToken: null as string | null,
   teacherToken: null as string | null,
@@ -584,7 +583,7 @@ async function geminiAnalyze(
       response_data: JSON.stringify(result.response?.data)?.slice(0, 500),
       failed_assertions: result.assertions.filter(a => !a.pass).map(a => a.name),
     });
-    return res.data; // { root_cause, issues, fix }
+    return res.data;
   } catch {
     return null;
   }
@@ -708,7 +707,8 @@ export default function FlowTester() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-up bg-white min-h-screen p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+    <>
+    <div className="space-y-6 animate-fade-up bg-white min-h-screen p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 relative">
 
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -967,5 +967,7 @@ export default function FlowTester() {
         </div>
       </div>
     </div>
+    <ChipiWidget screenName="flow-tester" />
+    </>
   );
 }

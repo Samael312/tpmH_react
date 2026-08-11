@@ -13,6 +13,7 @@ import {
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { NATIONALITIES } from "@/lib/nationalities";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 // ─── Constantes ─────────────────────────────────────────────────────────────
 import {
@@ -827,6 +828,7 @@ export default function TeacherOnboardingPage() {
   };
 
   return (
+    <>
     <div className="flex min-h-screen bg-slate-50 font-sans">
       <SidebarProgress step={step} name={name} />
 
@@ -894,5 +896,7 @@ export default function TeacherOnboardingPage() {
         )}
       </div>
     </div>
+    <ChipiWidget screenName="onboarding_teacher" />
+    </>
   );
 }

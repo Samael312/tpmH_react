@@ -73,6 +73,7 @@ export default function PackageRequestsPage() {
   const changes = requests.filter(r => r.status === "pending_package_change");
 
   return (
+  <>  
     <div className="space-y-8 animate-fade-up bg-white min-h-screen p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
 
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -168,8 +169,8 @@ export default function PackageRequestsPage() {
           ))}
         </div>
       )}
-
-      <ChipiWidget screenName="admin_package_requests" />
     </div>
+    <ChipiWidget screenName="admin_package_requests" />
+    </>
   );
 }

@@ -83,6 +83,7 @@ export default function SettingsPage() {
   }
 
   return (
+  <>
     <div className="space-y-8 animate-fade-up bg-white min-h-screen p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 max-w-4xl mx-auto">
 
       {/* Header */}
@@ -398,7 +399,9 @@ export default function SettingsPage() {
           )}
         </Card>
       </div>
-      <ChipiWidget screenName="admin_settings" /> 
+      
     </div>
+    <ChipiWidget screenName="admin_settings" /> 
+    </>
   )
 }

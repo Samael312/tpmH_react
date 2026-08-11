@@ -632,6 +632,7 @@ export default function MyClassesPage() {
   const displayed = tab === "upcoming" ? upcomingFiltered : history;
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50 relative overflow-hidden">
 
       <div className="fixed top-[-80px] right-[-80px] w-[500px] h-[500px]
@@ -781,7 +782,7 @@ export default function MyClassesPage() {
             ))
           )}
         </div>
-        <ChipiWidget screenName="my_classes" />
+        
       </div>
 
       {rescheduleTarget && (
@@ -800,5 +801,7 @@ export default function MyClassesPage() {
         />
       )}
     </div>
+    <ChipiWidget screenName="my_classes_student" />
+    </>
   );
 }

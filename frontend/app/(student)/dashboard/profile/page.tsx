@@ -9,6 +9,7 @@ import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { COUNTRY_OPTIONS, DEFAULT_COUNTRY, parsePhoneNumber, CountryInfo } from "@/lib/timezones";
 import { NATIONALITIES, getFlagForNationality } from "@/lib/nationalities";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 // ─── Helpers & Formateadores de Errores ──────────────────────────────────────
 function formatErrorMessage(error: any, fallbackMessage: string): string {
@@ -415,6 +416,7 @@ export default function StudentProfilePage() {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50 relative overflow-hidden py-8 px-4 sm:px-6 lg:px-8">
 
       <div className="fixed top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/25 rounded-full blur-[120px] pointer-events-none" />
@@ -825,5 +827,7 @@ export default function StudentProfilePage() {
 
       </div>
     </div>
+    <ChipiWidget screenName="student_profile" />
+    </>
   );
 }

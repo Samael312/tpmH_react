@@ -802,6 +802,7 @@ export default function MaterialsPage() {
   const vocabCount = materials.filter(m => isVocab(m)).length;
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50 relative overflow-hidden">
 
       <div className="fixed top-[-100px] right-[-100px] w-[500px] h-[500px]
@@ -1373,7 +1374,6 @@ export default function MaterialsPage() {
           )}
         </div>
       </div>
-      <ChipiWidget screenName="materials" /> 
 
       {assignTarget && (
         <AssignModal
@@ -1403,5 +1403,7 @@ export default function MaterialsPage() {
         />
       )}
     </div>
+    <ChipiWidget screenName="materials_teacher" /> 
+    </>
   );
 }

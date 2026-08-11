@@ -7,6 +7,7 @@ import {
   Check, X, AlertTriangle, RefreshCw,
   Users, Filter
 } from "lucide-react";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 import api from "@/lib/api";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -298,6 +299,7 @@ export default function BulkEditStudentsPage() {
     filtered.length > 0 && selectedIds.size === filtered.length;
 
   return (
+  <>
     <div className="min-h-screen bg-slate-50 relative overflow-hidden">
       <div
         className="fixed top-[-80px] right-[-80px] w-[400px] h-[400px]
@@ -817,5 +819,7 @@ export default function BulkEditStudentsPage() {
         </div>
       </div>
     </div>
+    <ChipiWidget screenName="admin_edit_students" /> 
+    </>
   );
 }

@@ -654,6 +654,7 @@ export default function HomeworkPage() {
   }).length;
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50 relative overflow-x-hidden">
 
       <div className="fixed top-[-80px] right-[-80px] w-[450px] h-[450px]
@@ -1086,7 +1087,6 @@ export default function HomeworkPage() {
           </div>
         )}
       </div>
-      <ChipiWidget screenName="homework" />
       {gradeTarget && (
         <GradeModal
           submission={gradeTarget}
@@ -1109,5 +1109,7 @@ export default function HomeworkPage() {
         />
       )}
     </div>
+    <ChipiWidget screenName="homework_teacher" />
+    </>
   );
 }

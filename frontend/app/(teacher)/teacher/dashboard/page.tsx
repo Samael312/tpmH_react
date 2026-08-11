@@ -180,6 +180,7 @@ export default function TeacherDashboard() {
     : null
 
   return (
+    <>
     <div className="space-y-8 animate-fade-up bg-white min-h-screen p-6 rounded-3xl">
 
       {/* Header */}
@@ -410,8 +411,8 @@ export default function TeacherDashboard() {
           )
         )}
       </div>
-
-      <ChipiWidget screenName="teacher_home" />
     </div>
+    <ChipiWidget screenName="teacher_home" />
+    </>
   )
 }

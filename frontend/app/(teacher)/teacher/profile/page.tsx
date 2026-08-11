@@ -606,6 +606,7 @@ export default function TeacherProfilePage() {
   if (loading) return <ProfileSkeleton />;
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50 relative overflow-hidden py-8 px-4 sm:px-6 lg:px-8">
       <div className="fixed top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/20 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-[-80px] left-[-80px] w-[400px] h-[400px] bg-purple-300/15 rounded-full blur-[100px] pointer-events-none" />
@@ -1190,7 +1191,8 @@ export default function TeacherProfilePage() {
         </div>
 
       </div>
-      <ChipiWidget screenName="teacher_profile" />
     </div>
+    <ChipiWidget screenName="teacher_profile" />
+    </>
   );
 }

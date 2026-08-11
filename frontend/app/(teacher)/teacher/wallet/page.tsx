@@ -50,6 +50,7 @@ export default function WalletPage() {
   }
 
   return (
+    <>
     <div className="space-y-8 animate-fade-up max-w-4xl mx-auto pb-12 px-4 sm:px-0">
 
       {/* Header */}
@@ -224,8 +225,9 @@ export default function WalletPage() {
           </div>
         </Card>
       </div>
-      <ChipiWidget screenName="wallet" />
     </div>
+    <ChipiWidget screenName="wallet_teacher" />
+    </>
   )
 }
 
