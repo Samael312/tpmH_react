@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useWallet, useRequestWithdrawal } from '@/hooks/useTeacherData'
-import { Card, Button, Badge, StatCard, RefreshButton, Skeleton } from '@/components/ui'
+import { Card, Button, Badge, StatCard, RefreshButton, Skeleton, DesktopOnly } from '@/components/ui'
+import { usePageTopBar } from '@/lib/mobileTopBar'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 
 const DESTINATION_METHODS = [
@@ -14,6 +15,8 @@ const DESTINATION_METHODS = [
 export default function WalletPage() {
   const { wallet, loading, isFetching, refetch } = useWallet()
   const withdrawal = useRequestWithdrawal()
+
+  usePageTopBar({ title: 'Mis Ganancias', onRefresh: refetch, isFetching })
 
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState('paypal')
@@ -51,182 +54,183 @@ export default function WalletPage() {
 
   return (
     <>
-    <div className="space-y-8 animate-fade-up max-w-4xl mx-auto pb-12 px-4 sm:px-0">
+      <div className="space-y-8 animate-fade-up max-w-4xl mx-auto pb-12 px-4 sm:px-0">
+        {/* Header: Visible solo en pantallas desktop */}
+        <DesktopOnly>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="font-display text-3xl sm:text-4xl font-black text-slate-800 mb-2 tracking-tight">
+                Mis Ganancias
+              </h1>
+              <p className="text-slate-500 font-medium text-sm sm:text-base">
+                Gestiona tus ingresos acumulados y solicita tus pagos de forma segura.
+              </p>
+            </div>
+            <RefreshButton onRefresh={refetch} isFetching={isFetching} className="mt-1" />
+          </div>
+        </DesktopOnly>
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="font-display text-3xl sm:text-4xl font-black text-slate-800 mb-2 tracking-tight">
-            Mis Ganancias
-          </h1>
-          <p className="text-slate-500 font-medium text-sm sm:text-base">
-            Gestiona tus ingresos acumulados y solicita tus pagos de forma segura.
-          </p>
+        {/* Stats Section */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+          {loading ? (
+            [1, 2, 3].map(i => (
+              <div key={i} className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6 space-y-3">
+                <Skeleton className="w-11 h-11 rounded-2xl" />
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-7 w-28" />
+              </div>
+            ))
+          ) : wallet && (
+            <>
+              <StatCard
+                label="Disponible"
+                value={`$${wallet.available_balance.toFixed(2)}`}
+                change="Listo para retirar"
+                changeType="up"
+                icon={<WalletIcon />}
+              />
+              <StatCard
+                label="Total Ganado"
+                value={`$${wallet.total_earned.toFixed(2)}`}
+                change="Histórico total"
+                changeType="neutral"
+                icon={<TrendingUpIcon />}
+              />
+              <StatCard
+                label="Total Retirado"
+                value={`$${wallet.total_withdrawn.toFixed(2)}`}
+                change="Procesado"
+                changeType="neutral"
+                icon={<CheckIcon />}
+              />
+            </>
+          )}
         </div>
-        <RefreshButton onRefresh={refetch} isFetching={isFetching} className="mt-1" />
-      </div>
 
-      {/* Stats Section */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-        {loading ? (
-          [1, 2, 3].map(i => (
-            <div key={i} className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6 space-y-3">
-              <Skeleton className="w-11 h-11 rounded-2xl" />
-              <Skeleton className="h-3 w-20" />
-              <Skeleton className="h-7 w-28" />
-            </div>
-          ))
-        ) : wallet && (
-          <>
-            <StatCard
-              label="Disponible"
-              value={`$${wallet.available_balance.toFixed(2)}`}
-              change="Listo para retirar"
-              changeType="up"
-              icon={<WalletIcon />}
-            />
-            <StatCard
-              label="Total Ganado"
-              value={`$${wallet.total_earned.toFixed(2)}`}
-              change="Histórico total"
-              changeType="neutral"
-              icon={<TrendingUpIcon />}
-            />
-            <StatCard
-              label="Total Retirado"
-              value={`$${wallet.total_withdrawn.toFixed(2)}`}
-              change="Procesado"
-              changeType="neutral"
-              icon={<CheckIcon />}
-            />
-          </>
-        )}
-      </div>
+        <div className="grid grid-cols-1 gap-8">
+          {/* Formulario de Retiro */}
+          <Card className="p-5 sm:p-8 md:p-10 relative overflow-hidden">
+            <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-pink-50 rounded-full blur-3xl opacity-50" />
 
-      <div className="grid grid-cols-1 gap-8">
-        {/* Formulario de Retiro */}
-        <Card className="p-5 sm:p-8 md:p-10 relative overflow-hidden">
-          <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-pink-50 rounded-full blur-3xl opacity-50" />
-
-          <div className="relative z-10 space-y-8">
-            <div className="flex items-center gap-3">
-              <div className="w-1.5 h-6 bg-emerald-500 rounded-full" />
-              <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest">
-                Solicitar nuevo retiro
-              </h2>
-            </div>
-
-            {success && (
-              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl px-4 sm:px-6 py-4 flex items-center gap-4 animate-in zoom-in duration-300">
-                <div className="bg-emerald-500 text-white rounded-full p-1 flex-shrink-0">
-                  <CheckIcon className="w-4 h-4" />
-                </div>
-                <p className="text-emerald-700 font-bold text-sm">
-                  ¡Solicitud enviada con éxito! La procesaremos en 1-3 días hábiles.
-                </p>
+            <div className="relative z-10 space-y-8">
+              <div className="flex items-center gap-3">
+                <div className="w-1.5 h-6 bg-emerald-500 rounded-full" />
+                <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest">
+                  Solicitar nuevo retiro
+                </h2>
               </div>
-            )}
 
-            {formError && (
-              <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 sm:px-6 py-4 text-sm font-bold">
-                {formError}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10">
-              <div className="space-y-6">
-                {/* Monto */}
-                <div className="space-y-3">
-                  <label className="text-xs font-black text-slate-500 uppercase ml-1 tracking-tight">Monto a retirar</label>
-                  <div className="relative group">
-                    <span className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-300 group-focus-within:text-pink-500 transition-colors">$</span>
-                    <input
-                      type="number"
-                      value={amount}
-                      onChange={e => setAmount(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-[1.5rem] pl-12 pr-6 py-4 sm:py-5 text-xl sm:text-2xl font-black text-slate-800 outline-none focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
-                    />
+              {success && (
+                <div className="bg-emerald-50 border border-emerald-100 rounded-2xl px-4 sm:px-6 py-4 flex items-center gap-4 animate-in zoom-in duration-300">
+                  <div className="bg-emerald-500 text-white rounded-full p-1 flex-shrink-0">
+                    <CheckIcon className="w-4 h-4" />
                   </div>
-                  {wallet && (
-                    <button
-                      onClick={() => setAmount(wallet.available_balance.toString())}
-                      className="text-xs font-bold text-pink-500 hover:text-pink-600 ml-1 transition-colors flex items-center gap-1 flex-wrap"
-                    >
-                      <span className="underline underline-offset-4">Retirar saldo máximo</span>
-                      <Badge variant="pink" className="ml-2">${wallet.available_balance.toFixed(2)}</Badge>
-                    </button>
-                  )}
-                </div>
-
-                {/* Método Selector */}
-                <div className="space-y-3">
-                  <label className="text-xs font-black text-slate-500 uppercase ml-1 tracking-tight">Método de pago</label>
-                  <div className="grid grid-cols-1 gap-2">
-                    {DESTINATION_METHODS.map(m => (
-                      <button
-                        key={m.value}
-                        onClick={() => setMethod(m.value)}
-                        className={`
-                          flex items-center justify-between px-6 py-4 rounded-2xl border font-bold text-sm transition-all
-                          ${method === m.value
-                            ? 'bg-pink-500 border-pink-500 text-white shadow-lg shadow-pink-200 scale-[1.02]'
-                            : 'bg-white border-slate-100 text-slate-600 hover:border-pink-200'
-                          }
-                        `}
-                      >
-                        <span className="flex items-center gap-3">
-                          <span className="text-xl">{m.icon}</span>
-                          {m.label}
-                        </span>
-                        {method === m.value && <div className="w-2 h-2 bg-white rounded-full animate-pulse" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-6 flex flex-col justify-between">
-                <div className="space-y-3">
-                  <label className="text-xs font-black text-slate-500 uppercase ml-1 tracking-tight">
-                    {method === 'paypal'  && 'Email de cuenta PayPal'}
-                    {method === 'binance' && 'Dirección de Wallet (Red TRC-20)'}
-                    {method === 'bank'    && 'Detalles Bancarios Completos'}
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={details}
-                    onChange={e => setDetails(e.target.value)}
-                    placeholder={
-                      method === 'paypal' ? 'ejemplo@correo.com' :
-                      method === 'binance' ? 'Txxxx...' :
-                      'Banco:\nCuenta:\nTitular:\nSwift/IBAN:'
-                    }
-                    className="w-full bg-slate-50 border border-slate-200 rounded-[1.5rem] px-6 py-4 text-sm font-bold text-slate-700 outline-none focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all placeholder:text-slate-300"
-                  />
-                </div>
-
-                <div className="space-y-4">
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    loading={withdrawal.isPending}
-                    onClick={requestWithdrawal}
-                    className="w-full py-6 !rounded-[1.5rem]"
-                  >
-                    Confirmar Retiro
-                  </Button>
-                  <p className="text-[10px] text-slate-400 text-center uppercase font-black tracking-widest leading-relaxed">
-                    Pagos procesados por el departamento financiero <br/> de lunes a viernes
+                  <p className="text-emerald-700 font-bold text-sm">
+                    ¡Solicitud enviada con éxito! La procesaremos en 1-3 días hábiles.
                   </p>
                 </div>
+              )}
+
+              {formError && (
+                <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 sm:px-6 py-4 text-sm font-bold">
+                  {formError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10">
+                <div className="space-y-6">
+                  {/* Monto */}
+                  <div className="space-y-3">
+                    <label className="text-xs font-black text-slate-500 uppercase ml-1 tracking-tight">Monto a retirar</label>
+                    <div className="relative group">
+                      <span className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-300 group-focus-within:text-pink-500 transition-colors">$</span>
+                      <input
+                        type="number"
+                        value={amount}
+                        onChange={e => setAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-[1.5rem] pl-12 pr-6 py-4 sm:py-5 text-xl sm:text-2xl font-black text-slate-800 outline-none focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
+                      />
+                    </div>
+                    {wallet && (
+                      <button
+                        onClick={() => setAmount(wallet.available_balance.toString())}
+                        className="text-xs font-bold text-pink-500 hover:text-pink-600 ml-1 transition-colors flex items-center gap-1 flex-wrap"
+                      >
+                        <span className="underline underline-offset-4">Retirar saldo máximo</span>
+                        <Badge variant="pink" className="ml-2">${wallet.available_balance.toFixed(2)}</Badge>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Método Selector */}
+                  <div className="space-y-3">
+                    <label className="text-xs font-black text-slate-500 uppercase ml-1 tracking-tight">Método de pago</label>
+                    <div className="grid grid-cols-1 gap-2">
+                      {DESTINATION_METHODS.map(m => (
+                        <button
+                          key={m.value}
+                          onClick={() => setMethod(m.value)}
+                          className={`
+                            flex items-center justify-between px-6 py-4 rounded-2xl border font-bold text-sm transition-all
+                            ${method === m.value
+                              ? 'bg-pink-500 border-pink-500 text-white shadow-lg shadow-pink-200 scale-[1.02]'
+                              : 'bg-white border-slate-100 text-slate-600 hover:border-pink-200'
+                            }
+                          `}
+                        >
+                          <span className="flex items-center gap-3">
+                            <span className="text-xl">{m.icon}</span>
+                            {m.label}
+                          </span>
+                          {method === m.value && <div className="w-2 h-2 bg-white rounded-full animate-pulse" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-6 flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <label className="text-xs font-black text-slate-500 uppercase ml-1 tracking-tight">
+                      {method === 'paypal'  && 'Email de cuenta PayPal'}
+                      {method === 'binance' && 'Dirección de Wallet (Red TRC-20)'}
+                      {method === 'bank'    && 'Detalles Bancarios Completos'}
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={details}
+                      onChange={e => setDetails(e.target.value)}
+                      placeholder={
+                        method === 'paypal' ? 'ejemplo@correo.com' :
+                        method === 'binance' ? 'Txxxx...' :
+                        'Banco:\nCuenta:\nTitular:\nSwift/IBAN:'
+                      }
+                      className="w-full bg-slate-50 border border-slate-200 rounded-[1.5rem] px-6 py-4 text-sm font-bold text-slate-700 outline-none focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all placeholder:text-slate-300"
+                    />
+                  </div>
+
+                  <div className="space-y-4">
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      loading={withdrawal.isPending}
+                      onClick={requestWithdrawal}
+                      className="w-full py-6 !rounded-[1.5rem]"
+                    >
+                      Confirmar Retiro
+                    </Button>
+                    <p className="text-[10px] text-slate-400 text-center uppercase font-black tracking-widest leading-relaxed">
+                      Pagos procesados por el departamento financiero <br/> de lunes a viernes
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </div>
       </div>
-    </div>
-    <ChipiWidget screenName="wallet_teacher" />
+      <ChipiWidget screenName="wallet_teacher" />
     </>
   )
 }

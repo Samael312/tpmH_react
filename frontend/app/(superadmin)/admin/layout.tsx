@@ -26,7 +26,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         
 
       {/* ─── Main content ─────────────────────────────────── */}
-      <main className="flex-1 flex flex-col min-w-0 bg-slate-50">
+      <main className="flex-1 flex flex-col min-w-0 bg-slate-50 pt-14 pb-20 md:pt-0 md:pb-0">
         
         {/* Topbar */}
         <header className="h-20 sticky top-0 z-10 border-b border-slate-200/50
