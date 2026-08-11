@@ -21,12 +21,13 @@ const nextConfig: NextConfig = {
 
   // Variables de entorno públicas disponibles en el cliente
   env: {
-    NEXT_PUBLIC_API_URL:
-      process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1",
-    NEXT_PUBLIC_FEATURED_TEACHER_USERNAME:
-      process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "mar12",
-    GEMINI_API_KEY: process.env.GEMINI_API_KEY ?? "",
-  },
+  NEXT_PUBLIC_API_URL:
+    process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1",
+  NEXT_PUBLIC_FEATURED_TEACHER_USERNAME:
+    process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "mar12",
+  NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "",
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY ?? "",
+},
 };
 
 export default nextConfig;

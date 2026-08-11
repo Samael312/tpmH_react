@@ -9,7 +9,8 @@ from app.auth.jwt import create_access_token
 from app.auth.google import verify_google_token
 from app.schemas.auth import (
     RegisterRequest, LoginRequest,
-    TokenResponse, GoogleAuthRequest
+    TokenResponse, GoogleAuthRequest, GoogleAuthResponse,
+    GoogleRegisterRequest
 )
 import secrets
 from datetime import timedelta
@@ -108,9 +109,15 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         username=user.username
     )
 
-@router.post("/google", response_model=TokenResponse)
+@router.post("/google", response_model=GoogleAuthResponse)
 async def google_login(data: GoogleAuthRequest, db: Session = Depends(get_db)):
-
+    """
+    Paso 1 del flujo Google (GSI). Verifica el id_token contra Google.
+    - Si el email ya tiene cuenta -> login normal, devuelve token.
+    - Si no existe -> NO crea la cuenta. Devuelve needs_registration=True
+      junto con los datos de Google para que el frontend pida
+      username + rol antes de crear la cuenta.
+    """
     try:
         google_data = await verify_google_token(data.id_token)
     except ValueError as e:
@@ -122,42 +129,95 @@ async def google_login(data: GoogleAuthRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == google_data["email"]).first()
 
     if not user:
-        # Generamos un username desde el email automáticamente
-        # ejemplo: samuel.boscan.18@gmail.com -> samuel_boscan_18
-        base_username = google_data["email"].split("@")[0].replace(".", "_")
-
-        # Si ese username ya existe le añadimos un número
-        username = base_username
-        counter = 1
-        while db.query(User).filter(User.username == username).first():
-            username = f"{base_username}_{counter}"
-            counter += 1
-
-        user = User(
-            username=username,
-            email=google_data["email"],
+        return GoogleAuthResponse(
+            needs_registration=True,
             name=google_data["name"],
             surname=google_data["surname"],
-            avatar=google_data["avatar"],
-            google_id=google_data["google_id"],
-            is_verified=google_data["is_verified"],
-            role=UserRole.student
+            email=google_data["email"],
+            avatar=google_data.get("avatar"),
         )
-        db.add(user)
-        db.flush()
-        db.add(StudentProfile(user_id=user.id, user_username=user.username))
-        db.commit()
-        db.refresh(user)
-    else:
+
+    # Si el usuario existía con password normal, vinculamos el google_id
+    if not user.google_id:
         user.google_id = google_data["google_id"]
         db.commit()
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cuenta desactivada"
+        )
+
     token = create_access_token(user.id, user.role)
-    return TokenResponse(
+    return GoogleAuthResponse(
         access_token=token,
         role=user.role,
         name=user.name,
-        username=user.username
+        username=user.username,
+        email=user.email,
+        surname=user.surname,
+        avatar=user.avatar,
+    )
+
+
+@router.post("/google/register", response_model=GoogleAuthResponse)
+async def google_register(data: GoogleRegisterRequest, db: Session = Depends(get_db)):
+    """
+    Paso 2 del flujo Google — solo se llama cuando /auth/google devolvió
+    needs_registration=True. Revalida el id_token (nunca confía en datos
+    que el cliente pudiera enviar sueltos) y crea la cuenta + perfil.
+    """
+    try:
+        google_data = await verify_google_token(data.id_token)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+    if db.query(User).filter(User.email == google_data["email"]).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este email ya está registrado"
+        )
+
+    if db.query(User).filter(User.username == data.username).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este nombre de usuario ya está en uso"
+        )
+
+    user = User(
+        username=data.username,
+        email=google_data["email"],
+        password_hash=None,
+        name=google_data["name"],
+        surname=google_data["surname"],
+        avatar=google_data.get("avatar"),
+        google_id=google_data["google_id"],
+        is_verified=google_data.get("is_verified") == "true",
+        role=data.role,
+    )
+    db.add(user)
+    db.flush()
+
+    if data.role == "student":
+        db.add(StudentProfile(user_id=user.id, user_username=user.username))
+    else:
+        db.add(TeacherProfile(user_id=user.id, user_username=user.username))
+
+    db.commit()
+    db.refresh(user)
+
+    token = create_access_token(user.id, user.role)
+    return GoogleAuthResponse(
+        access_token=token,
+        role=user.role,
+        name=user.name,
+        username=user.username,
+        email=user.email,
+        surname=user.surname,
+        avatar=user.avatar,
     )
 
 @router.post("/forgot-password")

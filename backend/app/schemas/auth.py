@@ -1,4 +1,39 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
+from typing import Optional
+
+class GoogleAuthResponse(BaseModel):
+    """Respuesta de /auth/google — puede ser un login exitoso o una señal de que falta completar el registro"""
+    needs_registration: bool = False
+    access_token: Optional[str] = None
+    token_type: str = "bearer"
+    role: Optional[str] = None
+    name: Optional[str] = None
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
+    surname: Optional[str] = None
+    avatar: Optional[str] = None
+
+
+class GoogleRegisterRequest(BaseModel):
+    """El frontend reenvía el id_token (se revalida) junto con los datos que faltaban"""
+    id_token: str
+    username: str
+    role: str  # obligatorio — el usuario lo elige en la pantalla intermedia (student|teacher)
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v):
+        if v not in ("student", "teacher"):
+            raise ValueError("El rol debe ser 'student' o 'teacher'")
+        return v
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v):
+        v = v.strip().lower()
+        if not v:
+            raise ValueError("El usuario no puede estar vacío")
+        return v
 
 class RegisterRequest(BaseModel):
     """Datos necesarios para registrarse"""
