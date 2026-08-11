@@ -27,6 +27,11 @@ class Payment(Base):
     payment_method = Column(String, nullable=False)
     # "paypal", "binance", "other"
 
+    payment_type = Column(String, nullable=True)      # "package" | "single_class"
+    installment_number = Column(Integer, nullable=True)  # 1, 2, o None (pago completo)
+    # receipt_url / receipt_public_id ya eran nullable=True — se quedan así,
+    # simplemente dejamos de poblarlos desde el nuevo flujo.
+
     # Comprobante subido por el estudiante
     receipt_url = Column(String, nullable=True)      # URL de Cloudinary
     receipt_public_id = Column(String, nullable=True)
@@ -91,3 +96,6 @@ class Withdrawal(Base):
     rejection_reason = Column(String, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    reference = Column(String, nullable=True)   # referencia que deja el admin al liquidar
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())

@@ -515,12 +515,16 @@ def select_initial_package(
             detail="Solo puedes elegir tu paquete inicial después de completar la clase de prueba con este profesor."
         )
 
+    # Se crea el enrollment con 0 créditos desbloqueados y estado "unpaid".
+    # El frontend debe llamar a /notify-payment inmediatamente después.
     enrollment = Enrollment(
         student_id=student_id,
         package_id=package.id,
         teacher_id=package.teacher_id,
         classes_used=0,
         classes_total=package.classes_count,
+        unlocked_credits=0,
+        payment_installment_status="unpaid",
         status=EnrollmentStatus.active,
     )
     db.add(enrollment)
@@ -528,9 +532,12 @@ def select_initial_package(
     db.refresh(enrollment)
 
     return {
-        "message": "Paquete activado. Ya puedes agendar tus clases.",
+        "message": "Paquete seleccionado. Procede a notificar el pago para desbloquear tus créditos.",
         "enrollment_id": enrollment.id,
+        "package_id": package.id,
         "classes_total": enrollment.classes_total,
+        "unlocked_credits": enrollment.unlocked_credits,
+        "payment_installment_status": enrollment.payment_installment_status,
     }
 
 # ─── ESTUDIANTE — Cambio de paquete (paquete actual sigue activo) ───────────

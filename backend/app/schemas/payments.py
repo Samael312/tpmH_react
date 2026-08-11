@@ -125,3 +125,49 @@ class WithdrawalResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class NotifyPaymentRequest(BaseModel):
+    type: str  # "package" | "single_class"
+    enrollment_id: Optional[int] = None
+    class_id: Optional[int] = None
+    installment_number: Optional[int] = None  # 1, 2, o None = pago completo
+    transaction_reference: Optional[str] = None
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, v):
+        if v not in ("package", "single_class"):
+            raise ValueError("type debe ser 'package' o 'single_class'")
+        return v
+
+    @field_validator("installment_number")
+    @classmethod
+    def validate_installment(cls, v):
+        if v is not None and v not in (1, 2):
+            raise ValueError("installment_number debe ser 1 o 2")
+        return v
+
+
+class WithdrawalRequestV2(BaseModel):
+    amount: float
+    payment_info: str  # datos de cobro (Zelle, IBAN, wallet, etc.)
+
+    @field_validator("amount")
+    @classmethod
+    def validate_amount(cls, v):
+        if v <= 0:
+            raise ValueError("El monto debe ser mayor a 0")
+        return v
+
+
+class ProcessWithdrawalRequest(BaseModel):
+    action: str  # "complete" | "reject"
+    reference: Optional[str] = None
+    rejection_reason: Optional[str] = None
+
+    @field_validator("action")
+    @classmethod
+    def validate_action(cls, v):
+        if v not in ("complete", "reject"):
+            raise ValueError("action debe ser 'complete' o 'reject'")
+        return v

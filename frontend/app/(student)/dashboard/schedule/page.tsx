@@ -4,13 +4,14 @@ import { useState, useEffect } from "react";
 import { useAvailableSlots, useEnrollments, useMyTeachers } from "@/hooks/useStudentData";
 import {
   Calendar, Clock, CreditCard,
-  Upload, Check, X, ChevronLeft,
+  Check, X, ChevronLeft,
   ChevronRight, AlertCircle, AlertTriangle,
   Sparkles, Package as PackageIcon, Hourglass,
 } from "lucide-react";
 import api from "@/lib/api";
 import Link from "next/link";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import PackageCheckout from "@/components/payments/PackageCheckout";
 import { formatTimeTz, formatDateHumanTz, getHourMinuteTz, getMyDisplayTimezone } from "@/lib/tzFormat";
 
 type BookingStage = "loading" | "needs_trial" | "trial_in_progress" | "needs_package" | "needs_renewal" | "renewal_pending" | "ready";
@@ -18,12 +19,6 @@ type BookingStage = "loading" | "needs_trial" | "trial_in_progress" | "needs_pac
 const DURATIONS = [
   { value: 30, label: "30 min" },
   { value: 60, label: "1 hora" },
-];
-
-const PAYMENT_METHODS = [
-  { value: "binance", label: "Binance (USDT)" },
-  { value: "paypal", label: "PayPal" },
-  { value: "zelle", label: "Zelle" },
 ];
 
 // ─── Helper: normaliza errores de la API (string o array de Pydantic) ────────
@@ -391,43 +386,27 @@ function StepConfirmTrial({
   );
 }
 
-// ─── Paso: Confirmar y pagar ──────────────────────────────────────────────────
+// ─── Paso: Confirmar y pagar (Clase Suelta / Créditos) ───────────────────────
 function StepPayment({
-  date,
-  slot,
-  duration,
-  enrollmentId,
-  teacherUsername,
-  onBack,
-  onSuccess,
+  date, slot, duration, enrollmentId, teacherUsername, onBack, onSuccess,
 }: {
-  date: string;
-  slot: any;
-  duration: number;
-  enrollmentId?: number;
-  teacherUsername: string | null;
-  onBack: () => void;
-  onSuccess: () => void;
+  date: string; slot: any; duration: number;
+  enrollmentId?: number; teacherUsername: string | null;
+  onBack: () => void; onSuccess: () => void;
 }) {
-  const [method, setMethod] = useState("binance");
-  const [txId, setTxId] = useState("");
-  const [receipt, setReceipt] = useState<File | null>(null);
+  const [reference, setReference] = useState("");
   const [booking, setBooking] = useState(false);
   const [classId, setClassId] = useState<number | null>(null);
-  const [payInfo, setPayInfo] = useState<{
-    amount: number;
-    instructions: string;
-    payment_address: string;
-  } | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [notifying, setNotifying] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
 
+  const myTz = getMyDisplayTimezone();
+  const fmtDate = formatDateHumanTz(date + "T00:00:00", myTz);
+  const fmtTime = formatTimeTz(slot.start_time_utc, myTz);
+
+  // Paso 1: reservar el slot
   const bookSlot = async () => {
-    if (!enrollmentId && !teacherUsername) {
-      setError("No se encontró un paquete activo para reservar esta clase.");
-      return;
-    }
     setBooking(true);
     setError("");
     try {
@@ -437,15 +416,13 @@ function StepPayment({
         end_time_utc: slot.end_time_utc,
         duration_minutes: duration,
       });
+      // Paquete finito con créditos → ya viene "confirmed", no hace falta notificar nada
+      if (res.data.status === "confirmed") {
+        setDone(true);
+        setTimeout(onSuccess, 1500);
+        return;
+      }
       setClassId(res.data.class_id);
-      setPayInfo({
-        amount: res.data.payment_instructions?.amount ?? res.data.amount,
-        instructions: res.data.payment_instructions?.whatsapp_number ?? res.data.payment_instructions ?? "",
-        payment_address:
-          method === "binance"
-            ? res.data.payment_instructions?.binance_address
-            : res.data.payment_instructions?.paypal_email,
-      });
     } catch (e: any) {
       setError(extractErrorMessage(e, "Error reservando el horario"));
     } finally {
@@ -453,55 +430,43 @@ function StepPayment({
     }
   };
 
-  const submitReceipt = async () => {
-    if (!classId || !receipt) return;
-    setSubmitting(true);
+  // Paso 2 (solo paquetes ilimitados): notificar el pago
+  const notify = async () => {
+    if (!classId) return;
+    setNotifying(true);
     setError("");
     try {
-      const form = new FormData();
-      form.append("class_id", String(classId));
-      form.append("payment_method", method);
-      form.append("transaction_id", txId);
-      form.append("receipt", receipt);
-      await api.post("/payments/submit-receipt", form, {
-        headers: { "Content-Type": "multipart/form-data" },
+      await api.post("/payments/notify-payment", {
+        type: "single_class",
+        class_id: classId,
+        transaction_reference: reference.trim() || undefined,
       });
       setDone(true);
-      setTimeout(onSuccess, 2000);
+      setTimeout(onSuccess, 1500);
     } catch (e: any) {
-      setError(extractErrorMessage(e, "Error enviando comprobante"));
+      setError(extractErrorMessage(e, "Error notificando el pago"));
     } finally {
-      setSubmitting(false);
+      setNotifying(false);
     }
   };
-
-  const myTz = getMyDisplayTimezone();
-  const fmtDate = formatDateHumanTz(date + "T00:00:00", myTz);
-  const fmtTime = formatTimeTz(slot.start_time_utc, myTz);
 
   return (
     <div className="max-w-lg mx-auto space-y-5">
       <div className="bg-gradient-to-r from-pink-500 to-rose-400 rounded-[2rem] p-6 text-white relative overflow-hidden shadow-xl shadow-pink-200">
         <div className="absolute top-[-30px] right-[-30px] w-32 h-32 bg-white/10 rounded-full blur-xl" />
-        <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-2">
-          Clase seleccionada
-        </p>
+        <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-2">Clase seleccionada</p>
         <p className="text-2xl font-black capitalize">{fmtDate}</p>
         <div className="flex items-center gap-3 mt-2 flex-wrap">
           <span className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5 rounded-full text-sm font-bold">
-            <Clock className="w-3.5 h-3.5" />
-            {fmtTime}
+            <Clock className="w-3.5 h-3.5" /> {fmtTime}
           </span>
-          <span className="bg-white/20 px-3 py-1.5 rounded-full text-sm font-bold">
-            {duration} min
-          </span>
+          <span className="bg-white/20 px-3 py-1.5 rounded-full text-sm font-bold">{duration} min</span>
         </div>
       </div>
 
       {error && (
         <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
-          <X className="w-4 h-4 flex-shrink-0" />
-          {error}
+          <X className="w-4 h-4 flex-shrink-0" /> {error}
         </div>
       )}
 
@@ -510,43 +475,22 @@ function StepPayment({
           <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Check className="w-8 h-8 text-emerald-600" />
           </div>
-          <h3 className="text-xl font-black text-slate-800 mb-2">¡Comprobante enviado!</h3>
+          <h3 className="text-xl font-black text-slate-800 mb-2">
+            {classId ? "¡Pago notificado!" : "¡Clase confirmada!"}
+          </h3>
           <p className="text-slate-500 text-sm">
-            La profesora revisará tu pago y confirmará la clase
+            {classId
+              ? "Tu profesor(a) validará el pago pronto. Tienes una ventana de tiempo limitada — revisa el estado en Mis Clases."
+              : "Tu clase quedó agendada usando tus créditos disponibles."}
           </p>
         </div>
-      ) : !payInfo ? (
-        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6 space-y-5">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            Método de pago
+      ) : !classId ? (
+        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6 space-y-4">
+          <p className="text-sm text-slate-500 leading-relaxed">
+            Confirma este horario para reservarlo.
           </p>
-
-          <div className="space-y-3">
-            {PAYMENT_METHODS.map(pm => (
-              <button
-                key={pm.value}
-                onClick={() => setMethod(pm.value)}
-                className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl border-2 transition-all duration-200 ${
-                  method === pm.value
-                    ? "border-pink-400 bg-pink-50"
-                    : "border-slate-100 bg-white hover:border-slate-200"
-                }`}
-              >
-                <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-                  method === pm.value ? "border-pink-500 bg-pink-500" : "border-slate-300"
-                }`}>
-                  {method === pm.value && <div className="w-2 h-2 bg-white rounded-full" />}
-                </div>
-                <span className="text-sm font-bold text-slate-700">{pm.label}</span>
-              </button>
-            ))}
-          </div>
-
           <div className="flex gap-3">
-            <button
-              onClick={onBack}
-              className="flex-1 py-3.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
-            >
+            <button onClick={onBack} className="flex-1 py-3.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
               Volver
             </button>
             <button
@@ -554,90 +498,37 @@ function StepPayment({
               disabled={booking}
               className="flex-1 py-3.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {booking ? (
-                <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-              ) : (
-                <><CreditCard className="w-4 h-4" /> Reservar</>
-              )}
+              {booking ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <><CreditCard className="w-4 h-4" /> Reservar</>}
             </button>
           </div>
         </div>
       ) : (
         <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6 space-y-5">
           <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
-            <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2">
-              Instrucciones de pago
+            <p className="text-xs font-bold text-amber-700 leading-relaxed">
+              Tu slot está reservado temporalmente. Realiza el pago por tu método habitual
+              y confirma abajo — tienes una ventana de tiempo limitada antes de que se libere.
             </p>
-            <p className="text-2xl font-black text-amber-700 mb-2">
-              ${payInfo.amount?.toFixed ? payInfo.amount.toFixed(2) : payInfo.amount}
-            </p>
-            <p className="text-sm text-amber-700 font-bold mb-1">Enviar a:</p>
-            <p className="text-xs font-mono bg-amber-100 px-3 py-2 rounded-xl text-amber-800 break-all">
-              {payInfo.payment_address || "Contacta al staff para los datos de pago"}
-            </p>
-            {payInfo.instructions && (
-              <p className="text-xs text-amber-600 mt-2">{payInfo.instructions}</p>
-            )}
-          </div>
-
-          <div className="group">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-              ID de transacción (opcional)
-            </label>
-            <input
-              value={txId}
-              onChange={e => setTxId(e.target.value)}
-              placeholder="Ej: TXN123456789"
-              className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 px-4 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
-            />
           </div>
 
           <div>
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-              Comprobante de pago
+              Referencia de transacción (opcional)
             </label>
-            <label className={`flex flex-col items-center justify-center gap-3 p-6 rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-200 ${
-              receipt
-                ? "border-emerald-300 bg-emerald-50"
-                : "border-slate-200 bg-slate-50 hover:border-pink-300 hover:bg-pink-50/50"
-            }`}>
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                className="hidden"
-                onChange={e => setReceipt(e.target.files?.[0] ?? null)}
-              />
-              {receipt ? (
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-emerald-100 rounded-xl flex items-center justify-center">
-                    <Check className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-800">{receipt.name}</p>
-                    <p className="text-xs text-slate-500">{(receipt.size / 1024).toFixed(0)} KB</p>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
-                    <Upload className="w-5 h-5 text-slate-400" />
-                  </div>
-                  <p className="text-sm font-bold text-slate-500">Subir captura o PDF</p>
-                </>
-              )}
-            </label>
+            <input
+              value={reference}
+              onChange={e => setReference(e.target.value)}
+              placeholder="Ej: últimos 4 dígitos, ID de transferencia..."
+              className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 px-4 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
+            />
           </div>
 
           <button
-            onClick={submitReceipt}
-            disabled={!receipt || submitting}
-            className="w-full py-3.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            onClick={notify}
+            disabled={notifying}
+            className="w-full py-3.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {submitting ? (
-              <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-            ) : (
-              <><Check className="w-4 h-4" /> Enviar comprobante</>
-            )}
+            {notifying ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <><Check className="w-4 h-4" /> Ya realicé el pago</>}
           </button>
         </div>
       )}
@@ -668,6 +559,7 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
   const [loading, setLoading] = useState(true);
   const [selecting, setSelecting] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [checkoutTarget, setCheckoutTarget] = useState<{ pkg: any; enrollmentId: number } | null>(null);
 
   useEffect(() => {
     if (!teacherUsername) { setLoading(false); return; }
@@ -677,12 +569,12 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
       .finally(() => setLoading(false));
   }, [teacherUsername]);
 
-  const choose = async (packageId: number) => {
-    setSelecting(packageId);
+  const choose = async (pkg: any) => {
+    setSelecting(pkg.id);
     setError("");
     try {
-      await api.post(`/packages/select-initial?package_id=${packageId}`);
-      onSelected();
+      const res = await api.post(`/packages/select-initial?package_id=${pkg.id}`);
+      setCheckoutTarget({ pkg, enrollmentId: res.data.enrollment_id });
     } catch (e: any) {
       setError(extractErrorMessage(e, "Error seleccionando el paquete"));
     } finally {
@@ -765,7 +657,7 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
                 </div>
 
                 <button
-                  onClick={() => choose(pkg.id)}
+                  onClick={() => choose(pkg)}
                   disabled={selecting !== null}
                   className="mt-auto w-full py-3.5 text-sm font-bold text-center rounded-xl transition-all duration-200 active:scale-[0.97] text-white shadow-lg hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
                   style={{ background: `linear-gradient(135deg, ${accent}, ${accent}cc)` }}
@@ -781,6 +673,26 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
           })}
         </div>
       )}
+
+      {checkoutTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setCheckoutTarget(null)} />
+          <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-black text-slate-800">Completar pago</h2>
+              <button onClick={() => setCheckoutTarget(null)} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+            <PackageCheckout
+              pkg={checkoutTarget.pkg}
+              enrollmentId={checkoutTarget.enrollmentId}
+              onClose={() => setCheckoutTarget(null)}
+              onDone={onSelected}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -792,7 +704,7 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const [done, setDone] = useState(false);
+  const [checkoutTarget, setCheckoutTarget] = useState<any>(null);
 
   useEffect(() => {
     if (!teacherUsername) { setLoading(false); return; }
@@ -808,17 +720,16 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
       .finally(() => setLoading(false));
   }, [teacherUsername]);
 
-  const requestRenewal = async (packageId: number) => {
+  const requestRenewal = async (pkg: any) => {
     if (!lastEnrollmentId) return;
-    setRequesting(packageId);
+    setRequesting(pkg.id);
     setError("");
     try {
       await api.post("/packages/request-renewal", {
         current_enrollment_id: lastEnrollmentId,
-        new_package_id: packageId,
+        new_package_id: pkg.id,
       });
-      setDone(true);
-      setTimeout(onRequested, 1500);
+      setCheckoutTarget({ pkg, enrollmentId: lastEnrollmentId });
     } catch (e: any) {
       setError(extractErrorMessage(e, "Error solicitando la renovación"));
     } finally {
@@ -830,20 +741,6 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
     return (
       <div className="flex justify-center py-24">
         <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (done) {
-    return (
-      <div className="max-w-lg mx-auto bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl p-10 text-center">
-        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <Check className="w-8 h-8 text-emerald-600" />
-        </div>
-        <h3 className="text-xl font-black text-slate-800 mb-2">¡Solicitud enviada!</h3>
-        <p className="text-slate-500 text-sm">
-          Tu profesor(a) confirmará tu pago y activará el nuevo paquete en breve.
-        </p>
       </div>
     );
   }
@@ -914,7 +811,7 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
                 </div>
 
                 <button
-                  onClick={() => requestRenewal(pkg.id)}
+                  onClick={() => requestRenewal(pkg)}
                   disabled={requesting !== null}
                   className="mt-auto w-full py-3.5 text-sm font-bold text-center rounded-xl transition-all duration-200 active:scale-[0.97] text-white shadow-lg hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
                   style={{ background: `linear-gradient(135deg, ${accent}, ${accent}cc)` }}
@@ -926,6 +823,26 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
               </div>
             );
           })}
+        </div>
+      )}
+
+      {checkoutTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setCheckoutTarget(null)} />
+          <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-black text-slate-800">Completar pago</h2>
+              <button onClick={() => setCheckoutTarget(null)} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+            <PackageCheckout
+              pkg={checkoutTarget.pkg}
+              enrollmentId={checkoutTarget.enrollmentId}
+              onClose={() => setCheckoutTarget(null)}
+              onDone={onRequested}
+            />
+          </div>
         </div>
       )}
     </div>

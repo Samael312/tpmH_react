@@ -66,6 +66,7 @@ export interface CalendarStatus {
   calendar_id: string | null
 }
 
+
 // ─── Estudiantes del profesor (detalle completo) ─────────────────────────────
 export interface StudentEnrollmentSummary {
   id: number
@@ -86,7 +87,6 @@ export interface StudentMaterialSummary {
   progress: string
   assigned_at: string
 }
-
 export interface TeacherStudentFull {
   id: number
   user_id: number
@@ -102,6 +102,55 @@ export interface TeacherStudentFull {
   created_at: string
   enrollments: StudentEnrollmentSummary[]
   materials: StudentMaterialSummary[]
+}
+
+export interface WithdrawalHistoryItem {
+  id: number
+  amount: number
+  status: string
+  destination_details: string | null
+  reference: string | null
+  rejection_reason: string | null
+  created_at: string
+  processed_at: string | null
+}
+
+export interface IncomeHistoryItem {
+  id: number
+  amount_teacher: number
+  payment_type: string | null
+  installment_number: number | null
+  status: string
+  created_at: string
+  validated_at: string | null
+}
+
+export function useMyWithdrawals() {
+  const [withdrawals, setWithdrawals] = useState<WithdrawalHistoryItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const fetch = useCallback(async () => {
+    try {
+      setLoading(true)
+      const res = await api.get('/payments/my-withdrawals')
+      setWithdrawals(res.data)
+    } catch { } finally { setLoading(false) }
+  }, [])
+  useEffect(() => { fetch() }, [fetch])
+  return { withdrawals, loading, refetch: fetch }
+}
+
+export function useMyIncome() {
+  const [income, setIncome] = useState<IncomeHistoryItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const fetch = useCallback(async () => {
+    try {
+      setLoading(true)
+      const res = await api.get('/payments/my-income')
+      setIncome(res.data)
+    } catch { } finally { setLoading(false) }
+  }, [])
+  useEffect(() => { fetch() }, [fetch])
+  return { income, loading, refetch: fetch }
 }
 
 export function useTeacherStudentsFull() {

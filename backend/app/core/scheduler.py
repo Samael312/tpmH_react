@@ -3,7 +3,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy.orm import Session
 from datetime import timedelta
 import logging
-
+from app.models.payment import Payment
 from app.db.base import SessionLocal
 from app.models.class_ import Class
 from app.models.student import StudentProfile
@@ -95,25 +95,47 @@ async def send_class_reminders():
     finally:
         db.close()
 
+async def expire_pending_class_payments():
+    """
+    Cada 10 min: expira clases en 'pending_payment' cuyo payment_expires_at
+    ya pasó, libera el slot y marca el Payment asociado como rechazado.
+    """
+    db: Session = SessionLocal()
+    try:
+        now = utc_now()
+        expired = db.query(Class).filter(
+            Class.status == "pending_payment",
+            Class.payment_expires_at.isnot(None),
+            Class.payment_expires_at < now,
+        ).all()
+
+        for c in expired:
+            c.status = "expired"
+            c.payment_expires_at = None
+
+            payment = db.query(Payment).filter(
+                Payment.class_id == c.id, Payment.status == "pending_review"
+            ).first()
+            if payment:
+                payment.status = "rejected"
+                payment.rejection_reason = "Expiró el tiempo de validación del pago"
+
+        if expired:
+            db.commit()
+            logger.info(f"Clases expiradas por falta de aprobación: {len(expired)}")
+    except Exception as e:
+        logger.error(f"Error expirando pagos pendientes: {e}")
+    finally:
+        db.close()
 
 def start_scheduler():
-    """Inicia el scheduler al arrancar la aplicación"""
-    scheduler.add_job(
-        send_class_reminders,
-        trigger=IntervalTrigger(hours=1),
-        id="class_reminders",
-        replace_existing=True,
-    )
-    scheduler.add_job(
-        finalize_expired_classes,
-        trigger=IntervalTrigger(minutes=10),
-        id="finalize_expired_classes",
-        replace_existing=True,
-    )
+    scheduler.add_job(send_class_reminders, trigger=IntervalTrigger(hours=1), id="class_reminders", replace_existing=True)
+    scheduler.add_job(finalize_expired_classes, trigger=IntervalTrigger(minutes=10), id="finalize_expired_classes", replace_existing=True)
+    scheduler.add_job(expire_pending_class_payments, trigger=IntervalTrigger(minutes=10), id="expire_pending_payments", replace_existing=True)
     scheduler.start()
-    logger.info("Scheduler iniciado — recordatorios cada hora")
-
 
 def stop_scheduler():
     """Para el scheduler al apagar la aplicación"""
     scheduler.shutdown()
+
+    

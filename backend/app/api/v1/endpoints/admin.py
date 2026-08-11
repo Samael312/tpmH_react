@@ -451,45 +451,6 @@ def get_pending_withdrawals(
     return result
 
 
-@router.patch("/withdrawals/{withdrawal_id}/process")
-def process_withdrawal(
-    withdrawal_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Marca un retiro como procesado.
-    Por ahora es manual. En Fase 3 se automatiza con Stripe Connect.
-    """
-    withdrawal = db.query(Withdrawal).filter(
-        Withdrawal.id == withdrawal_id,
-        Withdrawal.status == "pending"
-    ).first()
-
-    if not withdrawal:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Retiro no encontrado o ya procesado"
-        )
-
-    withdrawal.status = "completed"
-
-    # Descontar del balance del profesor
-    teacher = db.query(TeacherProfile).filter(
-        TeacherProfile.id == withdrawal.teacher_id
-    ).first()
-
-    if teacher:
-        teacher.balance = max(0, teacher.balance - withdrawal.amount)
-
-    db.commit()
-
-    return {
-        "message": "Retiro procesado correctamente",
-        "withdrawal_id": withdrawal_id,
-        "amount": withdrawal.amount,
-    }
-
 @router.get("/platform-config")
 def get_platform_config(db: Session = Depends(get_db)):
     """
