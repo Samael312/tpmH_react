@@ -157,21 +157,23 @@ export default function RegisterPage() {
   return (
     <>
       <div className="min-h-screen bg-slate-50 flex flex-col relative overflow-hidden font-sans">
-        <header className="fixed top-0 w-full z-20 h-14 px-6 bg-white/70 backdrop-blur-md border-b border-white/50 flex items-center shadow-sm">
-          <Link href="/" className="flex items-center gap-2 group">
-            <div className="p-1 bg-pink-50 rounded-lg group-hover:bg-pink-100 transition-colors">
-              <GraduationCap className="w-5 h-5 text-pink-600" />
-            </div>
-            <span className="text-base font-black tracking-tight text-slate-800 group-hover:text-pink-600 transition-colors">
-              TuProfeMaria
-            </span>
-          </Link>
-        </header>
+        <header className="relative z-20 h-16 px-6 bg-white/70 backdrop-blur-md border-b border-white/50 flex items-center shadow-sm">
+        <Link href="/" className="flex items-center gap-2 group">
+          <div className="p-1.5 bg-pink-50 rounded-lg group-hover:bg-pink-100 transition-colors">
+            <svg className="w-6 h-6 text-pink-600" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 3L1 9L4 10.636V17C4 18.104 7.582 19 12 19C16.418 19 20 18.104 20 17V10.636L23 9L12 3ZM12 17C8.686 17 6 16.328 6 15.5C6 14.672 8.686 14 12 14C15.314 14 18 14.672 18 15.5C18 16.328 15.314 17 12 17ZM20 13V17H22V13H20Z" />
+            </svg>
+          </div>
+          <span className="text-xl font-black tracking-tight text-slate-800 group-hover:text-pink-600 transition-colors">
+            TuProfeMaria
+          </span>
+        </Link>
+      </header>
 
         <div className="absolute top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/25 rounded-full blur-[120px] pointer-events-none" />
         <div className="absolute bottom-[-100px] left-[-100px] w-[400px] h-[400px] bg-rose-300/20 rounded-full blur-[100px] pointer-events-none" />
 
-        <main className="flex-1 flex justify-center items-center pt-12 p-3 relative z-10">
+        <main className="flex-1 flex justify-center items-center pt-3 p-3 relative z-10">
           <div className="w-full max-w-[23rem] my-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             
             {/* Header del Formulario */}
@@ -283,7 +285,7 @@ export default function RegisterPage() {
                   className="space-y-2 animate-in fade-in duration-200"
                 >
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-0.5">
+                    <label className="text-[10px] font-black text-slate-400 tracking-widest block px-0.5">
                       Soy...
                     </label>
                     <div className="grid grid-cols-2 gap-1.5">
@@ -316,7 +318,7 @@ export default function RegisterPage() {
 
                   <div className="grid grid-cols-2 gap-1.5">
                     <div className="space-y-0.5">
-                      <label htmlFor="name" className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-0.5">
+                      <label htmlFor="name" className="text-[10px] font-black text-slate-400  tracking-widest block px-0.5">
                         Nombre
                       </label>
                       <div className="relative group">
@@ -334,7 +336,7 @@ export default function RegisterPage() {
                       </div>
                     </div>
                     <div className="space-y-0.5">
-                      <label htmlFor="surname" className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-0.5">
+                      <label htmlFor="surname" className="text-[10px] font-black text-slate-400  tracking-widest block px-0.5">
                         Apellido
                       </label>
                       <div className="relative group">
@@ -354,7 +356,7 @@ export default function RegisterPage() {
                   </div>
 
                   <div className="space-y-0.5">
-                    <label htmlFor="username" className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-0.5">
+                    <label htmlFor="username" className="text-[10px] font-black text-slate-400  tracking-widest block px-0.5">
                       Usuario
                     </label>
                     <div className="relative group">
@@ -379,7 +381,7 @@ export default function RegisterPage() {
                   </div>
 
                   <div className="space-y-0.5">
-                    <label htmlFor="email" className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-0.5">
+                    <label htmlFor="email" className="text-[10px] font-black text-slate-400  tracking-widest block px-0.5">
                       Email
                     </label>
                     <div className="relative group">
