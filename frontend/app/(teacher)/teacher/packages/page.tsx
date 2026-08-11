@@ -225,6 +225,7 @@ export default function TeacherPackagesPage() {
   const pendingRenewals = enrollments.filter(e => e.status === "pending_renewal");
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50 relative overflow-hidden">
       <div className="fixed top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/20 rounded-full blur-[100px] pointer-events-none" />
       <div className="fixed bottom-[-100px] left-[-100px] w-[400px] h-[400px] bg-purple-300/15 rounded-full blur-[100px] pointer-events-none" />
@@ -766,7 +767,8 @@ export default function TeacherPackagesPage() {
         </div>
 
       </div>
-      <ChipiWidget screenName="teacher_packages" />
     </div>
+    <ChipiWidget screenName="teacher_packages" />
+    </>
   );
 }

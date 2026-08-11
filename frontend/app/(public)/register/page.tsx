@@ -127,6 +127,7 @@ export default function RegisterPage() {
     }`;
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50 flex flex-col relative overflow-hidden font-sans">
       <header className="fixed top-0 w-full z-50 h-14 px-6 bg-white/70 backdrop-blur-md border-b border-white/50 flex items-center shadow-sm">
         <Link href="/" className="flex items-center gap-2 group">
@@ -365,8 +366,7 @@ export default function RegisterPage() {
           </p>
         </div>
       </main>
-
-      <ChipiWidget screenName="signup" />
     </div>
+    </>
   );
 }

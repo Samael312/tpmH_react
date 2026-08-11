@@ -1002,6 +1002,7 @@ export default function SchedulePage() {
   };
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50 relative overflow-hidden">
       {/* Blobs */}
       <div className="fixed top-[-80px] right-[-80px] w-[500px] h-[500px] bg-pink-300/20 rounded-full blur-[100px] pointer-events-none" />
@@ -1196,7 +1197,8 @@ export default function SchedulePage() {
           </div>
         )}
       </div>
-      <ChipiWidget screenName="schedule" />
     </div>
+    <ChipiWidget screenName="schedule_student" />
+    </>
   );
 }

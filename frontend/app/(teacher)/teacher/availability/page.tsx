@@ -193,6 +193,7 @@ export default function TeacherAvailabilityPage() {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50 relative overflow-hidden pb-12">
       <div className="fixed top-[-80px] right-[-80px] w-[500px] h-[500px] bg-purple-300/20 rounded-full blur-[100px] pointer-events-none" />
       <div className="fixed bottom-[-80px] left-[-80px] w-[400px] h-[400px] bg-pink-300/15 rounded-full blur-[100px] pointer-events-none" />
@@ -370,7 +371,8 @@ export default function TeacherAvailabilityPage() {
         <ExceptionsSection />
 
       </div>
-      <ChipiWidget screenName="teacher-availability" />
     </div>
+    <ChipiWidget screenName="teacher-availability" />
+    </>
   );
 }

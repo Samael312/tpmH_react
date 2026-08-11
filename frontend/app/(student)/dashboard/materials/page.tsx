@@ -1,13 +1,16 @@
+// app/student/materials/page.tsx (o StudentMaterialsPage.tsx)
+
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  FileText, Search, BookOpen, Check,
-  Volume2, ExternalLink, Clock, Award,
+  FileText, Search, BookOpen,
+  Volume2, ExternalLink, Clock,
   Play, Pause, Loader2, Headphones,
   CheckCircle2, CircleDashed, Sparkles, BarChart3
 } from "lucide-react";
 import api from "@/lib/api";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 interface Material {
   id: number;
@@ -189,280 +192,279 @@ export default function StudentMaterialsPage() {
     return inSearch && inFilter;
   });
 
-  // Métricas de progreso para el header
   const totalCount = materials.length;
   const completedCount = materials.filter(m => m.progress === "completed").length;
   const progressPercent = totalCount ? Math.round((completedCount / totalCount) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-slate-50/60 text-slate-900 pb-16">
-      <audio ref={audioRef} className="hidden" />
+    <>
+      <div className="min-h-screen bg-slate-50/60 text-slate-900 pb-16">
+        <audio ref={audioRef} className="hidden" />
 
-      {/* Header Container */}
-      <div className="bg-white border-b border-slate-200/80 sticky top-0 z-10 backdrop-blur-md bg-white/90">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                Mis Materiales Asignados
-              </h1>
-              <p className="text-sm text-slate-500 mt-0.5">
-                Accede a tus recursos de estudio, documentos y listas de vocabulario interactivo.
-              </p>
-            </div>
-
-            {/* Micro Stats Widget */}
-            {!loading && totalCount > 0 && (
-              <div className="flex items-center gap-4 bg-slate-50 border border-slate-200/80 px-4 py-2.5 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-                    <BarChart3 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-slate-500">Progreso general</span>
-                      <span className="text-xs font-bold text-indigo-600">{progressPercent}%</span>
-                    </div>
-                    <div className="w-32 bg-slate-200 h-1.5 rounded-full mt-1 overflow-hidden">
-                      <div 
-                        className="bg-indigo-600 h-full rounded-full transition-all duration-500" 
-                        style={{ width: `${progressPercent}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="h-8 w-px bg-slate-200 mx-1 hidden sm:block" />
-                <div className="text-xs text-slate-500 hidden sm:block">
-                  <span className="font-bold text-slate-800">{completedCount}</span> de <span className="font-bold text-slate-800">{totalCount}</span> listos
-                </div>
+        {/* Header Container */}
+        <div className="bg-white border-b border-slate-200/80 sticky top-0 z-10 backdrop-blur-md bg-white/90">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+                  Mis Materiales Asignados
+                </h1>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  Accede a tus recursos de estudio, documentos y listas de vocabulario interactivo.
+                </p>
               </div>
-            )}
-          </div>
 
-          {/* Controls Section */}
-          <div className="mt-6 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Buscar por título o palabra clave..."
-                className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
-              />
+              {!loading && totalCount > 0 && (
+                <div className="flex items-center gap-4 bg-slate-50 border border-slate-200/80 px-4 py-2.5 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                      <BarChart3 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-slate-500">Progreso general</span>
+                        <span className="text-xs font-bold text-indigo-600">{progressPercent}%</span>
+                      </div>
+                      <div className="w-32 bg-slate-200 h-1.5 rounded-full mt-1 overflow-hidden">
+                        <div 
+                          className="bg-indigo-600 h-full rounded-full transition-all duration-500" 
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="h-8 w-px bg-slate-200 mx-1 hidden sm:block" />
+                  <div className="text-xs text-slate-500 hidden sm:block">
+                    <span className="font-bold text-slate-800">{completedCount}</span> de <span className="font-bold text-slate-800">{totalCount}</span> listos
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="flex gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
-              {CATEGORIES.map(cat => {
-                const isActive = filter === cat;
-                return (
-                  <button
-                    key={cat}
-                    onClick={() => setFilter(cat)}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold capitalize whitespace-nowrap transition-all duration-150 ${
-                      isActive
-                        ? "bg-rose-500 text-white shadow-sm"
-                        : "bg-white border border-slate-200/80 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                    }`}
-                  >
-                    {cat === "all" ? "Todos los temas" : cat}
-                  </button>
-                );
-              })}
+            {/* Controls Section */}
+            <div className="mt-6 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Buscar por título o palabra clave..."
+                  className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                />
+              </div>
+
+              <div className="flex gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
+                {CATEGORIES.map(cat => {
+                  const isActive = filter === cat;
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setFilter(cat)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold capitalize whitespace-nowrap transition-all duration-150 ${
+                        isActive
+                          ? "bg-rose-500 text-white shadow-sm"
+                          : "bg-white border border-slate-200/80 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                      }`}
+                    >
+                      {cat === "all" ? "Todos los temas" : cat}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Main Content Area */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
-        {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="h-56 bg-white border border-slate-200/70 rounded-2xl animate-pulse p-6 flex flex-col justify-between">
-                <div className="space-y-3">
-                  <div className="flex gap-3">
-                    <div className="w-10 h-10 bg-slate-100 rounded-xl" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-4 bg-slate-100 rounded w-3/4" />
-                      <div className="h-3 bg-slate-100 rounded w-1/2" />
+        {/* Main Content Area */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <div key={i} className="h-56 bg-white border border-slate-200/70 rounded-2xl animate-pulse p-6 flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <div className="flex gap-3">
+                      <div className="w-10 h-10 bg-slate-100 rounded-xl" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-slate-100 rounded w-3/4" />
+                        <div className="h-3 bg-slate-100 rounded w-1/2" />
+                      </div>
                     </div>
+                    <div className="h-12 bg-slate-50 rounded-lg" />
                   </div>
-                  <div className="h-12 bg-slate-50 rounded-lg" />
+                  <div className="h-9 bg-slate-100 rounded-xl w-full" />
                 </div>
-                <div className="h-9 bg-slate-100 rounded-xl w-full" />
-              </div>
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm py-16 text-center max-w-lg mx-auto my-8">
-            <div className="w-12 h-12 bg-slate-100 text-slate-400 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <BookOpen className="w-6 h-6" />
+              ))}
             </div>
-            <h3 className="text-base  text-slate-600">No se encontraron materiales</h3>
-            <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-              No hay coincidencias para los criterios de búsqueda o filtros seleccionados.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filtered.map(assignment => {
-              const m = assignment.material;
-              const isCompleted = assignment.progress === "completed";
-              const isUpdating = updatingId === assignment.id;
-              const vocab = isVocab(m);
-              const isThisPlayingAll = playingAllId === assignment.material_id;
-              const isLoadingAudio = !!loadingVocabAudio[assignment.material_id];
+          ) : filtered.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm py-16 text-center max-w-lg mx-auto my-8">
+              <div className="w-12 h-12 bg-slate-100 text-slate-400 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <BookOpen className="w-6 h-6" />
+              </div>
+              <h3 className="text-base text-slate-600">No se encontraron materiales</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                No hay coincidencias para los criterios de búsqueda o filtros seleccionados.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filtered.map(assignment => {
+                const m = assignment.material;
+                const isCompleted = assignment.progress === "completed";
+                const isUpdating = updatingId === assignment.id;
+                const vocab = isVocab(m);
+                const isThisPlayingAll = playingAllId === assignment.material_id;
+                const isLoadingAudio = !!loadingVocabAudio[assignment.material_id];
 
-              return (
-                <div
-                  key={assignment.id}
-                  className={`group bg-white rounded-2xl border transition-all duration-200 flex flex-col justify-between ${
-                    isCompleted
-                      ? "border-emerald-200/80 bg-emerald-50/10"
-                      : "border-slate-200/80 hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5"
-                  }`}
-                >
-                  <div className="p-5">
-                    {/* Header Card */}
-                    <div className="flex items-start gap-3.5 mb-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
-                        vocab 
-                          ? "bg-purple-50 text-purple-600 border border-purple-100" 
-                          : "bg-indigo-50 text-indigo-600 border border-indigo-100"
-                      }`}>
-                        {vocab ? <Headphones className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                          <LevelBadge level={m?.level} />
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                            {m?.category}
-                          </span>
+                return (
+                  <div
+                    key={assignment.id}
+                    className={`group bg-white rounded-2xl border transition-all duration-200 flex flex-col justify-between ${
+                      isCompleted
+                        ? "border-emerald-200/80 bg-emerald-50/10"
+                        : "border-slate-200/80 hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5"
+                    }`}
+                  >
+                    <div className="p-5">
+                      <div className="flex items-start gap-3.5 mb-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
+                          vocab 
+                            ? "bg-purple-50 text-purple-600 border border-purple-100" 
+                            : "bg-indigo-50 text-indigo-600 border border-indigo-100"
+                        }`}>
+                          {vocab ? <Headphones className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
                         </div>
-                        <h3 className="text-sm font-bold text-slate-900 leading-snug line-clamp-2">
-                          {m?.title || "Sin título"}
-                        </h3>
-                      </div>
-                    </div>
-
-                    {/* Description */}
-                    {m?.description && (
-                      <p className="text-xs text-slate-500 line-clamp-2 mb-4 leading-relaxed">
-                        {m.description}
-                      </p>
-                    )}
-
-                    {/* Vocabulary Interactive Section */}
-                    {vocab && (
-                      <div className="mt-3 bg-purple-50/40 border border-purple-100 rounded-xl p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[11px] font-bold text-purple-900 flex items-center gap-1">
-                            <Sparkles className="w-3 h-3 text-purple-600" />
-                            Palabras ({m!.vocabulary_words!.length})
-                          </span>
-                          <button
-                            onClick={() => handlePlayAll(m!)}
-                            disabled={isLoadingAudio}
-                            className="flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-800 bg-white hover:bg-purple-100/50 border border-purple-200/60 px-2 py-1 rounded-lg transition-colors shadow-2xs disabled:opacity-50"
-                          >
-                            {isLoadingAudio ? (
-                              <Loader2 className="w-3 h-3 animate-spin text-purple-600" />
-                            ) : isThisPlayingAll ? (
-                              <Pause className="w-3 h-3 text-purple-600" />
-                            ) : (
-                              <Play className="w-3 h-3 text-purple-600 fill-purple-600" />
-                            )}
-                            {isThisPlayingAll ? "Detener" : "Escuchar todo"}
-                          </button>
-                        </div>
-
-                        <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto custom-scrollbar pt-0.5">
-                          {m!.vocabulary_words!.map((w, idx) => {
-                            const active = nowPlaying?.materialId === m!.id && nowPlaying?.word === w;
-                            return (
-                              <button
-                                key={idx}
-                                onClick={() => handlePlayWord(m!, w)}
-                                className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg transition-all duration-150 ${
-                                  active
-                                    ? "bg-purple-600 text-white shadow-sm scale-95"
-                                    : "bg-white text-purple-900 border border-purple-100 hover:border-purple-300 hover:bg-purple-50"
-                                }`}
-                              >
-                                <Volume2 className={`w-3 h-3 ${active ? "animate-pulse" : "text-purple-500"}`} />
-                                {w}
-                              </button>
-                            );
-                          })}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                            <LevelBadge level={m?.level} />
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                              {m?.category}
+                            </span>
+                          </div>
+                          <h3 className="text-sm font-bold text-slate-900 leading-snug line-clamp-2">
+                            {m?.title || "Sin título"}
+                          </h3>
                         </div>
                       </div>
-                    )}
-                  </div>
 
-                  {/* Footer Card */}
-                  <div className="px-5 py-3.5 bg-slate-50/80 border-t border-slate-100 rounded-b-2xl flex flex-col gap-3">
-                    <div className="flex items-center justify-between text-[11px] text-slate-500">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        Asignado:
-                      </span>
-                      <span className="font-semibold text-slate-700">
-                        {new Date(assignment.assigned_at).toLocaleDateString(undefined, {
-                          day: "numeric",
-                          month: "short"
-                        })}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {m?.file_url && (
-                        <a
-                          href={m.file_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 flex items-center justify-center gap-1.5 bg-white border border-slate-200/80 hover:bg-slate-100 text-slate-700 text-xs font-semibold py-2 rounded-xl transition-colors shadow-2xs"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
-                          Documento
-                        </a>
+                      {m?.description && (
+                        <p className="text-xs text-slate-500 line-clamp-2 mb-4 leading-relaxed">
+                          {m.description}
+                        </p>
                       )}
 
-                      <button
-                        onClick={() =>
-                          updateProgress(
-                            assignment.id,
-                            isCompleted ? "pending" : "completed"
-                          )
-                        }
-                        disabled={isUpdating}
-                        className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-2 rounded-xl transition-all duration-200 shadow-2xs ${
-                          isCompleted
-                            ? "bg-emerald-100/70 text-emerald-800 hover:bg-emerald-200/60 border border-emerald-200/80"
-                            : "bg-pink-500 text-white hover:bg-slate-800"
-                        }`}
-                      >
-                        {isUpdating ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : isCompleted ? (
-                          <>
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            Completado
-                          </>
-                        ) : (
-                          <>
-                            <CircleDashed className="w-3.5 h-3.5 opacity-70" />
-                            Marcar listo
-                          </>
+                      {vocab && (
+                        <div className="mt-3 bg-purple-50/40 border border-purple-100 rounded-xl p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[11px] font-bold text-purple-900 flex items-center gap-1">
+                              <Sparkles className="w-3 h-3 text-purple-600" />
+                              Palabras ({m!.vocabulary_words!.length})
+                            </span>
+                            <button
+                              onClick={() => handlePlayAll(m!)}
+                              disabled={isLoadingAudio}
+                              className="flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-800 bg-white hover:bg-purple-100/50 border border-purple-200/60 px-2 py-1 rounded-lg transition-colors shadow-2xs disabled:opacity-50"
+                            >
+                              {isLoadingAudio ? (
+                                <Loader2 className="w-3 h-3 animate-spin text-purple-600" />
+                              ) : isThisPlayingAll ? (
+                                <Pause className="w-3 h-3 text-purple-600" />
+                              ) : (
+                                <Play className="w-3 h-3 text-purple-600 fill-purple-600" />
+                              )}
+                              {isThisPlayingAll ? "Detener" : "Escuchar todo"}
+                            </button>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto custom-scrollbar pt-0.5">
+                            {m!.vocabulary_words!.map((w, idx) => {
+                              const active = nowPlaying?.materialId === m!.id && nowPlaying?.word === w;
+                              return (
+                                <button
+                                  key={idx}
+                                  onClick={() => handlePlayWord(m!, w)}
+                                  className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg transition-all duration-150 ${
+                                    active
+                                      ? "bg-purple-600 text-white shadow-sm scale-95"
+                                      : "bg-white text-purple-900 border border-purple-100 hover:border-purple-300 hover:bg-purple-50"
+                                  }`}
+                                >
+                                  <Volume2 className={`w-3 h-3 ${active ? "animate-pulse" : "text-purple-500"}`} />
+                                  {w}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="px-5 py-3.5 bg-slate-50/80 border-t border-slate-100 rounded-b-2xl flex flex-col gap-3">
+                      <div className="flex items-center justify-between text-[11px] text-slate-500">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          Asignado:
+                        </span>
+                        <span className="font-semibold text-slate-700">
+                          {new Date(assignment.assigned_at).toLocaleDateString(undefined, {
+                            day: "numeric",
+                            month: "short"
+                          })}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {m?.file_url && (
+                          <a
+                            href={m.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 flex items-center justify-center gap-1.5 bg-white border border-slate-200/80 hover:bg-slate-100 text-slate-700 text-xs font-semibold py-2 rounded-xl transition-colors shadow-2xs"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                            Documento
+                          </a>
                         )}
-                      </button>
+
+                        <button
+                          onClick={() =>
+                            updateProgress(
+                              assignment.id,
+                              isCompleted ? "pending" : "completed"
+                            )
+                          }
+                          disabled={isUpdating}
+                          className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-2 rounded-xl transition-all duration-200 shadow-2xs ${
+                            isCompleted
+                              ? "bg-emerald-100/70 text-emerald-800 hover:bg-emerald-200/60 border border-emerald-200/80"
+                              : "bg-pink-500 text-white hover:bg-slate-800"
+                          }`}
+                        >
+                          {isUpdating ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : isCompleted ? (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              Completado
+                            </>
+                          ) : (
+                            <>
+                              <CircleDashed className="w-3.5 h-3.5 opacity-70" />
+                              Marcar listo
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Widget renderizado mediante Portal en document.body */}
+      <ChipiWidget screenName="materials_student" />
+    </>
   );
 }

@@ -252,6 +252,7 @@ export default function StudentPreferencesPage() {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50 relative overflow-hidden pb-12">
       {/* Blobs de fondo */}
       <div className="fixed top-[-80px] right-[-80px] w-[500px] h-[500px] bg-purple-300/20 rounded-full blur-[100px] pointer-events-none" />
@@ -433,7 +434,8 @@ export default function StudentPreferencesPage() {
         </div>
 
       </div>
-      <ChipiWidget screenName="student-preferences" />
     </div>
+     <ChipiWidget screenName="student-preferences" />
+    </>
   );
 }

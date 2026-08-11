@@ -92,6 +92,7 @@ export default function PaymentsPage() {
   }
 
   return (
+  <>
     <div className="space-y-8 animate-fade-up bg-white min-h-screen p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
 
       {/* Header */}
@@ -365,8 +366,8 @@ export default function PaymentsPage() {
         </div>
         
       )}
-      <ChipiWidget screenName="admin_payments" /> 
     </div>
-    
+    <ChipiWidget screenName="admin_payments" /> 
+    </>
   )
 }

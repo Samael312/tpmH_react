@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Lock, Eye, EyeOff, Check, ArrowLeft, AlertTriangle } from "lucide-react";
 import api from "@/lib/api";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -158,29 +159,34 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute top-[-100px] right-[-80px] w-[400px] h-[400px] bg-pink-300/20 rounded-full blur-[100px] pointer-events-none" />
+    <>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+        <div className="absolute top-[-100px] right-[-80px] w-[400px] h-[400px] bg-pink-300/20 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="relative w-full max-w-sm animate-in fade-in slide-in-from-bottom-6 duration-500">
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-[1.25rem] overflow-hidden shadow-xl shadow-pink-200 mb-4">
-            <Image src="/assets/logo.png" alt="TuProfeMaria" width={56} height={56} className="object-contain w-full h-full" />
+        <div className="relative w-full max-w-sm animate-in fade-in slide-in-from-bottom-6 duration-500">
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-14 h-14 rounded-[1.25rem] overflow-hidden shadow-xl shadow-pink-200 mb-4">
+              <Image src="/assets/logo.png" alt="TuProfeMaria" width={56} height={56} className="object-contain w-full h-full" />
+            </div>
+            <h1 className="text-2xl font-black text-slate-800 tracking-tight">Nueva contraseña</h1>
+            <p className="text-slate-500 text-sm mt-1 text-center">Elige una contraseña segura</p>
           </div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Nueva contraseña</h1>
-          <p className="text-slate-500 text-sm mt-1 text-center">Elige una contraseña segura</p>
-        </div>
 
-        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-8">
-          <Suspense fallback={<div className="flex justify-center py-8"><div className="w-6 h-6 border-2 border-pink-200 border-t-pink-500 rounded-full animate-spin" /></div>}>
-            <ResetPasswordForm />
-          </Suspense>
-        </div>
+          <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-8">
+            <Suspense fallback={<div className="flex justify-center py-8"><div className="w-6 h-6 border-2 border-pink-200 border-t-pink-500 rounded-full animate-spin" /></div>}>
+              <ResetPasswordForm />
+            </Suspense>
+          </div>
 
-        <Link href="/login" className="flex items-center justify-center gap-2 text-sm font-bold text-slate-500 hover:text-pink-600 transition-colors mt-6">
-          <ArrowLeft className="w-4 h-4" />
-          Volver al inicio de sesión
-        </Link>
+          <Link href="/login" className="flex items-center justify-center gap-2 text-sm font-bold text-slate-500 hover:text-pink-600 transition-colors mt-6">
+            <ArrowLeft className="w-4 h-4" />
+            Volver al inicio de sesión
+          </Link>
+        </div>
       </div>
-    </div>
+
+      {/* Widget flotante de Chipi */}
+      <ChipiWidget screenName="forgot-password" />
+    </>
   );
 }

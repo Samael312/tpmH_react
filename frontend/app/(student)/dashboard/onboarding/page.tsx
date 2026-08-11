@@ -13,6 +13,7 @@ import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { TIMEZONE_OPTIONS as TIMEZONES, TIMEZONE_TO_COUNTRY, DEFAULT_COUNTRY } from "@/lib/timezones";
 import { NATIONALITIES } from "@/lib/nationalities";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 const GOALS = [
   { text: "Conversaciones cotidianas", desc: "Hablar de temas del día a día", icon: "🗣️" },
@@ -716,7 +717,7 @@ export default function OnboardingPage() {
       // 2. Guardar foto de perfil si fue seleccionada
       if (avatarFile) {
         const formData = new FormData();
-        formData.append("file", avatarFile); // <-- Cambiado de "avatar" a "file"
+        formData.append("file", avatarFile);
 
         await api.patch("/users/me/avatar", formData, {
           headers: { "Content-Type": "multipart/form-data" },
@@ -767,75 +768,80 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-50 font-sans">
-      <SidebarProgress step={step} name={name} />
+    <>
+      <div className="flex min-h-screen bg-slate-50 font-sans">
+        <SidebarProgress step={step} name={name} />
 
-      <div className="flex-1 flex flex-col justify-center px-6 py-12 md:px-12 overflow-y-auto relative">
-        
-        {/* Banner de error seguro contra objetos React */}
-        {error && (
-          <div className="absolute top-6 right-6 left-6 md:left-auto max-w-sm bg-rose-50 border border-rose-200 text-rose-700 px-5 py-4 rounded-2xl text-sm font-bold flex items-start gap-3 shadow-lg z-50 animate-in slide-in-from-top-5">
-            <X className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            <p className="flex-1">{error}</p>
-            <button onClick={() => setError("")} className="text-rose-400 hover:text-rose-600">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
-        <div className="w-full flex justify-center">
-          {step === 1 && <StepWelcome name={name} onNext={next} />}
-          {step === 2 && (
-            <StepPreferences
-              timezone={timezone}
-              setTimezone={setTimezone}
-              country={country}
-              setCountry={setCountry}
-              goal={goal}
-              setGoal={setGoal}
-              nationality={nationality}
-              setNationality={setNationality}
-              phone={phone}
-              setPhone={setPhone}
-              avatarPreview={avatarPreview}
-              onAvatarChange={handleAvatarChange}
-              onRemoveAvatar={handleRemoveAvatar}
-              onNext={next}
-              onBack={back}
-            />
-          )}
-          {step === 3 && <StepSchedule blocks={blocks} setBlocks={setBlocks} onNext={next} onBack={back} />}
-          {step === 4 && <StepPaymentMethods selected={payMethods} setSelected={setPayMethods} onNext={finish} onBack={back} saving={saving} />}
+        <div className="flex-1 flex flex-col justify-center px-6 py-12 md:px-12 overflow-y-auto relative">
           
-          {step === 5 && (
-            <div className="w-full">
-              <StepSuccess name={name} />
-              <div className="max-w-md mx-auto mt-8">
-                <button
-                  onClick={() => router.push("/dashboard")}
-                  className="w-full py-4 text-base font-bold text-white rounded-xl bg-slate-800 hover:bg-slate-900 shadow-xl transition-all duration-300 flex items-center justify-center gap-2"
-                >
-                  Ir a mi dashboard ahora
-                  <ChevronRight className="w-5 h-5" />
-                </button>
+          {/* Banner de error seguro contra objetos React */}
+          {error && (
+            <div className="absolute top-6 right-6 left-6 md:left-auto max-w-sm bg-rose-50 border border-rose-200 text-rose-700 px-5 py-4 rounded-2xl text-sm font-bold flex items-start gap-3 shadow-lg z-50 animate-in slide-in-from-top-5">
+              <X className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <p className="flex-1">{error}</p>
+              <button onClick={() => setError("")} className="text-rose-400 hover:text-rose-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          <div className="w-full flex justify-center">
+            {step === 1 && <StepWelcome name={name} onNext={next} />}
+            {step === 2 && (
+              <StepPreferences
+                timezone={timezone}
+                setTimezone={setTimezone}
+                country={country}
+                setCountry={setCountry}
+                goal={goal}
+                setGoal={setGoal}
+                nationality={nationality}
+                setNationality={setNationality}
+                phone={phone}
+                setPhone={setPhone}
+                avatarPreview={avatarPreview}
+                onAvatarChange={handleAvatarChange}
+                onRemoveAvatar={handleRemoveAvatar}
+                onNext={next}
+                onBack={back}
+              />
+            )}
+            {step === 3 && <StepSchedule blocks={blocks} setBlocks={setBlocks} onNext={next} onBack={back} />}
+            {step === 4 && <StepPaymentMethods selected={payMethods} setSelected={setPayMethods} onNext={finish} onBack={back} saving={saving} />}
+            
+            {step === 5 && (
+              <div className="w-full">
+                <StepSuccess name={name} />
+                <div className="max-w-md mx-auto mt-8">
+                  <button
+                    onClick={() => router.push("/dashboard")}
+                    className="w-full py-4 text-base font-bold text-white rounded-xl bg-slate-800 hover:bg-slate-900 shadow-xl transition-all duration-300 flex items-center justify-center gap-2"
+                  >
+                    Ir a mi dashboard ahora
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {step < 5 && (
+            <div className="lg:hidden mt-12 text-center">
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                {step === 1 ? "Paso 1 de 4" : `Paso ${step} de 4`}
+              </p>
+              <div className="flex justify-center gap-2 mt-3">
+                {[1, 2, 3, 4].map((s) => (
+                  <div key={s} className={`h-1.5 rounded-full transition-all duration-300 ${step >= s ? "w-8 bg-pink-500" : "w-4 bg-slate-200"}`} />
+                ))}
               </div>
             </div>
           )}
         </div>
-
-        {step < 5 && (
-          <div className="lg:hidden mt-12 text-center">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
-              {step === 1 ? "Paso 1 de 4" : `Paso ${step} de 4`}
-            </p>
-            <div className="flex justify-center gap-2 mt-3">
-              {[1, 2, 3, 4].map((s) => (
-                <div key={s} className={`h-1.5 rounded-full transition-all duration-300 ${step >= s ? "w-8 bg-pink-500" : "w-4 bg-slate-200"}`} />
-              ))}
-            </div>
-          </div>
-        )}
       </div>
-    </div>
+
+      {/* Widget renderizado con portal */}
+      <ChipiWidget screenName="onboarding_student" />
+    </>
   );
 }

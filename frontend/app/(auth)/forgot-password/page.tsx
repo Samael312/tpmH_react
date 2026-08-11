@@ -30,6 +30,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50 flex flex-col items-center
                     justify-center p-4 relative overflow-hidden">
 
@@ -155,7 +156,8 @@ export default function ForgotPasswordPage() {
           Volver al inicio de sesión
         </Link>
       </div>
-      <ChipiWidget screenName="forgot-password" />
     </div>
+    <ChipiWidget screenName="forgot-password" />
+    </>
   );
 }

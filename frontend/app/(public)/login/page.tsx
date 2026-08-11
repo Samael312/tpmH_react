@@ -114,6 +114,7 @@ export default function LoginPage() {
   };
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50 flex flex-col relative overflow-hidden font-sans">
       {/* HEADER */}
       <header className="relative z-20 h-16 px-6 bg-white/70 backdrop-blur-md border-b border-white/50 flex items-center shadow-sm">
@@ -243,7 +244,8 @@ export default function LoginPage() {
           </p>
         </div>
       </main>
-      <ChipiWidget screenName="login" />
     </div>
+    <ChipiWidget screenName="login" />
+    </>
   );
 }
