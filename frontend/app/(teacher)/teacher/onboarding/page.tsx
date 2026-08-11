@@ -8,7 +8,7 @@ import {
   Briefcase, BookOpen, Award, MessageCircle,
   Sparkles, Upload, Plus, X, Rocket,
   Languages, GraduationCap, Clock, Star,
-  ChevronDown,
+  ChevronDown, AlertCircle,
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -18,7 +18,6 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 // ─── Constantes ─────────────────────────────────────────────────────────────
 import {
   TIMEZONE_OPTIONS,
-  TIMEZONE_OPTIONS as TIMEZONES,
   TIMEZONE_TO_COUNTRY,
   DEFAULT_COUNTRY,
 } from "@/lib/timezones";
@@ -168,7 +167,7 @@ function StepWelcome({ name, onNext }: { name: string; onNext: () => void }) {
   );
 }
 
-// ─── Paso 2: Foto, bio, título y WhatsApp con código de país ─────────────────
+// ─── Paso 2: Foto, bio, título, nacionalidad y WhatsApp ─────────────────────
 interface StepProfileProps {
   photoPreview: string | null;
   setPhotoPreview: (v: string | null) => void;
@@ -195,7 +194,7 @@ function StepProfile({
   country, setCountry, phone, setPhone, nationality, setNationality,
   onNext, onBack,
 }: StepProfileProps) {
-  const valid = Boolean(title_.trim() && bio.trim() && timezone && phone.trim() && nationality);
+  const [valError, setValError] = useState("");
 
   const COUNTRY_OPTIONS = useMemo(() => {
     const map = new Map<string, CountryInfo>();
@@ -219,12 +218,36 @@ function StepProfile({
     setPhotoPreview(null);
   };
 
+  const handleContinue = () => {
+    const missing: string[] = [];
+    if (!title_.trim()) missing.push("Título profesional");
+    if (!bio.trim()) missing.push("Sobre mí");
+    if (!nationality) missing.push("Nacionalidad");
+    if (!timezone) missing.push("Zona horaria");
+    if (!phone.trim()) missing.push("Número de WhatsApp");
+
+    if (missing.length > 0) {
+      setValError(`Por favor completa los siguientes campos obligatorios: ${missing.join(", ")}.`);
+      return;
+    }
+
+    setValError("");
+    onNext();
+  };
+
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-300 w-full max-w-3xl mx-auto space-y-7">
       <div>
         <h2 className="text-4xl font-black text-slate-800 tracking-tight">Tu presentación</h2>
         <p className="text-slate-500 text-lg mt-2">Lo primero que verán los estudiantes de ti.</p>
       </div>
+
+      {valError && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-2xl text-sm font-bold flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <p>{valError}</p>
+        </div>
+      )}
 
       {/* Foto */}
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
@@ -267,7 +290,7 @@ function StepProfile({
         </div>
       </div>
 
-      {/* Título, bio, zona horaria, WhatsApp */}
+      {/* Título, bio, nacionalidad, zona horaria, WhatsApp */}
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
         <div>
           <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">Título profesional *</label>
@@ -295,6 +318,24 @@ function StepProfile({
         </div>
 
         <div>
+          <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">Nacionalidad *</label>
+          <div className="relative">
+            <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+            <select
+              value={nationality}
+              onChange={e => setNationality(e.target.value)}
+              className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-12 pr-10 py-4 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all cursor-pointer"
+            >
+              <option value="">Seleccionar nacionalidad...</option>
+                {NATIONALITIES.map((n) => (
+              <option key={n.code} value={n.name}>{n.flag} {n.name}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          </div>
+        </div>
+
+        <div>
           <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">Zona horaria *</label>
           <div className="relative">
             <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
@@ -310,6 +351,7 @@ function StepProfile({
                 </option>
               ))}
             </select>
+            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           </div>
         </div>
 
@@ -363,7 +405,7 @@ function StepProfile({
         <button onClick={onBack} className="px-8 py-4 text-base font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors flex items-center gap-2">
           <ChevronLeft className="w-5 h-5" /> Volver
         </button>
-        <button onClick={onNext} disabled={!valid} className="flex-1 py-4 text-base font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+        <button onClick={handleContinue} className="flex-1 py-4 text-base font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2">
           Continuar <ChevronRight className="w-5 h-5" />
         </button>
       </div>
@@ -378,6 +420,7 @@ function StepSpecialties({
   onNext, onBack,
 }: any) {
   const [skillInput, setSkillInput] = useState("");
+  const [valError, setValError] = useState("");
 
   const toggleLang = (l: string) =>
     setLanguages((p: string[]) => p.includes(l) ? p.filter(x => x !== l) : [...p, l]);
@@ -397,7 +440,16 @@ function StepSpecialties({
   const removeCert = (idx: number) =>
     setCertificates(certificates.filter((_: any, i: number) => i !== idx));
 
-  const valid = languages.length > 0 && subjects.length > 0;
+  // Validación: Se requiere al menos un idioma O una materia (no ambos obligatoriamente)
+  const handleContinue = () => {
+    if (languages.length === 0 && subjects.length === 0) {
+      setValError("Debes seleccionar al menos un idioma o una materia para continuar.");
+      return;
+    }
+
+    setValError("");
+    onNext();
+  };
 
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-300 w-full max-w-3xl mx-auto space-y-7">
@@ -406,11 +458,18 @@ function StepSpecialties({
         <p className="text-slate-500 text-lg mt-2">¿Qué enseñas y cuáles son tus puntos fuertes?</p>
       </div>
 
+      {valError && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-2xl text-sm font-bold flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <p>{valError}</p>
+        </div>
+      )}
+
       {/* Idiomas */}
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
         <div className="flex items-center gap-2 mb-4">
           <Languages className="w-5 h-5 text-pink-500" />
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Idiomas que enseñas *</p>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Idiomas que enseñas</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {LANGUAGES.map(l => (
@@ -427,7 +486,7 @@ function StepSpecialties({
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
         <div className="flex items-center gap-2 mb-4">
           <BookOpen className="w-5 h-5 text-purple-500" />
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Materias / Áreas *</p>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Materias / Áreas</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {SUBJECTS.map(s => (
@@ -509,7 +568,7 @@ function StepSpecialties({
         <button onClick={onBack} className="px-8 py-4 text-base font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors flex items-center gap-2">
           <ChevronLeft className="w-5 h-5" /> Volver
         </button>
-        <button onClick={onNext} disabled={!valid} className="flex-1 py-4 text-base font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+        <button onClick={handleContinue} className="flex-1 py-4 text-base font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2">
           Continuar <ChevronRight className="w-5 h-5" />
         </button>
       </div>
@@ -642,9 +701,8 @@ function StepAvailability({ blocks, setBlocks, onNext, onBack }: any) {
 
 // ─── Paso 5: Redes sociales y finalizar ──────────────────────────────────────
 function StepSocial({ socialLinks, setSocialLinks, onFinish, onBack, saving }: any) {
-  // Nota: WhatsApp ya se pide en el paso 2, por lo que aquí solo quedan redes secundarias o sitio web
   const fields = [
-    { key: "instagram", label: "Instagram", placeholder: "@tuprofemaria", icon: <GraduationCap className="w-5 h-5" /> },
+    { key: "instagram", label: "Instagram", placeholder: "https://www.instagram.com/tu_usuario/", icon: <GraduationCap className="w-5 h-5" /> },
     { key: "website", label: "Sitio web", placeholder: "https://tuweb.com", icon: <Globe className="w-5 h-5" /> },
   ];
 
@@ -759,7 +817,7 @@ export default function TeacherOnboardingPage() {
   const [certificates, setCertificates] = useState<{ title: string; year: string }[]>([]);
   // Step 4
   const [blocks, setBlocks]             = useState<ScheduleBlock[]>([]);
-  // Step 5 (Ya no requiere whatsapp aquí, se toma de 'phone' del Paso 2)
+  // Step 5
   const [socialLinks, setSocialLinks]   = useState({ instagram: "", website: "" });
 
   const [saving, setSaving] = useState(false);
@@ -790,7 +848,7 @@ export default function TeacherOnboardingPage() {
 
       await api.patch("/users/me", { phone_number: fullPhone, nationality });
 
-      // 2. Guardar perfil del profesor incluyendo el teléfono del paso 2 como whatsapp en social_links
+      // 2. Guardar perfil del profesor
       await api.patch("/teachers/me/profile", {
         bio,
         title: title_,
@@ -808,7 +866,7 @@ export default function TeacherOnboardingPage() {
 
       // 3. Guardar disponibilidad si hay bloques
       if (blocks.length > 0) {
-        await api.post("/availability/me/weekly", {
+        await api.put("/availability/me/weekly", {
           timezone,
           slots: blocks,
         });
@@ -842,7 +900,7 @@ export default function TeacherOnboardingPage() {
       <SidebarProgress step={step} name={name} />
 
       <div className="flex-1 flex flex-col justify-center px-6 py-12 md:px-12 overflow-y-auto relative">
-        {/* Error global */}
+        {/* Error global de la API */}
         {error && (
           <div className="absolute top-6 right-6 left-6 md:left-auto max-w-sm bg-rose-50 border border-rose-200 text-rose-700 px-5 py-4 rounded-2xl text-sm font-bold flex items-start gap-3 shadow-lg z-50 animate-in slide-in-from-top-5">
             <X className="w-5 h-5 flex-shrink-0 mt-0.5" />

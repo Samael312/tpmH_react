@@ -37,7 +37,6 @@ const LEVELS     = ["A1", "A2", "B1", "B2", "C1", "C2"];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-// 2. Función auxiliar para saber si es vocabulario
 const isVocab = (m: Material) => m.vocabulary_words !== null && m.vocabulary_words.length > 0;
 
 function getFileIcon(filename: string | null, category: string) {
@@ -80,7 +79,7 @@ function StudentAvatar({ s, className }: { s: Student; className?: string }) {
   );
 }
 
-// ─── Modal Asignar (con buscador + avatares) ──────────────────────────────────
+// ─── Modal Asignar ───────────────────────────────────────────────────────────
 function AssignModal({
   material,
   onClose,
@@ -182,7 +181,6 @@ function AssignModal({
           </div>
         ) : (
           <>
-            {/* Buscador */}
             <div className="group relative mb-4">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2
                                   w-4 h-4 text-slate-400
@@ -267,7 +265,7 @@ function AssignModal({
   );
 }
 
-// ─── Modal Vocabulario (palabras) ─────────────────────────────────────────────
+// ─── Modal Vocabulario ────────────────────────────────────────────────────────
 function VocabModal({
   material,
   onClose,
@@ -697,6 +695,7 @@ export default function MaterialsPage() {
   const [category, setCategory]       = useState(CATEGORIES[0]);
   const [level, setLevel]             = useState(LEVELS[0]);
   const [file, setFile]               = useState<File | null>(null);
+  const [fileError, setFileError]     = useState<string | null>(null);
 
   const [vocabTitle, setVocabTitle]             = useState("");
   const [vocabDescription, setVocabDescription] = useState("");
@@ -718,6 +717,7 @@ export default function MaterialsPage() {
   const uploadFile = async () => {
     if (!title || !file) return;
     setUploading(true);
+    setFileError(null);
     try {
       const form = new FormData();
       form.append("title", title);
@@ -732,7 +732,8 @@ export default function MaterialsPage() {
       if (fileRef.current) fileRef.current.value = "";
       fetchMaterials();
     } catch (e: any) {
-      alert(e.response?.data?.detail || "Error subiendo");
+      const errorMsg = e.response?.data?.detail || "Error subiendo el archivo";
+      setFileError(errorMsg);
     } finally { setUploading(false); }
   };
 
@@ -1003,7 +1004,20 @@ export default function MaterialsPage() {
                     type="file"
                     className="hidden"
                     accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                    onChange={e => setFile(e.target.files?.[0] ?? null)}
+                    onChange={e => {
+                      const selectedFile = e.target.files?.[0] ?? null;
+                      if (selectedFile) {
+                        const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+                        if (selectedFile.size > MAX_SIZE) {
+                          setFileError("El archivo supera el límite permitido de 10 MB.");
+                          setFile(null);
+                          if (fileRef.current) fileRef.current.value = "";
+                          return;
+                        }
+                      }
+                      setFileError(null);
+                      setFile(selectedFile);
+                    }}
                   />
                   {file ? (
                     <div className="flex items-center justify-center gap-3">
@@ -1016,7 +1030,7 @@ export default function MaterialsPage() {
                           {file.name}
                         </p>
                         <p className="text-xs text-slate-500">
-                          {(file.size / 1024).toFixed(0)} KB
+                          {(file.size / (1024 * 1024)).toFixed(2)} MB
                         </p>
                       </div>
                       <button
@@ -1037,11 +1051,24 @@ export default function MaterialsPage() {
                         Arrastra un archivo o haz clic
                       </p>
                       <p className="text-xs text-slate-400 mt-1">
-                        PDF, DOC, DOCX, JPG, PNG
+                        PDF, DOC, DOCX, JPG, PNG (Máx. 10 MB)
                       </p>
                     </>
                   )}
                 </div>
+
+                {fileError && (
+                  <div className="sm:col-span-2 bg-rose-50 border border-rose-100 text-rose-600
+                                  px-4 py-3 rounded-xl text-xs font-bold flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 text-rose-500" />
+                      <span>{fileError}</span>
+                    </div>
+                    <button onClick={() => setFileError(null)} className="text-rose-400 hover:text-rose-600">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
 
                 <button
                   onClick={uploadFile}
@@ -1275,7 +1302,6 @@ export default function MaterialsPage() {
               </button>
             </div>
           ) : (
-            // CAMBIO PRINCIPAL: Se ajustó el grid a 4 columnas y las acciones de las tarjetas (incluyendo trash2)
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {filtered.map(m => (
                 <div key={m.id}
@@ -1320,7 +1346,6 @@ export default function MaterialsPage() {
                     </p>
                   )}
 
-                  {/* ─── Fila de Botones (4 columnas visuales distribuidas equitativamente) ─── */}
                   <div className="grid grid-cols-2 gap-2 mt-auto">
                     <button
                       onClick={() => setAssignTarget(m)}

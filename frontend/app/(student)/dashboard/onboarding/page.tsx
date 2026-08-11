@@ -134,7 +134,7 @@ function StepWelcome({ name, onNext }: { name: string; onNext: () => void }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
         {[
-          { icon: <Globe className="w-5 h-5 text-blue-500" />, title: "Zona horaria", text: "Para sincronizar clases" },
+          { icon: <Globe className="w-5 h-5 text-blue-500" />, title: "Zona horaria", text: "Para synchronizar clases" },
           { icon: <Target className="w-5 h-5 text-purple-500" />, title: "Objetivo", text: "Para adaptar el contenido" },
           { icon: <Clock className="w-5 h-5 text-pink-500" />, title: "Disponibilidad", text: "Para mostrarte huecos" },
           { icon: <CreditCard className="w-5 h-5 text-emerald-500" />, title: "Pagos", text: "Para agilizar reservas" },
@@ -188,7 +188,11 @@ function StepPreferences({
   onRemoveAvatar,
   onNext, onBack,
 }: StepPreferencesProps) {
-  const valid = Boolean(timezone && goal && phone.trim() && nationality);
+  const [useCustomGoal, setUseCustomGoal] = useState(() => {
+    return Boolean(goal && !GOALS.some((g) => g.text === goal));
+  });
+
+  const valid = Boolean(timezone && goal.trim() && phone.trim() && nationality);
 
   const COUNTRY_OPTIONS = useMemo(() => {
     const map = new Map<string, CountryInfo>();
@@ -344,21 +348,58 @@ function StepPreferences({
           {GOALS.map((g) => (
             <button
               key={g.text}
-              onClick={() => setGoal(g.text)}
+              type="button"
+              onClick={() => {
+                setUseCustomGoal(false);
+                setGoal(g.text);
+              }}
               className={`flex items-start gap-4 p-4 rounded-2xl border-2 text-left transition-all duration-200 ${
-                goal === g.text
+                !useCustomGoal && goal === g.text
                   ? "border-pink-500 bg-pink-50 shadow-md"
                   : "border-slate-100 bg-white hover:border-pink-200"
               }`}
             >
               <div className="text-3xl">{g.icon}</div>
               <div>
-                <p className={`font-bold ${goal === g.text ? "text-pink-700" : "text-slate-800"}`}>{g.text}</p>
+                <p className={`font-bold ${!useCustomGoal && goal === g.text ? "text-pink-700" : "text-slate-800"}`}>{g.text}</p>
                 <p className="text-xs text-slate-500 mt-1">{g.desc}</p>
               </div>
             </button>
           ))}
+
+          {/* Opción de Objetivo Personalizado */}
+          <button
+            type="button"
+            onClick={() => {
+              setUseCustomGoal(true);
+              setGoal("");
+            }}
+            className={`flex items-start gap-4 p-4 rounded-2xl border-2 text-left transition-all duration-200 ${
+              useCustomGoal
+                ? "border-pink-500 bg-pink-50 shadow-md"
+                : "border-slate-100 bg-white hover:border-pink-200"
+            }`}
+          >
+            <div className="text-3xl">✍️</div>
+            <div>
+              <p className={`font-bold ${useCustomGoal ? "text-pink-700" : "text-slate-800"}`}>Otro objetivo</p>
+              <p className="text-xs text-slate-500 mt-1">Escribe tu propio objetivo personalizado</p>
+            </div>
+          </button>
         </div>
+
+        {/* Input Textarea cuando se selecciona "Otro objetivo" */}
+        {useCustomGoal && (
+          <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+            <textarea
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              placeholder="Describe tu objetivo personalizado aquí..."
+              className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl p-4 text-base font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300 resize-none"
+              rows={3}
+            />
+          </div>
+        )}
       </div>
 
       <div className="flex gap-4 pt-6 border-t border-slate-100">
@@ -765,7 +806,7 @@ export default function OnboardingPage() {
       next();
 
       // 8. Redirigir al dashboard tras 3 segundos
-      setTimeout(() => router.push("/dashboard"), 3000);
+      setTimeout(() => router.replace("/dashboard"), 3000);
 
     } catch (e: any) {
       const errorDetail = e.response?.data?.detail;
@@ -822,7 +863,7 @@ export default function OnboardingPage() {
                 <StepSuccess name={name} />
                 <div className="max-w-md mx-auto mt-8">
                   <button
-                    onClick={() => router.push("/dashboard")}
+                    onClick={() => router.replace("/dashboard")}
                     className="w-full py-4 text-base font-bold text-white rounded-xl bg-slate-800 hover:bg-slate-900 shadow-xl transition-all duration-300 flex items-center justify-center gap-2"
                   >
                     Ir a mi dashboard ahora

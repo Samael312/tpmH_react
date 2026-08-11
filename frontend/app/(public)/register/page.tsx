@@ -77,7 +77,7 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState(false);
 
   const [touched, setTouched] = useState<Record<string, boolean>>({});
-
+  
   const markTouched = (field: string) =>
     setTouched((prev) => ({ ...prev, [field]: true }));
 

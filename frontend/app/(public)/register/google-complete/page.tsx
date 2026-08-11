@@ -18,6 +18,7 @@ export default function GoogleCompleteSignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [checkingSession, setCheckingSession] = useState(true);
+  const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     const token = sessionStorage.getItem("google_id_token");
@@ -28,7 +29,9 @@ export default function GoogleCompleteSignupPage() {
     }
     setIdToken(token);
     if (raw) {
-      try { setPrefill(JSON.parse(raw)); } catch {}
+      try {
+        setPrefill(JSON.parse(raw));
+      } catch {}
     }
     setCheckingSession(false);
   }, [router]);
@@ -57,7 +60,9 @@ export default function GoogleCompleteSignupPage() {
         });
         const userData = meRes.data;
         login(access_token, {
-          username: uname, name, role: userRole,
+          username: uname,
+          name,
+          role: userRole,
           email: userData.email || email,
           surname: userData.surname || surname,
           onboarding_completed: userData.onboarding_completed ?? false,
@@ -106,8 +111,14 @@ export default function GoogleCompleteSignupPage() {
       <main className="flex-1 flex justify-center pt-12 p-4 relative z-10">
         <div className="w-full max-w-sm animate-in fade-in slide-in-from-bottom-6 duration-500">
           <div className="flex flex-col items-center mb-8">
-            {prefill.avatar ? (
-              <img src={prefill.avatar} alt="" className="w-16 h-16 rounded-2xl shadow-xl shadow-pink-200 mb-4 object-cover" />
+            {prefill.avatar && !imgError ? (
+              <img
+                src={prefill.avatar}
+                alt={prefill.name || "Usuario"}
+                referrerPolicy="no-referrer"
+                onError={() => setImgError(true)}
+                className="w-16 h-16 rounded-2xl shadow-xl shadow-pink-200 mb-4 object-cover"
+              />
             ) : (
               <div className="w-16 h-16 rounded-2xl bg-pink-100 flex items-center justify-center shadow-xl shadow-pink-200 mb-4">
                 <User className="w-7 h-7 text-pink-500" />
@@ -117,13 +128,12 @@ export default function GoogleCompleteSignupPage() {
               ¡Hola{prefill.name ? `, ${prefill.name}` : ""}!
             </h1>
             <p className="text-slate-500 text-sm mt-1 text-center">
-              Solo necesitamos un par de datos más para crear tu cuenta
+              Necesitamos los siguientes datos para seguir tu registro
             </p>
           </div>
 
           <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6">
             <form onSubmit={handleSubmit} className="space-y-4">
-
               {prefill.email && (
                 <div className="bg-slate-50 rounded-xl px-4 py-3 flex items-center gap-2 text-xs font-bold text-slate-500">
                   <Mail className="w-4 h-4 text-slate-400" />
@@ -139,7 +149,7 @@ export default function GoogleCompleteSignupPage() {
                   {[
                     { id: "student", label: "Estudiante", icon: BookOpen },
                     { id: "teacher", label: "Profesor", icon: GraduationCap },
-                  ].map(r => (
+                  ].map((r) => (
                     <button
                       key={r.id}
                       type="button"
@@ -162,10 +172,12 @@ export default function GoogleCompleteSignupPage() {
                   Elige tu usuario
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">@</span>
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">
+                    @
+                  </span>
                   <input
                     value={username}
-                    onChange={e => setUsername(e.target.value.toLowerCase().replace(/\s/g, ""))}
+                    onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s/g, ""))}
                     placeholder="tu_usuario"
                     className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-8 pr-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
                   />
@@ -186,7 +198,9 @@ export default function GoogleCompleteSignupPage() {
                 {loading ? (
                   <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                 ) : (
-                  <>Crear cuenta <ArrowRight className="w-4 h-4" /></>
+                  <>
+                    Crear cuenta <ArrowRight className="w-4 h-4" />
+                  </>
                 )}
               </button>
             </form>

@@ -32,12 +32,12 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   useEffect(() => {
     if (!hasHydrated) return;
     if (!user || !token) {
-      router.push("/login");
+      router.replace("/login");
       return;
     }
 
     if (user.role !== "student") {
-      router.push("/login");
+      router.replace("/login");
       return;
     }
 
@@ -48,38 +48,38 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     }
 
     Promise.all([
-    api.get("/users/me"),
-    api.get("/users/me/student-profile").catch(() => ({ data: {} })),
-  ]).then(([meRes, spRes]) => {
-    const userData = meRes.data;
-    const studentData = spRes.data;
-    const onboardingCompleted = userData.onboarding_completed ?? false;
+      api.get("/users/me"),
+      api.get("/users/me/student-profile").catch(() => ({ data: {} })),
+    ]).then(([meRes, spRes]) => {
+      const userData = meRes.data;
+      const studentData = spRes.data;
+      const onboardingCompleted = userData.onboarding_completed ?? false;
 
-    setUser({
-      ...user,
-      onboarding_completed: onboardingCompleted,
-      // solo sobreescribe si el perfil trae un valor real — nunca con "UTC" falso
-      timezone: studentData?.timezone || user.timezone,
-      goal: studentData?.goal ?? user.goal,
+      setUser({
+        ...user,
+        onboarding_completed: onboardingCompleted,
+        // solo sobreescribe si el perfil trae un valor real — nunca con "UTC" falso
+        timezone: studentData?.timezone || user.timezone,
+        goal: studentData?.goal ?? user.goal,
+      });
+
+      if (!onboardingCompleted) {
+        router.replace("/dashboard/onboarding");
+      } else {
+        setChecked(true);
+      }
+    }).catch(() => {
+      if (!user.onboarding_completed) {
+        router.replace("/dashboard/onboarding");
+      } else {
+        setChecked(true);
+      }
     });
-
-    if (!onboardingCompleted) {
-      router.push("/dashboard/onboarding");
-    } else {
-      setChecked(true);
-    }
-  }).catch(() => {
-    if (!user.onboarding_completed) {
-      router.push("/dashboard/onboarding");
-    } else {
-      setChecked(true);
-    }
-  });
-}, [pathname, hasHydrated]);
+  }, [pathname, hasHydrated]);
 
   const handleLogout = () => {
     logout();
-    router.push("/login");
+    router.replace("/login");
   };
 
   if (!checked && !isFullscreen) {
