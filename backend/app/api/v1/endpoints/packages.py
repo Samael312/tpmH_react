@@ -1,8 +1,9 @@
-#models/packages.py
+# app/routers/packages.py
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from datetime import timedelta
 
 from app.db.base import get_db
 from app.auth.dependencies import (
@@ -13,7 +14,6 @@ from app.auth.dependencies import (
 )
 from app.models.class_ import Class, ClassType 
 from app.core.timezone import utc_now             
-from datetime import timedelta 
 from app.models.user import User
 from app.models.package import Package, Enrollment, EnrollmentStatus
 from app.models.teacher import TeacherProfile
@@ -43,16 +43,7 @@ def create_package(
     """El profesor crea un paquete de clases"""
     package = Package(
         teacher_id=current_user.teacher_profile.id,
-        name=data.name,
-        subject=data.subject,
-        description=data.description,
-        description_type=data.description_type,
-        description_items=data.description_items,
-        icon=data.icon,
-        color=data.color,
-        classes_count=data.classes_count,
-        price=data.price,
-        duration_minutes=data.duration_minutes,
+        **data.model_dump()
     )
     db.add(package)
     db.commit()
@@ -121,6 +112,7 @@ def deactivate_package(
     db.commit()
     return {"message": "Paquete desactivado"}
 
+
 # ─── PROFESOR — Seguimiento de cumplimiento ──────────────────────────────────
 
 @router.get("/teacher/enrollments", response_model=List[EnrollmentComplianceResponse])
@@ -145,8 +137,6 @@ def get_teacher_enrollments_overview(
 
         completed_count = sum(1 for c in classes if c.status in ("completed", "finalized"))
         no_show_count = sum(1 for c in classes if c.status == "no_show")
-        # Aproximamos "cancelada tarde" comparando contra cuándo se actualizó
-        # el registro, ya que no guardamos un timestamp específico de cancelación.
         cancelled_late_count = sum(
             1 for c in classes
             if c.status == "cancelled"
@@ -187,79 +177,6 @@ def get_teacher_enrollments_overview(
 
     return result
 
-@router.get("/admin/pending-requests")
-def get_all_pending_requests(
-    current_user: User = Depends(get_current_staff),
-    db: Session = Depends(get_db)
-):
-    """
-    Lista TODAS las solicitudes pendientes (renovación y cambio de
-    paquete) de toda la plataforma, sin importar el profesor. Pensado
-    para que superadmin/teacher_admin puedan aprobar sin depender de
-    que el profesor dueño entre a su propio panel.
-    """
-    enrollments = db.query(Enrollment).filter(
-        Enrollment.status.in_([
-            EnrollmentStatus.pending_renewal,
-            EnrollmentStatus.pending_package_change,
-        ])
-    ).order_by(Enrollment.created_at.desc()).all()
-
-    result = []
-    for e in enrollments:
-        classes = db.query(Class).filter(Class.enrollment_id == e.id).all()
-
-        completed_count = sum(1 for c in classes if c.status in ("completed", "finalized"))
-        no_show_count = sum(1 for c in classes if c.status == "no_show")
-        cancelled_late_count = sum(
-            1 for c in classes
-            if c.status == "cancelled"
-            and c.updated_at is not None
-            and (c.start_time_utc - c.updated_at) < timedelta(hours=12)
-        )
-
-        student_user = e.student.user if e.student else None
-        package = e.package
-        teacher_user = e.teacher.user if e.teacher and e.teacher.user else None
-
-        requested_pkg_name = None
-        if e.renewal_requested_package_id:
-            rp = db.query(Package).filter(Package.id == e.renewal_requested_package_id).first()
-            requested_pkg_name = rp.name if rp else None
-
-        change_pkg_name = None
-        if e.change_requested_package_id:
-            cp = db.query(Package).filter(Package.id == e.change_requested_package_id).first()
-            change_pkg_name = cp.name if cp else None
-
-        item = EnrollmentComplianceResponse(
-            id=e.id,
-            student_id=e.student_id,
-            student_username=student_user.username if student_user else "unknown",
-            student_name=f"{student_user.name} {student_user.surname}" if student_user else "Desconocido",
-            package_id=e.package_id,
-            package_name=package.name if package else "N/A",
-            classes_used=e.classes_used,
-            classes_total=e.classes_total,
-            status=e.status,
-            completed_count=completed_count,
-            no_show_count=no_show_count,
-            cancelled_late_count=cancelled_late_count,
-            renewal_requested_package_name=requested_pkg_name,
-            change_requested_package_name=change_pkg_name,
-            created_at=e.created_at,
-        )
-        # Campos extra solo para esta vista (no rompen el schema porque
-        # Pydantic v2 permite atributos dinámicos vía model_dump si se
-        # usan aparte) — los añadimos como dict al final en vez de forzarlos
-        # al schema tipado, para no tener que tocar EnrollmentComplianceResponse.
-        result.append({
-            **item.model_dump(),
-            "teacher_username": teacher_user.username if teacher_user else "unknown",
-            "teacher_name": f"{teacher_user.name} {teacher_user.surname}" if teacher_user else "Desconocido",
-        })
-
-    return result
 
 # ─── PÚBLICO — Ver paquetes de un profesor ───────────────────────────────────
 
@@ -347,8 +264,7 @@ def request_renewal(
     """
     El estudiante solicita renovar su paquete (mismo u otro del mismo
     profesor). El enrollment pasa a 'pending_renewal' y se guarda cuál
-    paquete pidió, para que el staff/profesor no tenga que preguntarle
-    de nuevo al aprobar.
+    paquete pidió.
     """
     current_enrollment = db.query(Enrollment).filter(
         Enrollment.id == data.current_enrollment_id,
@@ -399,16 +315,14 @@ def request_renewal(
     db.commit()
 
     return {
-        "message": "Solicitud de renovación enviada. "
-                   "Tu profesor(a) la activará al confirmar tu pago.",
+        "message": "Solicitud de renovación enviada. Tu profesor(a) la activará al confirmar tu pago.",
         "enrollment_id": current_enrollment.id,
         "requested_package": new_package.name,
         "price": new_package.price,
     }
 
 
-# ─── STAFF — Activar renovación ──────────────────────────────────────────────
-
+# ─── ESTUDIANTE — Selección de paquete inicial ────────────────────────────────
 
 @router.post("/select-initial")
 def select_initial_package(
@@ -417,9 +331,7 @@ def select_initial_package(
     db: Session = Depends(get_db)
 ):
     """
-    El estudiante elige su primer paquete con UN profesor, solo permitido
-    justo después de completar la clase de prueba con ese mismo profesor
-    (stage == needs_package para esa relación específica).
+    El estudiante elige su primer paquete con un profesor tras completar la clase de prueba.
     """
     from app.core.class_logic import get_student_booking_stage
 
@@ -440,8 +352,6 @@ def select_initial_package(
             detail="Solo puedes elegir tu paquete inicial después de completar la clase de prueba con este profesor."
         )
 
-    # Se crea el enrollment con 0 créditos desbloqueados y estado "unpaid".
-    # El frontend debe llamar a /notify-payment inmediatamente después.
     enrollment = Enrollment(
         student_id=student_id,
         package_id=package.id,
@@ -449,7 +359,7 @@ def select_initial_package(
         classes_used=0,
         classes_total=package.classes_count,
         unlocked_credits=0,
-        payment_installment_status="unpaid",
+        payment_status="unpaid",
         status=EnrollmentStatus.active,
     )
     db.add(enrollment)
@@ -462,18 +372,11 @@ def select_initial_package(
         "package_id": package.id,
         "classes_total": enrollment.classes_total,
         "unlocked_credits": enrollment.unlocked_credits,
-        "payment_installment_status": enrollment.payment_installment_status,
+        "payment_status": enrollment.payment_status,
     }
 
-# ─── ESTUDIANTE — Cambio de paquete (paquete actual sigue activo) ───────────
 
-# Estados de clase que "ocupan" un cupo del paquete al validar un cambio:
-# completed/no_show = ya sucedieron y cuentan como usadas; confirmed = clase
-# futura ya confirmada; pending = clase futura reservada pero sin confirmar
-# pago todavía. finalized/cancelled no cuentan (finalized ya se resolvió
-# aparte, cancelled liberó su cupo).
-
-
+# ─── ESTUDIANTE — Cambio de paquete ──────────────────────────────────────────
 
 @router.post("/request-package-change")
 def request_package_change(
@@ -482,16 +385,7 @@ def request_package_change(
     db: Session = Depends(get_db)
 ):
     """
-    El estudiante solicita cambiar de paquete (con el MISMO profesor)
-    mientras el paquete actual sigue activo. No crea un enrollment nuevo:
-    al aprobarse, este mismo enrollment se actualiza in-place.
-
-    Se rechaza si:
-    - El enrollment no está 'active' (agotado → usar renovación; ya tiene
-      una solicitud pendiente; cancelado, etc.)
-    - El paquete nuevo no pertenece al mismo profesor o no está activo
-    - Las clases que ya ocupan un cupo (completed/no_show/confirmed/pending)
-      superan el límite del paquete nuevo
+    El estudiante solicita cambiar de paquete manteniendo la relación activa.
     """
     current_enrollment = db.query(Enrollment).filter(
         Enrollment.id == data.current_enrollment_id,
@@ -507,8 +401,7 @@ def request_package_change(
     if current_enrollment.status != EnrollmentStatus.active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Solo puedes solicitar un cambio de paquete si tu paquete actual está activo. "
-                   "Si ya lo agotaste, usa la opción de renovar."
+            detail="Solo puedes solicitar un cambio de paquete si tu paquete actual está activo. Si ya lo agotaste, usa la opción de renovar."
         )
 
     new_package = db.query(Package).filter(
@@ -520,8 +413,7 @@ def request_package_change(
     if not new_package:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Paquete no encontrado, no disponible, o no pertenece a tu profesor actual. "
-                   "Solo puedes cambiar de paquete dentro del mismo profesor."
+            detail="Paquete no encontrado, no disponible, o no pertenece a tu profesor actual."
         )
 
     if new_package.id == current_enrollment.package_id:
@@ -551,8 +443,7 @@ def request_package_change(
     db.commit()
 
     return {
-        "message": "Solicitud de cambio de paquete enviada. "
-                   "Tu profesor(a) o el staff la aprobará en breve.",
+        "message": "Solicitud de cambio de paquete enviada. Tu profesor(a) o el staff la aprobará en breve.",
         "enrollment_id": current_enrollment.id,
         "requested_package": new_package.name,
         "price": new_package.price,
@@ -567,7 +458,6 @@ def cancel_package_change(
 ):
     """
     El estudiante cancela su solicitud de cambio de paquete.
-    El enrollment vuelve a 'active' tal cual estaba, sin ningún cambio.
     """
     enrollment = db.query(Enrollment).filter(
         Enrollment.id == enrollment_id,
@@ -587,12 +477,16 @@ def cancel_package_change(
 
     return {"message": "Solicitud de cambio de paquete cancelada. Tu paquete original sigue activo."}
 
+
 @router.get("/enrollment/{enrollment_id}")
 def get_enrollment_package(
     enrollment_id: int,
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
+    """
+    Obtiene los detalles del paquete asignado a un enrollment.
+    """
     enrollment = db.query(Enrollment).filter(
         Enrollment.id == enrollment_id,
         Enrollment.student_id == current_user.student_profile.id
@@ -610,6 +504,6 @@ def get_enrollment_package(
     return {
         "package": package,
         "installments_paid": enrollment.installments_paid,
+        "payment_status": enrollment.payment_status,
         "enrollment_id": enrollment.id
     }
-

@@ -1,10 +1,12 @@
+// frontend/components/payments/PackageCheckout.tsx
+
 "use client";
 
 import { useState } from "react";
 import { Check, X, Loader2, CreditCard, Split } from "lucide-react";
 import api from "@/lib/api";
 
-interface PackageLite {
+export interface PackageLite {
   id: number;
   name: string;
   price: number;
@@ -15,7 +17,7 @@ interface PackageLite {
   icon?: string;
 }
 
-interface PackageCheckoutProps {
+export interface PackageCheckoutProps {
   pkg: PackageLite;
   enrollmentId: number;
   installmentsPaid: number; // 0 si es la primera vez
@@ -72,14 +74,13 @@ export default function PackageCheckout({
 
   if (done) {
     return (
-      <div className="flex flex-col items-center py-10 gap-3">
-        <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center">
+      <div className="flex flex-col items-center py-10 gap-3 animate-fade-in">
+        <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center shadow-inner">
           <Check className="w-7 h-7 text-emerald-600" />
         </div>
-        <p className="font-bold text-slate-700">¡Pago notificado!</p>
-        <p className="text-xs text-slate-500 text-center max-w-xs">
-          Tu profesor(a) o el staff lo validará en breve. Verás tus créditos disponibles
-          en cuanto se apruebe.
+        <p className="font-bold text-slate-800 text-lg">¡Pago notificado!</p>
+        <p className="text-xs text-slate-500 text-center max-w-xs leading-relaxed">
+          Tu profesor(a) o el equipo administrativo validará la transacción en breve. Verás tus créditos disponibles tan pronto como sea aprobada.
         </p>
       </div>
     );
@@ -87,22 +88,28 @@ export default function PackageCheckout({
 
   return (
     <div className="space-y-5">
-      {/* Header del paquete */}
-      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-lg">{pkg.icon || "📦"}</span>
-          <p className="text-sm font-black text-slate-800">{pkg.name}</p>
+      {/* Header / Resumen del paquete */}
+      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xl">{pkg.icon || "📦"}</span>
+            <p className="text-sm font-black text-slate-800">{pkg.name}</p>
+          </div>
+          <p className="text-xs text-slate-500 font-medium">
+            {pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases incluidas`}
+          </p>
         </div>
-        <p className="text-xs text-slate-500">
-          {pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`}
-        </p>
+        <div className="text-right">
+          <span className="text-xs font-bold text-slate-400 block">Total paquete</span>
+          <span className="text-sm font-black text-slate-700">${pkg.price.toFixed(2)}</span>
+        </div>
       </div>
 
       {/* Selector de cuotas (Solo si lo permite y no está ya pagando cuotas) */}
       {pkg.allow_installments && !alreadyMidInstallments && (
         <div>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-            Forma de pago
+            Modalidad de pago
           </p>
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -110,7 +117,7 @@ export default function PackageCheckout({
               onClick={() => setUseInstallments(false)}
               className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border-2 text-xs font-bold transition-all ${
                 !useInstallments
-                  ? "border-pink-400 bg-pink-50 text-pink-600"
+                  ? "border-pink-500 bg-pink-50 text-pink-600 shadow-sm"
                   : "border-slate-100 bg-white text-slate-500 hover:bg-slate-50"
               }`}
             >
@@ -121,7 +128,7 @@ export default function PackageCheckout({
               onClick={() => setUseInstallments(true)}
               className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border-2 text-xs font-bold transition-all ${
                 useInstallments
-                  ? "border-pink-400 bg-pink-50 text-pink-600"
+                  ? "border-pink-500 bg-pink-50 text-pink-600 shadow-sm"
                   : "border-slate-100 bg-white text-slate-500 hover:bg-slate-50"
               }`}
             >
@@ -131,31 +138,35 @@ export default function PackageCheckout({
         </div>
       )}
 
-      {/* Banner si ya está en proceso de pago de cuotas */}
+      {/* Banner de progreso si ya está en cuotas */}
       {alreadyMidInstallments && (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-xs font-bold text-amber-700">
-          Pagando cuota {nextIndex} de {pkg.installment_count || 1}
+        <div className="bg-amber-50 border border-amber-200/60 rounded-xl px-4 py-3 text-xs font-bold text-amber-800 flex items-center justify-between">
+          <span>Pagando cuota en curso</span>
+          <span className="bg-amber-200/60 px-2 py-0.5 rounded-md text-[11px]">
+            {nextIndex} de {pkg.installment_count || 1}
+          </span>
         </div>
       )}
 
-      {/* Card de monto */}
-      <div className="bg-pink-50 border border-pink-100 rounded-2xl p-4 text-center">
-        <p className="text-[10px] font-black text-pink-400 uppercase tracking-widest mb-1">
+      {/* Card de Monto a Pagar */}
+      <div className="bg-gradient-to-br from-pink-50 to-rose-50 border border-pink-100 rounded-2xl p-4 text-center">
+        <p className="text-[10px] font-black text-pink-500 uppercase tracking-widest mb-1">
           {useInstallments || alreadyMidInstallments
             ? `Monto de la cuota ${alreadyMidInstallments ? nextIndex : 1}`
-            : "Monto a pagar"}
+            : "Monto total a transferir"}
         </p>
-        <p className="text-3xl font-black text-pink-700">${amount.toFixed(2)}</p>
+        <p className="text-3xl font-black text-pink-600">${amount.toFixed(2)} USD</p>
       </div>
 
-      {/* Input de referencia */}
+      {/* Input de Referencia */}
       <div>
         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
           Referencia de transacción (opcional)
         </label>
         <input
+          type="text"
           value={reference}
-          onChange={e => setReference(e.target.value)}
+          onChange={(e) => setReference(e.target.value)}
           placeholder="Ej: últimos 4 dígitos, ID de transferencia..."
           className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold
                      text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none
@@ -163,15 +174,16 @@ export default function PackageCheckout({
         />
       </div>
 
-      {/* Mensaje de error */}
+      {/* Alerta de Error */}
       {error && (
         <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
-          <X className="w-4 h-4 flex-shrink-0" /> {error}
+          <X className="w-4 h-4 flex-shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
-      {/* Botones de acción */}
-      <div className="flex gap-3">
+      {/* Botones de Acción */}
+      <div className="flex gap-3 pt-1">
         <button
           type="button"
           onClick={onClose}
@@ -192,7 +204,9 @@ export default function PackageCheckout({
           {sending ? (
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
-            <><Check className="w-4 h-4" /> Ya realicé el pago</>
+            <>
+              <Check className="w-4 h-4" /> Ya realicé el pago
+            </>
           )}
         </button>
       </div>

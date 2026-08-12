@@ -1,17 +1,19 @@
+# app/models/package.py
+
+import enum
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.db.base import Base
-import enum
 from sqlalchemy.dialects.postgresql import JSONB
+
+from app.db.base import Base
 
 
 class EnrollmentStatus(str, enum.Enum):
-    active    = "active"
-    completed = "completed"   # Todas las clases usadas
+    active = "active"
+    completed = "completed"  # Todas las clases usadas
     cancelled = "cancelled"
-    # pending_renewal → estudiante solicitó renovar, esperando pago del staff
-    pending_renewal = "pending_renewal"
+    pending_renewal = "pending_renewal"  # Estudiante solicitó renovar, esperando pago/confirmación
     pending_package_change = "pending_package_change"
 
 
@@ -22,11 +24,10 @@ class Package(Base):
     teacher_id = Column(Integer, ForeignKey("teacher_profiles.id"), nullable=False)
 
     name = Column(String, nullable=False)
-    subject = Column(String, nullable=False)
-    # "Inglés", "Francés", "Guitarra", "Matemáticas", etc.
+    subject = Column(String, nullable=False)  # "Inglés", "Francés", "Guitarra", "Matemáticas", etc.
 
     description = Column(String, nullable=True)
-    classes_count = Column(Integer, nullable=True)
+    classes_count = Column(Integer, nullable=True)  # NULL si es paquete ilimitado/mensual
     price = Column(Float, nullable=False)
     duration_minutes = Column(Integer, default=60)
     is_active = Column(Boolean, default=True)
@@ -35,18 +36,14 @@ class Package(Base):
     color = Column(String, nullable=True, default="#ec4899")
     description_type = Column(String, default="paragraph")  # "paragraph" | "list"
     description_items = Column(JSONB, nullable=True)  # ["Punto 1", "Punto 2", ...]
+
+    # Campos para pagos en cuotas
     allow_installments = Column(Boolean, default=False)
-    installment_count = Column(Integer, nullable=True)   # ej. 3
-    installment_amount = Column(Float, nullable=True) 
+    installment_count = Column(Integer, nullable=True)   # Número total de cuotas (ej. 3)
+    installment_amount = Column(Float, nullable=True)    # Precio por cuota
 
-
-
-
+    # Relaciones
     teacher = relationship("TeacherProfile", back_populates="packages")
-
-    # Explícito: solo enrollments donde package_id apunta a este paquete
-    # (no confundir con renewal_requested_package_id, que es otra FK
-    # hacia esta misma tabla usada para las solicitudes de renovación).
     enrollments = relationship(
         "Enrollment",
         back_populates="package",
@@ -65,25 +62,27 @@ class Enrollment(Base):
     classes_used = Column(Integer, default=0)
     classes_total = Column(Integer, nullable=True)
 
-    status = Column(Enum(EnrollmentStatus),default=EnrollmentStatus.active)
+    status = Column(Enum(EnrollmentStatus), default=EnrollmentStatus.active)
 
-    # Renovación
+    # Renovación y Cambio de Paquete
     renewal_count = Column(Integer, default=0)
     previous_enrollment_id = Column(Integer, ForeignKey("enrollments.id"), nullable=True)
     renewal_requested_package_id = Column(Integer, ForeignKey("packages.id"), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    student = relationship("StudentProfile", back_populates="enrollments")
     change_requested_package_id = Column(Integer, ForeignKey("packages.id"), nullable=True)
+
+    # Gestión de Créditos, Activación y Cuotas
     unlocked_credits = Column(Integer, default=0)
+    prepaid_unlimited_credits = Column(Integer, default=0)
     payment_status = Column(String, default="unpaid")  # "unpaid" | "partially_paid" | "paid"
     installments_paid = Column(Integer, default=0)
-    prepaid_unlimited_credits = Column(Integer, default=0)
     activated_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-
-    package = relationship("Package", back_populates="enrollments",foreign_keys=[package_id],)
-    renewal_requested_package = relationship("Package", foreign_keys=[renewal_requested_package_id], viewonly=True,)
-    change_requested_package = relationship("Package", foreign_keys=[change_requested_package_id],viewonly=True,)
+    # Relaciones
+    student = relationship("StudentProfile", back_populates="enrollments")
+    teacher = relationship("TeacherProfile", back_populates="enrollments")
+    package = relationship("Package", back_populates="enrollments", foreign_keys=[package_id])
+    renewal_requested_package = relationship("Package", foreign_keys=[renewal_requested_package_id], viewonly=True)
+    change_requested_package = relationship("Package", foreign_keys=[change_requested_package_id], viewonly=True)
     classes = relationship("Class", back_populates="enrollment")
     payment = relationship("Payment", back_populates="enrollment", uselist=False)
-    teacher = relationship("TeacherProfile", back_populates="enrollments")

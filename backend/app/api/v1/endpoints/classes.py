@@ -1,3 +1,5 @@
+# app/routers/classes.py
+
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
@@ -107,11 +109,6 @@ def _build_class_responses(classes: list[Class], db: Session) -> list[ClassRespo
         data["student_name"] = (
             f"{student_user.name} {student_user.surname}" if student_user else None
         )
-        # IMPORTANTE: usamos la zona horaria ACTUAL del perfil, no la que
-        # quedó guardada en la fila de Class al momento de reservar. Así,
-        # si el profesor o el estudiante cambian su zona horaria después,
-        # todas sus clases (pasadas y futuras) se muestran correctamente
-        # sin tener que tocar la base de datos.
         data["teacher_timezone"] = teacher.timezone if teacher else data.get("teacher_timezone")
         data["student_timezone"] = student.timezone if student else data.get("student_timezone")
         
@@ -175,7 +172,7 @@ def book_class(
     enrollment = db.query(Enrollment).filter(
         Enrollment.id == data.enrollment_id,
         Enrollment.student_id == student_id,
-        Enrollment.status == EnrollmentStatus.active
+        Enrollment.status.in_([EnrollmentStatus.active, EnrollmentStatus.pending_package_change])
     ).first()
 
     if not enrollment:
@@ -184,12 +181,18 @@ def book_class(
             detail="Enrollment no encontrado o no activo"
         )
 
-    if enrollment.classes_total is not None and enrollment.classes_used >= enrollment.classes_total:
+    if enrollment.payment_status == "unpaid":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Has agotado todas las clases de este paquete. "
-                "Solicita una renovación desde tu dashboard."
-    )
+            detail="Tu paquete está pendiente de confirmación de pago"
+        )
+
+    if enrollment.package.classes_count is not None:
+        if enrollment.classes_used >= enrollment.unlocked_credits:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No tienes créditos disponibles todavía. Paga la siguiente cuota o renueva tu paquete."
+            )
 
     can_book, error_msg = can_book_slot(
         start_time_utc=data.start_time_utc,
@@ -207,6 +210,10 @@ def book_class(
     teacher_tz = getattr(enrollment.teacher, "timezone", None) if enrollment.teacher else None
     day_of_week = DAYS_ES[data.start_time_utc.weekday()]
 
+    has_prepaid = False
+    if enrollment.package.classes_count is None:
+        has_prepaid = enrollment.prepaid_unlimited_credits > 0
+
     new_class = Class(
         enrollment_id=enrollment.id,
         teacher_id=enrollment.teacher_id,
@@ -218,9 +225,13 @@ def book_class(
         duration=data.duration_minutes,
         teacher_timezone=teacher_tz,
         student_timezone=current_user.student_profile.timezone,
-        status="pending",
-        day_of_week=day_of_week
+        status="confirmed" if has_prepaid or enrollment.package.classes_count is not None else "pending",
+        day_of_week=day_of_week,
+        used_prepaid_credit=has_prepaid,
     )
+
+    if has_prepaid:
+        enrollment.prepaid_unlimited_credits -= 1
 
     db.add(new_class)
     db.commit()
@@ -326,6 +337,7 @@ def reschedule_class_student(
 
     class_.start_time_utc = data.start_time_utc
     class_.end_time_utc = data.end_time_utc
+    class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
     class_.status = "pending_trial" if class_.class_type == ClassType.trial else "pending"
     db.commit()
     db.refresh(class_)
@@ -563,6 +575,7 @@ def reschedule_class_admin(
 
     class_.start_time_utc = data.start_time_utc
     class_.end_time_utc = data.end_time_utc
+    class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
     class_.status = "pending_trial" if class_.class_type == ClassType.trial else "pending"
     db.commit()
     db.refresh(class_)

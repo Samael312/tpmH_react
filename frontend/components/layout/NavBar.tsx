@@ -95,6 +95,7 @@ export default function DashboardSidebar() {
               <NavItem href="/teacher/availability" icon={<Calendar size={20} />} label="Disponibilidad" active={isActive("/teacher/availability")} collapsed={collapsed} />
               <NavItem href="/teacher/students" icon={<GraduationCap size={20} />} label="Estudiantes" active={isActive("/teacher/students")} collapsed={collapsed} />
               <NavItem href="/teacher/materials" icon={<Book size={20} />} label="Materiales" active={isActive("/teacher/materials")} collapsed={collapsed} />
+              <NavItem href="/teacher/payments" icon={<CreditCard size={20} />} label="Pagos" active={isActive("/teacher/payments")} collapsed={collapsed} />
               <NavItem href="/teacher/homework" icon={<ClipboardEdit size={20} />} label="Tareas" active={isActive("/teacher/homework")} collapsed={collapsed} />
               <NavItem href="/teacher/packages" icon={<CreditCard size={20} />} label="Paquetes" active={isActive("/teacher/packages")} collapsed={collapsed} />
               <NavItem href="/teacher/wallet" icon={<BarChart size={20} />} label="Ganancias" active={isActive("/teacher/wallet")} collapsed={collapsed} />
@@ -116,7 +117,6 @@ export default function DashboardSidebar() {
               <NavItem href="/admin/dashboard" icon={<LayoutDashboard size={20} />} label="Vista Global" active={pathname === "/admin/dashboard"} collapsed={collapsed} />
               <NavItem href="/admin/teachers" icon={<Book size={20} />} label="Profesores" active={isActive("/admin/teachers")} collapsed={collapsed} />
               <NavItem href="/admin/students" icon={<GraduationCap size={20} />} label="Estudiantes" active={isActive("/admin/students")} collapsed={collapsed} />
-              <NavItem href="/admin/package-requests" icon={<PackageIcon size={20} />} label="Solicitudes de Paquetes" active={isActive("/admin/package-requests")} collapsed={collapsed} />
               <NavItem href="/admin/payments" icon={<CreditCard size={20} />} label="Pagos y Facturas" active={isActive("/admin/payments")} collapsed={collapsed} />
               <NavItem href="/admin/settings" icon={<Settings size={20} />} label="Configuración" active={isActive("/admin/settings")} collapsed={collapsed} />
               <NavItem href="/admin/flow-tester" icon={<CheckCheck size={20} />} label="Flow Tester" active={isActive("/admin/flow-tester")} collapsed={collapsed} /> 
