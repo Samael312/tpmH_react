@@ -1,14 +1,15 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import {
   Package as PackageIcon, Plus, X, Check, Edit2,
-  Trash2, Users, ChevronDown, RefreshCw, AlertTriangle,
+  Trash2, Users, ChevronDown, RefreshCw, AlertTriangle, ChevronRight,
 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { SUBJECTS, LANGUAGES } from "@/lib/teacherOptions";
-import { getSuggestedTheme, ICON_PICKER_OPTIONS, DEFAULT_PACKAGE_THEME } from "@/lib/packageThemes";
+import { getSuggestedTheme, ICON_PICKER_OPTIONS, DEFAULT_PACKAGE_THEME, priceLabelSuffix } from "@/lib/packageThemes";
 import { THEME_PRESETS } from "@/lib/color";
 
 interface Package {
@@ -24,6 +25,8 @@ interface Package {
   price: number;
   duration_minutes: number;
   is_active: boolean;
+  allow_installments?: boolean;
+  installment_count?: number | null;
 }
 
 interface EnrollmentCompliance {
@@ -44,8 +47,6 @@ interface EnrollmentCompliance {
   created_at: string;
 }
 
-const DURATIONS = [30, 60];
-
 const emptyForm = {
   name: "", subject: "", description: "",
   description_type: "paragraph" as "paragraph" | "list",
@@ -53,6 +54,8 @@ const emptyForm = {
   icon: DEFAULT_PACKAGE_THEME.icon,
   color: DEFAULT_PACKAGE_THEME.color,
   classes_count: "4", price: "10", duration_minutes: 60,
+  allow_installments: false,
+  installment_count: "3",
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -134,6 +137,8 @@ export default function TeacherPackagesPage() {
       classes_count: String(pkg.classes_count),
       price: String(pkg.price),
       duration_minutes: pkg.duration_minutes,
+      allow_installments: pkg.allow_installments ?? false,
+      installment_count: pkg.installment_count ? String(pkg.installment_count) : "3",
     });
     setShowForm(true);
     scrollToForm();
@@ -168,6 +173,8 @@ export default function TeacherPackagesPage() {
         classes_count: classesCountNum,
         price: priceNum,
         duration_minutes: form.duration_minutes,
+        allow_installments: form.allow_installments,
+        installment_count: unlimited ? null : (form.allow_installments ? parseInt(form.installment_count, 10) : null),
       };
       if (editingId) {
         await api.patch(`/packages/${editingId}`, payload);
@@ -198,29 +205,18 @@ export default function TeacherPackagesPage() {
     }
   };
 
-  const approveRenewal = async (enrollmentId: number) => {
+  const grantManually = async (enrollmentId: number) => {
+    if (!confirm("¿Otorgar este paquete sin registrar un cobro? Se usará para becas o pagos ya recibidos fuera de la plataforma.")) return;
     setApprovingId(enrollmentId);
     try {
-      await api.post(`/packages/${enrollmentId}/activate-renewal`);
+      await api.post("/payments/manual-grant", { type: "package", enrollment_id: enrollmentId });
       fetchAll();
     } catch (e: any) {
-      alert(e.response?.data?.detail || "Error activando la renovación");
+      alert(e.response?.data?.detail || "Error otorgando acceso");
     } finally {
       setApprovingId(null);
     }
   };
-
-  const approvePackageChange = async (enrollmentId: number) => {
-  setApprovingId(enrollmentId);
-  try {
-    await api.post(`/packages/${enrollmentId}/approve-package-change`);
-    fetchAll();
-  } catch (e: any) {
-    alert(e.response?.data?.detail || "Error aprobando el cambio de paquete");
-  } finally {
-    setApprovingId(null);
-  }
-};
 
   const pendingRenewals = enrollments.filter(e => e.status === "pending_renewal");
 
@@ -240,14 +236,19 @@ export default function TeacherPackagesPage() {
               Crea tus paquetes de clases y da seguimiento al cumplimiento de tus estudiantes
             </p>
           </div>
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-pink-500 to-rose-400
-                       text-white text-sm font-bold rounded-xl shadow-lg shadow-pink-200
-                       hover:shadow-pink-300 active:scale-[0.98] transition-all duration-200"
-          >
-            <Plus className="w-4 h-4" /> Nuevo paquete
-          </button>
+          <div className="flex items-center gap-4">
+            <Link href="/teacher/payments" className="text-sm font-bold text-pink-600 hover:text-pink-700 flex items-center gap-1.5">
+              Ver pagos pendientes <ChevronRight className="w-4 h-4" />
+            </Link>
+            <button
+              onClick={openCreate}
+              className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-pink-500 to-rose-400
+                         text-white text-sm font-bold rounded-xl shadow-lg shadow-pink-200
+                         hover:shadow-pink-300 active:scale-[0.98] transition-all duration-200"
+            >
+              <Plus className="w-4 h-4" /> Nuevo paquete
+            </button>
+          </div>
         </div>
 
         {/* Alerta de renovaciones pendientes */}
@@ -551,6 +552,38 @@ export default function TeacherPackagesPage() {
                   </div>
                 </div>
               </div>
+              {/* Pago en cuotas */}
+              <div className="sm:col-span-2 space-y-3 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Permitir pago en cuotas
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, allow_installments: !form.allow_installments })}
+                    className={`relative w-11 h-6 rounded-full transition-colors ${form.allow_installments ? "bg-pink-500" : "bg-slate-300"}`}
+                  >
+                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${form.allow_installments ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+                  </button>
+                </div>
+                {form.allow_installments && (
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Número de cuotas</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={form.installment_count}
+                      onChange={e => /^[0-9]*$/.test(e.target.value) && setForm({ ...form, installment_count: e.target.value })}
+                      className="w-24 bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold px-4 py-3 focus:outline-none focus:border-pink-500"
+                    />
+                    {parseFloat(form.price) > 0 && parseInt(form.installment_count) > 1 && (
+                      <p className="text-xs text-slate-400 font-bold mt-1.5">
+                        ${(parseFloat(form.price) / parseInt(form.installment_count)).toFixed(2)} por cuota
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <button
@@ -584,78 +617,75 @@ export default function TeacherPackagesPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-  {packages.map(pkg => {
-    const accent = pkg.color || "#ec4899";
-    const priceSuffix =
-      pkg.classes_count === 1 ? "/clase" :
-      pkg.classes_count === null ? "/ilimitado" :
-      "/clase";
-    const priceDisplay = Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2);
-    const bullets: string[] =
-      pkg.description_type === "list" && pkg.description_items?.length
-        ? pkg.description_items
-        : [
-            pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
-            `${pkg.duration_minutes} min por clase`,
-            "Modalidad 100% online",
-            ...(pkg.description ? [pkg.description] : []),
-          ];
+              {packages.map(pkg => {
+                const accent = pkg.color || "#ec4899";
+                const priceSuffix = priceLabelSuffix(pkg.classes_count);
+                const priceDisplay = Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2);
+                const bullets: string[] =
+                  pkg.description_type === "list" && pkg.description_items?.length
+                    ? pkg.description_items
+                    : [
+                        pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
+                        `${pkg.duration_minutes} min por clase`,
+                        "Modalidad 100% online",
+                        ...(pkg.description ? [pkg.description] : []),
+                      ];
 
-    return (
-      <div
-        key={pkg.id}
-        className={`relative bg-white rounded-[2rem] border border-slate-100
-                    shadow-lg shadow-slate-100 p-6 flex flex-col transition-all duration-300
-                    hover:-translate-y-0.5 hover:shadow-xl
-                    ${!pkg.is_active ? "opacity-50" : ""}`}
-      >
-        <div className="mb-4">
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-lg">{pkg.icon || "📦"}</span>
-            <h3 className="text-base font-black" style={{ color: accent }}>
-              {pkg.name}
-            </h3>
-          </div>
-          <p className="text-[11px] text-slate-400 font-bold mb-2">{pkg.subject}</p>
-          <div className="flex items-baseline gap-1">
-            <span className="text-3xl font-black text-slate-800">${priceDisplay}</span>
-            <span className="text-slate-500 text-xs font-medium">{priceSuffix}</span>
-          </div>
-        </div>
+                return (
+                  <div
+                    key={pkg.id}
+                    className={`relative bg-white rounded-[2rem] border border-slate-100
+                                shadow-lg shadow-slate-100 p-6 flex flex-col transition-all duration-300
+                                hover:-translate-y-0.5 hover:shadow-xl
+                                ${!pkg.is_active ? "opacity-50" : ""}`}
+                  >
+                    <div className="mb-4">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-lg">{pkg.icon || "📦"}</span>
+                        <h3 className="text-base font-black" style={{ color: accent }}>
+                          {pkg.name}
+                        </h3>
+                      </div>
+                      <p className="text-[11px] text-slate-400 font-bold mb-2">{pkg.subject}</p>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-3xl font-black text-slate-800">${priceDisplay}</span>
+                        <span className="text-slate-500 text-xs font-medium">{priceSuffix}</span>
+                      </div>
+                    </div>
 
-        <div className="flex-1 space-y-2 mb-5">
-          {bullets.slice(0, 4).map((item, i) => (
-            <div key={i} className="flex items-start gap-1.5">
-              <Check className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: accent }} />
-              <span className="text-xs text-slate-600 font-medium">{item}</span>
+                    <div className="flex-1 space-y-2 mb-5">
+                      {bullets.slice(0, 4).map((item, i) => (
+                        <div key={i} className="flex items-start gap-1.5">
+                          <Check className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: accent }} />
+                          <span className="text-xs text-slate-600 font-medium">{item}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex gap-2 pt-4 border-t border-slate-100">
+                      <button
+                        onClick={() => openEdit(pkg)}
+                        className="flex-1 flex items-center justify-center gap-1.5 bg-slate-50
+                                   hover:bg-slate-100 text-slate-700 text-xs font-bold py-2.5 rounded-xl transition-colors
+                                   border border-slate-200"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" /> Editar
+                      </button>
+                      {pkg.is_active && (
+                        <button
+                          onClick={() => deactivatePackage(pkg.id)}
+                          className="w-10 flex items-center justify-center bg-slate-50 text-red-400
+                                     hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors flex-shrink-0
+                                     border border-slate-200"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          ))}
-        </div>
-
-        <div className="flex gap-2 pt-4 border-t border-slate-100">
-          <button
-            onClick={() => openEdit(pkg)}
-            className="flex-1 flex items-center justify-center gap-1.5 bg-slate-50
-                       hover:bg-slate-100 text-slate-700 text-xs font-bold py-2.5 rounded-xl transition-colors
-                       border border-slate-200"
-          >
-            <Edit2 className="w-3.5 h-3.5" /> Editar
-          </button>
-          {pkg.is_active && (
-            <button
-              onClick={() => deactivatePackage(pkg.id)}
-              className="w-10 flex items-center justify-center bg-slate-50 text-red-400
-                         hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors flex-shrink-0
-                         border border-slate-200"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  })}
-</div>
           )}
         </div>
 
@@ -721,43 +751,37 @@ export default function TeacherPackagesPage() {
                               Pidió: {e.renewal_requested_package_name}
                             </span>
                           )}
+                          <span className="text-[10px] font-bold text-amber-600">
+                            Esperando que el estudiante notifique su pago
+                          </span>
                           <button
-                            onClick={() => approveRenewal(e.id)}
+                            onClick={() => grantManually(e.id)}
                             disabled={approvingId === e.id}
-                            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-500
-                                       to-teal-400 text-white text-xs font-bold rounded-xl shadow-sm
-                                       hover:shadow-md active:scale-[0.98] transition-all disabled:opacity-50"
+                            className="text-[10px] font-bold text-slate-400 hover:text-pink-600 underline underline-offset-2"
                           >
-                            {approvingId === e.id ? (
-                              <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                            ) : (
-                              <><Check className="w-3.5 h-3.5" /> Aprobar renovación</>
-                            )}
+                            Otorgar manualmente (sin cobro)
                           </button>
                         </div>
                       )}
                       {e.status === "pending_package_change" && (
-  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-    {e.change_requested_package_name && (
-      <span className="text-[10px] text-slate-400 font-bold">
-        Quiere cambiar a: {e.change_requested_package_name}
-      </span>
-    )}
-    <button
-      onClick={() => approvePackageChange(e.id)}
-      disabled={approvingId === e.id}
-      className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-500
-                 to-indigo-400 text-white text-xs font-bold rounded-xl shadow-sm
-                 hover:shadow-md active:scale-[0.98] transition-all disabled:opacity-50"
-    >
-      {approvingId === e.id ? (
-        <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-      ) : (
-        <><Check className="w-3.5 h-3.5" /> Aprobar cambio de paquete</>
-      )}
-    </button>
-  </div>
-)}
+                        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                          {e.change_requested_package_name && (
+                            <span className="text-[10px] text-slate-400 font-bold">
+                              Quiere cambiar a: {e.change_requested_package_name}
+                            </span>
+                          )}
+                          <span className="text-[10px] font-bold text-amber-600">
+                            Esperando que el estudiante notifique su pago
+                          </span>
+                          <button
+                            onClick={() => grantManually(e.id)}
+                            disabled={approvingId === e.id}
+                            className="text-[10px] font-bold text-slate-400 hover:text-pink-600 underline underline-offset-2"
+                          >
+                            Otorgar manualmente (sin cobro)
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

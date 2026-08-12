@@ -14,6 +14,8 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 import PackagesCarousel from "@/components/landing/PackagesCarousel";
 import TeacherVideosCarousel from "@/components/landing/TeacherVideosCarousel";
 import Carousel from "@/components/landing/Carousel";
+import { priceLabelSuffix } from "@/lib/packageThemes";
+
 
 
 interface NavItem {
@@ -421,10 +423,7 @@ export default function LandingPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {packages.slice(0, 8).map(pkg => {
           const accent = pkg.color || "#ec4899";
-          const priceSuffix =
-            pkg.classes_count === 1 ? "/clase" :
-            pkg.classes_count === null ? "/ilimitado" :
-            "/clase";
+          const priceSuffix = priceLabelSuffix(pkg.classes_count);
           const priceDisplay = Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2);
 
           const bullets: string[] =

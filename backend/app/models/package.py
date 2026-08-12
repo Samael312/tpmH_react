@@ -35,7 +35,9 @@ class Package(Base):
     color = Column(String, nullable=True, default="#ec4899")
     description_type = Column(String, default="paragraph")  # "paragraph" | "list"
     description_items = Column(JSONB, nullable=True)  # ["Punto 1", "Punto 2", ...]
-    allows_installments = Column(Boolean, default=False)
+    allow_installments = Column(Boolean, default=False)
+    installment_count = Column(Integer, nullable=True)   # ej. 3
+    installment_amount = Column(Float, nullable=True) 
 
 
 
@@ -73,7 +75,10 @@ class Enrollment(Base):
     student = relationship("StudentProfile", back_populates="enrollments")
     change_requested_package_id = Column(Integer, ForeignKey("packages.id"), nullable=True)
     unlocked_credits = Column(Integer, default=0)
-    payment_installment_status = Column(String, default="unpaid")
+    payment_status = Column(String, default="unpaid")  # "unpaid" | "partially_paid" | "paid"
+    installments_paid = Column(Integer, default=0)
+    prepaid_unlimited_credits = Column(Integer, default=0)
+    activated_at = Column(DateTime(timezone=True), nullable=True)
 
 
     package = relationship("Package", back_populates="enrollments",foreign_keys=[package_id],)

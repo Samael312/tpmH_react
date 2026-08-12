@@ -56,7 +56,6 @@ def _get_featured_teacher(db: Session):
     return db.query(TeacherProfile).filter(TeacherProfile.user_username == username).first()
 
 def _apply_commission(amount_total: float, teacher: TeacherProfile) -> tuple[float, float]:
-    """Devuelve (amount_teacher, amount_platform)."""
     commission = teacher.commission_rate if teacher else 0.15
     amount_platform = round(amount_total * commission, 2)
     amount_teacher = round(amount_total - amount_platform, 2)
@@ -70,6 +69,15 @@ def _credit_wallet(teacher_id: int, amount_teacher: float, db: Session):
         db.flush()
     wallet.available_balance += amount_teacher
     wallet.total_earned += amount_teacher
+
+def _installment_amount(package: Package, index: int) -> float:
+    """Monto de la cuota `index` (1-based). Reparte el residuo en la última cuota."""
+    n = package.installment_count or 1
+    base = package.installment_amount or round(package.price / n, 2)
+    if index < n:
+        return base
+    # última cuota absorbe el residuo por redondeo
+    return round(package.price - base * (n - 1), 2)
 
 def _sync_student_teacher_username(current_user: User, teacher: TeacherProfile, db: Session):
     """
@@ -382,65 +390,106 @@ def book_class(
 
     _sync_student_teacher_username(current_user, enrollment.teacher, db)
 
-    # Verificación de créditos desbloqueados contra clases usadas
-    if enrollment.classes_total is not None and enrollment.classes_used >= enrollment.unlocked_credits:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "No tienes créditos disponibles todavía. Completa el pago pendiente o renueva tu paquete."
-        )
-
-    can_book, error_msg = can_book_slot(
-        start_time_utc=data.start_time_utc,
-        teacher_id=enrollment.teacher_id,
-        student_id=student_id,
-        db=db
-    )
-    if not can_book:
-        raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
-
     day_of_week = DAYS_ES[data.start_time_utc.weekday()]
 
-    new_class = Class(
-        enrollment_id=enrollment.id,
-        teacher_id=enrollment.teacher_id,
-        student_id=student_id,
-        class_type=ClassType.regular,
-        subject=enrollment.package.subject,
-        start_time_utc=data.start_time_utc,
-        end_time_utc=data.end_time_utc,
-        duration=data.duration_minutes,
-        teacher_timezone=getattr(enrollment.teacher, "timezone", None),
-        student_timezone=current_user.student_profile.timezone,
-        status="confirmed" if enrollment.classes_total is not None else "pending",
-        day_of_week=day_of_week,
-    )
-    db.add(new_class)
-    db.commit()
-    db.refresh(new_class)
+    # ─── Paquete finito ───
+    if enrollment.package.classes_count is not None:
+        if enrollment.payment_status == "unpaid":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Tu paquete está pendiente de confirmación de pago")
+        if enrollment.classes_used >= enrollment.unlocked_credits:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "No tienes créditos disponibles todavía")
 
-    # Paquete finito (con créditos ya desbloqueados): confirmada sin payment_instructions
-    if enrollment.classes_total is not None:
+        can_book, error_msg = can_book_slot(
+            start_time_utc=data.start_time_utc,
+            teacher_id=enrollment.teacher_id,
+            student_id=student_id,
+            db=db
+        )
+        if not can_book:
+            raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
+
+        new_class = Class(
+            enrollment_id=enrollment.id,
+            teacher_id=enrollment.teacher_id,
+            student_id=student_id,
+            class_type=ClassType.regular,
+            subject=enrollment.package.subject,
+            start_time_utc=data.start_time_utc,
+            end_time_utc=data.end_time_utc,
+            duration=data.duration_minutes,
+            teacher_timezone=getattr(enrollment.teacher, "timezone", None),
+            student_timezone=current_user.student_profile.timezone,
+            status="confirmed",
+            day_of_week=day_of_week,
+            used_prepaid_credit=False,
+        )
+        db.add(new_class)
+        db.commit()
+        db.refresh(new_class)
+
         return {
             "class_id": new_class.id,
             "status": new_class.status,
             "message": "Clase agendada y confirmada."
         }
 
-    # Paquete ilimitado: queda "pending" y requiere notify-payment por cada clase
-    config = db.query(PaymentConfig).first()
-    return {
-        "class_id": new_class.id,
-        "status": new_class.status,
-        "message": "Slot reservado. Notifica tu pago para confirmarla.",
-        "payment_instructions": {
-            "paypal_enabled": config.paypal_enabled if config else False,
-            "binance_enabled": config.binance_enabled if config else False,
-            "paypal_email": config.paypal_email if config else None,
-            "binance_address": config.binance_address if config else None,
-            "binance_network": config.binance_network if config else None,
-            "whatsapp_number": config.whatsapp_number if config else None,
+    # ─── Paquete ilimitado ───
+    else:
+        can_book, error_msg = can_book_slot(
+            start_time_utc=data.start_time_utc,
+            teacher_id=enrollment.teacher_id,
+            student_id=student_id,
+            db=db
+        )
+        if not can_book:
+            raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
+
+        has_prepaid = enrollment.prepaid_unlimited_credits > 0
+
+        new_class = Class(
+            enrollment_id=enrollment.id,
+            teacher_id=enrollment.teacher_id,
+            student_id=student_id,
+            class_type=ClassType.regular,
+            subject=enrollment.package.subject,
+            start_time_utc=data.start_time_utc,
+            end_time_utc=data.end_time_utc,
+            duration=data.duration_minutes,
+            teacher_timezone=getattr(enrollment.teacher, "timezone", None),
+            student_timezone=current_user.student_profile.timezone,
+            status="confirmed" if has_prepaid else "pending",
+            day_of_week=day_of_week,
+            used_prepaid_credit=has_prepaid,
+        )
+        db.add(new_class)
+
+        if has_prepaid:
+            enrollment.prepaid_unlimited_credits -= 1
+
+        db.commit()
+        db.refresh(new_class)
+
+        if has_prepaid:
+            return {
+                "class_id": new_class.id,
+                "status": new_class.status,
+                "message": "Clase agendada usando tu saldo prepagado."
+            }
+
+        config = db.query(PaymentConfig).first()
+        return {
+            "class_id": new_class.id,
+            "status": new_class.status,
+            "message": "Slot reservado. Notifica tu pago para confirmarla.",
+            "payment_instructions": {
+                "paypal_enabled": config.paypal_enabled if config else False,
+                "binance_enabled": config.binance_enabled if config else False,
+                "paypal_email": config.paypal_email if config else None,
+                "binance_address": config.binance_address if config else None,
+                "binance_network": config.binance_network if config else None,
+                "whatsapp_number": config.whatsapp_number if config else None,
+            }
         }
-    }
 
 @router.get("/my-withdrawals", response_model=List[WithdrawalResponse])
 def get_my_withdrawals(
@@ -472,53 +521,53 @@ def get_my_income(
 
 @router.get("/pending-review")
 def get_payments_pending_review(
-    current_user: User = Depends(get_current_staff),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_staff_or_teacher),
+    db: Session = Depends(get_db),
 ):
-    """
-    Lista todos los pagos pendientes de validación.
-    El staff ve los comprobantes aquí para aprobar o rechazar.
-    """
-    payments = db.query(Payment).filter(
-        Payment.status == "pending_review"
-    ).order_by(Payment.created_at.asc()).all()
+    query = db.query(Payment).filter(Payment.status == "pending_review")
+    if current_user.role == "teacher":
+        query = query.filter(Payment.teacher_id == current_user.teacher_profile.id)
+
+    payments = query.order_by(Payment.created_at.asc()).all()
 
     result = []
     for p in payments:
-        class_ = db.query(Class).filter(Class.id == p.class_id).first()
-        student_user = p.student.user if hasattr(p, 'student') else None
-
-        result.append({
+        student_user = p.student.user if p.student else None
+        entry = {
             "payment_id": p.id,
-            "class_id": p.class_id,
-            "student_name": f"{student_user.name} {student_user.surname}"
-                if student_user else "Unknown",
-            "student_username": student_user.username if student_user else "Unknown",
+            "payment_type": p.payment_type,
+            "installment_index": p.installment_index,
             "amount": p.amount_total,
-            "payment_method": p.payment_method,
-            "transaction_id": p.transaction_id,
-            "receipt_url": p.receipt_url,
-            "class_start_utc": class_.start_time_utc if class_ else None,
+            "transaction_reference": p.transaction_id,
             "submitted_at": p.created_at,
-        })
+            "student_name": f"{student_user.name} {student_user.surname}" if student_user else "Desconocido",
+            "student_username": student_user.username if student_user else None,
+        }
+        if p.payment_type == "single_class" and p.class_id:
+            class_ = db.query(Class).filter(Class.id == p.class_id).first()
+            entry["class_start_utc"] = class_.start_time_utc if class_ else None
+            entry["payment_expires_at"] = class_.payment_expires_at if class_ else None
+        elif p.enrollment_id:
+            enrollment = db.query(Enrollment).filter(Enrollment.id == p.enrollment_id).first()
+            pkg_id = (enrollment.renewal_requested_package_id or enrollment.change_requested_package_id or enrollment.package_id) if enrollment else None
+            pkg = db.query(Package).filter(Package.id == pkg_id).first() if pkg_id else None
+            entry["package_name"] = pkg.name if pkg else None
+            entry["installment_total"] = pkg.installment_count if pkg else None
+        result.append(entry)
 
     return result
-
 
 @router.patch("/{payment_id}/validate")
 def validate_payment(
     payment_id: int,
     data: ValidatePaymentRequest,
-    current_user: User = Depends(get_current_staff_or_teacher),  # ← ahora simétrico: staff o el profesor dueño
+    current_user: User = Depends(get_current_staff_or_teacher),
     db: Session = Depends(get_db),
 ):
-    payment = db.query(Payment).filter(
-        Payment.id == payment_id, Payment.status == "pending_review"
-    ).first()
+    payment = db.query(Payment).filter(Payment.id == payment_id, Payment.status == "pending_review").first()
     if not payment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pago no encontrado o ya procesado")
 
-    # Un profesor solo puede validar pagos de sus propios estudiantes
     if current_user.role == "teacher":
         if not current_user.teacher_profile or payment.teacher_id != current_user.teacher_profile.id:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo puedes validar pagos de tus estudiantes")
@@ -538,21 +587,26 @@ def validate_payment(
             if class_:
                 class_.status = "pending"
                 class_.payment_expires_at = None
-                class_.meet_link = None
 
         db.commit()
-        return {"message": "Pago rechazado", "rejection_reason": data.rejection_reason}
+        return {"message": "Pago rechazado"}
 
-    # ── approve ──
+    # ── approve (incluye is_manual_grant si viene marcado por el caller) ──
     teacher = db.query(TeacherProfile).filter(TeacherProfile.id == payment.teacher_id).first()
-    amount_teacher, amount_platform = _apply_commission(payment.amount_total, teacher)
-    payment.amount_teacher = amount_teacher
-    payment.amount_platform = amount_platform
+
+    if not payment.is_manual_grant:
+        amount_teacher, amount_platform = _apply_commission(payment.amount_total, teacher)
+        payment.amount_teacher = amount_teacher
+        payment.amount_platform = amount_platform
+        _credit_wallet(payment.teacher_id, amount_teacher, db)
+    else:
+        payment.amount_teacher = 0
+        payment.amount_platform = 0
+        amount_teacher = 0
+
     payment.status = "approved"
     payment.validated_by = current_user.id
     payment.validated_at = now
-
-    _credit_wallet(payment.teacher_id, amount_teacher, db)
 
     if payment.payment_type == "single_class":
         if not data.meet_link:
@@ -563,57 +617,108 @@ def validate_payment(
             class_.meet_link = data.meet_link
             class_.payment_expires_at = None
 
+    elif payment.payment_type == "unlimited_recharge":
+        enrollment = db.query(Enrollment).filter(Enrollment.id == payment.enrollment_id).first()
+        if enrollment:
+            credits = payment.installment_index or 0
+            enrollment.prepaid_unlimited_credits += credits
+            if enrollment.activated_at is None:
+                enrollment.activated_at = now
+                enrollment.payment_status = "paid"
+
     elif payment.payment_type == "package":
         enrollment = db.query(Enrollment).filter(Enrollment.id == payment.enrollment_id).first()
-        if not enrollment:
-            db.commit()
-            return {"message": "Pago aprobado (enrollment no encontrado)"}
+        if enrollment:
+            target_package_id = (
+                enrollment.renewal_requested_package_id
+                or enrollment.change_requested_package_id
+                or enrollment.package_id
+            )
+            target_package = db.query(Package).filter(Package.id == target_package_id).first()
+            is_renewal = enrollment.status == EnrollmentStatus.pending_renewal
+            is_change = enrollment.status == EnrollmentStatus.pending_package_change
 
-        target_package_id = (
-            enrollment.renewal_requested_package_id
-            or enrollment.change_requested_package_id
-            or enrollment.package_id
-        )
-        target_package = db.query(Package).filter(Package.id == target_package_id).first()
-        is_renewal = enrollment.status == EnrollmentStatus.pending_renewal
-        is_change = enrollment.status == EnrollmentStatus.pending_package_change
-
-        if payment.installment_number == 1:
-            enrollment.payment_installment_status = "installment_1_paid"
-            if target_package.classes_count is not None:
-                enrollment.unlocked_credits = target_package.classes_count // 2
-            # Renovación/cambio se activa ya con la primera cuota — el
-            # estudiante puede empezar a agendar de inmediato.
-            if is_renewal:
-                enrollment.package_id = target_package.id
-                enrollment.classes_total = target_package.classes_count
-                enrollment.classes_used = 0
-                enrollment.status = EnrollmentStatus.active
-            elif is_change:
-                enrollment.package_id = target_package.id
-                enrollment.classes_total = target_package.classes_count
-                enrollment.status = EnrollmentStatus.active
-
-        else:  # installment_number == 2 o pago completo (None)
-            enrollment.payment_installment_status = "fully_paid"
-            enrollment.unlocked_credits = target_package.classes_count if target_package.classes_count is not None else 0
-            if is_renewal or payment.installment_number is None:
+            if is_renewal or is_change:
                 enrollment.package_id = target_package.id
                 enrollment.classes_total = target_package.classes_count
                 if is_renewal:
                     enrollment.classes_used = 0
                 enrollment.status = EnrollmentStatus.active
-            elif is_change:
-                enrollment.package_id = target_package.id
-                enrollment.classes_total = target_package.classes_count
-                enrollment.status = EnrollmentStatus.active
+                enrollment.renewal_requested_package_id = None
+                enrollment.change_requested_package_id = None
 
-            enrollment.renewal_requested_package_id = None
-            enrollment.change_requested_package_id = None
+            if payment.installment_index is not None:
+                enrollment.installments_paid = payment.installment_index
+                n = target_package.installment_count or 1
+                if target_package.classes_count is not None:
+                    enrollment.unlocked_credits = round(target_package.classes_count * (payment.installment_index / n))
+                enrollment.payment_status = "paid" if payment.installment_index >= n else "partially_paid"
+            else:
+                enrollment.installments_paid = 1
+                enrollment.unlocked_credits = target_package.classes_count if target_package.classes_count is not None else 0
+                enrollment.payment_status = "paid"
+
+            if enrollment.activated_at is None and enrollment.payment_status in ("paid", "partially_paid"):
+                enrollment.activated_at = now
 
     db.commit()
     return {"message": "Pago aprobado correctamente", "amount_credited": amount_teacher}
 
+@router.post("/manual-grant")
+def manual_grant_payment(
+    data: NotifyPaymentRequest,  # mismo shape que notify-payment
+    current_user: User = Depends(get_current_staff_or_teacher),
+    db: Session = Depends(get_db),
+):
+    """
+    Staff/profesor otorga acceso manual (beca, pago fuera de plataforma, etc.)
+    sin acreditar comisión al wallet — pero SÍ deja registro en Payment
+    (is_manual_grant=True) para trazabilidad. Reutiliza toda la lógica de
+    notify_payment + validate internamente.
+    """
+    if data.type != "package" or not data.enrollment_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "manual-grant solo aplica a paquetes por ahora")
+
+    enrollment = db.query(Enrollment).filter(Enrollment.id == data.enrollment_id).first()
+    if not enrollment:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado")
+    if current_user.role == "teacher" and enrollment.teacher_id != current_user.teacher_profile.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "No autorizado")
+
+    target_package_id = enrollment.renewal_requested_package_id or enrollment.change_requested_package_id or enrollment.package_id
+    package = db.query(Package).filter(Package.id == target_package_id).first()
+
+    payment = Payment(
+        enrollment_id=enrollment.id, student_id=enrollment.student_id, teacher_id=enrollment.teacher_id,
+        amount_total=0, amount_teacher=0, amount_platform=0,
+        payment_method="manual_grant", status="pending_review",
+        payment_type="package", is_manual_grant=True,
+    )
+    db.add(payment); db.flush()
+
+    # Auto-aprobar inmediatamente (staff ya decidió otorgarlo)
+    payment.status = "approved"
+    payment.validated_by = current_user.id
+    payment.validated_at = utc_now()
+
+    is_renewal = enrollment.status == EnrollmentStatus.pending_renewal
+    is_change = enrollment.status == EnrollmentStatus.pending_package_change
+    if is_renewal or is_change:
+        enrollment.package_id = package.id
+        enrollment.classes_total = package.classes_count
+        if is_renewal:
+            enrollment.classes_used = 0
+        enrollment.status = EnrollmentStatus.active
+        enrollment.renewal_requested_package_id = None
+        enrollment.change_requested_package_id = None
+
+    enrollment.installments_paid = package.installment_count or 1
+    enrollment.unlocked_credits = package.classes_count if package.classes_count is not None else 0
+    enrollment.payment_status = "paid"
+    enrollment.activated_at = utc_now()
+
+    db.commit()
+    return {"message": "Acceso otorgado manualmente"}
 
 # ─── ESTUDIANTE — Ver pagos ──────────────────────────────────────────────────
 
@@ -735,54 +840,54 @@ def get_booking_status(
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    """
-    El frontend usa esto para saber qué flujo de reserva mostrar.
-    Single-tenant: siempre resuelve al featured teacher (se ignora el
-    parámetro). Multi-tenant: si el estudiante tiene un solo profesor
-    vinculado se resuelve automático; si tiene 0, devuelve "needs_teacher";
-    si tiene 2+, se requiere teacher_username explícito.
-    """
     from app.models.payment_config import PlatformConfig
     from app.models.student_teacher_link import StudentTeacherLink
 
     config = db.query(PlatformConfig).first()
     student_id = current_user.student_profile.id
 
+    teacher = None
     if not config or config.is_single_tenant:
         teacher = _get_featured_teacher(db)
         if not teacher:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No hay profesora featured configurada")
-        stage = get_student_booking_stage(student_id, teacher.id, db)
-        return {"stage": stage, "teacher_username": teacher.user_username}
-
-    if teacher_username:
+    elif teacher_username:
         teacher = db.query(TeacherProfile).filter(
             TeacherProfile.user_username == teacher_username,
             TeacherProfile.status == TeacherStatus.approved
         ).first()
         if not teacher:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesor no encontrado")
-        stage = get_student_booking_stage(student_id, teacher.id, db)
-        return {"stage": stage, "teacher_username": teacher.user_username}
+    else:
+        linked_teacher_ids = [
+            l.teacher_id for l in db.query(StudentTeacherLink).filter(
+                StudentTeacherLink.student_id == student_id
+            ).all()
+        ]
+        if len(linked_teacher_ids) == 0:
+            return {"stage": "needs_teacher", "teacher_username": None, "enrollment_id": None}
+        if len(linked_teacher_ids) == 1:
+            teacher = db.query(TeacherProfile).filter(TeacherProfile.id == linked_teacher_ids[0]).first()
 
-    linked_teacher_ids = [
-        l.teacher_id for l in db.query(StudentTeacherLink).filter(
-            StudentTeacherLink.student_id == student_id
-        ).all()
-    ]
+    if not teacher:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tienes más de un profesor vinculado. Especifica teacher_username."
+        )
 
-    if len(linked_teacher_ids) == 0:
-        return {"stage": "needs_teacher", "teacher_username": None}
+    stage = get_student_booking_stage(student_id, teacher.id, db)
 
-    if len(linked_teacher_ids) == 1:
-        teacher = db.query(TeacherProfile).filter(TeacherProfile.id == linked_teacher_ids[0]).first()
-        stage = get_student_booking_stage(student_id, teacher.id, db)
-        return {"stage": stage, "teacher_username": teacher.user_username}
+    # Obtenemos el enrollment más reciente con este profesor para devolver su ID
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.student_id == student_id,
+        Enrollment.teacher_id == teacher.id
+    ).order_by(Enrollment.created_at.desc()).first()
 
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Tienes más de un profesor vinculado. Especifica teacher_username."
-    )
+    return {
+        "stage": stage,
+        "teacher_username": teacher.user_username,
+        "enrollment_id": enrollment.id if enrollment else None
+    }
 
 # ─── NOTIFICACIÓN DE PAGO (reemplaza submit-receipt) ─────────────────────────
 
@@ -794,23 +899,18 @@ def notify_payment(
 ):
     student_id = current_user.student_profile.id
 
-    # ── Clase suelta (paquetes ilimitados) ──
+    # ── Clase suelta dentro de paquete ilimitado (sin recarga prepagada) ──
     if data.type == "single_class":
         if not data.class_id:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "class_id es requerido")
 
         class_ = db.query(Class).filter(
-            Class.id == data.class_id,
-            Class.student_id == student_id,
-            Class.status == "pending",
+            Class.id == data.class_id, Class.student_id == student_id, Class.status == "pending",
         ).first()
         if not class_:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Clase no encontrada o ya notificada")
 
-        existing = db.query(Payment).filter(
-            Payment.class_id == class_.id, Payment.status == "pending_review"
-        ).first()
-        if existing:
+        if db.query(Payment).filter(Payment.class_id == class_.id, Payment.status == "pending_review").first():
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya notificaste el pago de esta clase")
 
         enrollment = db.query(Enrollment).filter(Enrollment.id == class_.enrollment_id).first() if class_.enrollment_id else None
@@ -821,7 +921,6 @@ def notify_payment(
         amount = package.price
         now = utc_now()
         hours_to_class = (class_.start_time_utc - now).total_seconds() / 3600
-
         if hours_to_class > 24:
             expires_at = class_.start_time_utc - timedelta(hours=12)
         elif hours_to_class >= 12:
@@ -829,45 +928,54 @@ def notify_payment(
         else:
             expires_at = now + timedelta(hours=2)
 
-        class_.status = "pending_payment"  # = PENDING_APPROVAL
+        class_.status = "pending_payment"
         class_.payment_expires_at = expires_at
 
         payment = Payment(
-            class_id=class_.id,
-            enrollment_id=class_.enrollment_id,
-            student_id=student_id,
-            teacher_id=class_.teacher_id,
-            amount_total=amount,
-            amount_teacher=0,
-            amount_platform=0,
-            payment_method="manual",
-            transaction_id=data.transaction_reference,
-            status="pending_review",
-            payment_type="single_class",
+            class_id=class_.id, enrollment_id=class_.enrollment_id,
+            student_id=student_id, teacher_id=class_.teacher_id,
+            amount_total=amount, amount_teacher=0, amount_platform=0,
+            payment_method="manual", transaction_id=data.transaction_reference,
+            status="pending_review", payment_type="single_class",
         )
         db.add(payment)
-        db.commit()
-        db.refresh(payment)
+        db.commit(); db.refresh(payment)
+        return {"payment_id": payment.id, "class_status": class_.status, "expires_at": expires_at}
 
-        return {
-            "payment_id": payment.id,
-            "class_status": class_.status,
-            "expires_at": expires_at,
-            "message": "Pago notificado. Se validará antes de que expire la reserva.",
-        }
+    # ── "Recarga" de créditos prepagados en paquete ilimitado ──
+    if data.type == "unlimited_recharge":
+        if not data.enrollment_id or not data.credits_requested:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "enrollment_id y credits_requested son requeridos")
 
-    # ── Paquete (compra inicial, renovación o cambio) ──
+        enrollment = db.query(Enrollment).filter(
+            Enrollment.id == data.enrollment_id, Enrollment.student_id == student_id,
+        ).first()
+        if not enrollment or enrollment.package.classes_count is not None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este enrollment no es de tipo ilimitado")
+
+        amount = round(enrollment.package.price * data.credits_requested, 2)
+        payment = Payment(
+            enrollment_id=enrollment.id, student_id=student_id, teacher_id=enrollment.teacher_id,
+            amount_total=amount, amount_teacher=0, amount_platform=0,
+            payment_method="manual", transaction_id=data.transaction_reference,
+            status="pending_review", payment_type="unlimited_recharge",
+        )
+        # Guardamos cuántos créditos se piden en installment_index (reuso de campo, evita otra columna)
+        payment.installment_index = data.credits_requested
+        db.add(payment)
+        db.commit(); db.refresh(payment)
+        return {"payment_id": payment.id, "message": "Recarga notificada, en espera de aprobación"}
+
+    # ── Paquete (inicial, renovación o cambio) ──
     if not data.enrollment_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "enrollment_id es requerido")
 
     enrollment = db.query(Enrollment).filter(
-        Enrollment.id == data.enrollment_id,
-        Enrollment.student_id == student_id,
+        Enrollment.id == data.enrollment_id, Enrollment.student_id == student_id,
     ).first()
     if not enrollment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado")
 
-    # El paquete "objetivo" depende del contexto: renovación, cambio, o el propio
     target_package_id = (
         enrollment.renewal_requested_package_id
         or enrollment.change_requested_package_id
@@ -877,46 +985,50 @@ def notify_payment(
     if not package:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Paquete no encontrado")
 
-    installment = data.installment_number
-    if installment and not package.allows_installments:
+    use_installments = data.installment_index is not None
+    if use_installments and not package.allow_installments:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este paquete no admite pago en cuotas")
 
-    if installment == 1:
-        if enrollment.payment_installment_status != "unpaid":
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "La primera cuota ya fue notificada")
-        amount = round(package.price / 2, 2)
-    elif installment == 2:
-        if enrollment.payment_installment_status != "installment_1_paid":
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Completa la primera cuota antes de la segunda")
-        amount = round(package.price - round(package.price / 2, 2), 2)  # resto exacto, sin perder centavos
+    if use_installments:
+        expected_next = enrollment.installments_paid + 1
+        if data.installment_index != expected_next:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Debes pagar la cuota {expected_next} primero")
+        if db.query(Payment).filter(
+            Payment.enrollment_id == enrollment.id, Payment.status == "pending_review",
+            Payment.payment_type == "package",
+        ).first():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay una cuota pendiente de revisión")
+        amount = _installment_amount(package, data.installment_index)
     else:
-        if enrollment.payment_installment_status != "unpaid":
+        if enrollment.payment_status != "unpaid":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este paquete ya fue pagado o tiene una cuota en curso")
         amount = package.price
 
-    existing = db.query(Payment).filter(
-        Payment.enrollment_id == enrollment.id,
-        Payment.status == "pending_review",
-        Payment.payment_type == "package",
-    ).first()
-    if existing:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay un pago de este paquete pendiente de revisión")
-
     payment = Payment(
-        enrollment_id=enrollment.id,
-        student_id=student_id,
-        teacher_id=enrollment.teacher_id,
-        amount_total=amount,
-        amount_teacher=0,
-        amount_platform=0,
-        payment_method="manual",
-        transaction_id=data.transaction_reference,
-        status="pending_review",
-        payment_type="package",
-        installment_number=installment,
+        enrollment_id=enrollment.id, student_id=student_id, teacher_id=enrollment.teacher_id,
+        amount_total=amount, amount_teacher=0, amount_platform=0,
+        payment_method="manual", transaction_id=data.transaction_reference,
+        status="pending_review", payment_type="package",
+        installment_index=data.installment_index,
     )
     db.add(payment)
-    db.commit()
-    db.refresh(payment)
-
+    db.commit(); db.refresh(payment)
     return {"payment_id": payment.id, "message": "Pago notificado, en espera de aprobación"}
+
+@router.get("/admin/withdrawals/pending")
+def get_pending_withdrawals(
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    withdrawals = db.query(Withdrawal).filter(Withdrawal.status == "pending").order_by(Withdrawal.created_at.asc()).all()
+    result = []
+    for w in withdrawals:
+        teacher = db.query(TeacherProfile).filter(TeacherProfile.id == w.teacher_id).first()
+        result.append({
+            "id": w.id, "teacher_id": w.teacher_id,
+            "teacher_username": teacher.user.username if teacher else "unknown",
+            "teacher_name": f"{teacher.user.name} {teacher.user.surname}" if teacher else "unknown",
+            "amount": w.amount, "destination_details": w.destination_details,
+            "created_at": w.created_at, "status": w.status,
+        })
+    return result

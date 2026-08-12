@@ -27,10 +27,9 @@ class Payment(Base):
     payment_method = Column(String, nullable=False)
     # "paypal", "binance", "other"
 
-    payment_type = Column(String, nullable=True)      # "package" | "single_class"
-    installment_number = Column(Integer, nullable=True)  # 1, 2, o None (pago completo)
-    # receipt_url / receipt_public_id ya eran nullable=True — se quedan así,
-    # simplemente dejamos de poblarlos desde el nuevo flujo.
+    payment_type = Column(String, nullable=True)  # "package" | "single_class" | "unlimited_recharge" | "manual"
+    installment_index = Column(Integer, nullable=True)   # 1..N, o None si pago único/recarga
+    is_manual_grant = Column(Boolean, default=False) 
 
     # Comprobante subido por el estudiante
     receipt_url = Column(String, nullable=True)      # URL de Cloudinary

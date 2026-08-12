@@ -280,6 +280,13 @@ def cancel_class_student(
         )
 
     class_.status = "cancelled"
+
+    if class_.used_prepaid_credit and class_.enrollment_id:
+        enrollment = db.query(Enrollment).filter(Enrollment.id == class_.enrollment_id).first()
+        if enrollment:
+            enrollment.prepaid_unlimited_credits += 1
+        class_.used_prepaid_credit = False
+
     db.commit()
 
     _sync_google_calendar_cancelled(class_.teacher_id, class_.google_event_id, db)

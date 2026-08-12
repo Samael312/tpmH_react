@@ -417,39 +417,6 @@ def update_user_status(
 
 # ─── GESTIÓN DE RETIROS ──────────────────────────────────────────────────────
 
-@router.get("/withdrawals/pending")
-def get_pending_withdrawals(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Lista todos los retiros pendientes de procesar.
-    El superadmin los procesa manualmente hasta integrar Stripe Connect.
-    """
-    withdrawals = db.query(Withdrawal).filter(
-        Withdrawal.status == "pending"
-    ).order_by(Withdrawal.created_at.asc()).all()
-
-    result = []
-    for w in withdrawals:
-        teacher = db.query(TeacherProfile).filter(
-            TeacherProfile.id == w.teacher_id
-        ).first()
-
-        result.append({
-            "id": w.id,
-            "teacher_id": w.teacher_id,
-            "teacher_username": teacher.user.username if teacher else "unknown",
-            "teacher_name": f"{teacher.user.name} {teacher.user.surname}" if teacher else "unknown",
-            "amount": w.amount,
-            "destination_method": w.destination_method,
-            "destination_details": w.destination_details,
-            "created_at": w.created_at,
-            "status": w.status,
-        })
-
-    return result
-
 
 @router.get("/platform-config")
 def get_platform_config(db: Session = Depends(get_db)):

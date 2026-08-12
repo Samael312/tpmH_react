@@ -409,81 +409,6 @@ def request_renewal(
 
 # ─── STAFF — Activar renovación ──────────────────────────────────────────────
 
-@router.post("/{enrollment_id}/activate-renewal")
-def activate_renewal(
-    enrollment_id: int,
-    new_package_id: Optional[int] = None,
-    current_user: User = Depends(get_current_staff_or_teacher),
-    db: Session = Depends(get_db)
-):
-    """
-    El staff o el profesor dueño del enrollment activa la renovación
-    tras confirmar el pago (fuera de la plataforma).
-
-    Si no se pasa new_package_id, se usa el que el estudiante pidió
-    al solicitar la renovación.
-    """
-    old_enrollment = db.query(Enrollment).filter(
-        Enrollment.id == enrollment_id,
-        Enrollment.status == EnrollmentStatus.pending_renewal
-    ).first()
-
-    if not old_enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Solicitud de renovación no encontrada"
-        )
-
-    # Un profesor solo puede aprobar renovaciones de sus propios estudiantes
-    if current_user.role == "teacher":
-        if not current_user.teacher_profile or old_enrollment.teacher_id != current_user.teacher_profile.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Solo puedes aprobar renovaciones de tus propios estudiantes"
-            )
-
-    target_package_id = new_package_id or old_enrollment.renewal_requested_package_id
-    if not target_package_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No se especificó qué paquete activar"
-        )
-
-    new_package = db.query(Package).filter(
-        Package.id == target_package_id,
-        Package.is_active == True
-    ).first()
-
-    if not new_package:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Paquete no encontrado"
-        )
-
-    old_enrollment.status = EnrollmentStatus.completed
-
-    new_enrollment = Enrollment(
-        student_id=old_enrollment.student_id,
-        package_id=new_package.id,
-        teacher_id=old_enrollment.teacher_id,
-        classes_used=0,
-        classes_total=new_package.classes_count,
-        status=EnrollmentStatus.active,
-        renewal_count=old_enrollment.renewal_count + 1,
-        previous_enrollment_id=old_enrollment.id,
-    )
-
-    db.add(new_enrollment)
-    db.commit()
-    db.refresh(new_enrollment)
-
-    return {
-        "message": "Renovación activada correctamente",
-        "new_enrollment_id": new_enrollment.id,
-        "package": new_package.name,
-        "classes_total": new_enrollment.classes_total,
-        "renewal_count": new_enrollment.renewal_count,
-    }
 
 @router.post("/select-initial")
 def select_initial_package(
@@ -662,86 +587,29 @@ def cancel_package_change(
 
     return {"message": "Solicitud de cambio de paquete cancelada. Tu paquete original sigue activo."}
 
-
-# ─── STAFF / PROFESOR — Aprobar cambio de paquete ────────────────────────────
-
-@router.post("/{enrollment_id}/approve-package-change", response_model=PackageChangeApprovalResponse)
-def approve_package_change(
+@router.get("/enrollment/{enrollment_id}")
+def get_enrollment_package(
     enrollment_id: int,
-    current_user: User = Depends(get_current_staff_or_teacher),
+    current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    """
-    El staff o el profesor dueño del enrollment aprueba el cambio de
-    paquete. A diferencia de la renovación, esto actualiza el MISMO
-    enrollment in-place: las clases ya vinculadas (completed, no_show,
-    pending, confirmed) siguen apuntando al mismo enrollment_id, así que
-    quedan automáticamente "re-vinculadas" al nuevo paquete sin tocarlas.
-    """
     enrollment = db.query(Enrollment).filter(
         Enrollment.id == enrollment_id,
-        Enrollment.status == EnrollmentStatus.pending_package_change,
+        Enrollment.student_id == current_user.student_profile.id
     ).first()
-
     if not enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Solicitud de cambio de paquete no encontrada"
-        )
+        raise HTTPException(status_code=404, detail="Enrollment no encontrado")
 
-    # Un profesor solo puede aprobar cambios de sus propios estudiantes
-    if current_user.role == "teacher":
-        if not current_user.teacher_profile or enrollment.teacher_id != current_user.teacher_profile.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Solo puedes aprobar cambios de paquete de tus propios estudiantes"
-            )
-
-    if not enrollment.change_requested_package_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Esta solicitud no tiene un paquete de destino válido"
-        )
-
-    new_package = db.query(Package).filter(
-        Package.id == enrollment.change_requested_package_id,
-        Package.is_active == True
-    ).first()
-
-    if not new_package:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="El paquete solicitado ya no está disponible. "
-                   "Pide al estudiante que cancele y solicite otro."
-        )
-
-    # Revalidar el límite por si algo cambió desde que se solicitó
-    if new_package.classes_count is not None:
-        occupied_slots = db.query(Class).filter(
-            Class.enrollment_id == enrollment.id,
-            Class.status.in_(PACKAGE_CHANGE_BLOCKING_STATUSES)
-        ).count()
-
-        if occupied_slots > new_package.classes_count:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Ya no se puede aprobar: el estudiante tiene {occupied_slots} clases "
-                    f"usadas o agendadas y el paquete solicitado solo permite {new_package.classes_count}."
-                )
-            )
-
-    enrollment.package_id = new_package.id
-    enrollment.classes_total = new_package.classes_count
-    enrollment.status = EnrollmentStatus.active
-    enrollment.change_requested_package_id = None
-    db.commit()
-    db.refresh(enrollment)
-
-    return PackageChangeApprovalResponse(
-        message="Cambio de paquete aprobado correctamente",
-        enrollment_id=enrollment.id,
-        package=new_package.name,
-        classes_total=enrollment.classes_total,
-        classes_used=enrollment.classes_used,
+    target_pkg_id = (
+        enrollment.renewal_requested_package_id
+        or enrollment.change_requested_package_id
+        or enrollment.package_id
     )
+    package = db.query(Package).filter(Package.id == target_pkg_id).first()
+
+    return {
+        "package": package,
+        "installments_paid": enrollment.installments_paid,
+        "enrollment_id": enrollment.id
+    }
+

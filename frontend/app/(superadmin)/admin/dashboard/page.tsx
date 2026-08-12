@@ -197,161 +197,22 @@ export default function AdminDashboard() {
         </div>
       ) : null}
 
-      {/* ─── Pagos pendientes de validación ──────────────── */}
-      <div className="animate-fade-up animate-fade-up-delay-4 pt-4">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="font-display text-2xl font-bold text-slate-800">
-              Comprobantes por validar
-            </h2>
-            <p className="text-sm text-slate-500 mt-1 font-medium">
-              Revisa cada comprobante y aprueba o rechaza el pago
-            </p>
-          </div>
-          {payments.length > 0 && (
-            <Badge variant="warning" className="px-4 py-1.5 shadow-sm text-sm">
-              {payments.length} pendientes
-            </Badge>
-          )}
-        </div>
-
-        {paymentsLoading ? (
-          <div className="space-y-4">
-            {[1, 2].map(i => (
-              <div key={i} className="bg-slate-50 border border-slate-100 rounded-2xl h-28 animate-pulse" />
-            ))}
-          </div>
-        ) : payments.length === 0 ? (
-          <Card className="p-16 text-center bg-slate-50/50 border-2 border-dashed border-slate-200 rounded-3xl shadow-none">
-            <div className="text-5xl mb-4 drop-shadow-sm">✅</div>
-            <p className="text-slate-500 font-medium text-lg">
-              Todo al día. No hay comprobantes pendientes.
-            </p>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {payments.map((payment) => (
-              <Card key={payment.payment_id} hover className="p-6 border-slate-100 shadow-sm rounded-3xl">
-                <div className="flex flex-col md:flex-row items-start gap-6">
-
-                  {/* Recibo thumbnail */}
-                  {payment.receipt_url && (
-                    <a
-                      href={payment.receipt_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-shrink-0 group"
-                    >
-                      <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-2xl overflow-hidden border-2 border-slate-100 group-hover:border-pink-300 transition-all shadow-sm">
-                        <img
-                          src={payment.receipt_url}
-                          alt="Comprobante"
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <span className="bg-white/90 text-pink-600 text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
-                            Ampliar ↗
-                          </span>
-                        </div>
-                      </div>
-                    </a>
-                  )}
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0 w-full">
-                    <div className="flex items-center gap-3 mb-2 flex-wrap">
-                      <span className="text-slate-800 font-bold text-lg">
-                        {payment.student_name}
-                      </span>
-                      <span className="text-slate-400 text-sm font-medium">
-                        @{payment.student_username}
-                      </span>
-                      <Badge variant={payment.payment_method === 'binance' ? 'gold' : 'info'}>
-                        {payment.payment_method}
-                      </Badge>
-                      <span className="text-pink-500 font-black text-lg md:ml-auto bg-pink-50 px-3 py-1 rounded-full">
-                        ${payment.amount.toFixed(2)}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-500 mb-5 font-medium">
-                      <span className="flex items-center gap-1.5">
-                        <span className="text-slate-400">TX:</span> 
-                        <span className="bg-slate-100 px-2 py-0.5 rounded-md font-mono text-xs text-slate-600">
-                          {payment.transaction_id}
-                        </span>
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="text-slate-400">📅 Clase:</span> 
-                        {new Date(payment.class_start_utc).toLocaleString('es', {
-                          day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
-                        })}
-                      </span>
-                    </div>
-
-                    {/* Formulario de aprobación */}
-                    {activePayment === payment.payment_id ? (
-                      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                        <input
-                          type="url"
-                          value={meetLink}
-                          onChange={e => setMeetLink(e.target.value)}
-                          placeholder="https://meet.google.com/xxx-xxxx-xxx"
-                          className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300 transition-all"
-                        />
-                        <div className="flex gap-2">
-                          <Button
-                            variant="primary"
-                            loading={validating === payment.payment_id}
-                            onClick={() => handleApprove(payment.payment_id)}
-                            className="whitespace-nowrap"
-                          >
-                            Confirmar
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            onClick={() => setActivePayment(null)}
-                          >
-                            Cancelar
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap gap-3">
-                        <Button
-                          variant="primary"
-                          onClick={() => setActivePayment(payment.payment_id)}
-                        >
-                          Aprobar pago
-                        </Button>
-                        <Button
-                          variant="danger"
-                          loading={validating === payment.payment_id}
-                          onClick={() => handleReject(payment.payment_id)}
-                        >
-                          Rechazar
-                        </Button>
-                        {payment.receipt_url && (
-                          <a
-                            href={payment.receipt_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <Button variant="secondary" className="text-slate-500">
-                              Ver original ↗
-                            </Button>
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+      <div className="flex items-center justify-between mb-6">
+  <div>
+    <h2 className="font-display text-2xl font-bold text-slate-800">
+      Pagos y profesores por confirmar
+    </h2>
+    <p className="text-sm text-slate-500 mt-1 font-medium">
+      Revisa las notificaciones de pago y las solicitudes de nuevos profesores
+    </p>
+  </div>
+  <div className="flex gap-2">
+    {payments.length > 0 && <Badge variant="warning" className="px-4 py-1.5 shadow-sm text-sm">{payments.length} pagos</Badge>}
+    {stats && stats.total_teachers_pending > 0 && (
+      <Badge variant="warning" className="px-4 py-1.5 shadow-sm text-sm">{stats.total_teachers_pending} profesores</Badge>
+    )}
+  </div>
+</div>
     </div>
     <ChipiWidget screenName="admin_home" /> 
   </>

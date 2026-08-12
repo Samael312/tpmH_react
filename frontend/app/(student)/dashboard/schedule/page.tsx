@@ -13,15 +13,23 @@ import Link from "next/link";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import PackageCheckout from "@/components/payments/PackageCheckout";
 import { formatTimeTz, formatDateHumanTz, getHourMinuteTz, getMyDisplayTimezone } from "@/lib/tzFormat";
+import { priceLabelSuffix } from "@/lib/packageThemes";
 
-type BookingStage = "loading" | "needs_trial" | "trial_in_progress" | "needs_package" | "needs_renewal" | "renewal_pending" | "ready";
+type BookingStage =
+  | "loading"
+  | "needs_trial"
+  | "trial_in_progress"
+  | "needs_package"
+  | "package_pending_payment"
+  | "needs_renewal"
+  | "renewal_pending"
+  | "ready";
 
 const DURATIONS = [
   { value: 30, label: "30 min" },
   { value: 60, label: "1 hora" },
 ];
 
-// ─── Helper: normaliza errores de la API (string o array de Pydantic) ────────
 function extractErrorMessage(e: any, fallback: string): string {
   const detail = e?.response?.data?.detail;
   if (Array.isArray(detail)) {
@@ -67,28 +75,22 @@ function MiniCalendar({
   };
 
   return (
-    <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
-                    border border-white shadow-2xl shadow-slate-200/50 p-6">
+    <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6">
       <div className="flex items-center justify-between mb-5">
-        <button onClick={prev}
-          className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200
-                     flex items-center justify-center transition-colors">
+        <button onClick={prev} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
           <ChevronLeft className="w-4 h-4 text-slate-600" />
         </button>
         <span className="text-base font-black text-slate-800">
           {MONTHS[month]} {year}
         </span>
-        <button onClick={next}
-          className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200
-                     flex items-center justify-center transition-colors">
+        <button onClick={next} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
           <ChevronRight className="w-4 h-4 text-slate-600" />
         </button>
       </div>
 
       <div className="grid grid-cols-7 mb-2">
         {DAYS.map(d => (
-          <div key={d} className="text-center text-[10px] font-black
-                                   text-slate-400 uppercase tracking-widest py-1">
+          <div key={d} className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest py-1">
             {d}
           </div>
         ))}
@@ -159,10 +161,8 @@ function StepSelectSlot({
         <MiniCalendar value={date} onChange={setDate} />
 
         {!isTrial && (
-          <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
-                          border border-white shadow-xl shadow-slate-200/50 p-6">
-            <p className="text-[10px] font-black text-slate-400 uppercase
-                          tracking-widest mb-3">
+          <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-xl shadow-slate-200/50 p-6">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
               Duración de la clase
             </p>
             <div className="flex gap-3">
@@ -170,12 +170,11 @@ function StepSelectSlot({
                 <button
                   key={d.value}
                   onClick={() => setDuration(d.value)}
-                  className={`flex-1 py-3 rounded-xl text-sm font-bold
-                    border-2 transition-all duration-200
-                    ${duration === d.value
+                  className={`flex-1 py-3 rounded-xl text-sm font-bold border-2 transition-all duration-200 ${
+                    duration === d.value
                       ? "border-pink-400 bg-pink-50 text-pink-600"
                       : "border-transparent bg-slate-100 text-slate-500 hover:border-slate-200"
-                    }`}
+                  }`}
                 >
                   {d.label}
                 </button>
@@ -185,8 +184,7 @@ function StepSelectSlot({
         )}
 
         {isTrial && (
-          <div className="bg-purple-50 border border-purple-100 rounded-2xl p-5
-                          flex gap-3 items-start">
+          <div className="bg-purple-50 border border-purple-100 rounded-2xl p-5 flex gap-3 items-start">
             <Sparkles className="w-5 h-5 text-purple-400 flex-shrink-0 mt-0.5" />
             <p className="text-sm font-bold text-purple-700 leading-relaxed">
               Tu primera clase es una prueba gratuita de 30 minutos. Una vez
@@ -196,8 +194,7 @@ function StepSelectSlot({
         )}
       </div>
 
-      <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
-                      border border-white shadow-2xl shadow-slate-200/50 p-6">
+      <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
             Horarios disponibles
@@ -241,16 +238,15 @@ function StepSelectSlot({
                   onClick={() => !blocked && onSelect(date, slot, duration)}
                   disabled={blocked}
                   className={`
-                      relative py-4 px-3 rounded-2xl text-center
-                      border-2 transition-all duration-200
-                      ${blocked
-                        ? "border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed"
-                        : "hover:-translate-y-0.5 hover:shadow-md " +
-                          (preferred
-                            ? "border-purple-300 bg-purple-50/80 hover:border-purple-400 shadow-sm shadow-purple-100"
-                            : "border-slate-100 bg-white hover:border-pink-300")
-                      }
-                    `}
+                    relative py-4 px-3 rounded-2xl text-center border-2 transition-all duration-200
+                    ${blocked
+                      ? "border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed"
+                      : "hover:-translate-y-0.5 hover:shadow-md " +
+                        (preferred
+                          ? "border-purple-300 bg-purple-50/80 hover:border-purple-400 shadow-sm shadow-purple-100"
+                          : "border-slate-100 bg-white hover:border-pink-300")
+                    }
+                  `}
                 >
                   {preferred && !blocked && (
                     <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-purple-500 text-white text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm">
@@ -322,8 +318,7 @@ function StepConfirmTrial({
 
   return (
     <div className="max-w-lg mx-auto space-y-5">
-      <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-[2rem]
-                      p-6 text-white relative overflow-hidden shadow-xl shadow-purple-200">
+      <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-[2rem] p-6 text-white relative overflow-hidden shadow-xl shadow-purple-200">
         <div className="absolute top-[-30px] right-[-30px] w-32 h-32 bg-white/10 rounded-full blur-xl" />
         <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-2 flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5" /> Clase de prueba gratuita
@@ -362,10 +357,7 @@ function StepConfirmTrial({
             Solo confirma el horario para reservarla.
           </p>
           <div className="flex gap-3">
-            <button
-              onClick={onBack}
-              className="flex-1 py-3.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
-            >
+            <button onClick={onBack} className="flex-1 py-3.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
               Volver
             </button>
             <button
@@ -405,7 +397,6 @@ function StepPayment({
   const fmtDate = formatDateHumanTz(date + "T00:00:00", myTz);
   const fmtTime = formatTimeTz(slot.start_time_utc, myTz);
 
-  // Paso 1: reservar el slot
   const bookSlot = async () => {
     setBooking(true);
     setError("");
@@ -416,7 +407,6 @@ function StepPayment({
         end_time_utc: slot.end_time_utc,
         duration_minutes: duration,
       });
-      // Paquete finito con créditos → ya viene "confirmed", no hace falta notificar nada
       if (res.data.status === "confirmed") {
         setDone(true);
         setTimeout(onSuccess, 1500);
@@ -430,7 +420,6 @@ function StepPayment({
     }
   };
 
-  // Paso 2 (solo paquetes ilimitados): notificar el pago
   const notify = async () => {
     if (!classId) return;
     setNotifying(true);
@@ -553,6 +542,68 @@ function TrialInProgressScreen() {
   );
 }
 
+// ─── Pantalla: bloqueo package_pending_payment ────────────────────────────────
+function PackagePendingPaymentScreen({
+  enrollmentId,
+  onNotified,
+}: {
+  enrollmentId: number;
+  onNotified: () => void;
+}) {
+  const [pkg, setPkg] = useState<any>(null);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [installmentsPaid, setInstallmentsPaid] = useState(0);
+
+  useEffect(() => {
+    api.get(`/packages/enrollment/${enrollmentId}`).then(r => {
+      setPkg(r.data.package);
+      setInstallmentsPaid(r.data.installments_paid ?? 0);
+    });
+  }, [enrollmentId]);
+
+  return (
+    <div className="max-w-lg mx-auto">
+      <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-10 text-center">
+        <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Hourglass className="w-8 h-8 text-amber-500" />
+        </div>
+        <h3 className="text-xl font-black text-slate-800 mb-2">Pago pendiente de notificación</h3>
+        <p className="text-slate-500 text-sm leading-relaxed mb-6">
+          Elegiste este paquete pero aún no notificaste tu pago. El calendario permanecerá
+          bloqueado hasta que lo hagas y sea confirmado.
+        </p>
+        <button
+          onClick={() => setCheckoutOpen(true)}
+          className="px-6 py-3 bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 text-white text-sm font-bold rounded-xl shadow-md transition-all duration-200 active:scale-[0.98]"
+        >
+          Notificar pago
+        </button>
+      </div>
+
+      {checkoutOpen && pkg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setCheckoutOpen(false)} />
+          <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-black text-slate-800">Completar pago</h2>
+              <button onClick={() => setCheckoutOpen(false)} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+            <PackageCheckout
+              pkg={pkg}
+              enrollmentId={enrollmentId}
+              installmentsPaid={installmentsPaid}
+              onClose={() => setCheckoutOpen(false)}
+              onDone={onNotified}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Pantalla: elegir paquete inicial ────────────────────────────────────────
 function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: string | null; onSelected: () => void }) {
   const [packages, setPackages] = useState<any[]>([]);
@@ -613,10 +664,7 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {packages.map(pkg => {
             const accent = pkg.color || "#ec4899";
-            const priceSuffix =
-              pkg.classes_count === 1 ? "/clase" :
-              pkg.classes_count == null ? "/ilimitado" :
-              "/clase";
+            const priceSuffix = priceLabelSuffix(pkg.classes_count);
             const priceDisplay = pkg.price?.toFixed
               ? (Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2))
               : pkg.price;
@@ -687,6 +735,7 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
             <PackageCheckout
               pkg={checkoutTarget.pkg}
               enrollmentId={checkoutTarget.enrollmentId}
+              installmentsPaid={0}
               onClose={() => setCheckoutTarget(null)}
               onDone={onSelected}
             />
@@ -770,10 +819,7 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {packages.map(pkg => {
             const accent = pkg.color || "#ec4899";
-            const priceSuffix =
-              pkg.classes_count === 1 ? "/clase" :
-              pkg.classes_count == null ? "/ilimitado" :
-              "/clase";
+            const priceSuffix = priceLabelSuffix(pkg.classes_count);
             const priceDisplay = pkg.price?.toFixed
               ? (Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2))
               : pkg.price;
@@ -839,6 +885,7 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
             <PackageCheckout
               pkg={checkoutTarget.pkg}
               enrollmentId={checkoutTarget.enrollmentId}
+              installmentsPaid={0}
               onClose={() => setCheckoutTarget(null)}
               onDone={onRequested}
             />
@@ -870,6 +917,7 @@ function RenewalPendingScreen() {
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function SchedulePage() {
   const [stage, setStage] = useState<BookingStage>("loading");
+  const [enrollmentId, setEnrollmentId] = useState<number | null>(null);
   const [step, setStep] = useState<"select" | "payment">("select");
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
@@ -882,7 +930,6 @@ export default function SchedulePage() {
   const needsTeacherSelection = !isSingleTenant && myTeachers.length > 1 && !selectedTeacherUsername;
   const teacherBlocked = !teachersLoading && !isSingleTenant && myTeachers.length === 0;
 
-  // Auto-selección cuando hay 0 o 1 profesor
   useEffect(() => {
     if (teachersLoading) return;
     if (isSingleTenant) { setSelectedTeacherUsername(null); return; }
@@ -897,7 +944,10 @@ export default function SchedulePage() {
     if (!isSingleTenant && !selectedTeacherUsername) { setStage("loading"); return; }
     const params = selectedTeacherUsername ? `?teacher_username=${selectedTeacherUsername}` : "";
     api.get(`/payments/booking-status${params}`)
-      .then(res => setStage(res.data.stage))
+      .then(res => {
+        setStage(res.data.stage);
+        if (res.data.enrollment_id) setEnrollmentId(res.data.enrollment_id);
+      })
       .catch(() => setStage("ready"));
   };
 
@@ -943,6 +993,7 @@ export default function SchedulePage() {
                 {stage === "needs_trial" && step === "payment" && "Confirmar clase de prueba"}
                 {stage === "trial_in_progress" && "Clase de prueba pendiente"}
                 {stage === "needs_package" && "Elige tu paquete"}
+                {stage === "package_pending_payment" && "Pago pendiente de notificación"}
                 {stage === "needs_renewal" && "Renueva tu paquete"}
                 {stage === "renewal_pending" && "Renovación en revisión"}
                 {stage === "ready" && step === "select" && "Agendar Clase"}
@@ -953,6 +1004,7 @@ export default function SchedulePage() {
                 {stage === "needs_trial" && "Tu primera clase es gratuita, sin compromiso"}
                 {stage === "trial_in_progress" && "Prepárate para tu clase de prueba gratuita"}
                 {stage === "needs_package" && "Selecciona el paquete que mejor se adapte a ti"}
+                {stage === "package_pending_payment" && "Notifica tu pago para desbloquear el calendario de agendamiento"}
                 {stage === "needs_renewal" && "Renueva tu paquete para continuar con tu aprendizaje"}
                 {stage === "renewal_pending" && "Tu solicitud de renovación está en revisión"}
                 {stage === "ready" && step === "select" && "Selecciona fecha y horario disponible"}
@@ -1081,6 +1133,13 @@ export default function SchedulePage() {
                   loadStage();
                   refetchEnrollments();
                 }}
+              />
+            )}
+
+            {stage === "package_pending_payment" && enrollmentId && (
+              <PackagePendingPaymentScreen
+                enrollmentId={enrollmentId}
+                onNotified={loadStage}
               />
             )}
 

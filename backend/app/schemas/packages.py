@@ -6,6 +6,7 @@ from datetime import datetime
 ALLOWED_DURATIONS = [30, 60]
 ALLOWED_DESCRIPTION_TYPES = ["paragraph", "list"]
 
+
 class PackageCreate(BaseModel):
     name: str
     subject: str
@@ -17,12 +18,14 @@ class PackageCreate(BaseModel):
     classes_count: Optional[int] = None
     price: float
     duration_minutes: int = 60
+    allow_installments: bool = False
+    installment_count: Optional[int] = None
 
-    @field_validator("duration_minutes")
+    @field_validator("installment_count")
     @classmethod
-    def validate_duration(cls, v):
-        if v not in ALLOWED_DURATIONS:
-            raise ValueError(f"Duración inválida. Opciones: {ALLOWED_DURATIONS}")
+    def validate_installments(cls, v, info):
+        if info.data.get("allow_installments") and (v is None or v < 2):
+            raise ValueError("Si permites cuotas, installment_count debe ser al menos 2")
         return v
 
     @field_validator("classes_count")
@@ -57,9 +60,12 @@ class PackageResponse(BaseModel):
     description_items: Optional[List[str]] = None
     icon: Optional[str] = "📦"
     color: Optional[str] = "#ec4899"
-    classes_count: Optional[int] 
+    classes_count: Optional[int]
     price: float
     duration_minutes: int
+    allow_installments: bool = False
+    installment_count: Optional[int] = None
+    installment_amount: Optional[float] = None
     is_active: bool
     created_at: datetime
 
@@ -93,7 +99,7 @@ class RenewalRequest(BaseModel):
     """
     current_enrollment_id: int
     new_package_id: int
-    # Puede ser el mismo package_id (repetir) u otro (cambiar)
+
 
 class EnrollmentComplianceResponse(BaseModel):
     """
@@ -113,18 +119,17 @@ class EnrollmentComplianceResponse(BaseModel):
     no_show_count: int
     cancelled_late_count: int
     renewal_requested_package_name: Optional[str] = None
-    change_requested_package_name: Optional[str] = None  # NUEVO
+    change_requested_package_name: Optional[str] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
 
+
 class PackageChangeRequest(BaseModel):
     """
     El estudiante solicita cambiar de paquete (mismo profesor) mientras
-    el paquete actual sigue activo (no agotado). Distinto de renovación:
-    aquí NO se crea un enrollment nuevo, se actualiza el mismo in-place
-    una vez aprobado.
+    el paquete actual sigue activo (no agotado).
     """
     current_enrollment_id: int
     new_package_id: int

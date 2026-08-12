@@ -17,6 +17,7 @@ import {
   Award,
   UserCheck,
 } from "lucide-react";
+import PackageCheckout from "@/components/payments/PackageCheckout";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { useMyTeachers } from "@/hooks/useStudentData";
 import { useState as useStateReact } from "react";
@@ -27,19 +28,10 @@ function Skeleton({ className }: { className?: string }) {
   return <div className={`animate-pulse bg-slate-200/80 rounded-2xl ${className}`} />;
 }
 
-function ChangePackageModal({
-  enrollment,
-  teacherUsername,
-  onClose,
-  onDone,
-}: {
-  enrollment: any;
-  teacherUsername: string;
-  onClose: () => void;
-  onDone: () => void;
-}) {
+function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: any) {
   const [packages, setPackages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [checkoutTarget, setCheckoutTarget] = useState<any>(null);
   const [requesting, setRequesting] = useState<number | null>(null);
   const [error, setError] = useState("");
 
@@ -50,22 +42,39 @@ function ChangePackageModal({
       .finally(() => setLoading(false));
   }, [teacherUsername]);
 
-  const request = async (packageId: number) => {
-    setRequesting(packageId);
+  const request = async (pkg: any) => {
+    setRequesting(pkg.id);
     setError("");
     try {
       await api.post("/packages/request-package-change", {
         current_enrollment_id: enrollment.id,
-        new_package_id: packageId,
+        new_package_id: pkg.id,
       });
-      onDone();
-      onClose();
+      setCheckoutTarget(pkg);
     } catch (e: any) {
       setError(e.response?.data?.detail || "Error solicitando el cambio de paquete");
     } finally {
       setRequesting(null);
     }
   };
+
+  if (checkoutTarget) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8">
+          <h2 className="text-lg font-black text-slate-800 mb-5">Completar pago</h2>
+          <PackageCheckout
+            pkg={checkoutTarget}
+            enrollmentId={enrollment.id}
+            installmentsPaid={0}
+            onClose={onClose}
+            onDone={onDone}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

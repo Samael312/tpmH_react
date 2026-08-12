@@ -37,3 +37,7 @@ export const ICON_PICKER_OPTIONS = [
   "🔢", "📖", "⚛️", "🎵", "🧪", "🏛️", "🎨", "💻", "🔬", "📈",
   "🧠", "💼", "🇪🇸", "🇬🇧", "🇫🇷", "🇮🇹", "🇵🇹", "🇩🇪", "🌍", "📝",
 ];
+
+export function priceLabelSuffix(classesCount: number | null): string {
+  return classesCount == null ? "/clase" : "/paquete";
+}

@@ -4,6 +4,7 @@ import { Clock, Languages, BookOpen } from "lucide-react";
 import Carousel from "./Carousel";
 import { LANGUAGES } from "@/lib/teacherOptions";
 import type { LandingPackage } from "@/hooks/useLandingData";
+import { priceLabelSuffix } from "@/lib/packageThemes";
 
 function TeacherMiniAvatar({ name, url }: { name: string; url?: string | null }) {
   if (url) {
@@ -68,6 +69,9 @@ export default function PackagesCarousel({
 
             <p className="text-2xl font-black mb-5" style={{ color: accent }}>
               ${pkg.price?.toFixed ? pkg.price.toFixed(2) : pkg.price}
+              <span className="text-xs font-medium text-slate-500 ml-1">
+                {priceLabelSuffix(pkg.classes_count)}
+              </span>
             </p>
 
             {showTeacher && (

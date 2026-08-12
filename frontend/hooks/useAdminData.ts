@@ -112,6 +112,8 @@ export function useStudents(search?: string) {
   return { students, loading, total, refetch: fetch }
 }
 
+
+
 export function useWithdrawals() {
   const [withdrawals, setWithdrawals] = useState<WithdrawalRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -119,10 +121,9 @@ export function useWithdrawals() {
   const fetch = useCallback(async () => {
     try {
       setLoading(true)
-      const res = await api.get('/admin/withdrawals/pending')
+      const res = await api.get('/payments/admin/withdrawals/pending')  // ← ver nota abajo
       setWithdrawals(res.data)
-    } catch { }
-    finally { setLoading(false) }
+    } catch { } finally { setLoading(false) }
   }, [])
 
   useEffect(() => { fetch() }, [fetch])

@@ -192,7 +192,11 @@ def get_student_booking_stage(student_id: int, teacher_id: int, db: Session) -> 
         Enrollment.teacher_id == teacher_id,
         Enrollment.status == EnrollmentStatus.active
     ).first()
+
     if active_enrollment:
+        # Paquete finito sin confirmar aún → bloquea el calendario
+        if active_enrollment.package.classes_count is not None and active_enrollment.payment_status == "unpaid":
+            return "package_pending_payment"
         return "ready"
 
     package_change_pending = db.query(Enrollment).filter(

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
@@ -14,31 +14,16 @@ class Class(Base):
     __tablename__ = "classes"
 
     id = Column(Integer, primary_key=True, index=True)
-    enrollment_id = Column(
-        Integer, ForeignKey("enrollments.id"), nullable=True
-    )
-    # nullable=True porque las clases trial no tienen enrollment
-
+    enrollment_id = Column(Integer, ForeignKey("enrollments.id"), nullable=True)
     teacher_id = Column(Integer, ForeignKey("teacher_profiles.id"), nullable=False)
     student_id = Column(Integer, ForeignKey("student_profiles.id"), nullable=False)
-
-    # Tipo de clase
-    class_type = Column(
-        Enum(ClassType),
-        default=ClassType.regular,
-        nullable=False
-    )
-
-    # Materia — se hereda del paquete o se asigna manualmente en trial
+    class_type = Column(Enum(ClassType),default=ClassType.regular,nullable=False)
     subject = Column(String, nullable=True)
-    # "Inglés", "Francés", "Guitarra", etc.
-
     start_time_utc = Column(DateTime(timezone=True), nullable=False)
     end_time_utc = Column(DateTime(timezone=True), nullable=False)
     day_of_week = Column(String, nullable=True) # Nuevo campo (ej. "Lunes", "Martes")
     duration = Column(Integer, nullable=False)
     google_event_id = Column(String, nullable=True)  # Para sync con Calendar
-    # Estados
     status = Column(String, default="pending")
     # pending_trial      → bloquea horario
     # pending          → bloquea slot, esperando comprobante
@@ -56,6 +41,7 @@ class Class(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     payment_expires_at = Column(DateTime(timezone=True), nullable=True)
+    used_prepaid_credit = Column(Boolean, default=False)  # para saber si hay que devolver crédito al cancelar
 
     enrollment = relationship("Enrollment", back_populates="classes")
 
