@@ -64,6 +64,8 @@ const STATUS_BADGE: Record<string, string> = {
   pending_renewal: "bg-amber-100 text-amber-700",
   pending_package_change: "bg-blue-100 text-blue-700",
   cancelled: "bg-red-100 text-red-600",
+  package_pending_payment: "bg-amber-100 text-amber-700",
+  unpaid: "bg-amber-100 text-amber-700",
 };
 const STATUS_LABEL: Record<string, string> = {
   active: "Activo",
@@ -71,6 +73,8 @@ const STATUS_LABEL: Record<string, string> = {
   pending_renewal: "Renovación pendiente",
   pending_package_change: "Cambio de paquete pendiente",
   cancelled: "Cancelado",
+  package_pending_payment: "Pago pendiente",
+  unpaid: "Sin pagar",
 };
 
 export default function TeacherPackagesPage() {
@@ -744,6 +748,20 @@ export default function TeacherPackagesPage() {
                         </div>
                       </div>
 
+                      {(e.status === "package_pending_payment" || e.status === "unpaid") && (
+                        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                          <span className="text-[10px] font-bold text-amber-600">
+                            Esperando pago inicial
+                          </span>
+                          <button
+                            onClick={() => grantManually(e.id)}
+                            disabled={approvingId === e.id}
+                            className="text-[10px] font-bold text-slate-400 hover:text-pink-600 underline underline-offset-2"
+                          >
+                            Otorgar manualmente (sin cobro)
+                          </button>
+                        </div>
+                      )}
                       {e.status === "pending_renewal" && (
                         <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                           {e.renewal_requested_package_name && (

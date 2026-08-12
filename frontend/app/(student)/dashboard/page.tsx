@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
-import { useStudentClasses, useEnrollments } from "@/hooks/useStudentData";
+import { useStudentClasses, useEnrollments, BookingStage } from "@/hooks/useStudentData";
 import api from "@/lib/api";
 import ClassCard from "@/components/classes/ClassCard";
 import {
@@ -22,16 +22,6 @@ import {
 } from "lucide-react";
 import PackageCheckout from "@/components/payments/PackageCheckout";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
-
-// ─── Punto 2: Ampliación de BookingStage ─────────────────────────────────────
-type BookingStage =
-  | "loading"
-  | "needs_trial"
-  | "trial_in_progress"
-  | "needs_package"
-  | "needs_payment"
-  | "renew_required"
-  | "ready";
 
 function Skeleton({ className }: { className?: string }) {
   return <div className={`animate-pulse bg-slate-200/80 rounded-2xl ${className}`} />;
@@ -255,7 +245,6 @@ export default function StudentDashboard() {
           </p>
         </div>
 
-        {/* ─── Punto 2: Banners según el BookingStage ─── */}
         {stage === "needs_trial" && !hasTrial && (
           <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-[2rem] p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-purple-200 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="absolute top-[-40px] right-[-40px] w-48 h-48 bg-white/10 rounded-full blur-2xl" />
@@ -313,7 +302,28 @@ export default function StudentDashboard() {
           </div>
         )}
 
-        {/* Punto 2: Banner de Pago Pendiente */}
+        {/* Punto 2: Banner de Pago Pendiente de Notificación */}
+        {stage === "package_pending_payment" && (
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-[2rem] p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-amber-200 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="absolute top-[-40px] right-[-40px] w-48 h-48 bg-white/10 rounded-full blur-2xl" />
+            <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <AlertCircle className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-1">Pago pendiente de confirmación</p>
+                  <h2 className="text-xl font-black">Tu pago está en proceso de validación</h2>
+                  <p className="text-white/80 text-sm mt-1">Si no adjuntaste tu comprobante, puedes reabrirlo o enviarlo ahora para activar tu agenda.</p>
+                </div>
+              </div>
+              <Link href="/dashboard/schedule" className="flex-shrink-0 inline-flex items-center gap-2 px-5 py-3 bg-white text-amber-600 text-sm font-bold rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200">
+                <CreditCard className="w-4 h-4" /> Notificar pago
+              </Link>
+            </div>
+          </div>
+        )}
+
         {stage === "needs_payment" && (
           <div className="bg-gradient-to-r from-amber-500 to-rose-500 rounded-[2rem] p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-rose-200 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="absolute top-[-40px] right-[-40px] w-48 h-48 bg-white/10 rounded-full blur-2xl" />
@@ -335,8 +345,7 @@ export default function StudentDashboard() {
           </div>
         )}
 
-        {/* Punto 2: Banner de Renovación Pendiente */}
-        {stage === "renew_required" && (
+        {(stage === "renew_required" || stage === "needs_renewal" || stage === "renewal_pending") && (
           <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-[2rem] p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-purple-200 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="absolute top-[-40px] right-[-40px] w-48 h-48 bg-white/10 rounded-full blur-2xl" />
             <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -345,23 +354,32 @@ export default function StudentDashboard() {
                   <RefreshCw className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-1">Renovación requerida</p>
-                  <h2 className="text-xl font-black">Tu paquete ha finalizado</h2>
-                  <p className="text-white/80 text-sm mt-1">Renueva tu paquete o selecciona uno nuevo para continuar aprendiendo.</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-1">
+                    {stage === "renewal_pending" ? "Renovación en proceso" : "Renovación requerida"}
+                  </p>
+                  <h2 className="text-xl font-black">
+                    {stage === "renewal_pending" ? "Tu solicitud de renovación fue enviada" : "Tu paquete ha finalizado"}
+                  </h2>
+                  <p className="text-white/80 text-sm mt-1">
+                    {stage === "renewal_pending"
+                      ? "Tu profesor o administración revisará tu pago para desbloquear tus nuevas clases."
+                      : "Renueva tu paquete o selecciona uno nuevo para continuar aprendiendo."}
+                  </p>
                 </div>
               </div>
               <Link href="/dashboard/schedule" className="flex-shrink-0 inline-flex items-center gap-2 px-5 py-3 bg-white text-purple-600 text-sm font-bold rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200">
-                <PackageIcon className="w-4 h-4" /> Renovar paquete
+                <PackageIcon className="w-4 h-4" /> {stage === "renewal_pending" ? "Ver estado" : "Renovar paquete"}
               </Link>
             </div>
           </div>
         )}
 
-        {/* ─── Punto 5: Mostrar información de cuotas y créditos prepagados ─── */}
+        {/* Punto 5 y 7: Mostrar cuotas y créditos prepagados corregidos */}
         {stage === "ready" && activeOrChangingEnrollments.length > 0 && (
           <div className={`grid gap-4 ${activeOrChangingEnrollments.length > 1 ? "sm:grid-cols-2" : ""}`}>
             {activeOrChangingEnrollments.map((enr) => {
-              const remainingCredits = enr.prepaid_credits ?? (enr.classes_total != null ? Math.max(0, enr.classes_total - enr.classes_used) : null);
+              const remainingCredits = enr.prepaid_unlimited_credits ?? (enr.classes_total != null ? Math.max(0, enr.classes_total - enr.classes_used) : null);
+              const totalInstallments = enr.package?.installment_count ?? enr.total_installments;
 
               return (
                 <div key={enr.id}
@@ -375,9 +393,9 @@ export default function StudentDashboard() {
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-white/10 text-slate-200 border border-white/10">
                         <BookOpen className="w-3 h-3 text-purple-300" /> {enr.package?.subject}
                       </span>
-                      {enr.installments_paid && enr.installments_paid > 1 && (
+                      {enr.installments_paid && enr.installments_paid > 0 && totalInstallments && totalInstallments > 1 && (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                          <CreditCard className="w-3 h-3" /> Cuota {enr.installments_paid ?? 1}/{enr.installments_total}
+                          <CreditCard className="w-3 h-3" /> Cuota {enr.installments_paid}/{totalInstallments}
                         </span>
                       )}
                     </div>
@@ -402,19 +420,20 @@ export default function StudentDashboard() {
                       </div>
                     </div>
 
-                    {/* Detalle de créditos prepagados y estado de cuotas */}
                     <div className="flex items-center justify-between text-xs text-slate-300 border-t border-white/10 pt-3 mt-3">
                       <div>
-                        <span className="text-slate-400 block text-[10px] font-semibold uppercase tracking-wider">Créditos prepagados</span>
+                        <span className="text-slate-400 block text-[10px] font-semibold uppercase tracking-wider">
+                          {enr.package?.classes_count === null ? "Créditos prepagados" : "Créditos disponibles"}
+                        </span>
                         <span className="font-bold text-white text-sm">
                           {remainingCredits !== null ? `${remainingCredits} restantes` : "Ilimitados"}
                         </span>
                       </div>
-                      {enr.installments_paid && enr.installments_paid > 1 && (
+                      {enr.installments_paid && totalInstallments && totalInstallments > 1 && (
                         <div className="text-right">
                           <span className="text-slate-400 block text-[10px] font-semibold uppercase tracking-wider">Cuotas</span>
                           <span className="font-bold text-pink-300 text-sm">
-                            Cuota {enr.installments_paid ?? 1} de {enr.installments_paid}
+                            Cuota {enr.installments_paid} de {totalInstallments}
                           </span>
                         </div>
                       )}
@@ -448,7 +467,6 @@ export default function StudentDashboard() {
           />
         )}
 
-        {/* ─── Próximas clases ─── */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">

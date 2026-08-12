@@ -34,7 +34,6 @@ from app.models.student import StudentProfile
 from app.models.teacher import TeacherProfile
 from app.models.user import User
 from app.schemas.classes import (
-    BookClassRequest,
     BookTrialRequest,
     ClassListResponse,
     ClassResponse,
@@ -156,92 +155,6 @@ def _sync_google_calendar_cancelled(teacher_id: int, event_id: Optional[str], db
 
 
 # ─── ESTUDIANTE ──────────────────────────────────────────────────────────────
-
-@router.post(
-    "/book",
-    response_model=ClassResponse,
-    status_code=status.HTTP_201_CREATED
-)
-def book_class(
-    data: BookClassRequest,
-    current_user: User = Depends(get_current_student),
-    db: Session = Depends(get_db)
-):
-    student_id = current_user.student_profile.id
-
-    enrollment = db.query(Enrollment).filter(
-        Enrollment.id == data.enrollment_id,
-        Enrollment.student_id == student_id,
-        Enrollment.status.in_([EnrollmentStatus.active, EnrollmentStatus.pending_package_change])
-    ).first()
-
-    if not enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Enrollment no encontrado o no activo"
-        )
-
-    if enrollment.payment_status == "unpaid":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tu paquete está pendiente de confirmación de pago"
-        )
-
-    if enrollment.package.classes_count is not None:
-        if enrollment.classes_used >= enrollment.unlocked_credits:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No tienes créditos disponibles todavía. Paga la siguiente cuota o renueva tu paquete."
-            )
-
-    can_book, error_msg = can_book_slot(
-        start_time_utc=data.start_time_utc,
-        teacher_id=enrollment.teacher_id,
-        student_id=student_id,
-        db=db
-    )
-
-    if not can_book:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=error_msg
-        )
-
-    teacher_tz = getattr(enrollment.teacher, "timezone", None) if enrollment.teacher else None
-    day_of_week = DAYS_ES[data.start_time_utc.weekday()]
-
-    has_prepaid = False
-    if enrollment.package.classes_count is None:
-        has_prepaid = enrollment.prepaid_unlimited_credits > 0
-
-    new_class = Class(
-        enrollment_id=enrollment.id,
-        teacher_id=enrollment.teacher_id,
-        student_id=student_id,
-        class_type=ClassType.regular,
-        subject=enrollment.package.subject,
-        start_time_utc=data.start_time_utc,
-        end_time_utc=data.end_time_utc,
-        duration=data.duration_minutes,
-        teacher_timezone=teacher_tz,
-        student_timezone=current_user.student_profile.timezone,
-        status="confirmed" if has_prepaid or enrollment.package.classes_count is not None else "pending",
-        day_of_week=day_of_week,
-        used_prepaid_credit=has_prepaid,
-    )
-
-    if has_prepaid:
-        enrollment.prepaid_unlimited_credits -= 1
-    elif enrollment.package.classes_count is not None:
-        update_enrollment_counter(enrollment.id, delta=1, db=db)
-
-    db.add(new_class)
-    db.commit()
-    db.refresh(new_class)
-
-    _sync_google_calendar_created(new_class, db)
-    return _build_class_response(new_class, db)
-
 
 @router.get("/my-classes", response_model=ClassListResponse)
 def get_my_classes_student(

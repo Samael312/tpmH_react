@@ -169,6 +169,7 @@ export default function StudentProfilePage() {
   const [phoneRest, setPhoneRest] = useState("");
   const [timezone, setTz]       = useState("UTC");
   const [goal, setGoal]         = useState("");
+  const [useCustomGoal, setUseCustomGoal] = useState(false);
   const [payMethods, setPay]    = useState<string[]>([]);
   
   // Feedback e Interacción
@@ -216,9 +217,11 @@ export default function StudentProfilePage() {
     setTimezonesList(prev => (prev.includes(detectedTz) ? prev : [detectedTz, ...prev]));
     setSavedTimezone(studentData.timezone || "");
 
-    setGoal(studentData.goal ?? "");
+    const loadedGoal = studentData.goal ?? "";
+    setGoal(loadedGoal);
+    setUseCustomGoal(Boolean(loadedGoal) && !GOALS.includes(loadedGoal));
     setPay(studentData.preferred_payment_methods ?? []);
-    
+
     const photo = userData.avatar_url ?? userData.avatar ?? studentData.profile_photo_url ?? null;
     setAvatarUrl(photo);
   }, [user?.username]);
@@ -630,21 +633,53 @@ export default function StudentProfilePage() {
                         <button
                           type="button"
                           key={g}
-                          onClick={() => setGoal(g)}
+                          onClick={() => { setUseCustomGoal(false); setGoal(g); }}
                           disabled={savingInfo}
                           className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl border-2 text-left transition-all duration-200 disabled:opacity-60 ${
-                            goal === g ? "border-pink-400 bg-pink-50" : "border-slate-100 bg-white hover:border-slate-200"
+                            !useCustomGoal && goal === g ? "border-pink-400 bg-pink-50" : "border-slate-100 bg-white hover:border-slate-200"
                           }`}
                         >
                           <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
-                            goal === g ? "border-pink-500 bg-pink-500" : "border-slate-300"
+                            !useCustomGoal && goal === g ? "border-pink-500 bg-pink-500" : "border-slate-300"
                           }`}>
-                            {goal === g && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                            {!useCustomGoal && goal === g && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                           </div>
                           <span className="text-xs font-bold text-slate-700 leading-snug">{g}</span>
                         </button>
                       ))}
+
+                      {/* Opción de objetivo personalizado */}
+                      <button
+                        type="button"
+                        onClick={() => { setUseCustomGoal(true); if (GOALS.includes(goal)) setGoal(""); }}
+                        disabled={savingInfo}
+                        className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl border-2 text-left transition-all duration-200 disabled:opacity-60 ${
+                          useCustomGoal ? "border-pink-400 bg-pink-50" : "border-slate-100 bg-white hover:border-slate-200"
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+                          useCustomGoal ? "border-pink-500 bg-pink-500" : "border-slate-300"
+                        }`}>
+                          {useCustomGoal && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                        </div>
+                        <span className="text-xs font-bold text-slate-700 leading-snug">
+                          ✍️ Otro objetivo (personalizado)
+                        </span>
+                      </button>
                     </div>
+
+                    {useCustomGoal && (
+                      <div className="mt-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <textarea
+                          value={goal}
+                          onChange={e => setGoal(e.target.value)}
+                          disabled={savingInfo}
+                          rows={3}
+                          placeholder="Describe tu objetivo personalizado..."
+                          className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300 resize-none disabled:opacity-60"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div>

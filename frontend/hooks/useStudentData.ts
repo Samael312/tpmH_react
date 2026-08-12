@@ -53,6 +53,7 @@ export interface StudentEnrollment {
     color?: string | null;
     icon?: string | null;
     classes_count: number | null;
+    installment_count?: number;
     price: number;
     duration_minutes: number;
     is_active: boolean;
@@ -60,6 +61,7 @@ export interface StudentEnrollment {
   };
   classes_used: number;
   classes_total: number | null;
+  prepaid_unlimited_credits?: number;
   status: string;
   installments_paid?: number;
   total_installments?: number;
@@ -107,12 +109,11 @@ export interface StudentHomework {
   };
 }
 
-// ─── Resolución del profesor según el modo de la plataforma ──────────────────
 export interface TeacherResolution {
   loading: boolean;
   isSingleTenant: boolean;
   teacherUsername: string | null;
-  hasChosenTeacher: boolean; // solo relevante en multi-tenant
+  hasChosenTeacher: boolean;
 }
 
 export interface TeacherPublicProfile {
@@ -141,7 +142,6 @@ export interface Review {
   created_at: string;
 }
 
-// ─── Clases del estudiante ────────────────────────────────────────────────────
 export function useStudentClasses(includeHistory = false) {
   const [classes, setClasses]   = useState<StudentClass[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -172,7 +172,6 @@ export function useStudentClasses(includeHistory = false) {
   return { classes, loading, refetch: fetch };
 }
 
-// ─── Profesores vinculados al estudiante (single o multi-tenant) ────────────
 export interface MyTeacherInfo {
   teacher_username: string;
   name: string | null;
@@ -223,7 +222,6 @@ export function useMyTeachers() {
   };
 }
 
-// ─── Slots disponibles ────────────────────────────────────────────────────────
 export function useAvailableSlots(date: string, duration: number, teacherUsername: string | null) {
   const [slots, setSlots]     = useState<AvailableSlot[]>([]);
   const [loading, setLoading] = useState(false);
@@ -251,7 +249,6 @@ export function useAvailableSlots(date: string, duration: number, teacherUsernam
   return { slots, loading, refetch: fetch };
 }
 
-// ─── Enrollments ──────────────────────────────────────────────────────────────
 export function useEnrollments() {
   const [enrollments, setEnrollments] = useState<StudentEnrollment[]>([]);
   const [loading, setLoading]         = useState(true);
@@ -273,7 +270,6 @@ export function useEnrollments() {
   return { enrollments, loading, refetch: fetch };
 }
 
-// ─── Materiales ───────────────────────────────────────────────────────────────
 export function useStudentMaterials() {
   const [materials, setMaterials] = useState<StudentMaterial[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -295,7 +291,6 @@ export function useStudentMaterials() {
   return { materials, loading, refetch: fetch };
 }
 
-// ─── Tareas ───────────────────────────────────────────────────────────────────
 export function useStudentHomework() {
   const [homeworks, setHomeworks] = useState<StudentHomework[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -317,7 +312,6 @@ export function useStudentHomework() {
   return { homeworks, loading, refetch: fetch };
 }
 
-// ─── Perfil de la profesora ───────────────────────────────────────────────────
 export function useFeaturedTeacher() {
   const [teacher, setTeacher] = useState<TeacherPublicProfile | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -347,7 +341,6 @@ export function useFeaturedTeacher() {
   return { teacher, reviews, loading, refetch: fetch };
 }
 
-// ─── Directorio de profesores y config de plataforma ──────────────────────
 export interface TeacherDirectoryItem {
   user_username: string;
   name?: string;
