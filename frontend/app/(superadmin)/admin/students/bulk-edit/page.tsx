@@ -19,7 +19,6 @@ interface StudentRow {
   email: string;
   role: string;
   is_active: boolean;
-  package_name: string | null;
   classes_used: number;
   classes_total: number;
   // Estado local de edición
@@ -27,12 +26,10 @@ interface StudentRow {
   _original: {
     role: string;
     is_active: boolean;
-    package_name: string | null;
   };
 }
 
-const ROLES    = ["student", "teacher", "superadmin"];
-const PACKAGES = ["Básico", "Personalizado", "Intensivo", "Flexible", "Trial"];
+const ROLES = ["student", "teacher", "superadmin"];
 
 // ─── Celda editable con select ────────────────────────────────────────────────
 function SelectCell({
@@ -135,14 +132,12 @@ export default function BulkEditStudentsPage() {
           email:          u.email,
           role:           u.role,
           is_active:      u.is_active ?? true,
-          package_name:   u.package_name ?? null,
           classes_used:   u.classes_used ?? 0,
           classes_total:  u.classes_total ?? 0,
           _dirty: false,
           _original: {
-            role:           u.role,
-            is_active:      u.is_active ?? true,
-            package_name:   u.package_name ?? null,
+            role:      u.role,
+            is_active: u.is_active ?? true,
           },
         })
       );
@@ -181,17 +176,16 @@ export default function BulkEditStudentsPage() {
   // ── Editar celda ──
   const updateRow = (
     id: number,
-    field: keyof Pick<StudentRow, "role" | "is_active" | "package_name">,
-    value: string | boolean | null
+    field: keyof Pick<StudentRow, "role" | "is_active">,
+    value: string | boolean
   ) => {
     setRows((prev) =>
       prev.map((r) => {
         if (r.id !== id) return r;
         const updated = { ...r, [field]: value };
         const dirty =
-          updated.role         !== r._original.role ||
-          updated.is_active    !== r._original.is_active ||
-          updated.package_name !== r._original.package_name;
+          updated.role      !== r._original.role ||
+          updated.is_active !== r._original.is_active;
         return { ...updated, _dirty: dirty };
       })
     );
@@ -223,13 +217,12 @@ export default function BulkEditStudentsPage() {
     setRows((prev) =>
       prev.map((r) => {
         if (!selectedIds.has(r.id)) return r;
-        const field = bulkField as "role" | "is_active" | "package_name";
+        const field = bulkField as "role" | "is_active";
         const value = field === "is_active" ? bulkValue === "true" : bulkValue;
         const updated = { ...r, [field]: value };
         const dirty =
-          updated.role         !== r._original.role ||
-          updated.is_active    !== r._original.is_active ||
-          updated.package_name !== r._original.package_name;
+          updated.role      !== r._original.role ||
+          updated.is_active !== r._original.is_active;
         return { ...updated, _dirty: dirty };
       })
     );
@@ -245,9 +238,8 @@ export default function BulkEditStudentsPage() {
         if (r.id !== id) return r;
         return {
           ...r,
-          role:         r._original.role,
-          is_active:    r._original.is_active,
-          package_name: r._original.package_name,
+          role:      r._original.role,
+          is_active: r._original.is_active,
           _dirty: false,
         };
       })
@@ -265,9 +257,8 @@ export default function BulkEditStudentsPage() {
       await Promise.all(
         dirtyRows.map((r) =>
           api.patch(`/admin/users/${r.id}`, {
-            role:         r.role,
-            is_active:    r.is_active,
-            package_name: r.package_name,
+            role:      r.role,
+            is_active: r.is_active,
           })
         )
       );
@@ -278,9 +269,8 @@ export default function BulkEditStudentsPage() {
                 ...r,
                 _dirty: false,
                 _original: {
-                  role:         r.role,
-                  is_active:    r.is_active,
-                  package_name: r.package_name,
+                  role:      r.role,
+                  is_active: r.is_active,
                 },
               }
             : r
@@ -299,527 +289,487 @@ export default function BulkEditStudentsPage() {
     filtered.length > 0 && selectedIds.size === filtered.length;
 
   return (
-  <>
-    <div className="min-h-screen bg-slate-50 relative overflow-hidden">
-      <div
-        className="fixed top-[-80px] right-[-80px] w-[400px] h-[400px]
-                      bg-pink-300/15 rounded-full blur-[100px] pointer-events-none"
-      />
-
-      <div className="relative space-y-5">
-
-        {/* ─── Header ─── */}
+    <>
+      <div className="min-h-screen bg-slate-50 relative overflow-hidden">
         <div
-          className="flex flex-col sm:flex-row sm:items-center justify-between
-                        gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500"
-        >
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push("/admin/students")}
-              className="w-9 h-9 rounded-xl bg-white border border-slate-200
-                           flex items-center justify-center shadow-sm
-                           hover:bg-slate-50 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4 text-slate-600" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-black text-slate-800 tracking-tight">
-                Edición masiva
-              </h1>
-              <p className="text-slate-500 text-sm mt-0.5">
-                {rows.length} usuarios · {dirtyRows.length} cambios pendientes
-              </p>
-            </div>
-          </div>
+          className="fixed top-[-80px] right-[-80px] w-[400px] h-[400px]
+                        bg-pink-300/15 rounded-full blur-[100px] pointer-events-none"
+        />
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={load}
-              disabled={loading}
-              className="w-9 h-9 rounded-xl bg-white border border-slate-200
-                           flex items-center justify-center shadow-sm
-                           hover:bg-slate-50 transition-colors disabled:opacity-50"
-            >
-              <RefreshCw
-                className={`w-4 h-4 text-slate-600 ${loading ? "animate-spin" : ""}`}
-              />
-            </button>
+        <div className="relative space-y-5">
 
-            <button
-              onClick={saveAll}
-              disabled={dirtyRows.length === 0 || saving}
-              className={`
-                flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm
-                font-bold shadow-md transition-all duration-300
-                disabled:opacity-40 disabled:cursor-not-allowed
-                active:scale-[0.97]
-                ${saved
-                  ? "bg-emerald-500 text-white shadow-emerald-100"
-                  : "bg-gradient-to-r from-pink-500 to-rose-400 text-white shadow-pink-200"
-                }
-              `}
-            >
-              {saving ? (
-                <div
-                  className="w-4 h-4 border-2 border-white/40
-                                border-t-white rounded-full animate-spin"
-                />
-              ) : saved ? (
-                <><Check className="w-4 h-4" /> Guardado</>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  Guardar {dirtyRows.length > 0 && `(${dirtyRows.length})`}
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* ─── Error global ─── */}
-        {error && (
+          {/* ─── Header ─── */}
           <div
-            className="bg-rose-50 border border-rose-100 text-rose-600
-                          px-4 py-3 rounded-xl text-sm font-bold
-                          flex items-center gap-2"
+            className="flex flex-col sm:flex-row sm:items-center justify-between
+                          gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500"
           >
-            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-            {error}
-            <button
-              onClick={() => setError("")}
-              className="ml-auto text-rose-400 hover:text-rose-600"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
-        {/* ─── Filtros + Acciones masivas ─── */}
-        <div
-          className="bg-white/80 backdrop-blur-xl rounded-2xl border
-                        border-white shadow-lg p-4 space-y-3
-                        animate-in fade-in duration-500 delay-100"
-        >
-          <div className="flex flex-wrap gap-3 items-center">
-            {/* Buscador */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2
-                               w-4 h-4 text-slate-400 pointer-events-none"
-              />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por nombre, usuario o email..."
-                className="w-full bg-slate-50 border-2 border-transparent
-                             rounded-xl text-sm font-bold text-slate-800
-                             placeholder:text-slate-400 pl-9 pr-4 py-2.5
-                             focus:outline-none focus:bg-white
-                             focus:border-pink-500 focus:ring-4 focus:ring-pink-50
-                             transition-all duration-300"
-              />
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.push("/admin/students")}
+                className="w-9 h-9 rounded-xl bg-white border border-slate-200
+                             flex items-center justify-center shadow-sm
+                             hover:bg-slate-50 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4 text-slate-600" />
+              </button>
+              <div>
+                <h1 className="text-2xl font-black text-slate-800 tracking-tight">
+                  Edición masiva
+                </h1>
+                <p className="text-slate-500 text-sm mt-0.5">
+                  {rows.length} usuarios · {dirtyRows.length} cambios pendientes
+                </p>
+              </div>
             </div>
 
-            {/* Filtro rol */}
-            <div className="relative">
-              <select
-                value={filterRole}
-                onChange={(e) => setFilterRole(e.target.value)}
-                className="appearance-none bg-slate-100 border-2 border-transparent
-                             rounded-xl text-sm font-bold text-slate-700
-                             pl-3 pr-8 py-2.5 cursor-pointer
-                             focus:outline-none hover:bg-slate-200
-                             transition-colors"
+            <div className="flex items-center gap-3">
+              <button
+                onClick={load}
+                disabled={loading}
+                className="w-9 h-9 rounded-xl bg-white border border-slate-200
+                             flex items-center justify-center shadow-sm
+                             hover:bg-slate-50 transition-colors disabled:opacity-50"
               >
-                <option value="all">Todos los roles</option>
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-              <ChevronDown
-                className="absolute right-2.5 top-1/2 -translate-y-1/2
-                               w-3.5 h-3.5 text-slate-400 pointer-events-none"
-              />
-            </div>
+                <RefreshCw
+                  className={`w-4 h-4 text-slate-600 ${loading ? "animate-spin" : ""}`}
+                />
+              </button>
 
-            {/* Filtro activo/inactivo */}
-            <div className="relative">
-              <select
-                value={filterActive}
-                onChange={(e) => setFilterActive(e.target.value)}
-                className="appearance-none bg-slate-100 border-2 border-transparent
-                             rounded-xl text-sm font-bold text-slate-700
-                             pl-3 pr-8 py-2.5 cursor-pointer
-                             focus:outline-none hover:bg-slate-200
-                             transition-colors"
+              <button
+                onClick={saveAll}
+                disabled={dirtyRows.length === 0 || saving}
+                className={`
+                  flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm
+                  font-bold shadow-md transition-all duration-300
+                  disabled:opacity-40 disabled:cursor-not-allowed
+                  active:scale-[0.97]
+                  ${saved
+                    ? "bg-emerald-500 text-white shadow-emerald-100"
+                    : "bg-gradient-to-r from-pink-500 to-rose-400 text-white shadow-pink-200"
+                  }
+                `}
               >
-                <option value="all">Todos los estados</option>
-                <option value="active">Activos</option>
-                <option value="inactive">Inactivos</option>
-              </select>
-              <ChevronDown
-                className="absolute right-2.5 top-1/2 -translate-y-1/2
-                               w-3.5 h-3.5 text-slate-400 pointer-events-none"
-              />
+                {saving ? (
+                  <div
+                    className="w-4 h-4 border-2 border-white/40
+                                  border-t-white rounded-full animate-spin"
+                  />
+                ) : saved ? (
+                  <><Check className="w-4 h-4" /> Guardado</>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Guardar {dirtyRows.length > 0 && `(${dirtyRows.length})`}
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
-          {/* Acciones sobre seleccionados */}
-          {selectedIds.size > 0 && (
+          {/* ─── Error global ─── */}
+          {error && (
             <div
-              className="flex items-center gap-3 pt-2 border-t border-slate-100
-                            flex-wrap animate-in fade-in duration-200"
+              className="bg-rose-50 border border-rose-100 text-rose-600
+                            px-4 py-3 rounded-xl text-sm font-bold
+                            flex items-center gap-2"
             >
-              <span className="text-xs font-black text-pink-600 bg-pink-50
-                               px-3 py-1.5 rounded-full border border-pink-100">
-                {selectedIds.size} seleccionados
-              </span>
-
-              {!showBulk ? (
-                <button
-                  onClick={() => setShowBulk(true)}
-                  className="flex items-center gap-1.5 text-xs font-bold
-                               text-slate-600 bg-slate-100 hover:bg-slate-200
-                               px-3 py-1.5 rounded-full transition-colors"
-                >
-                  <Filter className="w-3.5 h-3.5" />
-                  Cambiar campo masivamente
-                </button>
-              ) : (
-                <div className="flex items-center gap-2 flex-wrap">
-                  {/* Qué campo */}
-                  <div className="relative">
-                    <select
-                      value={bulkField}
-                      onChange={(e) => { setBulkField(e.target.value); setBulkValue(""); }}
-                      className="appearance-none bg-white border-2
-                                   border-slate-200 rounded-xl text-xs
-                                   font-bold text-slate-700 pl-2.5 pr-7 py-2
-                                   cursor-pointer focus:outline-none
-                                   focus:border-pink-400"
-                    >
-                      <option value="">Seleccionar campo...</option>
-                      <option value="role">Rol</option>
-                      <option value="is_active">Estado (activo/inactivo)</option>
-                      <option value="package_name">Paquete</option>
-                    </select>
-                    <ChevronDown
-                      className="absolute right-2 top-1/2 -translate-y-1/2
-                                     w-3 h-3 text-slate-400 pointer-events-none"
-                    />
-                  </div>
-
-                  {/* Valor */}
-                  {bulkField === "role" && (
-                    <div className="relative">
-                      <select
-                        value={bulkValue}
-                        onChange={(e) => setBulkValue(e.target.value)}
-                        className="appearance-none bg-white border-2
-                                     border-slate-200 rounded-xl text-xs
-                                     font-bold text-slate-700 pl-2.5 pr-7 py-2
-                                     cursor-pointer focus:outline-none
-                                     focus:border-pink-400"
-                      >
-                        <option value="">Valor...</option>
-                        {ROLES.map((r) => (
-                          <option key={r} value={r}>{r}</option>
-                        ))}
-                      </select>
-                      <ChevronDown
-                        className="absolute right-2 top-1/2 -translate-y-1/2
-                                       w-3 h-3 text-slate-400 pointer-events-none"
-                      />
-                    </div>
-                  )}
-
-                  {bulkField === "is_active" && (
-                    <div className="relative">
-                      <select
-                        value={bulkValue}
-                        onChange={(e) => setBulkValue(e.target.value)}
-                        className="appearance-none bg-white border-2
-                                     border-slate-200 rounded-xl text-xs
-                                     font-bold text-slate-700 pl-2.5 pr-7 py-2
-                                     cursor-pointer focus:outline-none
-                                     focus:border-pink-400"
-                      >
-                        <option value="">Valor...</option>
-                        <option value="true">Activo</option>
-                        <option value="false">Inactivo</option>
-                      </select>
-                      <ChevronDown
-                        className="absolute right-2 top-1/2 -translate-y-1/2
-                                       w-3 h-3 text-slate-400 pointer-events-none"
-                      />
-                    </div>
-                  )}
-
-                  {bulkField === "package_name" && (
-                    <div className="relative">
-                      <select
-                        value={bulkValue}
-                        onChange={(e) => setBulkValue(e.target.value)}
-                        className="appearance-none bg-white border-2
-                                     border-slate-200 rounded-xl text-xs
-                                     font-bold text-slate-700 pl-2.5 pr-7 py-2
-                                     cursor-pointer focus:outline-none
-                                     focus:border-pink-400"
-                      >
-                        <option value="">Paquete...</option>
-                        {PACKAGES.map((p) => (
-                          <option key={p} value={p}>{p}</option>
-                        ))}
-                      </select>
-                      <ChevronDown
-                        className="absolute right-2 top-1/2 -translate-y-1/2
-                                       w-3 h-3 text-slate-400 pointer-events-none"
-                      />
-                    </div>
-                  )}
-
-                  <button
-                    onClick={applyBulk}
-                    disabled={!bulkField || bulkValue === ""}
-                    className="px-3 py-2 bg-pink-500 text-white text-xs
-                                 font-bold rounded-xl disabled:opacity-40
-                                 hover:bg-pink-600 transition-colors"
-                  >
-                    Aplicar
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowBulk(false);
-                      setBulkField("");
-                      setBulkValue("");
-                    }}
-                    className="text-slate-400 hover:text-slate-600 transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              {error}
+              <button
+                onClick={() => setError("")}
+                className="ml-auto text-rose-400 hover:text-rose-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           )}
-        </div>
 
-        {/* ─── Tabla ─── */}
-        <div
-          className="bg-white/80 backdrop-blur-xl rounded-[2rem] border
-                        border-white shadow-lg overflow-hidden
-                        animate-in fade-in duration-500 delay-150"
-        >
-          {loading ? (
-            <div className="flex items-center justify-center py-24">
+          {/* ─── Filtros + Acciones masivas ─── */}
+          <div
+            className="bg-white/80 backdrop-blur-xl rounded-2xl border
+                          border-white shadow-lg p-4 space-y-3
+                          animate-in fade-in duration-500 delay-100"
+          >
+            <div className="flex flex-wrap gap-3 items-center">
+              {/* Buscador */}
+              <div className="relative flex-1 min-w-[200px]">
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2
+                                 w-4 h-4 text-slate-400 pointer-events-none"
+                />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar por nombre, usuario o email..."
+                  className="w-full bg-slate-50 border-2 border-transparent
+                               rounded-xl text-sm font-bold text-slate-800
+                               placeholder:text-slate-400 pl-9 pr-4 py-2.5
+                               focus:outline-none focus:bg-white
+                               focus:border-pink-500 focus:ring-4 focus:ring-pink-50
+                               transition-all duration-300"
+                />
+              </div>
+
+              {/* Filtro rol */}
+              <div className="relative">
+                <select
+                  value={filterRole}
+                  onChange={(e) => setFilterRole(e.target.value)}
+                  className="appearance-none bg-slate-100 border-2 border-transparent
+                               rounded-xl text-sm font-bold text-slate-700
+                               pl-3 pr-8 py-2.5 cursor-pointer
+                               focus:outline-none hover:bg-slate-200
+                               transition-colors"
+                >
+                  <option value="all">Todos los roles</option>
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+                <ChevronDown
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2
+                                 w-3.5 h-3.5 text-slate-400 pointer-events-none"
+                />
+              </div>
+
+              {/* Filtro activo/inactivo */}
+              <div className="relative">
+                <select
+                  value={filterActive}
+                  onChange={(e) => setFilterActive(e.target.value)}
+                  className="appearance-none bg-slate-100 border-2 border-transparent
+                               rounded-xl text-sm font-bold text-slate-700
+                               pl-3 pr-8 py-2.5 cursor-pointer
+                               focus:outline-none hover:bg-slate-200
+                               transition-colors"
+                >
+                  <option value="all">Todos los estados</option>
+                  <option value="active">Activos</option>
+                  <option value="inactive">Inactivos</option>
+                </select>
+                <ChevronDown
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2
+                                 w-3.5 h-3.5 text-slate-400 pointer-events-none"
+                />
+              </div>
+            </div>
+
+            {/* Acciones sobre seleccionados */}
+            {selectedIds.size > 0 && (
               <div
-                className="w-10 h-10 border-4 border-pink-200
-                              border-t-pink-500 rounded-full animate-spin"
-              />
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center py-24">
-              <Users className="w-12 h-12 text-slate-200 mb-3" />
-              <p className="text-slate-400 font-bold">
-                No se encontraron usuarios
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[820px]">
-                {/* Cabecera */}
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50/60">
-                    <th className="w-10 px-4 py-3.5">
-                      <button
-                        onClick={toggleAll}
-                        className={`
-                          w-5 h-5 rounded-md border-2 flex items-center
-                          justify-center transition-all duration-200
-                          ${allSelected
-                            ? "border-pink-500 bg-pink-500"
-                            : "border-slate-300 bg-white hover:border-pink-300"
-                          }
-                        `}
-                      >
-                        {allSelected && (
-                          <Check className="w-3 h-3 text-white" />
-                        )}
-                      </button>
-                    </th>
-                    {[
-                      "Usuario",
-                      "Nombre",
-                      "Email",
-                      "Rol",
-                      "Estado",
-                      "Paquete",
-                      "Clases",
-                      "",
-                    ].map((h) => (
-                      <th
-                        key={h}
-                        className="text-left text-[10px] font-black
-                                     text-slate-400 uppercase tracking-widest
-                                     px-3 py-3.5 whitespace-nowrap"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
+                className="flex items-center gap-3 pt-2 border-t border-slate-100
+                              flex-wrap animate-in fade-in duration-200"
+              >
+                <span className="text-xs font-black text-pink-600 bg-pink-50
+                                 px-3 py-1.5 rounded-full border border-pink-100">
+                  {selectedIds.size} seleccionados
+                </span>
 
-                {/* Filas */}
-                <tbody className="divide-y divide-slate-50">
-                  {filtered.map((row) => (
-                    <tr
-                      key={row.id}
-                      className={`
-                        transition-colors duration-150 group
-                        ${selectedIds.has(row.id)
-                          ? "bg-pink-50/60"
-                          : "hover:bg-slate-50/60"
-                        }
-                        ${row._dirty ? "bg-amber-50/40" : ""}
-                      `}
+                {!showBulk ? (
+                  <button
+                    onClick={() => setShowBulk(true)}
+                    className="flex items-center gap-1.5 text-xs font-bold
+                                 text-slate-600 bg-slate-100 hover:bg-slate-200
+                                 px-3 py-1.5 rounded-full transition-colors"
+                  >
+                    <Filter className="w-3.5 h-3.5" />
+                    Cambiar campo masivamente
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Qué campo */}
+                    <div className="relative">
+                      <select
+                        value={bulkField}
+                        onChange={(e) => { setBulkField(e.target.value); setBulkValue(""); }}
+                        className="appearance-none bg-white border-2
+                                     border-slate-200 rounded-xl text-xs
+                                     font-bold text-slate-700 pl-2.5 pr-7 py-2
+                                     cursor-pointer focus:outline-none
+                                     focus:border-pink-400"
+                      >
+                        <option value="">Seleccionar campo...</option>
+                        <option value="role">Rol</option>
+                        <option value="is_active">Estado (activo/inactivo)</option>
+                      </select>
+                      <ChevronDown
+                        className="absolute right-2 top-1/2 -translate-y-1/2
+                                       w-3 h-3 text-slate-400 pointer-events-none"
+                      />
+                    </div>
+
+                    {/* Valor */}
+                    {bulkField === "role" && (
+                      <div className="relative">
+                        <select
+                          value={bulkValue}
+                          onChange={(e) => setBulkValue(e.target.value)}
+                          className="appearance-none bg-white border-2
+                                       border-slate-200 rounded-xl text-xs
+                                       font-bold text-slate-700 pl-2.5 pr-7 py-2
+                                       cursor-pointer focus:outline-none
+                                       focus:border-pink-400"
+                        >
+                          <option value="">Valor...</option>
+                          {ROLES.map((r) => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                        <ChevronDown
+                          className="absolute right-2 top-1/2 -translate-y-1/2
+                                         w-3 h-3 text-slate-400 pointer-events-none"
+                        />
+                      </div>
+                    )}
+
+                    {bulkField === "is_active" && (
+                      <div className="relative">
+                        <select
+                          value={bulkValue}
+                          onChange={(e) => setBulkValue(e.target.value)}
+                          className="appearance-none bg-white border-2
+                                       border-slate-200 rounded-xl text-xs
+                                       font-bold text-slate-700 pl-2.5 pr-7 py-2
+                                       cursor-pointer focus:outline-none
+                                       focus:border-pink-400"
+                        >
+                          <option value="">Valor...</option>
+                          <option value="true">Activo</option>
+                          <option value="false">Inactivo</option>
+                        </select>
+                        <ChevronDown
+                          className="absolute right-2 top-1/2 -translate-y-1/2
+                                         w-3 h-3 text-slate-400 pointer-events-none"
+                        />
+                      </div>
+                    )}
+
+                    <button
+                      onClick={applyBulk}
+                      disabled={!bulkField || bulkValue === ""}
+                      className="px-3 py-2 bg-pink-500 text-white text-xs
+                                   font-bold rounded-xl disabled:opacity-40
+                                   hover:bg-pink-600 transition-colors"
                     >
-                      {/* Checkbox */}
-                      <td className="px-4 py-2.5">
+                      Aplicar
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowBulk(false);
+                        setBulkField("");
+                        setBulkValue("");
+                      }}
+                      className="text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ─── Tabla ─── */}
+          <div
+            className="bg-white/80 backdrop-blur-xl rounded-[2rem] border
+                          border-white shadow-lg overflow-hidden
+                          animate-in fade-in duration-500 delay-150"
+          >
+            {loading ? (
+              <div className="flex items-center justify-center py-24">
+                <div
+                  className="w-10 h-10 border-4 border-pink-200
+                                border-t-pink-500 rounded-full animate-spin"
+                />
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="flex flex-col items-center py-24">
+                <Users className="w-12 h-12 text-slate-200 mb-3" />
+                <p className="text-slate-400 font-bold">
+                  No se encontraron usuarios
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[720px]">
+                  {/* Cabecera */}
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/60">
+                      <th className="w-10 px-4 py-3.5">
                         <button
-                          onClick={() => toggleSelect(row.id)}
+                          onClick={toggleAll}
                           className={`
                             w-5 h-5 rounded-md border-2 flex items-center
                             justify-center transition-all duration-200
-                            ${selectedIds.has(row.id)
+                            ${allSelected
                               ? "border-pink-500 bg-pink-500"
                               : "border-slate-300 bg-white hover:border-pink-300"
                             }
                           `}
                         >
-                          {selectedIds.has(row.id) && (
+                          {allSelected && (
                             <Check className="w-3 h-3 text-white" />
                           )}
                         </button>
-                      </td>
-
-                      {/* Username */}
-                      <td className="px-3 py-2.5">
-                        <div className="flex items-center gap-2">
-                          {row._dirty && (
-                            <div
-                              className="w-1.5 h-1.5 bg-amber-400
-                                           rounded-full flex-shrink-0"
-                            />
-                          )}
-                          <div>
-                            <p className="text-xs font-black text-slate-800">
-                              @{row.username}
-                            </p>
-                            <p className="text-[10px] text-slate-400">
-                              ID {row.id}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Nombre */}
-                      <td className="px-3 py-2.5">
-                        <p className="text-xs font-bold text-slate-700">
-                          {row.name} {row.surname}
-                        </p>
-                      </td>
-
-                      {/* Email */}
-                      <td className="px-3 py-2.5">
-                        <p className="text-xs text-slate-500 truncate max-w-[180px]">
-                          {row.email}
-                        </p>
-                      </td>
-
-                      {/* Rol editable */}
-                      <td className="px-3 py-2.5">
-                        <SelectCell
-                          value={row.role}
-                          options={ROLES}
-                          dirty={row._dirty && row.role !== row._original.role}
-                          onChange={(v) => updateRow(row.id, "role", v)}
-                        />
-                      </td>
-
-                      {/* Estado (is_active) editable */}
-                      <td className="px-3 py-2.5">
-                        <ActiveToggleCell
-                          value={row.is_active}
-                          dirty={row._dirty && row.is_active !== row._original.is_active}
-                          onChange={(v) => updateRow(row.id, "is_active", v)}
-                        />
-                      </td>
-
-                      {/* Paquete editable */}
-                      <td className="px-3 py-2.5">
-                        <SelectCell
-                          value={row.package_name ?? ""}
-                          options={["", ...PACKAGES]}
-                          dirty={
-                            row._dirty &&
-                            row.package_name !== row._original.package_name
-                          }
-                          onChange={(v) =>
-                            updateRow(row.id, "package_name", v || null)
-                          }
-                        />
-                      </td>
-
-                      {/* Clases (solo lectura) */}
-                      <td className="px-3 py-2.5">
-                        <p className="text-xs font-black text-slate-700">
-                          {row.classes_used}
-                          <span className="text-slate-400 font-bold">
-                            /{row.classes_total}
-                          </span>
-                        </p>
-                      </td>
-
-                      {/* Revertir */}
-                      <td className="px-3 py-2.5 text-right">
-                        {row._dirty && (
-                          <button
-                            onClick={() => revertRow(row.id)}
-                            className="text-xs font-bold text-amber-500
-                                         hover:text-amber-700 transition-colors
-                                         opacity-0 group-hover:opacity-100"
-                          >
-                            Revertir
-                          </button>
-                        )}
-                      </td>
+                      </th>
+                      {[
+                        "Usuario",
+                        "Nombre",
+                        "Email",
+                        "Rol",
+                        "Estado",
+                        "Clases",
+                        "",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="text-left text-[10px] font-black
+                                       text-slate-400 uppercase tracking-widest
+                                       px-3 py-3.5 whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  </thead>
 
-          {/* Footer con resumen */}
-          {!loading && filtered.length > 0 && (
-            <div
-              className="border-t border-slate-100 px-6 py-3 flex items-center
-                            justify-between text-xs text-slate-400 font-bold"
-            >
-              <span>
-                {filtered.length} de {rows.length} usuarios
-              </span>
-              {dirtyRows.length > 0 && (
-                <span className="text-amber-500">
-                  {dirtyRows.length} cambio
-                  {dirtyRows.length !== 1 ? "s" : ""} sin guardar
+                  {/* Filas */}
+                  <tbody className="divide-y divide-slate-50">
+                    {filtered.map((row) => (
+                      <tr
+                        key={row.id}
+                        className={`
+                          transition-colors duration-150 group
+                          ${selectedIds.has(row.id)
+                            ? "bg-pink-50/60"
+                            : "hover:bg-slate-50/60"
+                          }
+                          ${row._dirty ? "bg-amber-50/40" : ""}
+                        `}
+                      >
+                        {/* Checkbox */}
+                        <td className="px-4 py-2.5">
+                          <button
+                            onClick={() => toggleSelect(row.id)}
+                            className={`
+                              w-5 h-5 rounded-md border-2 flex items-center
+                              justify-center transition-all duration-200
+                              ${selectedIds.has(row.id)
+                                ? "border-pink-500 bg-pink-500"
+                                : "border-slate-300 bg-white hover:border-pink-300"
+                              }
+                            `}
+                          >
+                            {selectedIds.has(row.id) && (
+                              <Check className="w-3 h-3 text-white" />
+                            )}
+                          </button>
+                        </td>
+
+                        {/* Username */}
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2">
+                            {row._dirty && (
+                              <div
+                                className="w-1.5 h-1.5 bg-amber-400
+                                             rounded-full flex-shrink-0"
+                              />
+                            )}
+                            <div>
+                              <p className="text-xs font-black text-slate-800">
+                                @{row.username}
+                              </p>
+                              <p className="text-[10px] text-slate-400">
+                                ID {row.id}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Nombre */}
+                        <td className="px-3 py-2.5">
+                          <p className="text-xs font-bold text-slate-700">
+                            {row.name} {row.surname}
+                          </p>
+                        </td>
+
+                        {/* Email */}
+                        <td className="px-3 py-2.5">
+                          <p className="text-xs text-slate-500 truncate max-w-[180px]">
+                            {row.email}
+                          </p>
+                        </td>
+
+                        {/* Rol editable */}
+                        <td className="px-3 py-2.5">
+                          <SelectCell
+                            value={row.role}
+                            options={ROLES}
+                            dirty={row._dirty && row.role !== row._original.role}
+                            onChange={(v) => updateRow(row.id, "role", v)}
+                          />
+                        </td>
+
+                        {/* Estado (is_active) editable */}
+                        <td className="px-3 py-2.5">
+                          <ActiveToggleCell
+                            value={row.is_active}
+                            dirty={row._dirty && row.is_active !== row._original.is_active}
+                            onChange={(v) => updateRow(row.id, "is_active", v)}
+                          />
+                        </td>
+
+                        {/* Clases (solo lectura) */}
+                        <td className="px-3 py-2.5">
+                          <p className="text-xs font-black text-slate-700">
+                            {row.classes_used}
+                            <span className="text-slate-400 font-bold">
+                              /{row.classes_total}
+                            </span>
+                          </p>
+                        </td>
+
+                        {/* Revertir */}
+                        <td className="px-3 py-2.5 text-right">
+                          {row._dirty && (
+                            <button
+                              onClick={() => revertRow(row.id)}
+                              className="text-xs font-bold text-amber-500
+                                           hover:text-amber-700 transition-colors
+                                           opacity-0 group-hover:opacity-100"
+                            >
+                              Revertir
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Footer con resumen */}
+            {!loading && filtered.length > 0 && (
+              <div
+                className="border-t border-slate-100 px-6 py-3 flex items-center
+                              justify-between text-xs text-slate-400 font-bold"
+              >
+                <span>
+                  {filtered.length} de {rows.length} usuarios
                 </span>
-              )}
-            </div>
-          )}
+                {dirtyRows.length > 0 && (
+                  <span className="text-amber-500">
+                    {dirtyRows.length} cambio
+                    {dirtyRows.length !== 1 ? "s" : ""} sin guardar
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-    <ChipiWidget screenName="admin_edit_students" /> 
+      <ChipiWidget screenName="admin_edit_students" /> 
     </>
   );
 }

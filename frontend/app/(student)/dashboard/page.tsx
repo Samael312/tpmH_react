@@ -16,13 +16,22 @@ import {
   Package as PackageIcon,
   Award,
   UserCheck,
+  AlertCircle,
+  CreditCard,
+  RefreshCw,
 } from "lucide-react";
 import PackageCheckout from "@/components/payments/PackageCheckout";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
-import { useMyTeachers } from "@/hooks/useStudentData";
-import { useState as useStateReact } from "react";
 
-type BookingStage = "loading" | "needs_trial" | "trial_in_progress" | "needs_package" | "ready";
+// ─── Punto 2: Ampliación de BookingStage ─────────────────────────────────────
+type BookingStage =
+  | "loading"
+  | "needs_trial"
+  | "trial_in_progress"
+  | "needs_package"
+  | "needs_payment"
+  | "renew_required"
+  | "ready";
 
 function Skeleton({ className }: { className?: string }) {
   return <div className={`animate-pulse bg-slate-200/80 rounded-2xl ${className}`} />;
@@ -101,7 +110,7 @@ function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: an
                   </p>
                 </div>
                 <button
-                  onClick={() => request(p.id)}
+                  onClick={() => request(p)}
                   disabled={requesting !== null}
                   className="px-4 py-2 bg-pink-500 text-white text-xs font-bold rounded-xl disabled:opacity-50"
                 >
@@ -118,7 +127,6 @@ function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: an
     </div>
   );
 }
-
 
 function DashboardSkeleton() {
   return (
@@ -221,10 +229,6 @@ export default function StudentDashboard() {
     .filter(c => !["completed", "cancelled", "no_show", "finalized"].includes(c.status))
     .sort((a, b) => new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime());
 
-  const activeEnrollment = enrollments?.find(e => e.status === "active");
-  const assignedTeacher = activeEnrollment?.teacher_name || upcoming[0]?.teacher_name || null;
-  const activeSubject = activeEnrollment?.package?.subject || "General";
-
   const isGlobalLoading = stage === "loading" || classesLoading || enrollmentsLoading;
 
   if (isGlobalLoading) {
@@ -251,6 +255,7 @@ export default function StudentDashboard() {
           </p>
         </div>
 
+        {/* ─── Punto 2: Banners según el BookingStage ─── */}
         {stage === "needs_trial" && !hasTrial && (
           <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-[2rem] p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-purple-200 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="absolute top-[-40px] right-[-40px] w-48 h-48 bg-white/10 rounded-full blur-2xl" />
@@ -308,69 +313,142 @@ export default function StudentDashboard() {
           </div>
         )}
 
+        {/* Punto 2: Banner de Pago Pendiente */}
+        {stage === "needs_payment" && (
+          <div className="bg-gradient-to-r from-amber-500 to-rose-500 rounded-[2rem] p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-rose-200 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="absolute top-[-40px] right-[-40px] w-48 h-48 bg-white/10 rounded-full blur-2xl" />
+            <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <AlertCircle className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-1">Pago pendiente</p>
+                  <h2 className="text-xl font-black">Tienes un pago o cuota pendiente</h2>
+                  <p className="text-white/80 text-sm mt-1">Completa el pago para mantener tu paquete activo y seguir agendando clases.</p>
+                </div>
+              </div>
+              <Link href="/dashboard/schedule" className="flex-shrink-0 inline-flex items-center gap-2 px-5 py-3 bg-white text-rose-600 text-sm font-bold rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200">
+                <CreditCard className="w-4 h-4" /> Realizar pago
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Punto 2: Banner de Renovación Pendiente */}
+        {stage === "renew_required" && (
+          <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-[2rem] p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-purple-200 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="absolute top-[-40px] right-[-40px] w-48 h-48 bg-white/10 rounded-full blur-2xl" />
+            <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <RefreshCw className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-1">Renovación requerida</p>
+                  <h2 className="text-xl font-black">Tu paquete ha finalizado</h2>
+                  <p className="text-white/80 text-sm mt-1">Renueva tu paquete o selecciona uno nuevo para continuar aprendiendo.</p>
+                </div>
+              </div>
+              <Link href="/dashboard/schedule" className="flex-shrink-0 inline-flex items-center gap-2 px-5 py-3 bg-white text-purple-600 text-sm font-bold rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200">
+                <PackageIcon className="w-4 h-4" /> Renovar paquete
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Punto 5: Mostrar información de cuotas y créditos prepagados ─── */}
         {stage === "ready" && activeOrChangingEnrollments.length > 0 && (
-  <div className={`grid gap-4 ${activeOrChangingEnrollments.length > 1 ? "sm:grid-cols-2" : ""}`}>
-    {activeOrChangingEnrollments.map((enr) => (
-      <div key={enr.id}
-        className="bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 rounded-[2rem] p-6 text-white relative overflow-hidden shadow-2xl shadow-indigo-950/20 border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="absolute -top-12 -right-12 w-56 h-56 bg-pink-500/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-pink-500/20 text-pink-300 border border-pink-500/30">
-              <Award className="w-3 h-3" /> {enr.status === "pending_package_change" ? "Cambio pendiente" : "Plan Activo"}
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-white/10 text-slate-200 border border-white/10">
-              <BookOpen className="w-3 h-3 text-purple-300" /> {enr.package?.subject}
-            </span>
+          <div className={`grid gap-4 ${activeOrChangingEnrollments.length > 1 ? "sm:grid-cols-2" : ""}`}>
+            {activeOrChangingEnrollments.map((enr) => {
+              const remainingCredits = enr.prepaid_credits ?? (enr.classes_total != null ? Math.max(0, enr.classes_total - enr.classes_used) : null);
+
+              return (
+                <div key={enr.id}
+                  className="bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 rounded-[2rem] p-6 text-white relative overflow-hidden shadow-2xl shadow-indigo-950/20 border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="absolute -top-12 -right-12 w-56 h-56 bg-pink-500/20 rounded-full blur-3xl pointer-events-none" />
+                  <div className="relative z-10 space-y-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-pink-500/20 text-pink-300 border border-pink-500/30">
+                        <Award className="w-3 h-3" /> {enr.status === "pending_package_change" ? "Cambio pendiente" : "Plan Activo"}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-white/10 text-slate-200 border border-white/10">
+                        <BookOpen className="w-3 h-3 text-purple-300" /> {enr.package?.subject}
+                      </span>
+                      {enr.installments_paid && enr.installments_paid > 1 && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          <CreditCard className="w-3 h-3" /> Cuota {enr.installments_paid ?? 1}/{enr.installments_total}
+                        </span>
+                      )}
+                    </div>
+
+                    <h2 className="text-xl font-black text-white tracking-tight">{enr.package?.name}</h2>
+                    <p className="text-slate-300 text-xs font-bold">Con {enr.teacher_name || "tu profesor"}</p>
+
+                    <div className="bg-white/10 rounded-2xl p-4 space-y-2">
+                      <div className="flex items-end justify-between">
+                        <p className="text-2xl font-black text-white leading-none">
+                          {enr.classes_used}<span className="text-sm text-slate-400 font-bold">/{enr.classes_total ?? "∞"}</span>
+                        </p>
+                        {enr.classes_total && (
+                          <span className="text-[10px] font-bold text-pink-300 bg-pink-500/20 px-2 py-1 rounded-lg">
+                            {Math.round((enr.classes_used / enr.classes_total) * 100)}%
+                          </span>
+                        )}
+                      </div>
+                      <div className="w-full h-2 bg-slate-800/80 rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-pink-500 to-purple-400 rounded-full transition-all duration-700"
+                          style={{ width: enr.classes_total ? `${Math.min((enr.classes_used / enr.classes_total) * 100, 100)}%` : "100%" }} />
+                      </div>
+                    </div>
+
+                    {/* Detalle de créditos prepagados y estado de cuotas */}
+                    <div className="flex items-center justify-between text-xs text-slate-300 border-t border-white/10 pt-3 mt-3">
+                      <div>
+                        <span className="text-slate-400 block text-[10px] font-semibold uppercase tracking-wider">Créditos prepagados</span>
+                        <span className="font-bold text-white text-sm">
+                          {remainingCredits !== null ? `${remainingCredits} restantes` : "Ilimitados"}
+                        </span>
+                      </div>
+                      {enr.installments_paid && enr.installments_paid > 1 && (
+                        <div className="text-right">
+                          <span className="text-slate-400 block text-[10px] font-semibold uppercase tracking-wider">Cuotas</span>
+                          <span className="font-bold text-pink-300 text-sm">
+                            Cuota {enr.installments_paid ?? 1} de {enr.installments_paid}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {enr.status === "pending_package_change" ? (
+                      <p className="text-xs font-bold text-amber-300 pt-1">
+                        Solicitud de cambio de paquete en revisión por tu profesor(a).
+                      </p>
+                    ) : (
+                      <button
+                        onClick={() => setChangePackageTarget(enr)}
+                        className="text-xs font-bold text-pink-300 hover:text-pink-200 underline underline-offset-4 pt-1"
+                      >
+                        Cambiar de paquete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <h2 className="text-xl font-black text-white tracking-tight">{enr.package?.name}</h2>
-          <p className="text-slate-300 text-xs font-bold">Con {enr.teacher_name || "tu profesor"}</p>
+        )}
 
-          <div className="bg-white/10 rounded-2xl p-4 space-y-2">
-            <div className="flex items-end justify-between">
-              <p className="text-2xl font-black text-white leading-none">
-                {enr.classes_used}<span className="text-sm text-slate-400 font-bold">/{enr.classes_total ?? "∞"}</span>
-              </p>
-              {enr.classes_total && (
-                <span className="text-[10px] font-bold text-pink-300 bg-pink-500/20 px-2 py-1 rounded-lg">
-                  {Math.round((enr.classes_used / enr.classes_total) * 100)}%
-                </span>
-              )}
-            </div>
-            <div className="w-full h-2 bg-slate-800/80 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-pink-500 to-purple-400 rounded-full transition-all duration-700"
-                style={{ width: enr.classes_total ? `${Math.min((enr.classes_used / enr.classes_total) * 100, 100)}%` : "100%" }} />
-            </div>
-          </div>
+        {changePackageTarget && (
+          <ChangePackageModal
+            enrollment={changePackageTarget}
+            teacherUsername={changePackageTarget.teacher_username}
+            onClose={() => setChangePackageTarget(null)}
+            onDone={refetchEnrollments}
+          />
+        )}
 
-          {enr.status === "pending_package_change" ? (
-            <p className="text-xs font-bold text-amber-300">
-              Solicitud de cambio de paquete en revisión por tu profesor(a).
-            </p>
-          ) : (
-            <button
-              onClick={() => setChangePackageTarget(enr)}
-              className="text-xs font-bold text-pink-300 hover:text-pink-200 underline underline-offset-4"
-            >
-              Cambiar de paquete
-            </button>
-          )}
-        </div>
-      </div>
-    ))}
-  </div>
-)}
-
-{changePackageTarget && (
-  <ChangePackageModal
-    enrollment={changePackageTarget}
-    teacherUsername={changePackageTarget.teacher_username}
-    onClose={() => setChangePackageTarget(null)}
-    onDone={refetchEnrollments}
-  />
-)}
-
-        {/* ─── Próximas clases: SOLO INFORMATIVO (readOnly) ─── */}
+        {/* ─── Próximas clases ─── */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">

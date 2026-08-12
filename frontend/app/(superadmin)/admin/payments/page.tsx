@@ -8,7 +8,7 @@ import { Card, Badge, Button } from '@/components/ui'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 import Link from 'next/link'
-import { ChevronRight, Clock, User, Package as PackageIcon, Check, X } from 'lucide-react'
+import { ChevronRight, Clock, User, Package as PackageIcon, RefreshCw, Check, X } from 'lucide-react'
 
 const TYPE_BADGE: Record<string, { label: (p: any) => string; cls: string }> = {
   single_class: {
@@ -23,9 +23,17 @@ const TYPE_BADGE: Record<string, { label: (p: any) => string; cls: string }> = {
     label: (p) => p.installment_total ? `Renovación (Cuota ${p.installment_index}/${p.installment_total})` : "Renovación",
     cls: "bg-emerald-100 text-emerald-700 border-emerald-200"
   },
+  package_renewal: {
+    label: (p) => p.installment_total ? `Renovación (Cuota ${p.installment_index}/${p.installment_total})` : "Renovación",
+    cls: "bg-emerald-100 text-emerald-700 border-emerald-200"
+  },
   package_change: {
-    label: () => "Cambio de Paquete",
+    label: (p) => p.installment_total ? `Cambio (Cuota ${p.installment_index}/${p.installment_total})` : "Cambio de Paquete",
     cls: "bg-amber-100 text-amber-700 border-amber-200"
+  },
+  installment: {
+    label: (p) => `Cuota ${p.installment_index || 1}/${p.installment_total || 1}`,
+    cls: "bg-indigo-100 text-indigo-700 border-indigo-200"
   },
   unlimited_recharge: {
     label: (p) => `Recarga ${p.installment_index ? `${p.installment_index} clases` : "Ilimitada"}`,
@@ -175,10 +183,10 @@ export default function PaymentsPage() {
 
                   {/* Detalle adicional */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs text-slate-500 mb-4 bg-slate-50/70 p-3 rounded-2xl border border-slate-100">
-                    {p.package_name && (
+                    {(p.package_name || p.requested_package_name) && (
                       <div className="flex items-center gap-1.5">
                         <PackageIcon className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Paquete: <strong className="text-slate-700">{p.package_name}</strong></span>
+                        <span>Paquete: <strong className="text-slate-700">{p.requested_package_name || p.package_name}</strong></span>
                       </div>
                     )}
                     {p.teacher_name && (

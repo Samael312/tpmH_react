@@ -21,7 +21,9 @@ type BookingStage =
   | "trial_in_progress"
   | "needs_package"
   | "package_pending_payment"
+  | "needs_payment"
   | "needs_renewal"
+  | "renew_required"
   | "renewal_pending"
   | "ready";
 
@@ -542,7 +544,7 @@ function TrialInProgressScreen() {
   );
 }
 
-// ─── Pantalla: bloqueo package_pending_payment ────────────────────────────────
+// ─── Pantalla: bloqueo package_pending_payment / needs_payment ────────────────
 function PackagePendingPaymentScreen({
   enrollmentId,
   onNotified,
@@ -555,6 +557,7 @@ function PackagePendingPaymentScreen({
   const [installmentsPaid, setInstallmentsPaid] = useState(0);
 
   useEffect(() => {
+    if (!enrollmentId) return;
     api.get(`/packages/enrollment/${enrollmentId}`).then(r => {
       setPkg(r.data.package);
       setInstallmentsPaid(r.data.installments_paid ?? 0);
@@ -993,8 +996,8 @@ export default function SchedulePage() {
                 {stage === "needs_trial" && step === "payment" && "Confirmar clase de prueba"}
                 {stage === "trial_in_progress" && "Clase de prueba pendiente"}
                 {stage === "needs_package" && "Elige tu paquete"}
-                {stage === "package_pending_payment" && "Pago pendiente de notificación"}
-                {stage === "needs_renewal" && "Renueva tu paquete"}
+                {(stage === "package_pending_payment" || stage === "needs_payment") && "Pago pendiente de notificación"}
+                {(stage === "needs_renewal" || stage === "renew_required") && "Renueva tu paquete"}
                 {stage === "renewal_pending" && "Renovación en revisión"}
                 {stage === "ready" && step === "select" && "Agendar Clase"}
                 {stage === "ready" && step === "payment" && "Confirmar Reserva"}
@@ -1004,8 +1007,8 @@ export default function SchedulePage() {
                 {stage === "needs_trial" && "Tu primera clase es gratuita, sin compromiso"}
                 {stage === "trial_in_progress" && "Prepárate para tu clase de prueba gratuita"}
                 {stage === "needs_package" && "Selecciona el paquete que mejor se adapte a ti"}
-                {stage === "package_pending_payment" && "Notifica tu pago para desbloquear el calendario de agendamiento"}
-                {stage === "needs_renewal" && "Renueva tu paquete para continuar con tu aprendizaje"}
+                {(stage === "package_pending_payment" || stage === "needs_payment") && "Notifica tu pago para desbloquear el calendario de agendamiento"}
+                {(stage === "needs_renewal" || stage === "renew_required") && "Renueva tu paquete para continuar con tu aprendizaje"}
                 {stage === "renewal_pending" && "Tu solicitud de renovación está en revisión"}
                 {stage === "ready" && step === "select" && "Selecciona fecha y horario disponible"}
                 {stage === "ready" && step === "payment" && "Completa el pago para confirmar tu clase"}
@@ -1136,14 +1139,14 @@ export default function SchedulePage() {
               />
             )}
 
-            {stage === "package_pending_payment" && enrollmentId && (
+            {(stage === "package_pending_payment" || stage === "needs_payment") && enrollmentId && (
               <PackagePendingPaymentScreen
                 enrollmentId={enrollmentId}
                 onNotified={loadStage}
               />
             )}
 
-            {stage === "needs_renewal" && (
+            {(stage === "needs_renewal" || stage === "renew_required") && (
               <NeedsRenewalScreen
                 teacherUsername={selectedTeacherUsername}
                 onRequested={loadStage}

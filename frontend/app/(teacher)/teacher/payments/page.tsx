@@ -5,9 +5,13 @@ import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 const TYPE_BADGE: Record<string, { label: (p: any) => string; cls: string }> = {
-  single_class:      { label: () => "Clase única", cls: "bg-blue-100 text-blue-700" },
-  package:           { label: p => p.installment_total ? `Cuota ${p.installment_index}/${p.installment_total}` : "Paquete", cls: "bg-pink-100 text-pink-700" },
-  unlimited_recharge:{ label: p => `Recarga ${p.installment_index} clases`, cls: "bg-purple-100 text-purple-700" },
+  single_class:       { label: () => "Clase única", cls: "bg-blue-100 text-blue-700" },
+  package:            { label: p => p.installment_total ? `Cuota ${p.installment_index}/${p.installment_total}` : "Paquete", cls: "bg-pink-100 text-pink-700" },
+  renewal:            { label: p => p.installment_total ? `Renovación (Cuota ${p.installment_index}/${p.installment_total})` : "Renovación", cls: "bg-emerald-100 text-emerald-700" },
+  package_renewal:    { label: p => p.installment_total ? `Renovación (Cuota ${p.installment_index}/${p.installment_total})` : "Renovación", cls: "bg-emerald-100 text-emerald-700" },
+  package_change:     { label: p => p.installment_total ? `Cambio (Cuota ${p.installment_index}/${p.installment_total})` : "Cambio de Paquete", cls: "bg-amber-100 text-amber-700" },
+  installment:        { label: p => `Cuota ${p.installment_index || 1}/${p.installment_total || 1}`, cls: "bg-indigo-100 text-indigo-700" },
+  unlimited_recharge: { label: p => `Recarga ${p.installment_index ? `${p.installment_index} clases` : "Ilimitada"}`, cls: "bg-purple-100 text-purple-700" },
 };
 
 export default function TeacherPaymentsPage() {
@@ -68,7 +72,13 @@ export default function TeacherPaymentsPage() {
       ) : (
         <div className="space-y-3">
           {payments.map(p => {
-            const badge = TYPE_BADGE[p.payment_type] || TYPE_BADGE.package;
+            const badge = TYPE_BADGE[p.payment_type] || {
+              label: () => p.payment_type || "Pago",
+              cls: "bg-slate-100 text-slate-700"
+            };
+
+            const packageName = p.requested_package_name || p.package_name;
+
             return (
               <div key={p.payment_id} className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
                 <div className="flex items-center gap-3 flex-wrap mb-2">
@@ -81,7 +91,7 @@ export default function TeacherPaymentsPage() {
                     ${p.amount.toFixed(2)}
                   </span>
                 </div>
-                {p.package_name && <p className="text-xs text-slate-500 mb-1">Paquete: {p.package_name}</p>}
+                {packageName && <p className="text-xs text-slate-500 mb-1">Paquete: {packageName}</p>}
                 {p.transaction_reference && <p className="text-xs text-slate-400 font-mono mb-2">Ref: {p.transaction_reference}</p>}
                 {p.payment_expires_at && (
                   <p className="text-xs text-amber-600 font-bold flex items-center gap-1 mb-3">

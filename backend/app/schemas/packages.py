@@ -20,6 +20,7 @@ class PackageCreate(BaseModel):
     duration_minutes: int = 60
     allow_installments: bool = False
     installment_count: Optional[int] = None
+    installment_amount: Optional[float] = None
 
     @field_validator("installment_count")
     @classmethod
@@ -81,6 +82,11 @@ class EnrollmentResponse(BaseModel):
     classes_used: int
     classes_total: Optional[int]
     status: str
+    payment_status: Optional[str] = None
+    installments_paid: Optional[int] = 0
+    unlocked_credits: Optional[int] = 0
+    prepaid_unlimited_credits: Optional[int] = 0
+    activated_at: Optional[datetime] = None
     renewal_count: int
     created_at: datetime
     package: PackageResponse

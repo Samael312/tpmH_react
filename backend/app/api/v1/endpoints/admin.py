@@ -12,7 +12,7 @@ from app.models.teacher import TeacherProfile, TeacherStatus
 from app.models.student import StudentProfile
 from app.models.class_ import Class
 from app.models.payment import Payment, Withdrawal
-from app.models.package import Enrollment, Package
+from app.models.package import Enrollment
 from app.core.timezone import utc_now, UTC
 from app.schemas.admin import (
     PlatformStatsResponse,
@@ -255,7 +255,6 @@ def update_teacher_status(
             detail="El profesor debe subir su video de presentación antes de poder ser aprobado"
         )
 
-
     old_status = teacher.status
     teacher.status = new_status
     db.commit()
@@ -415,8 +414,7 @@ def update_user_status(
     }
 
 
-# ─── GESTIÓN DE RETIROS ──────────────────────────────────────────────────────
-
+# ─── CONFIGURACIÓN DE PLATAFORMA ─────────────────────────────────────────────
 
 @router.get("/platform-config")
 def get_platform_config(db: Session = Depends(get_db)):
@@ -478,7 +476,6 @@ def update_platform_config(
             )
         config.featured_teacher_id = teacher.id
     elif data.featured_teacher_username == "":
-        # Permite "desvincular" al profesor si el input se envía vacío
         config.featured_teacher_id = None
 
     if data.platform_name is not None:
@@ -490,6 +487,7 @@ def update_platform_config(
 
     db.commit()
     return {"message": "Configuración actualizada"}
+
 
 @router.patch("/users/{user_id}")
 def admin_update_user(
@@ -514,25 +512,6 @@ def admin_update_user(
 
     if data.phone_number is not None:
         user.phone_number = data.phone_number
-
-    if data.package_name is not None:
-        enrollment = (
-            db.query(Enrollment)
-            .filter(
-                Enrollment.student_id == user_id,
-                Enrollment.status == "active",
-            )
-            .first()
-        )
-        if enrollment:
-            package = (
-                db.query(Package)
-                .filter(Package.name == data.package_name)
-                .first()
-            )
-            if package:
-                enrollment.package_id    = package.id
-                enrollment.classes_total = package.classes_count
 
     db.commit()
     return {"ok": True}

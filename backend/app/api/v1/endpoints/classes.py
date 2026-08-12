@@ -232,6 +232,8 @@ def book_class(
 
     if has_prepaid:
         enrollment.prepaid_unlimited_credits -= 1
+    elif enrollment.package.classes_count is not None:
+        update_enrollment_counter(enrollment.id, delta=1, db=db)
 
     db.add(new_class)
     db.commit()
@@ -290,6 +292,9 @@ def cancel_class_student(
             detail=error_msg
         )
 
+    old_status = class_.status
+    old_counts = class_counts_towards_package(old_status, class_.start_time_utc)
+
     class_.status = "cancelled"
 
     if class_.used_prepaid_credit and class_.enrollment_id:
@@ -297,6 +302,8 @@ def cancel_class_student(
         if enrollment:
             enrollment.prepaid_unlimited_credits += 1
         class_.used_prepaid_credit = False
+    elif class_.class_type == ClassType.regular and class_.enrollment_id and old_counts:
+        update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
 
     db.commit()
 
@@ -496,7 +503,12 @@ def update_class_status(
     if data.notes:
         class_.notes = data.notes
 
-    if class_.class_type == ClassType.regular and class_.enrollment_id:
+    if class_.used_prepaid_credit and data.status in ["cancelled", "cancelled_by_teacher"]:
+        enrollment = db.query(Enrollment).filter(Enrollment.id == class_.enrollment_id).first()
+        if enrollment:
+            enrollment.prepaid_unlimited_credits += 1
+        class_.used_prepaid_credit = False
+    elif class_.class_type == ClassType.regular and class_.enrollment_id:
         if new_counts and not old_counts:
             update_enrollment_counter(class_.enrollment_id, delta=1, db=db)
         elif old_counts and not new_counts:
@@ -507,6 +519,42 @@ def update_class_status(
 
     _sync_google_calendar_updated(class_, db)
     return _build_class_response(class_, db)
+
+
+@router.delete("/teacher/{class_id}")
+def cancel_class_teacher(
+    class_id: int,
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    El profesor cancela una clase. El crédito siempre se le reembolsa al estudiante.
+    """
+    class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
+
+    if class_.status == "cancelled":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La clase ya se encuentra cancelada"
+        )
+
+    old_status = class_.status
+    old_counts = class_counts_towards_package(old_status, class_.start_time_utc)
+
+    class_.status = "cancelled"
+
+    if class_.used_prepaid_credit and class_.enrollment_id:
+        enrollment = db.query(Enrollment).filter(Enrollment.id == class_.enrollment_id).first()
+        if enrollment:
+            enrollment.prepaid_unlimited_credits += 1
+        class_.used_prepaid_credit = False
+    elif class_.class_type == ClassType.regular and class_.enrollment_id and old_counts:
+        update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
+
+    db.commit()
+
+    _sync_google_calendar_cancelled(class_.teacher_id, class_.google_event_id, db)
+    return {"message": "Clase cancelada por el profesor. El crédito ha sido reembolsado al estudiante."}
 
 
 @router.patch("/teacher/{class_id}/reschedule", response_model=ClassResponse)
@@ -582,3 +630,39 @@ def reschedule_class_admin(
 
     _sync_google_calendar_updated(class_, db)
     return _build_class_response(class_, db)
+
+
+@router.delete("/admin/{class_id}")
+def cancel_class_admin(
+    class_id: int,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db)
+):
+    """
+    El staff/admin cancela una clase y reembolsa el crédito al estudiante si corresponde.
+    """
+    class_ = _get_class_or_404(db, class_id)
+
+    if class_.status == "cancelled":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La clase ya se encuentra cancelada"
+        )
+
+    old_status = class_.status
+    old_counts = class_counts_towards_package(old_status, class_.start_time_utc)
+
+    class_.status = "cancelled"
+
+    if class_.used_prepaid_credit and class_.enrollment_id:
+        enrollment = db.query(Enrollment).filter(Enrollment.id == class_.enrollment_id).first()
+        if enrollment:
+            enrollment.prepaid_unlimited_credits += 1
+        class_.used_prepaid_credit = False
+    elif class_.class_type == ClassType.regular and class_.enrollment_id and old_counts:
+        update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
+
+    db.commit()
+
+    _sync_google_calendar_cancelled(class_.teacher_id, class_.google_event_id, db)
+    return {"message": "Clase cancelada por administración. Crédito reembolsado."}

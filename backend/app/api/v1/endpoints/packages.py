@@ -41,9 +41,14 @@ def create_package(
     db: Session = Depends(get_db)
 ):
     """El profesor crea un paquete de clases"""
+    pkg_data = data.model_dump()
+    if pkg_data.get("allow_installments") and pkg_data.get("installment_count"):
+        if not pkg_data.get("installment_amount"):
+            pkg_data["installment_amount"] = round(pkg_data["price"] / pkg_data["installment_count"], 2)
+
     package = Package(
         teacher_id=current_user.teacher_profile.id,
-        **data.model_dump()
+        **pkg_data
     )
     db.add(package)
     db.commit()
@@ -82,7 +87,19 @@ def update_package(
             detail="Paquete no encontrado"
         )
 
-    for field, value in data.model_dump(exclude_unset=True).items():
+    update_data = data.model_dump(exclude_unset=True)
+
+    allow_inst = update_data.get("allow_installments", package.allow_installments)
+    inst_count = update_data.get("installment_count", package.installment_count)
+    price = update_data.get("price", package.price)
+
+    if allow_inst and inst_count:
+        if update_data.get("installment_amount") is None:
+            update_data["installment_amount"] = round(price / inst_count, 2)
+    else:
+        update_data["installment_amount"] = None
+
+    for field, value in update_data.items():
         setattr(package, field, value)
 
     db.commit()
@@ -243,6 +260,11 @@ def get_my_enrollments(
             classes_used=e.classes_used,
             classes_total=e.classes_total,
             status=e.status,
+            payment_status=e.payment_status,
+            installments_paid=getattr(e, "installments_paid", 0),
+            unlocked_credits=getattr(e, "unlocked_credits", 0),
+            prepaid_unlimited_credits=getattr(e, "prepaid_unlimited_credits", 0),
+            activated_at=getattr(e, "activated_at", None),
             renewal_count=e.renewal_count,
             created_at=e.created_at,
             package=PackageResponse.model_validate(e.package),

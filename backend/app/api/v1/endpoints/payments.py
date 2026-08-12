@@ -1,4 +1,4 @@
-# app/routers/payments.py
+# app/routers/payments.py / app/api/v1/endpoints/payments.py
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -74,6 +74,12 @@ def _credit_wallet(teacher_id: int, amount_teacher: float, db: Session):
 def _installment_amount(package: Package, index: int) -> float:
     """Monto de la cuota `index` (1-based). Reparte el residuo en la última cuota."""
     n = package.installment_count or 1
+    if index < 1 or index > n:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Número de cuota inválido: {index}. Este paquete consta de {n} cuota(s)."
+        )
+    
     base = package.installment_amount or round(package.price / n, 2)
     if index < n:
         return base
@@ -627,7 +633,7 @@ def validate_payment(
                 enrollment.activated_at = now
                 enrollment.payment_status = "paid"
 
-    elif payment.payment_type == "package":
+    elif payment.payment_type in ("package", "renewal", "package_change"):
         enrollment = db.query(Enrollment).filter(Enrollment.id == payment.enrollment_id).first()
         if enrollment:
             target_package_id = (
@@ -636,8 +642,8 @@ def validate_payment(
                 or enrollment.package_id
             )
             target_package = db.query(Package).filter(Package.id == target_package_id).first()
-            is_renewal = enrollment.status == EnrollmentStatus.pending_renewal
-            is_change = enrollment.status == EnrollmentStatus.pending_package_change
+            is_renewal = enrollment.status == EnrollmentStatus.pending_renewal or payment.payment_type == "renewal"
+            is_change = enrollment.status == EnrollmentStatus.pending_package_change or payment.payment_type == "package_change"
 
             if is_renewal or is_change:
                 enrollment.package_id = target_package.id
@@ -986,6 +992,14 @@ def notify_payment(
     if not package:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Paquete no encontrado")
 
+    # Determinar correctamente el tipo de pago según la intención del enrollment o data.type
+    if enrollment.renewal_requested_package_id or enrollment.status == EnrollmentStatus.pending_renewal or data.type == "renewal":
+        payment_type = "renewal"
+    elif enrollment.change_requested_package_id or enrollment.status == EnrollmentStatus.pending_package_change or data.type == "package_change":
+        payment_type = "package_change"
+    else:
+        payment_type = "package"
+
     use_installments = data.installment_index is not None
     if use_installments and not package.allow_installments:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este paquete no admite pago en cuotas")
@@ -995,21 +1009,28 @@ def notify_payment(
         if data.installment_index != expected_next:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Debes pagar la cuota {expected_next} primero")
         if db.query(Payment).filter(
-            Payment.enrollment_id == enrollment.id, Payment.status == "pending_review",
-            Payment.payment_type == "package",
+            Payment.enrollment_id == enrollment.id,
+            Payment.status == "pending_review",
+            Payment.payment_type.in_(["package", "renewal", "package_change"]),
         ).first():
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay una cuota pendiente de revisión")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay un pago o cuota pendiente de revisión")
         amount = _installment_amount(package, data.installment_index)
     else:
-        if enrollment.payment_status != "unpaid":
+        if enrollment.payment_status != "unpaid" and payment_type not in ("renewal", "package_change"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este paquete ya fue pagado o tiene una cuota en curso")
+        if db.query(Payment).filter(
+            Payment.enrollment_id == enrollment.id,
+            Payment.status == "pending_review",
+            Payment.payment_type.in_(["package", "renewal", "package_change"]),
+        ).first():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay un pago pendiente de revisión")
         amount = package.price
 
     payment = Payment(
         enrollment_id=enrollment.id, student_id=student_id, teacher_id=enrollment.teacher_id,
         amount_total=amount, amount_teacher=0, amount_platform=0,
         payment_method="manual", transaction_id=data.transaction_reference,
-        status="pending_review", payment_type="package",
+        status="pending_review", payment_type=payment_type,
         installment_index=data.installment_index,
     )
     db.add(payment)

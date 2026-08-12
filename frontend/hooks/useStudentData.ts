@@ -1,5 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "@/lib/api";
+
+export type BookingStage =
+  | "loading"
+  | "needs_trial"
+  | "trial_in_progress"
+  | "needs_package"
+  | "package_pending_payment"
+  | "needs_payment"
+  | "needs_renewal"
+  | "renew_required"
+  | "renewal_pending"
+  | "ready";
   
 export interface StudentClass {
   id: number;
@@ -36,6 +48,10 @@ export interface StudentEnrollment {
     name: string;
     subject: string;
     description: string | null;
+    description_type?: "text" | "list" | string | null;
+    description_items?: string[] | null;
+    color?: string | null;
+    icon?: string | null;
     classes_count: number | null;
     price: number;
     duration_minutes: number;
@@ -45,9 +61,17 @@ export interface StudentEnrollment {
   classes_used: number;
   classes_total: number | null;
   status: string;
+  installments_paid?: number;
+  total_installments?: number;
+  pending_payment_notified?: boolean;
+  renewal_requested?: boolean;
+  requested_package_id?: number | null;
+  payment_status?: string;
   teacher_name: string | null;
   teacher_username: string | null;
   teacher_avatar: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface StudentMaterial {
@@ -156,7 +180,7 @@ export interface MyTeacherInfo {
   title: string | null;
   profile_photo_url: string | null;
   theme_color: string | null;
-  stage: "needs_trial" | "trial_in_progress" | "needs_package" | "needs_renewal" | "renewal_pending" | "ready";
+  stage: BookingStage;
   active_enrollment: {
     id: number;
     package_name: string | null;
@@ -166,12 +190,6 @@ export interface MyTeacherInfo {
   } | null;
 }
 
-/**
- * Reemplaza al antiguo useTeacherResolution. Funciona igual en ambos modos:
- * - single-tenant: siempre devuelve como máximo 1 profesor (el featured).
- * - multi-tenant: devuelve todos los profesores vinculados al estudiante.
- * El componente decide qué hacer según teachers.length (0, 1, o 2+).
- */
 export function useMyTeachers() {
   const [teachers, setTeachers] = useState<MyTeacherInfo[]>([]);
   const [isSingleTenant, setIsSingleTenant] = useState(true);

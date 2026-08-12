@@ -98,9 +98,9 @@ class UpdateUserStatusRequest(BaseModel):
     is_active: bool
     reason: Optional[str] = None
 
+
 class AdminUserUpdate(BaseModel):
-    role:            Optional[str]   = None
-    is_active:       Optional[bool]  = None
-    package_name:    Optional[str]   = None
-    phone_number:    Optional[str]   = None
-    nationality:    Optional[str]   = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+    phone_number: Optional[str] = None
+    nationality: Optional[str] = None
