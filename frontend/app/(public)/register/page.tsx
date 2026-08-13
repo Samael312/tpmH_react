@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -59,12 +59,31 @@ export default function RegisterPage() {
   const login = useAuthStore((state) => state.login);
   const [step, setStep] = useState(1);
 
+  // ─── Modo de plataforma ────────────────────────────────────────────────
+  // En single-tenant solo existe una profesora: cualquiera que se registre
+  // es estudiante por definición, así que no tiene sentido preguntar el rol.
+  const [isSingleTenant, setIsSingleTenant] = useState(true);
+  const [configLoaded, setConfigLoaded] = useState(false);
+
+  useEffect(() => {
+    api
+      .get("/admin/platform-config")
+      .then((res) => setIsSingleTenant(Boolean(res.data?.is_single_tenant)))
+      .catch(() => setIsSingleTenant(true)) // fallback seguro: asumir single-tenant
+      .finally(() => setConfigLoaded(true));
+  }, []);
+
   // Step 1
   const [role, setRole] = useState("student");
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+
+  // Si es single-tenant, forzamos el rol a "student" pase lo que pase
+  useEffect(() => {
+    if (isSingleTenant) setRole("student");
+  }, [isSingleTenant]);
 
   // Step 2
   const [password, setPassword] = useState("");
@@ -78,7 +97,7 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState(false);
 
   const [touched, setTouched] = useState<Record<string, boolean>>({});
-  
+
   const markTouched = (field: string) =>
     setTouched((prev) => ({ ...prev, [field]: true }));
 
@@ -123,7 +142,7 @@ export default function RegisterPage() {
         username,
         email,
         password,
-        role,
+        role: isSingleTenant ? "student" : role,
       });
       setSuccess(true);
       setTimeout(() => {
@@ -288,37 +307,42 @@ export default function RegisterPage() {
                   onSubmit={handleNext}
                   className="space-y-2 animate-in fade-in duration-200"
                 >
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 tracking-widest block px-0.5">
-                      Soy...
-                    </label>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {[
-                        { id: "student", label: "Estudiante", icon: BookOpen },
-                        {
-                          id: "teacher",
-                          label: "Profesor",
-                          icon: GraduationCap,
-                        },
-                      ].map((r) => (
-                        <button
-                          key={r.id}
-                          type="button"
-                          onClick={() => setRole(r.id)}
-                          className={`flex items-center justify-center gap-1.5 p-1.5 rounded-xl border-2 transition-all duration-300 ${
-                            role === r.id
-                              ? "border-pink-500 bg-pink-50 text-pink-600 shadow-sm"
-                              : "border-slate-100 bg-slate-50 text-slate-400 hover:border-pink-200"
-                          }`}
-                        >
-                          <r.icon className="w-3.5 h-3.5" />
-                          <span className="text-[10px] font-bold">
-                            {r.label}
-                          </span>
-                        </button>
-                      ))}
+                  {/* Selector de rol — solo visible en modo multi-tenant.
+                      En single-tenant solo hay una profesora, así que
+                      cualquiera que se registre es estudiante por defecto. */}
+                  {configLoaded && !isSingleTenant && (
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 tracking-widest block px-0.5">
+                        Soy...
+                      </label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {[
+                          { id: "student", label: "Estudiante", icon: BookOpen },
+                          {
+                            id: "teacher",
+                            label: "Profesor",
+                            icon: GraduationCap,
+                          },
+                        ].map((r) => (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => setRole(r.id)}
+                            className={`flex items-center justify-center gap-1.5 p-1.5 rounded-xl border-2 transition-all duration-300 ${
+                              role === r.id
+                                ? "border-pink-500 bg-pink-50 text-pink-600 shadow-sm"
+                                : "border-slate-100 bg-slate-50 text-slate-400 hover:border-pink-200"
+                            }`}
+                          >
+                            <r.icon className="w-3.5 h-3.5" />
+                            <span className="text-[10px] font-bold">
+                              {r.label}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-1.5">
                     <div className="space-y-0.5">

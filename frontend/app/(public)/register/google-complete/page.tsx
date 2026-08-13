@@ -20,6 +20,24 @@ export default function GoogleCompleteSignupPage() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [imgError, setImgError] = useState(false);
 
+  // ─── Modo de plataforma ────────────────────────────────────────────────
+  // En single-tenant solo existe una profesora: cualquiera que complete su
+  // registro con Google es estudiante por definición, sin preguntar el rol.
+  const [isSingleTenant, setIsSingleTenant] = useState(true);
+  const [configLoaded, setConfigLoaded] = useState(false);
+
+  useEffect(() => {
+    api
+      .get("/admin/platform-config")
+      .then((res) => setIsSingleTenant(Boolean(res.data?.is_single_tenant)))
+      .catch(() => setIsSingleTenant(true)) // fallback seguro
+      .finally(() => setConfigLoaded(true));
+  }, []);
+
+  useEffect(() => {
+    if (isSingleTenant) setRole("student");
+  }, [isSingleTenant]);
+
   useEffect(() => {
     const token = sessionStorage.getItem("google_id_token");
     const raw = sessionStorage.getItem("google_prefill");
@@ -45,7 +63,7 @@ export default function GoogleCompleteSignupPage() {
       const res = await api.post("/auth/google/register", {
         id_token: idToken,
         username: username.trim().toLowerCase(),
-        role,
+        role: isSingleTenant ? "student" : role,
       });
       const { access_token, role: userRole, name, username: uname, email, surname } = res.data;
 
@@ -141,31 +159,36 @@ export default function GoogleCompleteSignupPage() {
                 </div>
               )}
 
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                  Soy...
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: "student", label: "Estudiante", icon: BookOpen },
-                    { id: "teacher", label: "Profesor", icon: GraduationCap },
-                  ].map((r) => (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => setRole(r.id)}
-                      className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all duration-300 ${
-                        role === r.id
-                          ? "border-pink-500 bg-pink-50 text-pink-600 shadow-sm"
-                          : "border-slate-100 bg-slate-50 text-slate-400 hover:border-pink-200"
-                      }`}
-                    >
-                      <r.icon className="w-4 h-4" />
-                      <span className="text-[11px] font-bold">{r.label}</span>
-                    </button>
-                  ))}
+              {/* Selector de rol — solo visible en modo multi-tenant.
+                  En single-tenant solo hay una profesora, así que
+                  cualquiera que se registre es estudiante por defecto. */}
+              {configLoaded && !isSingleTenant && (
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                    Soy...
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: "student", label: "Estudiante", icon: BookOpen },
+                      { id: "teacher", label: "Profesor", icon: GraduationCap },
+                    ].map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setRole(r.id)}
+                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all duration-300 ${
+                          role === r.id
+                            ? "border-pink-500 bg-pink-50 text-pink-600 shadow-sm"
+                            : "border-slate-100 bg-slate-50 text-slate-400 hover:border-pink-200"
+                        }`}
+                      >
+                        <r.icon className="w-4 h-4" />
+                        <span className="text-[11px] font-bold">{r.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">

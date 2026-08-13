@@ -654,6 +654,12 @@ export default function TeacherPackagesPage() {
                       <div className="flex items-baseline gap-1">
                         <span className="text-3xl font-black text-slate-800">${priceDisplay}</span>
                         <span className="text-slate-500 text-xs font-medium">{priceSuffix}</span>
+                        {pkg.allow_installments && pkg.installment_count && (
+                          <p className="text-[11px] font-bold text-slate-400 mt-1">
+                            o en {pkg.installment_count} cuotas de $
+                            {(pkg.installment_count ?? pkg.price / pkg.installment_count).toFixed(2)}
+                          </p>
+                        )}
                       </div>
                     </div>
 

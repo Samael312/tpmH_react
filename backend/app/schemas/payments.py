@@ -127,24 +127,26 @@ class WithdrawalResponse(BaseModel):
         from_attributes = True
 
 class NotifyPaymentRequest(BaseModel):
-    type: str  # "package" | "single_class"
+    type: str  # "package" | "single_class" | "unlimited_recharge"
     enrollment_id: Optional[int] = None
     class_id: Optional[int] = None
-    installment_number: Optional[int] = None  # 1, 2, o None = pago completo
+    installment_index: Optional[int] = None
+    credits_requested: Optional[int] = None
     transaction_reference: Optional[str] = None
 
     @field_validator("type")
     @classmethod
     def validate_type(cls, v):
-        if v not in ("package", "single_class"):
-            raise ValueError("type debe ser 'package' o 'single_class'")
+        allowed = ("package", "single_class", "unlimited_recharge")
+        if v not in allowed:
+            raise ValueError(f"type debe ser uno de: {allowed}")
         return v
 
-    @field_validator("installment_number")
+    @field_validator("installment_index")
     @classmethod
     def validate_installment(cls, v):
-        if v is not None and v not in (1, 2):
-            raise ValueError("installment_number debe ser 1 o 2")
+        if v is not None and v < 1:
+            raise ValueError("installment_index debe ser mayor a 0")
         return v
 
 
