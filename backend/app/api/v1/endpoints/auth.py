@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 import httpx
 import logging
+import secrets
 from app.db.base import get_db
 from app.models.user import User, UserRole
 from app.models.teacher import TeacherProfile
@@ -9,15 +10,10 @@ from app.models.student import StudentProfile
 from app.auth.passwords import hash_password, verify_password
 from app.auth.jwt import create_access_token
 from app.auth.google import verify_google_token
-from app.schemas.auth import (
-    RegisterRequest, LoginRequest,
-    TokenResponse, GoogleAuthRequest, GoogleAuthResponse,
-    GoogleRegisterRequest
-)
-import secrets
+from app.schemas.auth import (RegisterRequest, LoginRequest, TokenResponse, GoogleAuthRequest, GoogleAuthResponse, GoogleRegisterRequest)
 from datetime import timedelta
 from app.models.password_reset import PasswordResetToken
-from app.core.email import send_password_reset_email
+from app.core.email import send_password_reset_email, send_username_recovery_email  
 from app.core.timezone import utc_now
 from pydantic import BaseModel, EmailStr
 from app.core.storage import upload_file
@@ -29,6 +25,8 @@ router = APIRouter()
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
+class ForgotUsernameRequest(BaseModel):
+    email: EmailStr
 
 class ResetPasswordRequest(BaseModel):
     token: str
@@ -310,3 +308,26 @@ def reset_password(
     db.commit()
 
     return {"message": "Contraseña actualizada correctamente"}
+
+@router.post("/forgot-username")
+def forgot_username(
+    data: ForgotUsernameRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Envía el nombre de usuario asociado a un email.
+    Igual que forgot-password: siempre devuelve el mismo mensaje,
+    exista o no el email, para no revelar qué correos están registrados.
+    """
+    user = db.query(User).filter(User.email == data.email).first()
+
+    if user:
+        send_username_recovery_email(
+            to_email=user.email,
+            user_name=user.name,
+            username=user.username,
+        )
+
+    return {
+        "message": "Si ese email está registrado, te enviaremos tu nombre de usuario en breve"
+    }

@@ -122,7 +122,12 @@ export default function RegisterPage() {
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
     setTouched({ name: true, surname: true, username: true, email: true });
-    if (!step1Valid) return;
+    
+    if (!step1Valid) {
+      setError("Por favor, completa todos los campos correctamente antes de continuar.");
+      return;
+    }
+    
     setError("");
     setStep(2);
   };
@@ -130,6 +135,19 @@ export default function RegisterPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setTouched((prev) => ({ ...prev, password: true, confirmPw: true }));
+
+    // Validar longitud mínima de contraseña
+    if (password.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+
+    // Validar si las contraseñas coinciden
+    if (password !== confirmPw) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+
     if (!step2Valid) return;
 
     setLoading(true);
@@ -528,7 +546,7 @@ export default function RegisterPage() {
                     </button>
                     <button
                       type="submit"
-                      disabled={!step2Valid || loading || success}
+                      disabled={loading || success}
                       className="flex-[2] py-2.5 text-xs font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
                     >
                       {loading ? (

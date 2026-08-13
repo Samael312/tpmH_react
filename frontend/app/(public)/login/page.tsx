@@ -248,7 +248,6 @@ export default function LoginPage() {
               <div className="group">
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contraseña</label>
-                  <Link href="/forgot-password" className="text-xs font-bold text-pink-500 hover:text-pink-600">¿La olvidaste?</Link>
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-pink-500 transition-colors pointer-events-none" />
@@ -275,6 +274,10 @@ export default function LoginPage() {
                   <span className="text-rose-500">⚠️</span> {error}
                 </div>
               )}
+
+              <div className="flex items-center justify-between mb-1.5">
+                  <Link href="/forgot-password" className="text-xs font-bold text-pink-500 hover:text-pink-600">¿Olvidaste tu usuario o contraseña?</Link>
+                </div>
 
               <button
                 type="submit"

@@ -361,7 +361,12 @@ export default function TeacherPackagesPage() {
                   </label>
                   <button
                     type="button"
-                    onClick={() => setUnlimited(p => !p)}
+                    onClick={() => {
+                      setUnlimited(!unlimited);
+                      if (!unlimited) {
+                        setForm({ ...form, allow_installments: false });
+                      }
+                    }}
                     className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors
                       ${unlimited ? "bg-pink-500 text-white" : "bg-slate-100 text-slate-500"}`}
                   >
@@ -556,32 +561,40 @@ export default function TeacherPackagesPage() {
                   </div>
                 </div>
               </div>
+              
               {/* Pago en cuotas */}
-              <div className="sm:col-span-2 space-y-3 pt-2 border-t border-slate-100">
+              <div className={`sm:col-span-2 space-y-3 pt-2 border-t border-slate-100 transition-opacity duration-300 ${unlimited ? 'opacity-50' : ''}`}>
                 <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                     Permitir pago en cuotas
+                    {unlimited && <span className="text-red-400 normal-case">(No disponible para clases ilimitadas)</span>}
                   </label>
                   <button
                     type="button"
+                    disabled={unlimited}
                     onClick={() => setForm({ ...form, allow_installments: !form.allow_installments })}
-                    className={`relative w-11 h-6 rounded-full transition-colors ${form.allow_installments ? "bg-pink-500" : "bg-slate-300"}`}
+                    className={`relative w-11 h-6 rounded-full transition-colors ${
+                      form.allow_installments && !unlimited ? "bg-pink-500" : "bg-slate-300"
+                    } ${unlimited ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                   >
-                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${form.allow_installments ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+                    <span className={`absolute top-[2px] left-[2px] w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${
+                      form.allow_installments && !unlimited ? "translate-x-5" : "translate-x-0"
+                    }`} />
                   </button>
                 </div>
-                {form.allow_installments && (
-                  <div>
+                
+                {form.allow_installments && !unlimited && (
+                  <div className="animate-in fade-in duration-300">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Número de cuotas</label>
                     <input
                       type="text"
                       inputMode="numeric"
                       value={form.installment_count}
                       onChange={e => /^[0-9]*$/.test(e.target.value) && setForm({ ...form, installment_count: e.target.value })}
-                      className="w-24 bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold px-4 py-3 focus:outline-none focus:border-pink-500"
+                      className="w-24 bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold px-4 py-3 focus:outline-none focus:border-pink-500 focus:bg-white transition-all"
                     />
-                    {parseFloat(form.price) > 0 && parseInt(form.installment_count) > 1 && (
-                      <p className="text-xs text-slate-400 font-bold mt-1.5">
+                    {parseFloat(form.price) > 0 && parseInt(form.installment_count || "0") > 1 && (
+                      <p className="text-[11px] text-slate-500 font-bold mt-2">
                         ${(parseFloat(form.price) / parseInt(form.installment_count)).toFixed(2)} por cuota
                       </p>
                     )}

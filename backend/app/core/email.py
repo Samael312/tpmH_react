@@ -250,3 +250,42 @@ def send_class_cancelled_email(
     except Exception as e:
         logger.error(f"Error enviando cancelación: {e}")
         return False
+
+def send_username_recovery_email(
+    to_email: str,
+    user_name: str,
+    username: str,
+) -> bool:
+    """
+    Envía el nombre de usuario asociado a ese email.
+    No incluye enlaces de acción — solo información.
+    """
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Recuperación de usuario</h2>
+        <p>Hola {user_name},</p>
+        <p>Recibimos una solicitud para recuperar tu nombre de usuario en TPMH.</p>
+        <p>Tu usuario es:</p>
+        <div style="display: inline-block; padding: 12px 24px;
+                    background-color: #f1f3f5; border-radius: 8px;
+                    font-weight: bold; font-size: 18px; color: #000;
+                    margin: 16px 0;">
+            @{username}
+        </div>
+        <p style="color: #666; font-size: 14px;">
+            Si no solicitaste esto, puedes ignorar este correo con tranquilidad —
+            tu cuenta no ha sido modificada.
+        </p>
+    </div>
+    """
+    try:
+        resend.Emails.send({
+            "from": settings.EMAIL_FROM,
+            "to": to_email,
+            "subject": "Tu nombre de usuario — TPMH",
+            "html": html,
+        })
+        return True
+    except Exception as e:
+        logger.error(f"Error enviando email de recuperación de usuario: {e}")
+        return False

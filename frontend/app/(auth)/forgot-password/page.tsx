@@ -7,11 +7,20 @@ import { Mail, ArrowLeft, Check, User } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 
+type Mode = "password" | "username";
+
 export default function ForgotPasswordPage() {
+  const [mode, setMode] = useState<Mode>("password");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
+
+  const switchMode = (m: Mode) => {
+    setMode(m);
+    setSent(false);
+    setError("");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,7 +28,8 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     setError("");
     try {
-      await api.post("/auth/forgot-password", { email });
+      const endpoint = mode === "password" ? "/auth/forgot-password" : "/auth/forgot-username";
+      await api.post(endpoint, { email });
       setSent(true);
     } catch {
       // Anti-enumeración: siempre mostrar éxito
@@ -56,12 +66,34 @@ export default function ForgotPasswordPage() {
             Recuperar acceso
           </h1>
           <p className="text-slate-500 text-sm mt-1 text-center">
-            Te enviaremos un enlace para restablecer tu contraseña
+            {mode === "password"
+              ? "Te enviaremos un enlace para restablecer tu contraseña"
+              : "Te enviaremos tu nombre de usuario por correo"}
           </p>
         </div>
 
         <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
                         border border-white shadow-2xl shadow-slate-200/50 p-8">
+
+          {/* Pestañas */}
+          <div className="flex gap-1 bg-slate-100 rounded-xl p-1 mb-6">
+            <button
+              type="button"
+              onClick={() => switchMode("password")}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all duration-200
+                ${mode === "password" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              Olvidé mi contraseña
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode("username")}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all duration-200
+                ${mode === "username" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              Olvidé mi usuario
+            </button>
+          </div>
 
           {sent ? (
             <div className="flex flex-col items-center py-6 text-center">
@@ -73,8 +105,9 @@ export default function ForgotPasswordPage() {
                 ¡Revisa tu correo!
               </h2>
               <p className="text-sm text-slate-500 leading-relaxed">
-                Si existe una cuenta con ese email, recibirás las
-                instrucciones en breve. Revisa también la carpeta de spam.
+                {mode === "password"
+                  ? "Si existe una cuenta con ese email, recibirás las instrucciones en breve. Revisa también la carpeta de spam."
+                  : "Si existe una cuenta con ese email, recibirás tu nombre de usuario en breve. Revisa también la carpeta de spam."}
               </p>
               <Link
                 href="/login"
@@ -85,11 +118,12 @@ export default function ForgotPasswordPage() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Info box */}
               <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-start gap-2">
                 <User className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
                 <p className="text-xs font-bold text-blue-700">
-                  Introduce el email con el que te registraste y te enviaremos un enlace de recuperación.
+                  {mode === "password"
+                    ? "Introduce el email con el que te registraste y te enviaremos un enlace de recuperación."
+                    : "Introduce el email con el que te registraste y te enviaremos tu nombre de usuario."}
                 </p>
               </div>
 
@@ -140,8 +174,10 @@ export default function ForgotPasswordPage() {
                 {loading ? (
                   <div className="w-4 h-4 border-2 border-white/40
                                   border-t-white rounded-full animate-spin" />
-                ) : (
+                ) : mode === "password" ? (
                   "Enviar enlace de recuperación"
+                ) : (
+                  "Enviar nombre de usuario"
                 )}
               </button>
             </form>
