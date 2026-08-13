@@ -48,6 +48,8 @@ class Payment(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     enrollment = relationship("Enrollment", back_populates="payment")
+    student = relationship("StudentProfile", foreign_keys=[student_id])
+    teacher = relationship("TeacherProfile", foreign_keys=[teacher_id])
 
 
 class TeacherWallet(Base):

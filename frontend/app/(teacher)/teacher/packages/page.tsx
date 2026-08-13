@@ -656,8 +656,7 @@ export default function TeacherPackagesPage() {
                         <span className="text-slate-500 text-xs font-medium">{priceSuffix}</span>
                         {pkg.allow_installments && pkg.installment_count && (
                           <p className="text-[11px] font-bold text-slate-400 mt-1">
-                            o en {pkg.installment_count} cuotas de $
-                            {(pkg.installment_count ?? pkg.price / pkg.installment_count).toFixed(2)}
+                            o en {pkg.installment_count} cuotas de $ {(pkg.price / pkg.installment_count).toFixed(2)}
                           </p>
                         )}
                       </div>

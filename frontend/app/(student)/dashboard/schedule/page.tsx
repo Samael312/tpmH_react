@@ -697,8 +697,7 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
                     <span className="text-slate-500 text-sm font-medium">{priceSuffix}</span>
                     {pkg.allow_installments && pkg.installment_count && (
                       <p className="text-xs font-bold text-slate-400 mb-3 -mt-2">
-                        O en {pkg.installment_count} cuotas de $
-                        {(pkg.price / pkg.installment_count).toFixed(2)}
+                        O en {pkg.installment_count} cuotas de $ {(pkg.price / pkg.installment_count).toFixed(2)}
                       </p>
                     )}
                   </div>
@@ -855,8 +854,7 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
                     <span className="text-slate-500 text-sm font-medium">{priceSuffix}</span>
                     {pkg.allow_installments && pkg.installment_count && (
                   <p className="text-[11px] font-bold text-slate-400 mt-1">
-                    |o en {pkg.installment_count} cuotas de $
-                    {(pkg.installment_count ?? pkg.price / pkg.installment_count).toFixed(2)}
+                    |o en {pkg.installment_count} cuotas de $ {(pkg.installment_count ?? pkg.price / pkg.installment_count).toFixed(2)}
                   </p>
                 )}
                   </div>
@@ -946,10 +944,10 @@ export default function SchedulePage() {
   const teacherBlocked = !teachersLoading && !isSingleTenant && myTeachers.length === 0;
 
   useEffect(() => {
-    if (teachersLoading) return;
-    if (isSingleTenant) { setSelectedTeacherUsername(null); return; }
-    if (myTeachers.length === 1) setSelectedTeacherUsername(myTeachers[0].teacher_username);
-  }, [teachersLoading, isSingleTenant, myTeachers]);
+  if (teachersLoading) return;
+  if (myTeachers.length === 1) { setSelectedTeacherUsername(myTeachers[0].teacher_username); return; }
+  if (isSingleTenant) { setSelectedTeacherUsername(null); return; }
+}, [teachersLoading, isSingleTenant, myTeachers]);
 
   const activeEnrollment = selectedTeacherUsername
     ? enrollments.find(e => e.status === "active" && e.teacher_username === selectedTeacherUsername)
