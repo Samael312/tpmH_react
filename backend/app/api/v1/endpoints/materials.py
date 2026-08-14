@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import logging
-
+from app.core.email import send_material_assigned_email
 from app.db.base import get_db
 from app.auth.dependencies import get_current_user, get_current_teacher, get_current_student, get_current_approved_teacher
 from app.models.user import User
@@ -203,6 +203,15 @@ def assign_material(
         )
         db.add(assignment)
         assigned_count += 1
+
+        if student_profile.user:
+            send_material_assigned_email(
+                to_email=student_profile.user.email,
+                student_name=student_profile.user.name,
+                teacher_name=f"{current_user.name} {current_user.surname}",
+                material_title=material.title,
+                category=material.category,
+            )
 
     db.commit()
 

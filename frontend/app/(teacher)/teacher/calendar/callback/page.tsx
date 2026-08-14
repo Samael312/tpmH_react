@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, AlertTriangle, Loader2, Calendar } from "lucide-react";
 import api from "@/lib/api";
@@ -12,11 +12,18 @@ function CalendarCallbackInner() {
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
 
+  // Referencia para prevenir doble ejecución en React.StrictMode
+  const hasExecuted = useRef(false);
+
   useEffect(() => {
+    // Si ya se envió la petición una vez, abortamos las llamadas duplicadas
+    if (hasExecuted.current) return;
+
     const code = searchParams.get("code");
     const oauthError = searchParams.get("error");
 
     if (oauthError) {
+      hasExecuted.current = true;
       setStatus("error");
       setErrorMsg(
         oauthError === "access_denied"
@@ -27,10 +34,14 @@ function CalendarCallbackInner() {
     }
 
     if (!code) {
+      hasExecuted.current = true;
       setStatus("error");
       setErrorMsg("No se recibió el código de autorización de Google.");
       return;
     }
+
+    // Marcamos como ejecutado justo antes de lanzar la llamada HTTP
+    hasExecuted.current = true;
 
     api
       .post("/calendar/callback", { code })
@@ -40,7 +51,9 @@ function CalendarCallbackInner() {
       })
       .catch((e) => {
         setStatus("error");
-        setErrorMsg(e.response?.data?.detail || "Error conectando con Google Calendar.");
+        setErrorMsg(
+          e.response?.data?.detail || "Error conectando con Google Calendar."
+        );
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

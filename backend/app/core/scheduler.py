@@ -12,6 +12,7 @@ from app.core.timezone import utc_now
 from app.core.email import send_class_reminder_email
 from app.core.class_logic import finalize_past_classes
 from app.core.google_calendar import run_calendar_sync_for_all_teachers
+from app.core.email import send_class_reminder_email, send_class_reminder_teacher_email
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,15 @@ async def send_class_reminders():
                     class_start_utc=class_.start_time_utc.strftime(
                         "%Y-%m-%d %H:%M UTC"
                     ),
+                    meet_link=class_.meet_link or "",
+                    hours_before=24,
+                )
+
+                send_class_reminder_teacher_email(
+                    to_email=teacher_user.email,
+                    teacher_name=teacher_user.name,
+                    student_name=f"{student_user.name} {student_user.surname}",
+                    class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
                     meet_link=class_.meet_link or "",
                     hours_before=24,
                 )

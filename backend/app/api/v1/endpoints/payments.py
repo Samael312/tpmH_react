@@ -12,6 +12,7 @@ from app.auth.dependencies import (
     get_current_staff,
     get_current_staff_or_teacher,
 )
+from app.core.email import send_class_confirmed_email, send_class_confirmed_teacher_email, send_new_booking_teacher_email
 from app.core.teacher_students import link_student_to_teacher
 from app.models.user import User
 from app.models.class_ import Class, ClassType
@@ -375,6 +376,16 @@ def book_class(
         db.commit()
         db.refresh(trial_class)
 
+        if teacher.user:
+            send_new_booking_teacher_email(
+                to_email=teacher.user.email, teacher_name=teacher.user.name,
+                student_name=f"{current_user.name} {current_user.surname}",
+                subject=trial_subject,
+                class_start_utc=trial_start.strftime("%Y-%m-%d %H:%M UTC"),
+                duration_minutes=30, is_trial=True,
+            )
+        
+
         return {
             "class_id": trial_class.id,
             "status": trial_class.status,
@@ -593,7 +604,25 @@ def validate_payment(
             class_ = db.query(Class).filter(Class.id == payment.class_id).first()
             if class_:
                 class_.status = "pending"
-                class_.payment_expires_at = None
+
+
+
+                student_user = payment.student.user if payment.student else None
+                teacher_profile = db.query(TeacherProfile).filter(TeacherProfile.id == payment.teacher_id).first()
+                if student_user:
+                    send_class_confirmed_email(
+                        to_email=student_user.email, student_name=student_user.name,
+                        teacher_name=f"{teacher_profile.user.name} {teacher_profile.user.surname}" if teacher_profile else "",
+                        subject=class_.subject or "Clase", class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+                        duration_minutes=class_.duration, meet_link=data.meet_link,
+                    )
+                if teacher_profile and teacher_profile.user:
+                    send_class_confirmed_teacher_email(
+                        to_email=teacher_profile.user.email, teacher_name=teacher_profile.user.name,
+                        student_name=f"{student_user.name} {student_user.surname}" if student_user else "",
+                        subject=class_.subject or "Clase", class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+                        duration_minutes=class_.duration, meet_link=data.meet_link,
+                    )
 
         db.commit()
         return {"message": "Pago rechazado"}

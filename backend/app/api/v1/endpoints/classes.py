@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-
+from app.core.email import send_class_cancelled_email, send_class_cancelled_teacher_email
 from app.auth.dependencies import (
     get_current_student,
     get_current_staff,
@@ -219,6 +219,18 @@ def cancel_class_student(
         update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
 
     db.commit()
+
+    # Notificar al profesor
+    student_user = current_user
+    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == class_.teacher_id).first()
+    if teacher and teacher.user:
+        send_class_cancelled_teacher_email(
+            to_email=teacher.user.email,
+            teacher_name=teacher.user.name,
+            student_name=f"{student_user.name} {student_user.surname}",
+            class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            cancelled_by="student",
+        )
 
     _sync_google_calendar_cancelled(class_.teacher_id, class_.google_event_id, db)
     return {"message": "Clase cancelada exitosamente"}
@@ -466,6 +478,17 @@ def cancel_class_teacher(
 
     db.commit()
 
+    # Notificar al estudiante
+    student = db.query(StudentProfile).filter(StudentProfile.id == class_.student_id).first()
+    if student and student.user:
+        send_class_cancelled_email(
+            to_email=student.user.email,
+            student_name=student.user.name,
+            teacher_name=f"{current_user.name} {current_user.surname}",
+            class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            cancelled_by="teacher",
+        )
+
     _sync_google_calendar_cancelled(class_.teacher_id, class_.google_event_id, db)
     return {"message": "Clase cancelada por el profesor. El crédito ha sido reembolsado al estudiante."}
 
@@ -576,6 +599,30 @@ def cancel_class_admin(
         update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
 
     db.commit()
+
+    # Notificar a ambas partes
+    student = db.query(StudentProfile).filter(StudentProfile.id == class_.student_id).first()
+    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == class_.teacher_id).first()
+
+    if student and student.user:
+        teacher_name = f"{teacher.user.name} {teacher.user.surname}" if teacher and teacher.user else "Profesor"
+        send_class_cancelled_email(
+            to_email=student.user.email,
+            student_name=student.user.name,
+            teacher_name=teacher_name,
+            class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            cancelled_by="staff",
+        )
+
+    if teacher and teacher.user:
+        student_name = f"{student.user.name} {student.user.surname}" if student and student.user else "Estudiante"
+        send_class_cancelled_teacher_email(
+            to_email=teacher.user.email,
+            teacher_name=teacher.user.name,
+            student_name=student_name,
+            class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            cancelled_by="staff",
+        )
 
     _sync_google_calendar_cancelled(class_.teacher_id, class_.google_event_id, db)
     return {"message": "Clase cancelada por administración. Crédito reembolsado."}

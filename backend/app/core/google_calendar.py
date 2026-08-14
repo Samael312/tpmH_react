@@ -1,25 +1,36 @@
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
-from google.auth.exceptions import RefreshError
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-import requests
-from google_auth_oauthlib.flow import Flow
-from datetime import datetime, timedelta
-from typing import Optional, List, Tuple
-from sqlalchemy.orm import Session
+import os
 import logging
 import time
+from datetime import datetime, timedelta
+from typing import List, Optional, Tuple
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+
+# Flexibilizar la validación de scopes en oauthlib
+os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
+
+import requests
+from google.auth.exceptions import RefreshError
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.timezone import utc_now, UTC
+from app.core.timezone import UTC, utc_now
+from app.models.class_ import Class
 from app.models.google_calendar import GoogleCalendarToken
 from app.models.teacher import TeacherProfile
-from app.models.class_ import Class
 
 logger = logging.getLogger(__name__)
 
-SCOPES = ["https://www.googleapis.com/auth/calendar"]
+SCOPES = [
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "openid",
+]
 
 # Ventana hacia adelante que consideramos al sincronizar / consultar busy
 SYNC_WINDOW_DAYS = 30
@@ -53,11 +64,7 @@ def get_oauth_flow() -> Flow:
 def get_auth_url(state: Optional[str] = None) -> str:
     """
     Genera la URL de autorización de Google.
-    `state` es opcional — el endpoint pasa el id del profesor para
-    identificarlo al volver del callback (protección CSRF básica).
-    Funciona igual para cuentas Gmail personales que para Workspace:
-    no requiere delegación de dominio ni admin del lado de Google,
-    cada profesor autoriza su propia cuenta.
+    Limpia los parámetros de PKCE para evitar desajustes de 'code_verifier'.
     """
     flow = get_oauth_flow()
     kwargs = {
@@ -67,13 +74,25 @@ def get_auth_url(state: Optional[str] = None) -> str:
     }
     if state:
         kwargs["state"] = state
+
     auth_url, _ = flow.authorization_url(**kwargs)
-    return auth_url
+
+    # Remueve code_challenge y code_challenge_method de la URL
+    parsed = urlparse(auth_url)
+    query_params = parse_qs(parsed.query)
+    query_params.pop("code_challenge", None)
+    query_params.pop("code_challenge_method", None)
+
+    new_query = urlencode(query_params, doseq=True)
+    return urlunparse(parsed._replace(query=new_query))
 
 
-def exchange_code_for_tokens(code: str) -> dict:
+def exchange_code_for_tokens(code: str, code_verifier: Optional[str] = None) -> dict:
     """Intercambia el código de autorización por tokens."""
     flow = get_oauth_flow()
+    if code_verifier:
+        flow.code_verifier = code_verifier
+
     flow.fetch_token(code=code)
     credentials = flow.credentials
     return {
@@ -100,17 +119,6 @@ def revoke_token(token: str):
 # ─────────────────────────────────────────────────────────────────────────
 
 def get_calendar_service_for_token(token: GoogleCalendarToken, db: Session):
-    """
-    Construye el cliente de Google Calendar a partir de un
-    GoogleCalendarToken, refrescando el access_token si hace falta.
-
-    Si el refresh falla porque el usuario revocó el acceso (o el
-    refresh_token expiró — pasa tras ~6 meses de inactividad, o
-    inmediatamente si el proyecto de OAuth sigue en modo "Testing"),
-    marca needs_reauth=True e is_active=False y devuelve None SIN
-    lanzar excepción, para que el llamador pueda seguir con el
-    resto de profesores.
-    """
     try:
         credentials = Credentials(
             token=token.access_token,
@@ -125,7 +133,6 @@ def get_calendar_service_for_token(token: GoogleCalendarToken, db: Session):
 
         if credentials.expired and credentials.refresh_token:
             credentials.refresh(Request())
-            # Persistir el access_token/expiry refrescado
             token.access_token = credentials.token
             token.token_expiry = credentials.expiry
             token.needs_reauth = False
@@ -150,11 +157,6 @@ def get_calendar_service_for_token(token: GoogleCalendarToken, db: Session):
 
 
 def _with_retries(fn, *args, **kwargs):
-    """
-    Reintenta una llamada a la API de Google ante errores transitorios
-    (5xx, o 429/rateLimitExceeded puntual). No reintenta errores 4xx
-    de permisos/validación — esos se propagan de inmediato.
-    """
     last_exc = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
@@ -172,7 +174,7 @@ def _with_retries(fn, *args, **kwargs):
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# Lectura — bloques ocupados externos (Preply, calendario personal, etc.)
+# Lectura — bloques ocupados externos
 # ─────────────────────────────────────────────────────────────────────────
 
 def get_busy_ranges(
@@ -181,16 +183,6 @@ def get_busy_ranges(
     time_min: datetime,
     time_max: datetime,
 ) -> List[Tuple[datetime, datetime]]:
-    """
-    Devuelve los rangos ocupados del calendario del profesor en Google
-    (freebusy) entre time_min y time_max, en UTC.
-
-    Esto incluye TODO lo que haya en su calendario — eventos de Preply,
-    citas personales, eventos que nuestra propia app creó, etc. — sin
-    distinguir origen, porque para efectos de "no dejar reservar encima"
-    no importa de dónde vino el bloqueo. No se crea ninguna fila en
-    `Class` a partir de esto: es solo información de disponibilidad.
-    """
     if time_min.tzinfo is None:
         time_min = time_min.replace(tzinfo=UTC)
     if time_max.tzinfo is None:
@@ -229,14 +221,6 @@ def get_teacher_busy_ranges(
     time_max: datetime,
     db: Session,
 ) -> List[Tuple[datetime, datetime]]:
-    """
-    Punto de entrada usado en tiempo real por availability.py al calcular
-    slots: si el profesor tiene Google Calendar conectado y activo,
-    devuelve sus bloques ocupados externos para ese rango. Si no tiene
-    Calendar conectado, o la sync está desactivada, o el token necesita
-    reconexión, devuelve lista vacía (no bloquea nada — el sistema
-    funciona igual sin Calendar conectado).
-    """
     token = db.query(GoogleCalendarToken).filter(
         GoogleCalendarToken.teacher_id == teacher_id,
         GoogleCalendarToken.is_active == True,
@@ -254,7 +238,7 @@ def get_teacher_busy_ranges(
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# Escritura — crear/actualizar/borrar SOLO eventos que el sistema creó
+# Escritura — crear/actualizar/borrar eventos
 # ─────────────────────────────────────────────────────────────────────────
 
 def create_calendar_event(
@@ -271,8 +255,6 @@ def create_calendar_event(
         "description": description,
         "start": {"dateTime": start_utc.isoformat(), "timeZone": "UTC"},
         "end": {"dateTime": end_utc.isoformat(), "timeZone": "UTC"},
-        # Marca de origen — nunca usada para decidir si borrar cosas
-        # ajenas, solo informativa dentro del propio evento.
         "extendedProperties": {"private": {"tpmh_managed": "true"}},
     }
     if meet_link:
@@ -297,12 +279,6 @@ def update_calendar_event(
     end_utc: Optional[datetime] = None,
     meet_link: Optional[str] = None,
 ) -> bool:
-    """
-    Actualiza un evento existente. Si el evento ya no existe en Google
-    (fue borrado manualmente por el profesor), devuelve False sin
-    lanzar excepción — el llamador debe interpretar esto como
-    "hay que limpiar el google_event_id local y recrearlo".
-    """
     try:
         event = _with_retries(
             service.events().get(calendarId=calendar_id, eventId=event_id).execute
@@ -334,12 +310,6 @@ def update_calendar_event(
 
 
 def delete_calendar_event(service, calendar_id: str, event_id: str) -> bool:
-    """
-    Borra un evento por su ID. Solo se llama con IDs que vinieron de
-    `Class.google_event_id` — es decir, eventos que el propio sistema
-    creó. Nunca se recorre el calendario buscando "sobrantes" para
-    borrarlos; eso es exactamente lo que evitamos aquí a propósito.
-    """
     try:
         _with_retries(
             service.events().delete(calendarId=calendar_id, eventId=event_id).execute
@@ -347,41 +317,17 @@ def delete_calendar_event(service, calendar_id: str, event_id: str) -> bool:
         return True
     except HttpError as e:
         status = getattr(e.resp, "status", None)
-        if status == 410 or status == 404:
-            # Ya estaba borrado — no es un error real
+        if status in (410, 404):
             return True
         logger.warning(f"Error eliminando evento {event_id}: {e}")
         return False
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# Reconciliación por profesor (Fase B) — llamada por el job periódico
-# y por el endpoint de "sincronizar ahora"
+# Reconciliación por profesor
 # ─────────────────────────────────────────────────────────────────────────
 
 def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
-    """
-    Sincroniza el calendario de UN profesor.
-
-    Fase A (lectura / salud de conexión):
-      Consulta freebusy en la ventana [ahora, ahora+SYNC_WINDOW_DAYS]
-      solo para verificar que la conexión funciona y registrar cuántos
-      bloques externos hay — esto NO escribe nada en `Class`. El uso
-      real de estos bloques para bloquear horarios ocurre en vivo, vía
-      `get_teacher_busy_ranges()`, cuando el estudiante pide slots
-      disponibles (ver integración en availability.py).
-
-    Fase B (escritura hacia Google):
-      Recorre las clases futuras y no canceladas del profesor:
-        - Sin google_event_id            -> crea el evento
-        - Con google_event_id y vigente  -> actualiza si cambió horario
-        - Con google_event_id pero el
-          evento ya no existe en Google  -> limpia el id y lo recrea
-        - Cancelada pero con
-          google_event_id                -> borra el evento y limpia el id
-
-      Nunca toca eventos que no tengan su origen en `Class.google_event_id`.
-    """
     token = db.query(GoogleCalendarToken).filter(
         GoogleCalendarToken.teacher_id == teacher_id,
         GoogleCalendarToken.is_active == True,
@@ -395,14 +341,12 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
 
     service = get_calendar_service_for_token(token, db)
     if not service:
-        # get_calendar_service_for_token ya marcó needs_reauth/last_error si aplicaba
         return {"ok": False, "message": token.last_error or "No se pudo conectar con Google Calendar"}
 
     calendar_id = token.calendar_id or "primary"
     now = utc_now()
     window_end = now + timedelta(days=SYNC_WINDOW_DAYS)
 
-    # ─── Fase A: healthcheck + conteo de bloques externos ───
     external_busy_count = 0
     try:
         busy = get_busy_ranges(service, calendar_id, now, window_end)
@@ -410,7 +354,6 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
     except Exception as e:
         logger.warning(f"Fase A (lectura) falló para teacher_id={teacher_id}: {e}")
 
-    # ─── Fase B: reconciliar Class -> Google ───
     new_count = 0
     updated_count = 0
     deleted_count = 0
@@ -434,7 +377,6 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
                 continue
 
             if class_.status not in ("pending", "pending_trial", "confirmed"):
-                # completed/finalized/no_show — no tocamos el evento pasado
                 continue
 
             student_name = (
@@ -465,7 +407,6 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
             if updated:
                 updated_count += 1
             else:
-                # El evento ya no existe del lado de Google — lo recreamos
                 class_.google_event_id = None
                 event_id = create_calendar_event(
                     service, calendar_id, title,
@@ -481,7 +422,7 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
         except HttpError as e:
             status = getattr(e.resp, "status", None)
             if status in (403, 429):
-                logger.warning(f"Cuota/permiso excedido sincronizando teacher_id={teacher_id}, deteniendo esta corrida: {e}")
+                logger.warning(f"Cuota/permiso excedido sincronizando teacher_id={teacher_id}: {e}")
                 token.last_error = f"Límite de la API de Google alcanzado (status {status})"
                 db.commit()
                 break
@@ -514,11 +455,6 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
 
 
 def run_calendar_sync_for_all_teachers(db: Session) -> dict:
-    """
-    Punto de entrada del job periódico. Recorre todos los profesores con
-    Calendar conectado y activo, sincronizando uno por uno. Un error en
-    un profesor no detiene a los demás.
-    """
     tokens = db.query(GoogleCalendarToken).filter(
         GoogleCalendarToken.is_active == True,
         GoogleCalendarToken.needs_reauth == False,

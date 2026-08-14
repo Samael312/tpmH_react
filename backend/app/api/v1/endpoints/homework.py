@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
-
+from app.core.email import send_homework_graded_email
 from app.db.base import get_db
 from app.auth.dependencies import get_current_teacher, get_current_student, get_current_approved_teacher
 from app.models.user import User
@@ -216,6 +216,16 @@ def grade_homework(
     assignment.graded_at = utc_now()
 
     db.commit()
+
+    student_user = assignment.student.user if assignment.student else None
+    if student_user:
+        send_homework_graded_email(
+            to_email=student_user.email,
+            student_name=student_user.name,
+            homework_title=homework.title,
+            score=data.score,
+            feedback=data.feedback,
+        )
 
     return {"message": "Tarea calificada correctamente", "score": data.score}
 
