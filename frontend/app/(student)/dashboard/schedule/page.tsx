@@ -943,10 +943,23 @@ export default function SchedulePage() {
   const needsTeacherSelection = !isSingleTenant && myTeachers.length > 1 && !selectedTeacherUsername;
   const teacherBlocked = !teachersLoading && !isSingleTenant && myTeachers.length === 0;
 
-  useEffect(() => {
+  // DESPUÉS
+useEffect(() => {
   if (teachersLoading) return;
-  if (myTeachers.length === 1) { setSelectedTeacherUsername(myTeachers[0].teacher_username); return; }
-  if (isSingleTenant) { setSelectedTeacherUsername(null); return; }
+  // Tanto en single-tenant como en multi-tenant con un solo profesor
+  // vinculado, resolvemos el username directamente — no hace falta
+  // que el estudiante "elija" nada.
+  if (myTeachers.length === 1) {
+    setSelectedTeacherUsername(myTeachers[0].teacher_username);
+    return;
+  }
+  if (isSingleTenant) {
+    // Único caso donde de verdad no hay profesor resoluble:
+    // single-tenant sin featured_teacher_id configurado en la BD.
+    setSelectedTeacherUsername(null);
+    return;
+  }
+  // Multi-tenant con 0 o 2+ profesores: se maneja con el selector de abajo.
 }, [teachersLoading, isSingleTenant, myTeachers]);
 
   const activeEnrollment = selectedTeacherUsername

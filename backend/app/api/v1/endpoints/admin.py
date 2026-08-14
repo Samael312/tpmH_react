@@ -14,6 +14,8 @@ from app.models.class_ import Class
 from app.models.payment import Payment, Withdrawal
 from app.models.package import Enrollment
 from app.core.timezone import utc_now, UTC
+from app.models.student_teacher_link import StudentTeacherLink
+from app.core.teacher_students import link_student_to_teacher
 from app.schemas.admin import (
     PlatformStatsResponse,
     TeacherAdminResponse,
@@ -460,10 +462,15 @@ def update_platform_config(
     db: Session = Depends(get_db)
 ):
     """El superadmin configura el modo de la plataforma"""
+
     config = db.query(PlatformConfig).first()
     if not config:
         config = PlatformConfig()
         db.add(config)
+        db.flush()
+
+    was_single_tenant = config.is_single_tenant
+    previous_featured_id = config.featured_teacher_id
 
     if data.featured_teacher_username:
         teacher = db.query(TeacherProfile).filter(
@@ -485,9 +492,61 @@ def update_platform_config(
     if data.is_single_tenant is not None:
         config.is_single_tenant = data.is_single_tenant
 
+    # ─── Backfill de StudentTeacherLink al salir de single-tenant ───
+    # Mientras la plataforma corrió en single-tenant, el vínculo
+    # estudiante-profesor se guardaba solo en student_profiles.teacher_username
+    # (ver _sync_student_teacher_username en payments.py), NUNCA en
+    # StudentTeacherLink. El modo multi-tenant resuelve "mis profesores"
+    # exclusivamente vía StudentTeacherLink, así que sin este backfill
+    # todo estudiante con historial previo bajo single-tenant aparecería
+    # como "sin profesor" (needs_teacher) al cambiar de modo.
+    switching_to_multi = (
+        was_single_tenant
+        and data.is_single_tenant is False
+        and previous_featured_id is not None
+    )
+    if switching_to_multi:
+        student_ids_with_history = {
+            e.student_id for e in db.query(Enrollment).filter(
+                Enrollment.teacher_id == previous_featured_id
+            ).all()
+        } | {
+            c.student_id for c in db.query(Class).filter(
+                Class.teacher_id == previous_featured_id
+            ).all()
+        }
+
+        featured_teacher = db.query(TeacherProfile).filter(
+            TeacherProfile.id == previous_featured_id
+        ).first()
+
+        for student_id in student_ids_with_history:
+            existing_link = db.query(StudentTeacherLink).filter(
+                StudentTeacherLink.student_id == student_id,
+                StudentTeacherLink.teacher_id == previous_featured_id,
+            ).first()
+            if existing_link:
+                continue
+
+            db.add(StudentTeacherLink(
+                student_id=student_id,
+                teacher_id=previous_featured_id,
+            ))
+
+            # También sincroniza teacher_profiles.students (JSONB) para
+            # que aparezca en /teachers/me/students y /me/students-full
+            if featured_teacher:
+                student_profile = db.query(StudentProfile).filter(
+                    StudentProfile.id == student_id
+                ).first()
+                if student_profile:
+                    link_student_to_teacher(
+                        db, student_profile, featured_teacher,
+                        old_teacher_username=None,
+                    )
+
     db.commit()
     return {"message": "Configuración actualizada"}
-
 
 @router.patch("/users/{user_id}")
 def admin_update_user(
