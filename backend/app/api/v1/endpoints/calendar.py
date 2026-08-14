@@ -8,7 +8,7 @@ from app.core.google_calendar import (
     sync_calendar_logic, revoke_token,
 )
 
-router = APIRouter(prefix="/calendar", tags=["calendar"])
+router = APIRouter(tags=["calendar"])
 
 
 @router.get("/status")
