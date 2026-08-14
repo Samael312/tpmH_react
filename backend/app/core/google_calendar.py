@@ -129,11 +129,16 @@ def get_calendar_service_for_token(token: GoogleCalendarToken, db: Session):
             scopes=SCOPES,
         )
         if token.token_expiry:
-            credentials.expiry = token.token_expiry
+            expiry = token.token_expiry
+            if expiry.tzinfo is not None:
+                expiry = expiry.astimezone(UTC).replace(tzinfo=None)
+            credentials.expiry = expiry
 
         if credentials.expired and credentials.refresh_token:
             credentials.refresh(Request())
             token.access_token = credentials.token
+            # credentials.expiry que devuelve la librería también es naive-UTC;
+            # lo guardamos tal cual coincide con la convención de google-auth
             token.token_expiry = credentials.expiry
             token.needs_reauth = False
             token.last_error = None

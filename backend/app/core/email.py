@@ -256,6 +256,7 @@ def send_class_cancelled_email(
       <p>Hola {student_name}, {reason}.</p>
       {_detail_table([_detail_row("Fecha/Hora (UTC)", class_start_utc)])}
       <p>Si tienes dudas, contacta al staff o a tu profesor(a).</p>
+      {_cta_button("Ir a la plataforma", settings.FRONTEND_URL)}
     """
     html = _base_template(
         preheader="Tu clase fue cancelada",
@@ -266,21 +267,28 @@ def send_class_cancelled_email(
     return _send(to_email, f"Clase cancelada — {PLATFORM_NAME}", html)
 
 
-# ─── Reservas / clases (PROFESOR) — NUEVO ────────────────────────────────────
+# ─── Reservas / clases (PROFESOR) ────────────────────────────────────────────
 
 def send_new_booking_teacher_email(
-    to_email: str, teacher_name: str, student_name: str, subject: str,
+    to_email: str, teacher_name: str, student_first_name: str, student_last_name: str,
+    student_nationality: str, student_phone: str, subject: str,
     class_start_utc: str, duration_minutes: int, is_trial: bool = False,
 ) -> bool:
+    student_full_name = f"{student_first_name} {student_last_name}".strip()
+
     body = f"""
       <p>Hola {teacher_name}, tienes una nueva {"clase de prueba" if is_trial else "clase"} reservada.</p>
+      <p><strong style="color:{COLOR_INK};">Datos del estudiante:</strong></p>
       {_detail_table([
-        _detail_row("Estudiante", student_name),
+        _detail_row("Estudiante", student_full_name),
+        _detail_row("Nacionalidad", student_nationality if student_nationality else "No especificada"),
+        _detail_row("Teléfono / WhatsApp", student_phone if student_phone else "No especificado"),
         _detail_row("Materia", subject),
         _detail_row("Fecha/Hora (UTC)", class_start_utc),
         _detail_row("Duración", f"{duration_minutes} minutos"),
       ])}
       <p>{"El staff confirmará la clase de prueba en breve." if is_trial else "La clase quedará confirmada una vez se valide el pago del estudiante."}</p>
+      {_cta_button("Ir a la plataforma", settings.FRONTEND_URL)}
     """
     html = _base_template(
         preheader="Nueva clase reservada",
@@ -344,6 +352,7 @@ def send_class_cancelled_teacher_email(
         _detail_row("Estudiante", student_name),
         _detail_row("Fecha/Hora (UTC)", class_start_utc),
       ])}
+      {_cta_button("Ir a la plataforma", settings.FRONTEND_URL)}
     """
     html = _base_template(
         preheader="Una clase fue cancelada",
@@ -354,7 +363,7 @@ def send_class_cancelled_teacher_email(
     return _send(to_email, f"Clase cancelada — {PLATFORM_NAME}", html)
 
 
-# ─── Tareas — NUEVO ───────────────────────────────────────────────────────────
+# ─── Tareas ───────────────────────────────────────────────────────────────────
 
 def send_homework_graded_email(
     to_email: str, student_name: str, homework_title: str, score: float, feedback: str | None,
@@ -366,6 +375,7 @@ def send_homework_graded_email(
         <span style="display:inline-block;font-size:32px;font-weight:900;color:{score_color};">{score}<span style="font-size:16px;color:{COLOR_SUBTLE};">/10</span></span>
       </div>
       {f'<div style="background:{COLOR_SURFACE_SOFT};border-radius:16px;padding:16px 18px;margin-top:8px;"><p style="margin:0;font-size:13px;color:{COLOR_INK};"><strong>Retroalimentación:</strong> {feedback}</p></div>' if feedback else ''}
+      {_cta_button("Ir a la plataforma", settings.FRONTEND_URL)}
     """
     html = _base_template(
         preheader="Tu tarea fue calificada",
@@ -376,7 +386,7 @@ def send_homework_graded_email(
     return _send(to_email, f"Tarea calificada — {PLATFORM_NAME}", html)
 
 
-# ─── Materiales — NUEVO ───────────────────────────────────────────────────────
+# ─── Materiales ───────────────────────────────────────────────────────────────
 
 def send_material_assigned_email(
     to_email: str, student_name: str, teacher_name: str, material_title: str, category: str,
@@ -388,6 +398,7 @@ def send_material_assigned_email(
         _detail_row("Categoría", category),
       ])}
       <p>Entra a tu panel de materiales para revisarlo.</p>
+      {_cta_button("Ir a la plataforma", settings.FRONTEND_URL)}
     """
     html = _base_template(
         preheader="Nuevo material asignado",

@@ -1044,7 +1044,7 @@ useEffect(() => {
             <div className="flex items-center gap-3 mt-4">
               {[
                 { n: 1, label: "Seleccionar horario" },
-                { n: 2, label: "Confirmar y pagar" },
+                { n: 2, label: "Confirmar y reservar" },
               ].map((s, i) => (
                 <div key={s.n} className="flex items-center gap-3">
                   {i > 0 && (

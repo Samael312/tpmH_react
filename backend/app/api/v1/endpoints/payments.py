@@ -1,51 +1,61 @@
 # app/routers/payments.py / app/api/v1/endpoints/payments.py
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List, Optional
 import logging
 from datetime import timedelta
-from app.db.base import get_db
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
 from app.auth.dependencies import (
-    get_current_student,
-    get_current_teacher_or_teacher_admin,
     get_current_staff,
     get_current_staff_or_teacher,
+    get_current_student,
+    get_current_teacher_or_teacher_admin,
 )
-from app.core.email import send_class_confirmed_email, send_class_confirmed_teacher_email, send_new_booking_teacher_email
+from app.core.class_logic import can_book_slot, get_student_booking_stage
+from app.core.email import (
+    send_class_booking_confirmation,
+    send_class_confirmed_email,
+    send_class_confirmed_teacher_email,
+    send_new_booking_teacher_email,
+)
 from app.core.teacher_students import link_student_to_teacher
-from app.models.user import User
-from app.models.class_ import Class, ClassType
-from app.models.payment import Payment, TeacherWallet, Withdrawal
-from app.models.package import Enrollment, EnrollmentStatus
-from app.models.package import Package
-from app.models.teacher import TeacherProfile, TeacherStatus
-from app.models.payment_config import PaymentConfig
 from app.core.timezone import utc_now
+from app.db.base import get_db
+from app.models.class_ import Class, ClassType
+from app.models.package import Enrollment, EnrollmentStatus, Package
+from app.models.payment import Payment, TeacherWallet, Withdrawal
+from app.models.payment_config import PaymentConfig
+from app.models.teacher import TeacherProfile, TeacherStatus
+from app.models.user import User
 from app.schemas.payments import (
-    PaymentConfigResponse,
-    UpdatePaymentConfigRequest,
     BookAndPayRequest,
-    SubmitPaymentReceiptRequest,
+    NotifyPaymentRequest,
+    PaymentConfigResponse,
     PaymentResponse,
+    ProcessWithdrawalRequest,
+    SubmitPaymentReceiptRequest,
+    UpdatePaymentConfigRequest,
     ValidatePaymentRequest,
     WalletResponse,
     WithdrawalRequest,
-    WithdrawalResponse,
-    NotifyPaymentRequest,
     WithdrawalRequestV2,
-    ProcessWithdrawalRequest
+    WithdrawalResponse,
 )
-from app.core.class_logic import can_book_slot, get_student_booking_stage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 DAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
+
+# ─── HELPER FUNCTIONS ─────────────────────────────────────────────────────────
+
 def _get_featured_teacher(db: Session):
-    from app.models.payment_config import PlatformConfig
     from app.core.config import settings
+    from app.models.payment_config import PlatformConfig
+
     config = db.query(PlatformConfig).first()
     username = None
     if config and config.featured_teacher_id:
@@ -57,11 +67,13 @@ def _get_featured_teacher(db: Session):
         return None
     return db.query(TeacherProfile).filter(TeacherProfile.user_username == username).first()
 
+
 def _apply_commission(amount_total: float, teacher: TeacherProfile) -> tuple[float, float]:
     commission = teacher.commission_rate if teacher else 0.15
     amount_platform = round(amount_total * commission, 2)
     amount_teacher = round(amount_total - amount_platform, 2)
     return amount_teacher, amount_platform
+
 
 def _credit_wallet(teacher_id: int, amount_teacher: float, db: Session):
     wallet = db.query(TeacherWallet).filter(TeacherWallet.teacher_id == teacher_id).first()
@@ -72,6 +84,7 @@ def _credit_wallet(teacher_id: int, amount_teacher: float, db: Session):
     wallet.available_balance += amount_teacher
     wallet.total_earned += amount_teacher
 
+
 def _installment_amount(package: Package, index: int) -> float:
     """Monto de la cuota `index` (1-based). Reparte el residuo en la última cuota."""
     n = package.installment_count or 1
@@ -80,12 +93,12 @@ def _installment_amount(package: Package, index: int) -> float:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Número de cuota inválido: {index}. Este paquete consta de {n} cuota(s)."
         )
-    
+
     base = package.installment_amount or round(package.price / n, 2)
     if index < n:
         return base
-    # última cuota absorbe el residuo por redondeo
     return round(package.price - base * (n - 1), 2)
+
 
 def _sync_student_teacher_username(current_user: User, teacher: TeacherProfile, db: Session):
     """
@@ -93,6 +106,7 @@ def _sync_student_teacher_username(current_user: User, teacher: TeacherProfile, 
     vinculado automáticamente al profesor featured.
     """
     from app.models.payment_config import PlatformConfig
+
     config = db.query(PlatformConfig).first()
     if not config or not config.is_single_tenant:
         return
@@ -107,11 +121,11 @@ def _sync_student_teacher_username(current_user: User, teacher: TeacherProfile, 
 
 def _resolve_booking_teacher(current_user: User, teacher_username: Optional[str], db: Session):
     """
-    Determina con qué profesor se agenda (trial o clase sin enrollment
-    todavía). Single-tenant: siempre el featured teacher, se ignora
-    teacher_username. Multi-tenant: teacher_username es obligatorio.
+    Determina con qué profesor se agenda (trial o clase sin enrollment todavía).
+    Single-tenant: siempre el featured teacher. Multi-tenant: teacher_username es obligatorio.
     """
     from app.models.payment_config import PlatformConfig
+
     config = db.query(PlatformConfig).first()
 
     if not config or config.is_single_tenant:
@@ -131,10 +145,7 @@ def _resolve_booking_teacher(current_user: User, teacher_username: Optional[str]
 
 def _ensure_teacher_linked(current_user: User, teacher: TeacherProfile, db: Session):
     """
-    Garantiza el vínculo estudiante-profesor. Single-tenant: no hace
-    nada (ya cubierto por _sync_student_teacher_username). Multi-tenant:
-    crea el StudentTeacherLink y agrega al estudiante a
-    teacher_profiles.students si no existía, de forma idempotente.
+    Garantiza el vínculo estudiante-profesor de forma idempotente en multi-tenant.
     """
     from app.models.payment_config import PlatformConfig
     from app.models.student_teacher_link import StudentTeacherLink
@@ -158,15 +169,8 @@ def _ensure_teacher_linked(current_user: User, teacher: TeacherProfile, db: Sess
 
 @router.get("/config", response_model=PaymentConfigResponse)
 def get_payment_config(db: Session = Depends(get_db)):
-    """
-    Devuelve la configuración de métodos de pago.
-    Endpoint público — el estudiante lo consulta antes de reservar
-    para saber cómo pagar.
-    """
     config = db.query(PaymentConfig).first()
-
     if not config:
-        # Si no hay config creamos una por defecto
         config = PaymentConfig()
         db.add(config)
         db.commit()
@@ -192,7 +196,6 @@ def update_payment_config(
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db)
 ):
-    """Solo staff puede modificar la configuración de pagos"""
     config = db.query(PaymentConfig).first()
     if not config:
         config = PaymentConfig()
@@ -210,19 +213,12 @@ def update_payment_config(
 
 # ─── FLUJO DE RESERVA Y PAGO ─────────────────────────────────────────────────
 
-
 @router.post("/submit-receipt")
 def submit_payment_receipt(
     data: SubmitPaymentReceiptRequest,
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    """
-    Paso 2 — El estudiante sube el comprobante de pago.
-    La clase pasa a 'pending_payment' y el slot queda BLOQUEADO.
-    Nadie más puede reservar ese horario.
-    """
-    # Verificar que la clase existe y pertenece al estudiante
     class_ = db.query(Class).filter(
         Class.id == data.class_id,
         Class.student_id == current_user.student_profile.id,
@@ -235,7 +231,6 @@ def submit_payment_receipt(
             detail="Clase no encontrada o ya tiene un comprobante"
         )
 
-    # Verificar que el método de pago está habilitado
     config = db.query(PaymentConfig).first()
     if config:
         if data.payment_method == "paypal" and not config.paypal_enabled:
@@ -249,16 +244,11 @@ def submit_payment_receipt(
                 detail="Binance no está habilitado actualmente"
             )
 
-    # Calcular distribución según comisión del profesor
-    teacher = db.query(TeacherProfile).filter(
-        TeacherProfile.id == class_.teacher_id
-    ).first()
-
+    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == class_.teacher_id).first()
     commission = teacher.commission_rate if teacher else 0.15
     amount_platform = round(data.amount * commission, 2)
     amount_teacher = round(data.amount - amount_platform, 2)
 
-    # Crear registro de pago
     payment = Payment(
         class_id=class_.id,
         enrollment_id=class_.enrollment_id,
@@ -275,9 +265,7 @@ def submit_payment_receipt(
     )
     db.add(payment)
 
-    # Cambiar estado de la clase — slot bloqueado
     class_.status = "pending_payment"
-
     db.commit()
     db.refresh(payment)
 
@@ -288,8 +276,6 @@ def submit_payment_receipt(
     }
 
 
-# ─── VALIDACIÓN POR STAFF ────────────────────────────────────────────────────
-
 @router.post("/book", status_code=status.HTTP_201_CREATED)
 def book_class(
     data: BookAndPayRequest,
@@ -298,9 +284,6 @@ def book_class(
 ):
     student_id = current_user.student_profile.id
 
-    # Resolver profesor: si viene enrollment_id, el profesor es implícito
-    # en el enrollment; si no (caso trial), se resuelve por
-    # teacher_username (obligatorio en multi-tenant) o featured (single).
     if data.enrollment_id:
         enrollment_for_teacher = db.query(Enrollment).filter(
             Enrollment.id == data.enrollment_id,
@@ -334,7 +317,7 @@ def book_class(
             detail="Debes elegir un paquete de clases con este profesor para poder seguir agendando."
         )
 
-    # ─── Primera clase con este profesor: SIEMPRE es de prueba, sin paquete ───
+    # ─── Primera clase con este profesor: SIEMPRE es de prueba ───
     if stage == "needs_trial":
         _ensure_teacher_linked(current_user, teacher, db)
         _sync_student_teacher_username(current_user, teacher, db)
@@ -376,15 +359,27 @@ def book_class(
         db.commit()
         db.refresh(trial_class)
 
+        # Enviar correo al profesor
         if teacher.user:
             send_new_booking_teacher_email(
-                to_email=teacher.user.email, teacher_name=teacher.user.name,
+                to_email=teacher.user.email,
+                teacher_name=teacher.user.name,
                 student_name=f"{current_user.name} {current_user.surname}",
                 subject=trial_subject,
                 class_start_utc=trial_start.strftime("%Y-%m-%d %H:%M UTC"),
-                duration_minutes=30, is_trial=True,
+                duration_minutes=30,
+                is_trial=True,
             )
-        
+
+        # Enviar correo de confirmación de registro al estudiante
+        send_class_booking_confirmation(
+            to_email=current_user.email,
+            student_name=current_user.name,
+            teacher_name=f"{teacher.user.name} {teacher.user.surname}" if teacher.user else "",
+            subject=trial_subject,
+            class_start_utc=trial_start.strftime("%Y-%m-%d %H:%M UTC"),
+            duration_minutes=30,
+        )
 
         return {
             "class_id": trial_class.id,
@@ -445,6 +440,28 @@ def book_class(
         db.commit()
         db.refresh(new_class)
 
+        # Notificar por correo a ambas partes
+        teacher_user = enrollment.teacher.user if enrollment.teacher and enrollment.teacher.user else None
+        send_class_confirmed_email(
+            to_email=current_user.email,
+            student_name=current_user.name,
+            teacher_name=f"{teacher_user.name} {teacher_user.surname}" if teacher_user else "",
+            subject=new_class.subject or "Clase",
+            class_start_utc=new_class.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            duration_minutes=new_class.duration,
+            meet_link=new_class.meet_link or "",
+        )
+        if teacher_user:
+            send_class_confirmed_teacher_email(
+                to_email=teacher_user.email,
+                teacher_name=teacher_user.name,
+                student_name=f"{current_user.name} {current_user.surname}",
+                subject=new_class.subject or "Clase",
+                class_start_utc=new_class.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+                duration_minutes=new_class.duration,
+                meet_link=new_class.meet_link or "",
+            )
+
         return {
             "class_id": new_class.id,
             "status": new_class.status,
@@ -487,12 +504,54 @@ def book_class(
         db.commit()
         db.refresh(new_class)
 
+        teacher_user = enrollment.teacher.user if enrollment.teacher and enrollment.teacher.user else None
+
         if has_prepaid:
+            send_class_confirmed_email(
+                to_email=current_user.email,
+                student_name=current_user.name,
+                teacher_name=f"{teacher_user.name} {teacher_user.surname}" if teacher_user else "",
+                subject=new_class.subject or "Clase",
+                class_start_utc=new_class.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+                duration_minutes=new_class.duration,
+                meet_link=new_class.meet_link or "",
+            )
+            if teacher_user:
+                send_class_confirmed_teacher_email(
+                    to_email=teacher_user.email,
+                    teacher_name=teacher_user.name,
+                    student_name=f"{current_user.name} {current_user.surname}",
+                    subject=new_class.subject or "Clase",
+                    class_start_utc=new_class.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+                    duration_minutes=new_class.duration,
+                    meet_link=new_class.meet_link or "",
+                )
+
             return {
                 "class_id": new_class.id,
                 "status": new_class.status,
                 "message": "Clase agendada usando tu saldo prepagado."
             }
+
+        # Sin prepago -> Notificaciones de reserva previa
+        send_class_booking_confirmation(
+            to_email=current_user.email,
+            student_name=current_user.name,
+            teacher_name=f"{teacher_user.name} {teacher_user.surname}" if teacher_user else "",
+            subject=new_class.subject or "Clase",
+            class_start_utc=new_class.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            duration_minutes=new_class.duration,
+        )
+        if teacher_user:
+            send_new_booking_teacher_email(
+                to_email=teacher_user.email,
+                teacher_name=teacher_user.name,
+                student_name=f"{current_user.name} {current_user.surname}",
+                subject=new_class.subject or "Clase",
+                class_start_utc=new_class.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+                duration_minutes=new_class.duration,
+                is_trial=False,
+            )
 
         config = db.query(PaymentConfig).first()
         return {
@@ -509,33 +568,8 @@ def book_class(
             }
         }
 
-@router.get("/my-withdrawals", response_model=List[WithdrawalResponse])
-def get_my_withdrawals(
-    current_user: User = Depends(get_current_teacher_or_teacher_admin),
-    db: Session = Depends(get_db),
-):
-    return db.query(Withdrawal).filter(
-        Withdrawal.teacher_id == current_user.teacher_profile.id
-    ).order_by(Withdrawal.created_at.desc()).all()
 
-
-@router.get("/my-income")
-def get_my_income(
-    current_user: User = Depends(get_current_teacher_or_teacher_admin),
-    db: Session = Depends(get_db),
-):
-    payments = db.query(Payment).filter(
-        Payment.teacher_id == current_user.teacher_profile.id,
-        Payment.status.in_(["approved", "pending_review", "rejected"]),
-    ).order_by(Payment.created_at.desc()).all()
-    return [
-        {
-            "id": p.id, "amount_teacher": p.amount_teacher,
-            "payment_type": p.payment_type, "installment_number": p.installment_number,
-            "status": p.status, "created_at": p.created_at, "validated_at": p.validated_at,
-        }
-        for p in payments
-    ]
+# ─── VALIDACIÓN POR STAFF O PROFESOR ─────────────────────────────────────────
 
 @router.get("/pending-review")
 def get_payments_pending_review(
@@ -575,6 +609,7 @@ def get_payments_pending_review(
 
     return result
 
+
 @router.patch("/{payment_id}/validate")
 def validate_payment(
     payment_id: int,
@@ -592,6 +627,7 @@ def validate_payment(
 
     now = utc_now()
 
+    # ── RECHAZAR PAGO ──
     if data.action == "reject":
         if not data.rejection_reason:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Debes indicar el motivo del rechazo")
@@ -605,29 +641,10 @@ def validate_payment(
             if class_:
                 class_.status = "pending"
 
-
-
-                student_user = payment.student.user if payment.student else None
-                teacher_profile = db.query(TeacherProfile).filter(TeacherProfile.id == payment.teacher_id).first()
-                if student_user:
-                    send_class_confirmed_email(
-                        to_email=student_user.email, student_name=student_user.name,
-                        teacher_name=f"{teacher_profile.user.name} {teacher_profile.user.surname}" if teacher_profile else "",
-                        subject=class_.subject or "Clase", class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
-                        duration_minutes=class_.duration, meet_link=data.meet_link,
-                    )
-                if teacher_profile and teacher_profile.user:
-                    send_class_confirmed_teacher_email(
-                        to_email=teacher_profile.user.email, teacher_name=teacher_profile.user.name,
-                        student_name=f"{student_user.name} {student_user.surname}" if student_user else "",
-                        subject=class_.subject or "Clase", class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
-                        duration_minutes=class_.duration, meet_link=data.meet_link,
-                    )
-
         db.commit()
         return {"message": "Pago rechazado"}
 
-    # ── approve (incluye is_manual_grant si viene marcado por el caller) ──
+    # ── APROBAR PAGO ──
     teacher = db.query(TeacherProfile).filter(TeacherProfile.id == payment.teacher_id).first()
 
     if not payment.is_manual_grant:
@@ -652,6 +669,31 @@ def validate_payment(
             class_.status = "confirmed"
             class_.meet_link = data.meet_link
             class_.payment_expires_at = None
+
+            # Enviar correos de confirmación al estudiante y al profesor
+            student_user = payment.student.user if payment.student else None
+            teacher_profile = db.query(TeacherProfile).filter(TeacherProfile.id == payment.teacher_id).first()
+            
+            if student_user:
+                send_class_confirmed_email(
+                    to_email=student_user.email,
+                    student_name=student_user.name,
+                    teacher_name=f"{teacher_profile.user.name} {teacher_profile.user.surname}" if teacher_profile and teacher_profile.user else "",
+                    subject=class_.subject or "Clase",
+                    class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+                    duration_minutes=class_.duration,
+                    meet_link=data.meet_link,
+                )
+            if teacher_profile and teacher_profile.user:
+                send_class_confirmed_teacher_email(
+                    to_email=teacher_profile.user.email,
+                    teacher_name=teacher_profile.user.name,
+                    student_name=f"{student_user.name} {student_user.surname}" if student_user else "",
+                    subject=class_.subject or "Clase",
+                    class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+                    duration_minutes=class_.duration,
+                    meet_link=data.meet_link,
+                )
 
     elif payment.payment_type == "unlimited_recharge":
         enrollment = db.query(Enrollment).filter(Enrollment.id == payment.enrollment_id).first()
@@ -700,18 +742,13 @@ def validate_payment(
     db.commit()
     return {"message": "Pago aprobado correctamente", "amount_credited": amount_teacher}
 
+
 @router.post("/manual-grant")
 def manual_grant_payment(
-    data: NotifyPaymentRequest,  # mismo shape que notify-payment
+    data: NotifyPaymentRequest,
     current_user: User = Depends(get_current_staff_or_teacher),
     db: Session = Depends(get_db),
 ):
-    """
-    Staff/profesor otorga acceso manual (beca, pago fuera de plataforma, etc.)
-    sin acreditar comisión al wallet — pero SÍ deja registro en Payment
-    (is_manual_grant=True) para trazabilidad. Reutiliza toda la lógica de
-    notify_payment + validate internamente.
-    """
     if data.type != "package" or not data.enrollment_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "manual-grant solo aplica a paquetes por ahora")
 
@@ -730,9 +767,9 @@ def manual_grant_payment(
         payment_method="manual_grant", status="pending_review",
         payment_type="package", is_manual_grant=True,
     )
-    db.add(payment); db.flush()
+    db.add(payment)
+    db.flush()
 
-    # Auto-aprobar inmediatamente (staff ya decidió otorgarlo)
     payment.status = "approved"
     payment.validated_by = current_user.id
     payment.validated_at = utc_now()
@@ -756,27 +793,43 @@ def manual_grant_payment(
     db.commit()
     return {"message": "Acceso otorgado manualmente"}
 
-# ─── ESTUDIANTE — Ver pagos ──────────────────────────────────────────────────
+
+# ─── CONSULTAS ESTUDIANTE Y PROFESOR ─────────────────────────────────────────
 
 @router.get("/my-payments", response_model=List[PaymentResponse])
 def get_my_payments_student(
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    """Historial de pagos del estudiante"""
     return db.query(Payment).filter(
         Payment.student_id == current_user.student_profile.id
     ).order_by(Payment.created_at.desc()).all()
 
 
-# ─── PROFESOR — Wallet y retiros ─────────────────────────────────────────────
+@router.get("/my-income")
+def get_my_income(
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    payments = db.query(Payment).filter(
+        Payment.teacher_id == current_user.teacher_profile.id,
+        Payment.status.in_(["approved", "pending_review", "rejected"]),
+    ).order_by(Payment.created_at.desc()).all()
+    return [
+        {
+            "id": p.id, "amount_teacher": p.amount_teacher,
+            "payment_type": p.payment_type, "installment_number": p.installment_number,
+            "status": p.status, "created_at": p.created_at, "validated_at": p.validated_at,
+        }
+        for p in payments
+    ]
+
 
 @router.get("/my-wallet", response_model=WalletResponse)
 def get_my_wallet(
     current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
-    """Balance de la billetera virtual del profesor"""
     teacher = current_user.teacher_profile
     if not teacher:
         raise HTTPException(
@@ -789,7 +842,6 @@ def get_my_wallet(
     ).first()
 
     if not wallet:
-        # Devolver wallet vacía si no existe
         return WalletResponse(
             available_balance=0.0,
             total_earned=0.0,
@@ -797,6 +849,16 @@ def get_my_wallet(
         )
 
     return wallet
+
+
+@router.get("/my-withdrawals", response_model=List[WithdrawalResponse])
+def get_my_withdrawals(
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    return db.query(Withdrawal).filter(
+        Withdrawal.teacher_id == current_user.teacher_profile.id
+    ).order_by(Withdrawal.created_at.desc()).all()
 
 
 @router.post("/request-withdrawal", response_model=WithdrawalResponse, status_code=status.HTTP_201_CREATED)
@@ -817,7 +879,6 @@ def request_withdrawal_v2(
     if pending:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya tienes un retiro pendiente de procesar")
 
-    # Bloqueo inmediato del saldo — evita doble solicitud del mismo dinero
     wallet.available_balance -= data.amount
 
     withdrawal = Withdrawal(
@@ -855,9 +916,7 @@ def process_withdrawal_v2(
         withdrawal.processed_at = now
         if wallet:
             wallet.total_withdrawn += withdrawal.amount
-        # available_balance NO se toca — ya se descontó al solicitar
-
-    else:  # reject
+    else:
         if not data.rejection_reason:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Debes indicar el motivo del rechazo")
         withdrawal.status = "rejected"
@@ -865,10 +924,11 @@ def process_withdrawal_v2(
         withdrawal.processed_by = current_user.id
         withdrawal.processed_at = now
         if wallet:
-            wallet.available_balance += withdrawal.amount  # reinyección
+            wallet.available_balance += withdrawal.amount
 
     db.commit()
     return {"message": f"Retiro {'completado' if data.action == 'complete' else 'rechazado'}"}
+
 
 @router.get("/booking-status")
 def get_booking_status(
@@ -913,7 +973,6 @@ def get_booking_status(
 
     stage = get_student_booking_stage(student_id, teacher.id, db)
 
-    # Obtenemos el enrollment más reciente con este profesor para devolver su ID
     enrollment = db.query(Enrollment).filter(
         Enrollment.student_id == student_id,
         Enrollment.teacher_id == teacher.id
@@ -925,7 +984,6 @@ def get_booking_status(
         "enrollment_id": enrollment.id if enrollment else None
     }
 
-# ─── NOTIFICACIÓN DE PAGO (reemplaza submit-receipt) ─────────────────────────
 
 @router.post("/notify-payment")
 def notify_payment(
@@ -935,7 +993,7 @@ def notify_payment(
 ):
     student_id = current_user.student_profile.id
 
-    # ── Clase suelta dentro de paquete ilimitado (sin recarga prepagada) ──
+    # ── Clase suelta ──
     if data.type == "single_class":
         if not data.class_id:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "class_id es requerido")
@@ -975,10 +1033,11 @@ def notify_payment(
             status="pending_review", payment_type="single_class",
         )
         db.add(payment)
-        db.commit(); db.refresh(payment)
+        db.commit()
+        db.refresh(payment)
         return {"payment_id": payment.id, "class_status": class_.status, "expires_at": expires_at}
 
-    # ── "Recarga" de créditos prepagados en paquete ilimitado ──
+    # ── Recarga prepagada ilimitada ──
     if data.type == "unlimited_recharge":
         if not data.enrollment_id or not data.credits_requested:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "enrollment_id y credits_requested son requeridos")
@@ -996,10 +1055,10 @@ def notify_payment(
             payment_method="manual", transaction_id=data.transaction_reference,
             status="pending_review", payment_type="unlimited_recharge",
         )
-        # Guardamos cuántos créditos se piden en installment_index (reuso de campo, evita otra columna)
         payment.installment_index = data.credits_requested
         db.add(payment)
-        db.commit(); db.refresh(payment)
+        db.commit()
+        db.refresh(payment)
         return {"payment_id": payment.id, "message": "Recarga notificada, en espera de aprobación"}
 
     # ── Paquete (inicial, renovación o cambio) ──
@@ -1021,7 +1080,6 @@ def notify_payment(
     if not package:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Paquete no encontrado")
 
-    # Determinar correctamente el tipo de pago según la intención del enrollment o data.type
     if enrollment.renewal_requested_package_id or enrollment.status == EnrollmentStatus.pending_renewal or data.type == "renewal":
         payment_type = "renewal"
     elif enrollment.change_requested_package_id or enrollment.status == EnrollmentStatus.pending_package_change or data.type == "package_change":
@@ -1063,8 +1121,10 @@ def notify_payment(
         installment_index=data.installment_index,
     )
     db.add(payment)
-    db.commit(); db.refresh(payment)
+    db.commit()
+    db.refresh(payment)
     return {"payment_id": payment.id, "message": "Pago notificado, en espera de aprobación"}
+
 
 @router.get("/admin/withdrawals/pending")
 def get_pending_withdrawals(
@@ -1077,8 +1137,8 @@ def get_pending_withdrawals(
         teacher = db.query(TeacherProfile).filter(TeacherProfile.id == w.teacher_id).first()
         result.append({
             "id": w.id, "teacher_id": w.teacher_id,
-            "teacher_username": teacher.user.username if teacher else "unknown",
-            "teacher_name": f"{teacher.user.name} {teacher.user.surname}" if teacher else "unknown",
+            "teacher_username": teacher.user.username if teacher and teacher.user else "unknown",
+            "teacher_name": f"{teacher.user.name} {teacher.user.surname}" if teacher and teacher.user else "unknown",
             "amount": w.amount, "destination_details": w.destination_details,
             "created_at": w.created_at, "status": w.status,
         })
