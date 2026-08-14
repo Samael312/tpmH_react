@@ -41,6 +41,7 @@ class BookAndPayRequest(BaseModel):
     start_time_utc: datetime
     end_time_utc: datetime
     duration_minutes: int
+    subject: Optional[str] = None 
 
 
 class SubmitPaymentReceiptRequest(BaseModel):

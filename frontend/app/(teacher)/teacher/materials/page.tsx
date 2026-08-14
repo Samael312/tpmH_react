@@ -23,6 +23,11 @@ interface Material {
   vocabulary_words: string[] | null;
 }
 
+interface ExpandableDescriptionProps {
+  text: string;
+  limitLines?: number;
+}
+
 interface Student {
   id: number;
   user_id?: number;
@@ -64,6 +69,31 @@ function LevelBadge({ level }: { level: string }) {
                       px-2 py-0.5 rounded-full ${colors[level] ?? "bg-slate-100 text-slate-500"}`}>
       {level}
     </span>
+  );
+}
+
+export function ExpandableDescription({ text, limitLines = 2 }: ExpandableDescriptionProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="mb-3">
+      <p
+        className={`text-xs text-slate-500 leading-relaxed whitespace-pre-wrap break-words ${
+          !isExpanded ? `line-clamp-${limitLines}` : ''
+        }`}
+      >
+        {text}
+      </p>
+
+      {/* Botón para alternar */}
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 hover:underline mt-1 block focus:outline-none"
+      >
+        {isExpanded ? 'Ver menos' : 'Ver más'}
+      </button>
+    </div>
   );
 }
 
@@ -689,7 +719,7 @@ export default function MaterialsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Material | null>(null);
   const [justDeleted, setJustDeleted]   = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-
+  
   const [title, setTitle]             = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory]       = useState(CATEGORIES[0]);
@@ -1331,13 +1361,9 @@ export default function MaterialsPage() {
                   </div>
 
                   {m.description ? (
-                    <p className="text-xs text-slate-500 mb-3 line-clamp-2 leading-relaxed">
-                      {m.description}
-                    </p>
+                    <ExpandableDescription text={m.description} limitLines={2} />
                   ) : (
-                    <p className="text-xs text-slate-300 italic mb-3">
-                      Sin descripción
-                    </p>
+                    <p className="text-xs text-slate-300 italic mb-3">Sin descripción</p>
                   )}
 
                   {isVocab(m) && (

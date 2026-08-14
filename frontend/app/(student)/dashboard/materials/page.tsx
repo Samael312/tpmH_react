@@ -54,6 +54,30 @@ function LevelBadge({ level }: { level?: string }) {
 const isVocab = (m?: Material) =>
   !!m && m.category?.toLowerCase() === "vocabulary" && !!m.vocabulary_words?.length;
 
+
+function ExpandableDescription({ text }: { text: string }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="mb-4">
+      <p
+        className={`text-xs text-slate-500 leading-relaxed whitespace-pre-wrap break-words ${
+          !isExpanded ? 'line-clamp-2' : ''
+        }`}
+      >
+        {text}
+      </p>
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="text-[11px] font-semibold text-purple-600 hover:text-purple-800 hover:underline mt-1 focus:outline-none inline-block"
+      >
+        {isExpanded ? 'Ver menos' : 'Ver más'}
+      </button>
+    </div>
+  );
+}
+
 export default function StudentMaterialsPage() {
   const [materials, setMaterials] = useState<MaterialAssignment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -347,55 +371,53 @@ export default function StudentMaterialsPage() {
                       </div>
 
                       {m?.description && (
-                        <p className="text-xs text-slate-500 line-clamp-2 mb-4 leading-relaxed">
-                          {m.description}
-                        </p>
-                      )}
+                          <ExpandableDescription text={m.description} />
+                        )}
 
-                      {vocab && (
-                        <div className="mt-3 bg-purple-50/40 border border-purple-100 rounded-xl p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-[11px] font-bold text-purple-900 flex items-center gap-1">
-                              <Sparkles className="w-3 h-3 text-purple-600" />
-                              Palabras ({m!.vocabulary_words!.length})
-                            </span>
-                            <button
-                              onClick={() => handlePlayAll(m!)}
-                              disabled={isLoadingAudio}
-                              className="flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-800 bg-white hover:bg-purple-100/50 border border-purple-200/60 px-2 py-1 rounded-lg transition-colors shadow-2xs disabled:opacity-50"
-                            >
-                              {isLoadingAudio ? (
-                                <Loader2 className="w-3 h-3 animate-spin text-purple-600" />
-                              ) : isThisPlayingAll ? (
-                                <Pause className="w-3 h-3 text-purple-600" />
-                              ) : (
-                                <Play className="w-3 h-3 text-purple-600 fill-purple-600" />
-                              )}
-                              {isThisPlayingAll ? "Detener" : "Escuchar todo"}
-                            </button>
-                          </div>
+                        {vocab && (
+                          <div className="mt-3 bg-purple-50/40 border border-purple-100 rounded-xl p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[11px] font-bold text-purple-900 flex items-center gap-1">
+                                <Sparkles className="w-3 h-3 text-purple-600" />
+                                Palabras ({m!.vocabulary_words!.length})
+                              </span>
+                              <button
+                                onClick={() => handlePlayAll(m!)}
+                                disabled={isLoadingAudio}
+                                className="flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-800 bg-white hover:bg-purple-100/50 border border-purple-200/60 px-2 py-1 rounded-lg transition-colors shadow-2xs disabled:opacity-50"
+                              >
+                                {isLoadingAudio ? (
+                                  <Loader2 className="w-3 h-3 animate-spin text-purple-600" />
+                                ) : isThisPlayingAll ? (
+                                  <Pause className="w-3 h-3 text-purple-600" />
+                                ) : (
+                                  <Play className="w-3 h-3 text-purple-600 fill-purple-600" />
+                                )}
+                                {isThisPlayingAll ? "Detener" : "Escuchar todo"}
+                              </button>
+                            </div>
 
-                          <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto custom-scrollbar pt-0.5">
-                            {m!.vocabulary_words!.map((w, idx) => {
-                              const active = nowPlaying?.materialId === m!.id && nowPlaying?.word === w;
-                              return (
-                                <button
-                                  key={idx}
-                                  onClick={() => handlePlayWord(m!, w)}
-                                  className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg transition-all duration-150 ${
-                                    active
-                                      ? "bg-purple-600 text-white shadow-sm scale-95"
-                                      : "bg-white text-purple-900 border border-purple-100 hover:border-purple-300 hover:bg-purple-50"
-                                  }`}
-                                >
-                                  <Volume2 className={`w-3 h-3 ${active ? "animate-pulse" : "text-purple-500"}`} />
-                                  {w}
-                                </button>
-                              );
-                            })}
+                            <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto custom-scrollbar pt-0.5">
+                              {m!.vocabulary_words!.map((w, idx) => {
+                                const active = nowPlaying?.materialId === m!.id && nowPlaying?.word === w;
+                                return (
+                                  <button
+                                    key={idx}
+                                    onClick={() => handlePlayWord(m!, w)}
+                                    className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg transition-all duration-150 ${
+                                      active
+                                        ? "bg-purple-600 text-white shadow-sm scale-95"
+                                        : "bg-white text-purple-900 border border-purple-100 hover:border-purple-300 hover:bg-purple-50"
+                                    }`}
+                                  >
+                                    <Volume2 className={`w-3 h-3 ${active ? "animate-pulse" : "text-purple-500"}`} />
+                                    {w}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
                     </div>
 
                     <div className="px-5 py-3.5 bg-slate-50/80 border-t border-slate-100 rounded-b-2xl flex flex-col gap-3">

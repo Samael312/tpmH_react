@@ -346,7 +346,9 @@ def book_class(
         if not can_book:
             raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
 
-        trial_subject = (
+        allowed_subjects = set((teacher.subjects or []) + (teacher.languages or []))
+        trial_subject = data.subject if data.subject in allowed_subjects else None
+        trial_subject = trial_subject or (
             (teacher.subjects[0] if teacher.subjects else None)
             or (teacher.languages[0] if teacher.languages else None)
             or "Clase de prueba"

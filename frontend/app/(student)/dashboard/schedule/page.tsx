@@ -139,14 +139,25 @@ function StepSelectSlot({
   teacherUsername,
   isTrial = false,
 }: {
-  onSelect: (date: string, slot: any, duration: number) => void;
+  onSelect: (date: string, slot: any, duration: number, subject?: string) => void;
   teacherUsername: string | null;
   isTrial?: boolean;
 }) {
   const [date, setDate] = useState("");
   const [duration, setDuration] = useState(isTrial ? 30 : 60);
+  const [subjectOptions, setSubjectOptions] = useState<string[]>([]);
+  const [selectedSubject, setSelectedSubject] = useState<string>("");
   const { slots, loading } = useAvailableSlots(date, duration, teacherUsername);
   const myTz = getMyDisplayTimezone();
+
+  useEffect(() => {
+    if (!isTrial || !teacherUsername) return;
+    api.get(`/teachers/${teacherUsername}`).then(res => {
+      const opts = [...(res.data.subjects || []), ...(res.data.languages || [])];
+      setSubjectOptions(opts);
+      setSelectedSubject(opts[0] || "");
+    }).catch(() => setSubjectOptions([]));
+  }, [isTrial, teacherUsername]);
 
   const formatTime = (utc: string) => formatTimeTz(utc, myTz);
 
@@ -160,6 +171,29 @@ function StepSelectSlot({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className="space-y-5">
+        {isTrial && subjectOptions.length > 1 && (
+          <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-xl shadow-slate-200/50 p-6">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+              ¿Qué quieres practicar en esta clase?
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {subjectOptions.map(s => (
+                <button
+                  key={s}
+                  onClick={() => setSelectedSubject(s)}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all duration-200 ${
+                    selectedSubject === s
+                      ? "border-pink-400 bg-pink-50 text-pink-600"
+                      : "border-transparent bg-slate-100 text-slate-500 hover:border-slate-200"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <MiniCalendar value={date} onChange={setDate} />
 
         {!isTrial && (
@@ -167,12 +201,12 @@ function StepSelectSlot({
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
               Duración de la clase
             </p>
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               {DURATIONS.map(d => (
                 <button
                   key={d.value}
                   onClick={() => setDuration(d.value)}
-                  className={`flex-1 py-3 rounded-xl text-sm font-bold border-2 transition-all duration-200 ${
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold border-2 transition-all duration-200 ${
                     duration === d.value
                       ? "border-pink-400 bg-pink-50 text-pink-600"
                       : "border-transparent bg-slate-100 text-slate-500 hover:border-slate-200"
@@ -237,7 +271,7 @@ function StepSelectSlot({
               return (
                 <button
                   key={i}
-                  onClick={() => !blocked && onSelect(date, slot, duration)}
+                  onClick={() => !blocked && onSelect(date, slot, duration, isTrial ? selectedSubject : undefined)}
                   disabled={blocked}
                   className={`
                     relative py-4 px-3 rounded-2xl text-center border-2 transition-all duration-200
@@ -282,12 +316,14 @@ function StepConfirmTrial({
   date,
   slot,
   teacherUsername,
+  subject,
   onBack,
   onBooked,
 }: {
   date: string;
   slot: any;
   teacherUsername: string | null;
+  subject?: string;
   onBack: () => void;
   onBooked: () => void;
 }) {
@@ -308,6 +344,7 @@ function StepConfirmTrial({
         start_time_utc: slot.start_time_utc,
         end_time_utc: slot.end_time_utc,
         duration_minutes: 30,
+        subject,
       });
       setDone(true);
       setTimeout(onBooked, 2000);
@@ -334,6 +371,11 @@ function StepConfirmTrial({
           <span className="bg-white/20 px-3 py-1.5 rounded-full text-sm font-bold">
             30 min
           </span>
+          {subject && (
+            <span className="bg-white/20 px-3 py-1.5 rounded-full text-sm font-bold">
+              {subject}
+            </span>
+          )}
         </div>
       </div>
 
@@ -612,7 +654,6 @@ function PackagePendingPaymentScreen({
 function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: string | null; onSelected: () => void }) {
   const [packages, setPackages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selecting, setSelecting] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [checkoutTarget, setCheckoutTarget] = useState<{ pkg: any; enrollmentId: number | null } | null>(null);
 
@@ -705,9 +746,13 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
                   ))}
                 </div>
 
-                <button onClick={() => choose(pkg)} className="...">
-                Elegir este paquete
-              </button>
+                <button
+                  onClick={() => choose(pkg)}
+                  className="mt-auto w-full py-3.5 text-sm font-bold text-center rounded-xl transition-all duration-200 active:scale-[0.97] text-white shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                  style={{ background: `linear-gradient(135deg, ${accent}, ${accent}cc)` }}
+                >
+                  Elegir este paquete
+                </button>
               </div>
             );
           })}
@@ -744,7 +789,7 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
   const [packages, setPackages] = useState<any[]>([]);
   const [lastEnrollmentId, setLastEnrollmentId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [requesting, setRequesting] = useState<number | null>(null);
+  const [requesting] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [checkoutTarget, setCheckoutTarget] = useState<any>(null);
 
@@ -827,10 +872,10 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
                     <span className="text-4xl font-black text-slate-800">${priceDisplay}</span>
                     <span className="text-slate-500 text-sm font-medium">{priceSuffix}</span>
                     {pkg.allow_installments && pkg.installment_count && (
-                  <p className="text-[11px] font-bold text-slate-400 mt-1">
-                    |o en {pkg.installment_count} cuotas de $ {(pkg.installment_count ?? pkg.price / pkg.installment_count).toFixed(2)}
-                  </p>
-                )}
+                      <p className="text-[11px] font-bold text-slate-400 mt-1">
+                        o en {pkg.installment_count} cuotas de $ {(pkg.price / pkg.installment_count).toFixed(2)}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -910,6 +955,7 @@ export default function SchedulePage() {
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
   const [selectedDuration, setSelectedDuration] = useState(60);
+  const [selectedSubject, setSelectedSubject] = useState<string | undefined>(undefined);
   const [selectedTeacherUsername, setSelectedTeacherUsername] = useState<string | null>(null);
 
   const { enrollments, refetch: refetchEnrollments } = useEnrollments();
@@ -918,24 +964,17 @@ export default function SchedulePage() {
   const needsTeacherSelection = !isSingleTenant && myTeachers.length > 1 && !selectedTeacherUsername;
   const teacherBlocked = !teachersLoading && !isSingleTenant && myTeachers.length === 0;
 
-  // DESPUÉS
-useEffect(() => {
-  if (teachersLoading) return;
-  // Tanto en single-tenant como en multi-tenant con un solo profesor
-  // vinculado, resolvemos el username directamente — no hace falta
-  // que el estudiante "elija" nada.
-  if (myTeachers.length === 1) {
-    setSelectedTeacherUsername(myTeachers[0].teacher_username);
-    return;
-  }
-  if (isSingleTenant) {
-    // Único caso donde de verdad no hay profesor resoluble:
-    // single-tenant sin featured_teacher_id configurado en la BD.
-    setSelectedTeacherUsername(null);
-    return;
-  }
-  // Multi-tenant con 0 o 2+ profesores: se maneja con el selector de abajo.
-}, [teachersLoading, isSingleTenant, myTeachers]);
+  useEffect(() => {
+    if (teachersLoading) return;
+    if (myTeachers.length === 1) {
+      setSelectedTeacherUsername(myTeachers[0].teacher_username);
+      return;
+    }
+    if (isSingleTenant) {
+      setSelectedTeacherUsername(null);
+      return;
+    }
+  }, [teachersLoading, isSingleTenant, myTeachers]);
 
   const activeEnrollment = selectedTeacherUsername
     ? enrollments.find(e => e.status === "active" && e.teacher_username === selectedTeacherUsername)
@@ -955,11 +994,12 @@ useEffect(() => {
   useEffect(() => { loadStage(); }, [selectedTeacherUsername, isSingleTenant]);
 
   const handleSlotSelect = (
-    date: string, slot: any, duration: number
+    date: string, slot: any, duration: number, subject?: string
   ) => {
     setSelectedDate(date);
     setSelectedSlot(slot);
     setSelectedDuration(duration);
+    setSelectedSubject(subject);
     setStep("payment");
   };
 
@@ -967,6 +1007,7 @@ useEffect(() => {
     setStep("select");
     setSelectedDate("");
     setSelectedSlot(null);
+    setSelectedSubject(undefined);
   };
 
   return (
@@ -1120,6 +1161,7 @@ useEffect(() => {
                 date={selectedDate}
                 slot={selectedSlot}
                 teacherUsername={selectedTeacherUsername}
+                subject={selectedSubject}
                 onBack={resetToSelect}
                 onBooked={loadStage}
               />
