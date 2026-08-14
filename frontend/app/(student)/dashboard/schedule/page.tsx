@@ -595,6 +595,7 @@ function PackagePendingPaymentScreen({
             </div>
             <PackageCheckout
               pkg={pkg}
+              mode="initial"
               enrollmentId={enrollmentId}
               installmentsPaid={installmentsPaid}
               onClose={() => setCheckoutOpen(false)}
@@ -613,7 +614,7 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
   const [loading, setLoading] = useState(true);
   const [selecting, setSelecting] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const [checkoutTarget, setCheckoutTarget] = useState<{ pkg: any; enrollmentId: number } | null>(null);
+  const [checkoutTarget, setCheckoutTarget] = useState<{ pkg: any; enrollmentId: number | null } | null>(null);
 
   useEffect(() => {
     if (!teacherUsername) { setLoading(false); return; }
@@ -623,17 +624,9 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
       .finally(() => setLoading(false));
   }, [teacherUsername]);
 
-  const choose = async (pkg: any) => {
-    setSelecting(pkg.id);
+  const choose = (pkg: any) => {
     setError("");
-    try {
-      const res = await api.post(`/packages/select-initial?package_id=${pkg.id}`);
-      setCheckoutTarget({ pkg, enrollmentId: res.data.enrollment_id });
-    } catch (e: any) {
-      setError(extractErrorMessage(e, "Error seleccionando el paquete"));
-    } finally {
-      setSelecting(null);
-    }
+    setCheckoutTarget({ pkg, enrollmentId: null });
   };
 
   return (
@@ -712,18 +705,9 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
                   ))}
                 </div>
 
-                <button
-                  onClick={() => choose(pkg)}
-                  disabled={selecting !== null}
-                  className="mt-auto w-full py-3.5 text-sm font-bold text-center rounded-xl transition-all duration-200 active:scale-[0.97] text-white shadow-lg hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
-                  style={{ background: `linear-gradient(135deg, ${accent}, ${accent}cc)` }}
-                >
-                  {selecting === pkg.id ? (
-                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    "Elegir este paquete"
-                  )}
-                </button>
+                <button onClick={() => choose(pkg)} className="...">
+                Elegir este paquete
+              </button>
               </div>
             );
           })}
@@ -742,6 +726,7 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
             </div>
             <PackageCheckout
               pkg={checkoutTarget.pkg}
+              mode="initial"
               enrollmentId={checkoutTarget.enrollmentId}
               installmentsPaid={0}
               onClose={() => setCheckoutTarget(null)}
@@ -777,21 +762,10 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
       .finally(() => setLoading(false));
   }, [teacherUsername]);
 
-  const requestRenewal = async (pkg: any) => {
+  const requestRenewal = (pkg: any) => {
     if (!lastEnrollmentId) return;
-    setRequesting(pkg.id);
     setError("");
-    try {
-      await api.post("/packages/request-renewal", {
-        current_enrollment_id: lastEnrollmentId,
-        new_package_id: pkg.id,
-      });
-      setCheckoutTarget({ pkg, enrollmentId: lastEnrollmentId });
-    } catch (e: any) {
-      setError(extractErrorMessage(e, "Error solicitando la renovación"));
-    } finally {
-      setRequesting(null);
-    }
+    setCheckoutTarget({ pkg, enrollmentId: lastEnrollmentId });
   };
 
   if (loading) {
@@ -897,6 +871,7 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
             </div>
             <PackageCheckout
               pkg={checkoutTarget.pkg}
+              mode="renewal"
               enrollmentId={checkoutTarget.enrollmentId}
               installmentsPaid={0}
               onClose={() => setCheckoutTarget(null)}

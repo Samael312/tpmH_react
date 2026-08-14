@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-
+import math
 from app.auth.dependencies import (
     get_current_staff,
     get_current_staff_or_teacher,
@@ -48,7 +48,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 DAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-
+PACKAGE_CHANGE_BLOCKING_STATUSES = ["completed", "no_show", "confirmed", "pending"]
 
 # ─── HELPER FUNCTIONS ─────────────────────────────────────────────────────────
 
@@ -99,6 +99,17 @@ def _installment_amount(package: Package, index: int) -> float:
         return base
     return round(package.price - base * (n - 1), 2)
 
+def _installment_credit_amount(classes_count: int, installment_count: int, installment_index: int) -> int:
+    """
+    Créditos que se liberan al pagar la cuota `installment_index` (1-based).
+    Cada cuota libera ceil(classes_count / installment_count), EXCEPTO la
+    última, que libera el resto exacto (puede ser menor que las anteriores).
+    """
+    per_installment = math.ceil(classes_count / installment_count)
+    if installment_index >= installment_count:
+        already_unlocked = per_installment * (installment_count - 1)
+        return max(classes_count - already_unlocked, 0)
+    return per_installment
 
 def _sync_student_teacher_username(current_user: User, teacher: TeacherProfile, db: Session):
     """
@@ -360,26 +371,26 @@ def book_class(
         db.refresh(trial_class)
 
         # Enviar correo al profesor
-        if teacher.user:
-            send_new_booking_teacher_email(
-                to_email=teacher.user.email,
-                teacher_name=teacher.user.name,
-                student_name=f"{current_user.name} {current_user.surname}",
-                subject=trial_subject,
-                class_start_utc=trial_start.strftime("%Y-%m-%d %H:%M UTC"),
-                duration_minutes=30,
-                is_trial=True,
-            )
+        #if teacher.user:
+        #    send_new_booking_teacher_email(
+        #        to_email=teacher.user.email,
+        #        teacher_name=teacher.user.name,
+        #        student_name=f"{current_user.name} {current_user.surname}",
+        #        subject=trial_subject,
+        #        class_start_utc=trial_start.strftime("%Y-%m-%d %H:%M UTC"),
+        #        duration_minutes=30,
+        #        is_trial=True,
+        #    )
 
         # Enviar correo de confirmación de registro al estudiante
-        send_class_booking_confirmation(
-            to_email=current_user.email,
-            student_name=current_user.name,
-            teacher_name=f"{teacher.user.name} {teacher.user.surname}" if teacher.user else "",
-            subject=trial_subject,
-            class_start_utc=trial_start.strftime("%Y-%m-%d %H:%M UTC"),
-            duration_minutes=30,
-        )
+        #send_class_booking_confirmation(
+        #    to_email=current_user.email,
+        #    student_name=current_user.name,
+        #    teacher_name=f"{teacher.user.name} {teacher.user.surname}" if teacher.user else "",
+        #    subject=trial_subject,
+        #    class_start_utc=trial_start.strftime("%Y-%m-%d %H:%M UTC"),
+        #    duration_minutes=30,
+        #)
 
         return {
             "class_id": trial_class.id,
@@ -542,16 +553,16 @@ def book_class(
             class_start_utc=new_class.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
             duration_minutes=new_class.duration,
         )
-        if teacher_user:
-            send_new_booking_teacher_email(
-                to_email=teacher_user.email,
-                teacher_name=teacher_user.name,
-                student_name=f"{current_user.name} {current_user.surname}",
-                subject=new_class.subject or "Clase",
-                class_start_utc=new_class.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
-                duration_minutes=new_class.duration,
-                is_trial=False,
-            )
+        #if teacher_user:
+        #    send_new_booking_teacher_email(
+        #        to_email=teacher_user.email,
+        #        teacher_name=teacher_user.name,
+        #        student_name=f"{current_user.name} {current_user.surname}",
+        #        subject=new_class.subject or "Clase",
+        #        class_start_utc=new_class.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+        #        duration_minutes=new_class.duration,
+        #        is_trial=False,
+        #    )
 
         config = db.query(PaymentConfig).first()
         return {
@@ -719,6 +730,7 @@ def validate_payment(
             if is_renewal or is_change:
                 enrollment.package_id = target_package.id
                 enrollment.classes_total = target_package.classes_count
+                enrollment.unlocked_credits = 0  # arranca limpio con el paquete nuevo
                 if is_renewal:
                     enrollment.classes_used = 0
                 enrollment.status = EnrollmentStatus.active
@@ -729,7 +741,10 @@ def validate_payment(
                 enrollment.installments_paid = payment.installment_index
                 n = target_package.installment_count or 1
                 if target_package.classes_count is not None:
-                    enrollment.unlocked_credits = round(target_package.classes_count * (payment.installment_index / n))
+                    credit_this_installment = _installment_credit_amount(
+                        target_package.classes_count, n, payment.installment_index
+                    )
+                    enrollment.unlocked_credits = (enrollment.unlocked_credits or 0) + credit_this_installment
                 enrollment.payment_status = "paid" if payment.installment_index >= n else "partially_paid"
             else:
                 enrollment.installments_paid = 1
@@ -1062,32 +1077,131 @@ def notify_payment(
         return {"payment_id": payment.id, "message": "Recarga notificada, en espera de aprobación"}
 
     # ── Paquete (inicial, renovación o cambio) ──
-    if not data.enrollment_id:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "enrollment_id es requerido")
 
-    enrollment = db.query(Enrollment).filter(
-        Enrollment.id == data.enrollment_id, Enrollment.student_id == student_id,
-    ).first()
-    if not enrollment:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado")
+    if data.type == "package":
+        if data.enrollment_id:
+            # Reanudar notificación de un enrollment "unpaid" ya existente
+            # (caso legado / reintento tras un fallo previo).
+            enrollment = db.query(Enrollment).filter(
+                Enrollment.id == data.enrollment_id, Enrollment.student_id == student_id,
+            ).first()
+            if not enrollment:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado")
+            package = db.query(Package).filter(Package.id == enrollment.package_id).first()
+            if not package:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Paquete no encontrado")
+        else:
+            if not data.package_id:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "package_id es requerido")
+            package = db.query(Package).filter(
+                Package.id == data.package_id, Package.is_active == True
+            ).first()
+            if not package:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Paquete no encontrado")
 
-    target_package_id = (
-        enrollment.renewal_requested_package_id
-        or enrollment.change_requested_package_id
-        or enrollment.package_id
-    )
-    package = db.query(Package).filter(Package.id == target_package_id).first()
-    if not package:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Paquete no encontrado")
+            stage = get_student_booking_stage(student_id, package.teacher_id, db)
+            if stage != "needs_package":
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Ya no puedes seleccionar un paquete inicial con este profesor en este momento"
+                )
 
-    if enrollment.renewal_requested_package_id or enrollment.status == EnrollmentStatus.pending_renewal or data.type == "renewal":
-        payment_type = "renewal"
-    elif enrollment.change_requested_package_id or enrollment.status == EnrollmentStatus.pending_package_change or data.type == "package_change":
-        payment_type = "package_change"
-    else:
+            enrollment = Enrollment(
+                student_id=student_id,
+                package_id=package.id,
+                teacher_id=package.teacher_id,
+                classes_used=0,
+                classes_total=package.classes_count,
+                unlocked_credits=0,
+                payment_status="unpaid",
+                status=EnrollmentStatus.active,
+            )
+            db.add(enrollment)
+            db.flush()
         payment_type = "package"
 
+    elif data.type == "renewal":
+        if not data.enrollment_id or not data.package_id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "enrollment_id y package_id son requeridos")
+
+        current_enrollment = db.query(Enrollment).filter(
+            Enrollment.id == data.enrollment_id, Enrollment.student_id == student_id,
+        ).first()
+        if not current_enrollment:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado")
+        if current_enrollment.status not in [EnrollmentStatus.active, EnrollmentStatus.completed]:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Solo puedes renovar un paquete activo o completado")
+
+        new_package = db.query(Package).filter(
+            Package.id == data.package_id,
+            Package.teacher_id == current_enrollment.teacher_id,
+            Package.is_active == True,
+        ).first()
+        if not new_package:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Paquete no encontrado o no disponible")
+
+        existing_renewal = db.query(Enrollment).filter(
+            Enrollment.student_id == student_id,
+            Enrollment.teacher_id == current_enrollment.teacher_id,
+            Enrollment.status == EnrollmentStatus.pending_renewal,
+        ).first()
+        if existing_renewal:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya tienes una solicitud de renovación pendiente")
+
+        current_enrollment.status = EnrollmentStatus.pending_renewal
+        current_enrollment.renewal_requested_package_id = new_package.id
+        enrollment = current_enrollment
+        package = new_package
+        payment_type = "renewal"
+
+    elif data.type == "package_change":
+        if not data.enrollment_id or not data.package_id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "enrollment_id y package_id son requeridos")
+
+        current_enrollment = db.query(Enrollment).filter(
+            Enrollment.id == data.enrollment_id, Enrollment.student_id == student_id,
+        ).first()
+        if not current_enrollment:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado")
+        if current_enrollment.status != EnrollmentStatus.active:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Solo puedes solicitar un cambio de paquete si tu paquete actual está activo"
+            )
+
+        new_package = db.query(Package).filter(
+            Package.id == data.package_id,
+            Package.teacher_id == current_enrollment.teacher_id,
+            Package.is_active == True,
+        ).first()
+        if not new_package:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Paquete no encontrado, no disponible, o no pertenece a tu profesor actual")
+        if new_package.id == current_enrollment.package_id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya tienes este paquete activo")
+
+        if new_package.classes_count is not None:
+            occupied_slots = db.query(Class).filter(
+                Class.enrollment_id == current_enrollment.id,
+                Class.status.in_(PACKAGE_CHANGE_BLOCKING_STATUSES)
+            ).count()
+            if occupied_slots > new_package.classes_count:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"No puedes cambiar a este paquete: tienes {occupied_slots} clases usadas o "
+                    f"agendadas y el nuevo paquete solo permite {new_package.classes_count}."
+                )
+
+        current_enrollment.status = EnrollmentStatus.pending_package_change
+        current_enrollment.change_requested_package_id = new_package.id
+        enrollment = current_enrollment
+        package = new_package
+        payment_type = "package_change"
+
+    else:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"type inválido: {data.type}")
+
     use_installments = data.installment_index is not None
+
     if use_installments and not package.allow_installments:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este paquete no admite pago en cuotas")
 
@@ -1124,7 +1238,6 @@ def notify_payment(
     db.commit()
     db.refresh(payment)
     return {"payment_id": payment.id, "message": "Pago notificado, en espera de aprobación"}
-
 
 @router.get("/admin/withdrawals/pending")
 def get_pending_withdrawals(

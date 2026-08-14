@@ -19,6 +19,7 @@ import {
   AlertCircle,
   CreditCard,
   RefreshCw,
+  X,
 } from "lucide-react";
 import PackageCheckout from "@/components/payments/PackageCheckout";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
@@ -41,20 +42,9 @@ function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: an
       .finally(() => setLoading(false));
   }, [teacherUsername]);
 
-  const request = async (pkg: any) => {
-    setRequesting(pkg.id);
+  const request = (pkg: any) => {
     setError("");
-    try {
-      await api.post("/packages/request-package-change", {
-        current_enrollment_id: enrollment.id,
-        new_package_id: pkg.id,
-      });
-      setCheckoutTarget(pkg);
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "Error solicitando el cambio de paquete");
-    } finally {
-      setRequesting(null);
-    }
+    setCheckoutTarget(pkg);
   };
 
   if (checkoutTarget) {
@@ -65,6 +55,7 @@ function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: an
           <h2 className="text-lg font-black text-slate-800 mb-5">Completar pago</h2>
           <PackageCheckout
             pkg={checkoutTarget}
+            mode="change"
             enrollmentId={enrollment.id}
             installmentsPaid={0}
             onClose={onClose}
@@ -200,6 +191,8 @@ export default function StudentDashboard() {
   const { classes: classesData, loading: classesLoading } = useStudentClasses();
   const { enrollments, loading: enrollmentsLoading, refetch: refetchEnrollments } = useEnrollments();
   const [changePackageTarget, setChangePackageTarget] = useState<any | null>(null);
+  const [installmentTarget, setInstallmentTarget] = useState<any | null>(null);
+  const [rechargeTarget, setRechargeTarget] = useState<any | null>(null);
 
   const activeOrChangingEnrollments = enrollments.filter(
     e => e.status === "active" || e.status === "pending_package_change"
@@ -378,8 +371,13 @@ export default function StudentDashboard() {
         {stage === "ready" && activeOrChangingEnrollments.length > 0 && (
           <div className={`grid gap-4 ${activeOrChangingEnrollments.length > 1 ? "sm:grid-cols-2" : ""}`}>
             {activeOrChangingEnrollments.map((enr) => {
-              const remainingCredits = enr.prepaid_unlimited_credits ?? (enr.classes_total != null ? Math.max(0, enr.classes_total - enr.classes_used) : null);
+              const isUnlimited = enr.package?.classes_count == null;
+              const remainingCredits = isUnlimited
+                ? (enr.prepaid_unlimited_credits ?? 0)
+                : Math.max((enr.unlocked_credits ?? 0) - enr.classes_used, 0);
               const totalInstallments = enr.package?.installment_count ?? enr.total_installments;
+              const hasMoreInstallments = !isUnlimited && !!totalInstallments && totalInstallments > 1 && (enr.installments_paid ?? 0) < totalInstallments;
+              const needsNextInstallment = hasMoreInstallments && remainingCredits <= 0;
 
               return (
                 <div key={enr.id}
@@ -439,6 +437,27 @@ export default function StudentDashboard() {
                       )}
                     </div>
 
+                    {enr.status !== "pending_package_change" && (
+                      <div className="flex flex-col gap-2 pt-2">
+                        {needsNextInstallment && (
+                          <button
+                            onClick={() => setInstallmentTarget(enr)}
+                            className="w-full py-2.5 text-xs font-bold text-white rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all"
+                          >
+                            Pagar cuota {(enr.installments_paid ?? 0) + 1} de {totalInstallments}
+                          </button>
+                        )}
+                        {isUnlimited && (
+                          <button
+                            onClick={() => setRechargeTarget(enr)}
+                            className="w-full py-2.5 text-xs font-bold text-pink-300 hover:text-pink-200 border border-pink-400/30 hover:border-pink-400/60 rounded-xl transition-all"
+                          >
+                            Comprar más créditos ({remainingCredits} disponibles)
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     {enr.status === "pending_package_change" ? (
                       <p className="text-xs font-bold text-amber-300 pt-1">
                         Solicitud de cambio de paquete en revisión por tu profesor(a).
@@ -465,6 +484,50 @@ export default function StudentDashboard() {
             onClose={() => setChangePackageTarget(null)}
             onDone={refetchEnrollments}
           />
+        )}
+
+        {installmentTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setInstallmentTarget(null)} />
+            <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-lg font-black text-slate-800">Pagar siguiente cuota</h2>
+                <button onClick={() => setInstallmentTarget(null)} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
+                  <X className="w-4 h-4 text-slate-500" />
+                </button>
+              </div>
+              <PackageCheckout
+                pkg={installmentTarget.package}
+                mode="change"
+                enrollmentId={installmentTarget.id}
+                installmentsPaid={installmentTarget.installments_paid ?? 0}
+                onClose={() => setInstallmentTarget(null)}
+                onDone={refetchEnrollments}
+              />
+            </div>
+          </div>
+        )}
+
+        {rechargeTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setRechargeTarget(null)} />
+            <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-lg font-black text-slate-800">Comprar créditos</h2>
+                <button onClick={() => setRechargeTarget(null)} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
+                  <X className="w-4 h-4 text-slate-500" />
+                </button>
+              </div>
+              <PackageCheckout
+                pkg={rechargeTarget.package}
+                mode="change"
+                enrollmentId={rechargeTarget.id}
+                installmentsPaid={0}
+                onClose={() => setRechargeTarget(null)}
+                onDone={refetchEnrollments}
+              />
+            </div>
+          </div>
         )}
 
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150">

@@ -60,6 +60,7 @@ export interface StudentEnrollment {
     created_at: string;
   };
   classes_used: number;
+  unlocked_credits?: number;
   classes_total: number | null;
   prepaid_unlimited_credits?: number;
   status: string;

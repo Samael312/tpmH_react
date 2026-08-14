@@ -129,6 +129,7 @@ class WithdrawalResponse(BaseModel):
 class NotifyPaymentRequest(BaseModel):
     type: str  # "package" | "single_class" | "unlimited_recharge"
     enrollment_id: Optional[int] = None
+    package_id: Optional[int] =None
     class_id: Optional[int] = None
     installment_index: Optional[int] = None
     credits_requested: Optional[int] = None
@@ -137,7 +138,7 @@ class NotifyPaymentRequest(BaseModel):
     @field_validator("type")
     @classmethod
     def validate_type(cls, v):
-        allowed = ("package", "single_class", "unlimited_recharge")
+        allowed = ("package", "renewal", "package_change", "single_class", "unlimited_recharge")
         if v not in allowed:
             raise ValueError(f"type debe ser uno de: {allowed}")
         return v
