@@ -137,8 +137,6 @@ def get_calendar_service_for_token(token: GoogleCalendarToken, db: Session):
         if credentials.expired and credentials.refresh_token:
             credentials.refresh(Request())
             token.access_token = credentials.token
-            # credentials.expiry que devuelve la librería también es naive-UTC;
-            # lo guardamos tal cual coincide con la convención de google-auth
             token.token_expiry = credentials.expiry
             token.needs_reauth = False
             token.last_error = None
@@ -293,6 +291,12 @@ def update_calendar_event(
             logger.info(f"Evento {event_id} ya no existe en Google (borrado externamente)")
         else:
             logger.warning(f"Error obteniendo evento {event_id}: {e}")
+        return False
+
+    # FIX: Si el evento está en la papelera de Google (status == "cancelled"), 
+    # lo tratamos como inexistente para forzar su recreación en sync_calendar_logic.
+    if event.get("status") == "cancelled":
+        logger.info(f"Evento {event_id} figura como cancelado/papelera en Google (borrado externamente)")
         return False
 
     if start_utc:

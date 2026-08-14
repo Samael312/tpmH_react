@@ -45,6 +45,9 @@ class Class(Base):
 
     enrollment = relationship("Enrollment", back_populates="classes")
 
+    student = relationship("StudentProfile", backref="classes_as_student")
+    teacher = relationship("TeacherProfile", backref="classes_as_teacher")
+
     @property
     def duration_minutes(self):
         return self.duration
