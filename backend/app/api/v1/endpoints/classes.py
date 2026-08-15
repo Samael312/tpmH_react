@@ -262,12 +262,12 @@ def cancel_class_student(
     teacher = db.query(TeacherProfile).filter(TeacherProfile.id == class_.teacher_id).first()
     if teacher and teacher.user:
         send_class_cancelled_teacher_email(
-            to_email=teacher.user.email,
-            teacher_name=teacher.user.name,
-            student_name=f"{student_user.name} {student_user.surname}",
-            class_start_utc=format_local_datetime(class_.start_time_utc, teacher.timezone),
-            cancelled_by="student",
-        )
+                to_email=teacher.user.email,
+                teacher_name=teacher.user.name,
+                student_name=f"{student_user.name} {student_user.surname}",
+                class_start_local=format_local_datetime(class_.start_time_utc, teacher.timezone),  # ✅
+                cancelled_by="student",
+            )
 
     _sync_google_calendar_cancelled(class_.teacher_id, class_.google_event_id, db)
     return {"message": "Clase cancelada exitosamente"}
@@ -688,7 +688,7 @@ def cancel_class_admin(
             to_email=teacher.user.email,
             teacher_name=teacher.user.name,
             student_name=student_name,
-            class_start_utc=format_local_datetime(class_.start_time_utc, teacher.timezone),
+            class_start_local=format_local_datetime(class_.start_time_utc, teacher.timezone),
             cancelled_by="staff",
         )
 

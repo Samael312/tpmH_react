@@ -573,3 +573,36 @@ def send_package_expiring_email(
     """
     html = _base_template("Tu paquete está por agotarse", _badge("Por vencer", COLOR_AMBER), "Tu paquete se está agotando ⏳", body)
     return _send(to_email, f"Tu paquete está por agotarse — {PLATFORM_NAME}", html)
+
+def send_class_confirmed_email(
+    to_email: str, student_name: str, teacher_name: str, subject: str,
+    class_start_local: str, duration_minutes: int,
+) -> bool:
+    body = f"""
+      <p>Hola {student_name}, tu clase con <strong style="color:{COLOR_INK};">{teacher_name}</strong> está confirmada.</p>
+      {_detail_table([
+        _detail_row("Materia", subject),
+        _detail_row("Fecha y hora", class_start_local),
+        _detail_row("Duración", f"{duration_minutes} minutos"),
+      ])}
+      {_cta_button("Ver mis clases", f"{settings.FRONTEND_URL}/dashboard/classes")}
+    """
+    html = _base_template("Tu clase fue confirmada", _badge("Confirmada", COLOR_GREEN), "Clase confirmada ✅", body)
+    return _send(to_email, f"Clase confirmada — {PLATFORM_NAME}", html)
+
+
+def send_class_confirmed_teacher_email(
+    to_email: str, teacher_name: str, student_name: str, subject: str,
+    class_start_local: str, duration_minutes: int,
+) -> bool:
+    body = f"""
+      <p>Hola {teacher_name}, tu clase con <strong style="color:{COLOR_INK};">{student_name}</strong> está confirmada.</p>
+      {_detail_table([
+        _detail_row("Materia", subject),
+        _detail_row("Fecha y hora", class_start_local),
+        _detail_row("Duración", f"{duration_minutes} minutos"),
+      ])}
+      {_cta_button("Ver mi agenda", f"{settings.FRONTEND_URL}/teacher/dashboard")}
+    """
+    html = _base_template("Una clase fue confirmada", _badge("Confirmada", COLOR_GREEN), "Clase confirmada ✅", body)
+    return _send(to_email, f"Clase confirmada — {PLATFORM_NAME}", html)
