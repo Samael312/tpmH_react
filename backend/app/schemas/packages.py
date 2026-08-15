@@ -84,8 +84,10 @@ class EnrollmentResponse(BaseModel):
     status: str
     payment_status: Optional[str] = None
     installments_paid: Optional[int] = 0
+    paid_via_installments: Optional[bool] = False
     unlocked_credits: Optional[int] = 0
     prepaid_unlimited_credits: Optional[int] = 0
+    available_credits: Optional[int] = None
     activated_at: Optional[datetime] = None
     renewal_count: int
     created_at: datetime
@@ -120,6 +122,7 @@ class EnrollmentComplianceResponse(BaseModel):
     package_name: str
     classes_used: int
     classes_total: Optional[int]
+    available_credits: Optional[int] = None
     status: str
     completed_count: int
     no_show_count: int

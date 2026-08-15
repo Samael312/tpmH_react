@@ -38,6 +38,7 @@ interface EnrollmentCompliance {
   package_name: string;
   classes_used: number;
   classes_total: number | null;
+  available_credits: number | null;
   status: string;
   completed_count: number;
   no_show_count: number;
@@ -759,11 +760,14 @@ export default function TeacherPackagesPage() {
                         </div>
 
                         <div className="flex items-center gap-3 flex-wrap text-[10px] font-bold text-slate-400">
-                          <span>{e.classes_used}/{e.classes_total ?? "∞"} usadas</span>
-                          <span className="text-emerald-600">{e.completed_count} completadas</span>
-                          <span className="text-red-500">{e.no_show_count} no-show</span>
-                          <span className="text-amber-600">{e.cancelled_late_count} canceladas tarde</span>
-                        </div>
+                        <span>{e.classes_used}/{e.classes_total ?? "∞"} usadas</span>
+                        {e.available_credits !== null && (
+                          <span className="text-indigo-600">{e.available_credits} créditos disponibles</span>
+                        )}
+                        <span className="text-emerald-600">{e.completed_count} completadas</span>
+                        <span className="text-red-500">{e.no_show_count} no-show</span>
+                        <span className="text-amber-600">{e.cancelled_late_count} canceladas tarde</span>
+                      </div>
                       </div>
 
                       {(e.status === "package_pending_payment" || e.status === "unpaid") && (

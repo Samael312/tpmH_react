@@ -161,6 +161,14 @@ def get_teacher_enrollments_overview(
             and (c.start_time_utc - c.updated_at) < timedelta(hours=12)
         )
 
+        if e.package and e.package.classes_count is not None:
+            occupied_slots = sum(1 for c in classes if c.status != "cancelled")
+            available_credits = max((e.unlocked_credits or 0) - occupied_slots, 0)
+        elif e.package:
+            available_credits = e.prepaid_unlimited_credits or 0
+        else:
+            available_credits = None
+
         student_user = e.student.user if e.student else None
         package = e.package
 
@@ -183,6 +191,7 @@ def get_teacher_enrollments_overview(
             package_name=package.name if package else "N/A",
             classes_used=e.classes_used,
             classes_total=e.classes_total,
+            available_credits=available_credits,
             status=e.status,
             completed_count=completed_count,
             no_show_count=no_show_count,
@@ -252,6 +261,15 @@ def get_my_enrollments(
     for e in enrollments:
         teacher_user = e.teacher.user if e.teacher and e.teacher.user else None
 
+        if e.package.classes_count is not None:
+            occupied_slots = db.query(Class).filter(
+                Class.enrollment_id == e.id,
+                Class.status != "cancelled",
+            ).count()
+            available_credits = max((e.unlocked_credits or 0) - occupied_slots, 0)
+        else:
+            available_credits = e.prepaid_unlimited_credits or 0
+
         result.append(EnrollmentResponse(
             id=e.id,
             student_id=e.student_id,
@@ -262,8 +280,10 @@ def get_my_enrollments(
             status=e.status,
             payment_status=e.payment_status,
             installments_paid=getattr(e, "installments_paid", 0),
+            paid_via_installments=getattr(e, "paid_via_installments", False),
             unlocked_credits=getattr(e, "unlocked_credits", 0),
             prepaid_unlimited_credits=getattr(e, "prepaid_unlimited_credits", 0),
+            available_credits=available_credits,
             activated_at=getattr(e, "activated_at", None),
             renewal_count=e.renewal_count,
             created_at=e.created_at,

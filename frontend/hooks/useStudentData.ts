@@ -63,8 +63,10 @@ export interface StudentEnrollment {
   unlocked_credits?: number;
   classes_total: number | null;
   prepaid_unlimited_credits?: number;
+  available_credits?: number;
   status: string;
   installments_paid?: number;
+  paid_via_installments?: boolean;
   total_installments?: number;
   pending_payment_notified?: boolean;
   renewal_requested?: boolean;

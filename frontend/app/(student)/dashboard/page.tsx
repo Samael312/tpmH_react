@@ -372,9 +372,9 @@ export default function StudentDashboard() {
           <div className={`grid gap-4 ${activeOrChangingEnrollments.length > 1 ? "sm:grid-cols-2" : ""}`}>
             {activeOrChangingEnrollments.map((enr) => {
               const isUnlimited = enr.package?.classes_count == null;
-              const remainingCredits = isUnlimited
+              const remainingCredits = enr.available_credits ?? (isUnlimited
                 ? (enr.prepaid_unlimited_credits ?? 0)
-                : Math.max((enr.unlocked_credits ?? 0) - enr.classes_used, 0);
+                : Math.max((enr.unlocked_credits ?? 0) - enr.classes_used, 0));
               const totalInstallments = enr.package?.installment_count ?? enr.total_installments;
               const hasMoreInstallments = !isUnlimited && !!totalInstallments && totalInstallments > 1 && (enr.installments_paid ?? 0) < totalInstallments;
               const needsNextInstallment = hasMoreInstallments && remainingCredits <= 0;
@@ -391,7 +391,7 @@ export default function StudentDashboard() {
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-white/10 text-slate-200 border border-white/10">
                         <BookOpen className="w-3 h-3 text-purple-300" /> {enr.package?.subject}
                       </span>
-                      {enr.installments_paid && enr.installments_paid > 0 && totalInstallments && totalInstallments > 1 && (
+                      {enr.paid_via_installments && enr.installments_paid && enr.installments_paid > 0 && totalInstallments && totalInstallments > 1 && (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                           <CreditCard className="w-3 h-3" /> Cuota {enr.installments_paid}/{totalInstallments}
                         </span>
@@ -427,7 +427,7 @@ export default function StudentDashboard() {
                           {remainingCredits !== null ? `${remainingCredits} restantes` : "Ilimitados"}
                         </span>
                       </div>
-                      {enr.installments_paid && totalInstallments && totalInstallments > 1 && (
+                      {enr.paid_via_installments && enr.installments_paid && totalInstallments && totalInstallments > 1 && (
                         <div className="text-right">
                           <span className="text-slate-400 block text-[10px] font-semibold uppercase tracking-wider">Cuotas</span>
                           <span className="font-bold text-pink-300 text-sm">

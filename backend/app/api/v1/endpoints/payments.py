@@ -429,7 +429,16 @@ def book_class(
     if enrollment.package.classes_count is not None:
         if enrollment.payment_status == "unpaid":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Tu paquete está pendiente de confirmación de pago")
-        if enrollment.classes_used >= enrollment.unlocked_credits:
+
+        # Los créditos se consumen al AGENDAR (no al completar la clase), para
+        # limitar cuántas clases puede reservar el estudiante. classes_used
+        # sigue siendo el contador de seguimiento del profesor y solo se
+        # actualiza cuando la clase se marca completed/no_show/cancelación tardía.
+        occupied_slots = db.query(Class).filter(
+            Class.enrollment_id == enrollment.id,
+            Class.status != "cancelled",
+        ).count()
+        if occupied_slots >= enrollment.unlocked_credits:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "No tienes créditos disponibles todavía")
 
         can_book, error_msg = can_book_slot(
@@ -738,6 +747,7 @@ def validate_payment(
                 or enrollment.package_id
             )
             target_package = db.query(Package).filter(Package.id == target_package_id).first()
+            enrollment.paid_via_installments = payment.installment_index is not None
             is_renewal = enrollment.status == EnrollmentStatus.pending_renewal or payment.payment_type == "renewal"
             is_change = enrollment.status == EnrollmentStatus.pending_package_change or payment.payment_type == "package_change"
 

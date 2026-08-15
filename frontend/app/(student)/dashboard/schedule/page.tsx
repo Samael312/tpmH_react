@@ -1117,6 +1117,39 @@ export default function SchedulePage() {
           </div>
         )}
 
+        {stage === "ready" && activeEnrollment && (
+          <div className="max-w-2xl mx-auto w-full">
+            {activeEnrollment.package?.classes_count == null ? (
+              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-4 flex items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <PackageIcon className="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-black text-indigo-800">
+                      Paquete ilimitado — {activeEnrollment.available_credits ?? activeEnrollment.prepaid_unlimited_credits ?? 0} créditos disponibles
+                    </p>
+                    <p className="text-xs text-indigo-600 mt-0.5">
+                      Tu plan es de clases ilimitadas. Puedes comprar más créditos cuando quieras desde tu panel principal.
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  href="/dashboard"
+                  className="flex-shrink-0 px-4 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded-xl shadow-sm transition-colors whitespace-nowrap"
+                >
+                  Comprar créditos
+                </Link>
+              </div>
+            ) : (
+              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl px-5 py-3 flex items-center gap-2">
+                <PackageIcon className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                <p className="text-sm font-bold text-emerald-700">
+                  Créditos disponibles: {activeEnrollment.available_credits ?? Math.max((activeEnrollment.unlocked_credits ?? 0) - activeEnrollment.classes_used, 0)} / {activeEnrollment.unlocked_credits ?? 0}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {!isSingleTenant && myTeachers.length > 1 && (
           <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-white shadow-lg p-5 max-w-2xl">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
