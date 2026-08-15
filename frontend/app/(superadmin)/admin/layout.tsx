@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useAuthStore } from '@/store/authStore'
 import NavBar from '@/components/layout/NavBar'
+import { RefreshButton } from '@/components/ui'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -20,7 +21,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [user, hasHydrated])
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+    <div className="flex min-h-screen bg-slate-50 overflow-hidden font-sans">
 
       <NavBar />
         
@@ -30,7 +31,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         
         {/* Topbar */}
         <header className="h-20 sticky top-0 z-10 border-b border-slate-200/50
-                           bg-white/80 backdrop-blur-md px-8
+                           bg-white/80 backdrop-blur-md px-4 sm:px-8
                            flex items-center justify-between shadow-sm shadow-slate-100/50">
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-pink-500 animate-pulse"/>
@@ -39,7 +40,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </span>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <RefreshButton onRefresh={() => window.location.reload()} className="bg-slate-50" />
             <div className="hidden md:flex flex-col items-end">
               <span className="text-xs font-bold text-slate-700">{user?.name}</span>
               <span className="text-[10px] text-pink-400 font-bold uppercase tracking-widest leading-none">Superadmin</span>
@@ -51,7 +53,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </header>
 
         {/* Page content */}
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 custom-scrollbar">
           <div className="max-w-[1400px] mx-auto">
             {children}
           </div>

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
 import api from "@/lib/api";
 import NavBar from "@/components/layout/NavBar";
+import { PageSkeleton, RefreshButton } from "@/components/ui";
 import {
   Home,
   CalendarDays,
@@ -85,7 +86,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   if (!checked && !isFullscreen) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
+        <PageSkeleton />
       </div>
     );
   }
@@ -95,12 +96,13 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="flex min-h-screen bg-slate-50 overflow-hidden">
       <NavBar />
+      <RefreshButton onRefresh={() => window.location.reload()} className="fixed right-4 top-4 z-[60] bg-white md:right-6" />
 
       {/* ─── Área de Contenido ─── */}
-      <main className="flex-1 h-screen overflow-y-auto relative bg-slate-50">
-        <div className="max-w-7xl mx-auto px-6 py-8 md:px-10 md:py-12 min-h-full flex flex-col">
+      <main className="flex-1 min-h-screen overflow-y-auto relative bg-slate-50">
+        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 md:px-10 md:py-12 min-h-full flex flex-col">
           <div className="flex-1">{children}</div>
           <footer className="text-center py-6 mt-12 text-slate-400 text-sm font-medium border-t border-slate-200/60">
             © {new Date().getFullYear()} TuProfeMaria. Todos los derechos reservados.

@@ -19,3 +19,15 @@
   .animate-fade-up-2 { animation-delay: 200ms; }
   .animate-fade-up-3 { animation-delay: 300ms; }
 }
+
+@layer components {
+  .app-page {
+    @apply space-y-6 sm:space-y-8 bg-white min-h-screen p-4 sm:p-6 rounded-2xl sm:rounded-3xl;
+  }
+}
+
+@media (max-width: 640px) {
+  html { font-size: 15px; }
+  table { min-width: 640px; }
+  .custom-scrollbar { -webkit-overflow-scrolling: touch; }
+}

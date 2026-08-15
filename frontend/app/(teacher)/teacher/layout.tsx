@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuthStore } from '@/store/authStore'
 import NavBar from '@/components/layout/NavBar'
+import { PageSkeleton, RefreshButton } from '@/components/ui'
 import api from '@/lib/api'
 
 const FULLSCREEN_ROUTES = ['/teacher/onboarding']
@@ -73,7 +74,7 @@ export default function TeacherLayout({
   if (!ready) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
+        <PageSkeleton />
       </div>
     )
   }
@@ -84,11 +85,11 @@ export default function TeacherLayout({
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+    <div className="flex min-h-screen bg-slate-50 overflow-hidden font-sans">
       <NavBar />
 
       <main className="flex-1 flex flex-col min-w-0 bg-slate-50">
-        <header className="h-20 border-b border-pink-100/50 bg-white/80 backdrop-blur-md px-8
+        <header className="h-20 border-b border-pink-100/50 bg-white/80 backdrop-blur-md px-4 sm:px-8
                            flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-[10px] font-black text-white bg-pink-500 px-2 py-0.5 rounded-full uppercase tracking-tighter shadow-sm shadow-pink-200">
@@ -99,7 +100,8 @@ export default function TeacherLayout({
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <RefreshButton onRefresh={() => window.location.reload()} className="bg-slate-50" />
             <div className="hidden md:flex flex-col items-end">
               <span className="text-xs font-bold text-slate-700">{user?.name}</span>
               <span className="text-[10px] text-pink-400 font-medium italic leading-none">
@@ -112,7 +114,7 @@ export default function TeacherLayout({
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 custom-scrollbar">
           <div className="max-w-7xl mx-auto">
             {children}
           </div>

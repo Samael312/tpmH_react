@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { 
   LayoutDashboard, Users, GraduationCap, Calendar, Settings, LogOut, 
-  MonitorPlay, UserCircle, ClipboardEdit, CreditCard, Book, BarChart, ChevronLeft, Check,
+  MonitorPlay, UserCircle, ClipboardEdit, CreditCard, Book, BarChart, ChevronLeft, Menu, X, Check,
   CheckCheck,
   NewspaperIcon,
   Package as PackageIcon
@@ -16,6 +16,7 @@ export default function DashboardSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   
   // 👇 1. ESTADO PARA EVITAR EL ERROR DE NEXT.JS
   const [isMounted, setIsMounted] = useState(false);
@@ -40,10 +41,26 @@ export default function DashboardSidebar() {
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
 
   return (
+    <>
+    <button
+      onClick={() => setMobileOpen(true)}
+      className="fixed left-4 top-4 z-[60] md:hidden w-11 h-11 rounded-2xl bg-white border border-pink-100 shadow-lg shadow-pink-500/10 flex items-center justify-center text-pink-500"
+      aria-label="Abrir menú"
+    >
+      <Menu className="w-5 h-5" />
+    </button>
+    {mobileOpen && (
+      <button
+        onClick={() => setMobileOpen(false)}
+        className="fixed inset-0 z-[65] bg-slate-900/40 backdrop-blur-sm md:hidden"
+        aria-label="Cerrar menú"
+      />
+    )}
     <aside className={`
       flex flex-col bg-white border-r border-pink-100 shadow-xl shadow-pink-500/5
-      transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] flex-shrink-0 z-50
-      ${collapsed ? "w-20" : "w-64"}
+      fixed md:static inset-y-0 left-0 transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] flex-shrink-0 z-[70] md:z-50
+      ${mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+      ${collapsed ? "md:w-20 w-64" : "w-64"}
     `}>
       {/* ─── LOGO SECTION ─── */}
       <div className="flex items-center gap-3 px-5 py-8">
@@ -56,6 +73,9 @@ export default function DashboardSidebar() {
             <span className="text-[11px] font-bold text-pink-400 uppercase tracking-widest">Portal</span>
           </div>
         )}
+        <button onClick={() => setMobileOpen(false)} className="ml-auto md:hidden text-slate-400 hover:text-pink-500" aria-label="Cerrar menú">
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
       {/* ─── MENÚS SCROLLABLES ─── */}
@@ -158,6 +178,7 @@ export default function DashboardSidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }
 
