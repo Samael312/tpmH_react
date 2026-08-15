@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional 
 from app.db.base import get_db
 from app.auth.dependencies import get_current_user, get_current_teacher
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.teacher import TeacherProfile, TeacherStatus
 from app.schemas.teacher import (
     TeacherProfileResponse,
@@ -14,7 +14,7 @@ from app.models.student import StudentProfile
 from app.core.storage import upload_file, delete_file
 from app.models.package import Enrollment
 from app.models.material import Material, MaterialAssignment
-
+from app.core.email import send_admin_new_teacher_pending_email
 
 router = APIRouter()
 
@@ -290,6 +290,14 @@ async def upload_teacher_video(
     profile.video_public_id = result["public_id"]
     db.commit()
     db.refresh(profile)
+
+    admin_emails = [a.email for a in db.query(User).filter(User.role == UserRole.superadmin, User.is_active == True).all()]
+    for admin_email in admin_emails:
+        send_admin_new_teacher_pending_email(
+            to_email=admin_email, teacher_name=f"{current_user.name} {current_user.surname}",
+            teacher_email=current_user.email,
+            subjects_or_languages=(profile.subjects or []) + (profile.languages or []),
+        )
 
     return {
         "message": "Video subido correctamente. Tu perfil está en revisión por el equipo.",

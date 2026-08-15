@@ -7,7 +7,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from app.core.email import send_class_cancelled_email, send_class_cancelled_teacher_email
+from app.core.email import (
+    send_class_cancelled_email, 
+    send_class_cancelled_teacher_email,
+    send_class_no_show_email,
+    send_class_rescheduled_student_email,
+    send_class_rescheduled_teacher_email
+)
 from app.auth.dependencies import (
     get_current_student,
     get_current_staff,
@@ -26,7 +32,7 @@ from app.core.class_logic import (
     finalize_past_classes,
     class_counts_towards_package
 )
-from app.core.timezone import UTC, utc_now
+from app.core.timezone import UTC, utc_now, format_local_datetime
 from app.db.base import get_db
 from app.models.class_ import Class, ClassType
 from app.models.package import Enrollment, EnrollmentStatus
@@ -154,6 +160,33 @@ def _sync_google_calendar_cancelled(teacher_id: int, event_id: Optional[str], db
         logger.error(f"Error al sincronizar Google Calendar (cancelación): {e}")
 
 
+def _send_reschedule_emails_helper(class_: Class, old_start: datetime, changed_by: str):
+    """Función de ayuda para enviar correos tras la reprogramación"""
+    student_user = class_.student.user if class_.student else None
+    teacher_user = class_.teacher.user if class_.teacher else None
+    student_name = f"{student_user.name} {student_user.surname}" if student_user else ""
+    teacher_name = f"{teacher_user.name} {teacher_user.surname}" if teacher_user else ""
+
+    if student_user and class_.student:
+        send_class_rescheduled_student_email(
+            to_email=student_user.email,
+            student_name=student_user.name,
+            teacher_name=teacher_name,
+            old_start_local=format_local_datetime(old_start, class_.student.timezone),
+            new_start_local=format_local_datetime(class_.start_time_utc, class_.student.timezone),
+            changed_by=changed_by
+        )
+    
+    if teacher_user and class_.teacher:
+        send_class_rescheduled_teacher_email(
+            to_email=teacher_user.email,
+            teacher_name=teacher_user.name,
+            student_name=student_name,
+            old_start_local=format_local_datetime(old_start, class_.teacher.timezone),
+            new_start_local=format_local_datetime(class_.start_time_utc, class_.teacher.timezone),
+            changed_by=changed_by
+        )
+
 # ─── ESTUDIANTE ──────────────────────────────────────────────────────────────
 
 @router.get("/my-classes", response_model=ClassListResponse)
@@ -210,13 +243,17 @@ def cancel_class_student(
 
     class_.status = "cancelled"
 
-    if class_.used_prepaid_credit and class_.enrollment_id:
-        enrollment = db.query(Enrollment).filter(Enrollment.id == class_.enrollment_id).first()
-        if enrollment:
-            enrollment.prepaid_unlimited_credits += 1
-        class_.used_prepaid_credit = False
-    elif class_.class_type == ClassType.regular and class_.enrollment_id and old_counts:
-        update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
+    counts_as_used = class_counts_towards_package("cancelled", class_.start_time_utc)
+    credit_returned = not counts_as_used
+
+    if credit_returned:
+        if class_.used_prepaid_credit and class_.enrollment_id:
+            enrollment = db.query(Enrollment).filter(Enrollment.id == class_.enrollment_id).first()
+            if enrollment:
+                enrollment.prepaid_unlimited_credits += 1
+            class_.used_prepaid_credit = False
+        elif class_.class_type == ClassType.regular and class_.enrollment_id and old_counts:
+            update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
 
     db.commit()
 
@@ -228,7 +265,7 @@ def cancel_class_student(
             to_email=teacher.user.email,
             teacher_name=teacher.user.name,
             student_name=f"{student_user.name} {student_user.surname}",
-            class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            class_start_utc=format_local_datetime(class_.start_time_utc, teacher.timezone),
             cancelled_by="student",
         )
 
@@ -267,12 +304,16 @@ def reschedule_class_student(
             detail=error_msg
         )
 
+    old_start = class_.start_time_utc
+
     class_.start_time_utc = data.start_time_utc
     class_.end_time_utc = data.end_time_utc
     class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
     class_.status = "pending_trial" if class_.class_type == ClassType.trial else "pending"
     db.commit()
     db.refresh(class_)
+    
+    _send_reschedule_emails_helper(class_, old_start, changed_by="student")
 
     _sync_google_calendar_updated(class_, db)
     return _build_class_response(class_, db)
@@ -442,6 +483,15 @@ def update_class_status(
     db.commit()
     db.refresh(class_)
 
+    if data.status == "no_show":
+        student_user = class_.student.user if class_.student else None
+        if student_user:
+            send_class_no_show_email(
+                to_email=student_user.email,
+                student_name=student_user.name,
+                class_start_local=format_local_datetime(class_.start_time_utc, class_.student.timezone),
+            )
+
     _sync_google_calendar_updated(class_, db)
     return _build_class_response(class_, db)
 
@@ -468,13 +518,17 @@ def cancel_class_teacher(
 
     class_.status = "cancelled"
 
-    if class_.used_prepaid_credit and class_.enrollment_id:
-        enrollment = db.query(Enrollment).filter(Enrollment.id == class_.enrollment_id).first()
-        if enrollment:
-            enrollment.prepaid_unlimited_credits += 1
-        class_.used_prepaid_credit = False
-    elif class_.class_type == ClassType.regular and class_.enrollment_id and old_counts:
-        update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
+    counts_as_used = class_counts_towards_package("cancelled", class_.start_time_utc)
+    credit_returned = not counts_as_used
+
+    if credit_returned:
+        if class_.used_prepaid_credit and class_.enrollment_id:
+            enrollment = db.query(Enrollment).filter(Enrollment.id == class_.enrollment_id).first()
+            if enrollment:
+                enrollment.prepaid_unlimited_credits += 1
+            class_.used_prepaid_credit = False
+        elif class_.class_type == ClassType.regular and class_.enrollment_id and old_counts:
+            update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
 
     db.commit()
 
@@ -485,8 +539,9 @@ def cancel_class_teacher(
             to_email=student.user.email,
             student_name=student.user.name,
             teacher_name=f"{current_user.name} {current_user.surname}",
-            class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            class_start_local=format_local_datetime(class_.start_time_utc, student.timezone),
             cancelled_by="teacher",
+            credit_returned=credit_returned,
         )
 
     _sync_google_calendar_cancelled(class_.teacher_id, class_.google_event_id, db)
@@ -523,12 +578,16 @@ def reschedule_class_teacher(
             detail=error_msg
         )
 
+    old_start = class_.start_time_utc
+
     class_.start_time_utc = data.start_time_utc
     class_.end_time_utc = data.end_time_utc
     class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
     class_.status = "pending_trial" if class_.class_type == ClassType.trial else "pending"
     db.commit()
     db.refresh(class_)
+
+    _send_reschedule_emails_helper(class_, old_start, changed_by="teacher")
 
     _sync_google_calendar_updated(class_, db)
     return _build_class_response(class_, db)
@@ -556,6 +615,8 @@ def reschedule_class_admin(
             status_code=status.HTTP_409_CONFLICT,
             detail=error_msg
         )
+    
+    old_start = class_.start_time_utc
 
     class_.start_time_utc = data.start_time_utc
     class_.end_time_utc = data.end_time_utc
@@ -563,6 +624,8 @@ def reschedule_class_admin(
     class_.status = "pending_trial" if class_.class_type == ClassType.trial else "pending"
     db.commit()
     db.refresh(class_)
+
+    _send_reschedule_emails_helper(class_, old_start, changed_by="admin")
 
     _sync_google_calendar_updated(class_, db)
     return _build_class_response(class_, db)
@@ -590,13 +653,17 @@ def cancel_class_admin(
 
     class_.status = "cancelled"
 
-    if class_.used_prepaid_credit and class_.enrollment_id:
-        enrollment = db.query(Enrollment).filter(Enrollment.id == class_.enrollment_id).first()
-        if enrollment:
-            enrollment.prepaid_unlimited_credits += 1
-        class_.used_prepaid_credit = False
-    elif class_.class_type == ClassType.regular and class_.enrollment_id and old_counts:
-        update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
+    counts_as_used = class_counts_towards_package("cancelled", class_.start_time_utc)
+    credit_returned = not counts_as_used
+
+    if credit_returned:
+        if class_.used_prepaid_credit and class_.enrollment_id:
+            enrollment = db.query(Enrollment).filter(Enrollment.id == class_.enrollment_id).first()
+            if enrollment:
+                enrollment.prepaid_unlimited_credits += 1
+            class_.used_prepaid_credit = False
+        elif class_.class_type == ClassType.regular and class_.enrollment_id and old_counts:
+            update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
 
     db.commit()
 
@@ -610,8 +677,9 @@ def cancel_class_admin(
             to_email=student.user.email,
             student_name=student.user.name,
             teacher_name=teacher_name,
-            class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            class_start_local=format_local_datetime(class_.start_time_utc, student.timezone),
             cancelled_by="staff",
+            credit_returned=credit_returned,
         )
 
     if teacher and teacher.user:
@@ -620,7 +688,7 @@ def cancel_class_admin(
             to_email=teacher.user.email,
             teacher_name=teacher.user.name,
             student_name=student_name,
-            class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            class_start_utc=format_local_datetime(class_.start_time_utc, teacher.timezone),
             cancelled_by="staff",
         )
 

@@ -75,6 +75,7 @@ class Enrollment(Base):
     prepaid_unlimited_credits = Column(Integer, default=0)
     payment_status = Column(String, default="unpaid")  # "unpaid" | "partially_paid" | "paid"
     installments_paid = Column(Integer, default=0)
+    low_credit_notified_at = Column(DateTime(timezone=True), nullable=True)
     activated_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

@@ -13,6 +13,7 @@ from app.models.student import StudentProfile
 from app.models.class_ import Class
 from app.models.payment import Payment, Withdrawal
 from app.models.package import Enrollment
+from app.core.email import send_teacher_status_update_email
 from app.core.timezone import utc_now, UTC
 from app.models.student_teacher_link import StudentTeacherLink
 from app.core.teacher_students import link_student_to_teacher
@@ -268,6 +269,12 @@ def update_teacher_status(
         TeacherStatus.suspended: "suspendido",
         TeacherStatus.pending: "puesto en revisión",
     }
+
+    if teacher.user:
+        send_teacher_status_update_email(
+            to_email=teacher.user.email, teacher_name=teacher.user.name,
+            new_status=new_status, reason=data.reason,
+        )
 
     return {
         "message": f"Profesor {action_map.get(new_status, 'actualizado')} correctamente",

@@ -3,7 +3,7 @@
 import logging
 from datetime import timedelta
 from typing import List, Optional
-
+from app.core.timezone import format_local_datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 import math
@@ -19,6 +19,12 @@ from app.core.email import (
     send_class_confirmed_email,
     send_class_confirmed_teacher_email,
     send_new_booking_teacher_email,
+    send_payment_failed_email,
+    send_payment_receipt_email,
+    send_admin_payment_pending_email,
+    send_withdrawal_requested_teacher_email,
+    send_admin_withdrawal_requested_email,
+    send_withdrawal_processed_email
 )
 from app.core.teacher_students import link_student_to_teacher
 from app.core.timezone import utc_now
@@ -28,7 +34,7 @@ from app.models.package import Enrollment, EnrollmentStatus, Package
 from app.models.payment import Payment, TeacherWallet, Withdrawal
 from app.models.payment_config import PaymentConfig
 from app.models.teacher import TeacherProfile, TeacherStatus
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.payments import (
     BookAndPayRequest,
     NotifyPaymentRequest,
@@ -372,27 +378,28 @@ def book_class(
         db.commit()
         db.refresh(trial_class)
 
-        # Enviar correo al profesor
-        #if teacher.user:
-        #    send_new_booking_teacher_email(
-        #        to_email=teacher.user.email,
-        #        teacher_name=teacher.user.name,
-        #        student_name=f"{current_user.name} {current_user.surname}",
-        #        subject=trial_subject,
-        #        class_start_utc=trial_start.strftime("%Y-%m-%d %H:%M UTC"),
-        #        duration_minutes=30,
-        #        is_trial=True,
-        #    )
-
-        # Enviar correo de confirmación de registro al estudiante
-        #send_class_booking_confirmation(
-        #    to_email=current_user.email,
-        #    student_name=current_user.name,
-        #    teacher_name=f"{teacher.user.name} {teacher.user.surname}" if teacher.user else "",
-        #    subject=trial_subject,
-        #    class_start_utc=trial_start.strftime("%Y-%m-%d %H:%M UTC"),
-        #    duration_minutes=30,
-        #)
+        if teacher.user:
+            send_new_booking_teacher_email(
+                to_email=teacher.user.email,
+                teacher_name=teacher.user.name,
+                student_first_name=current_user.name,
+                student_last_name=current_user.surname,
+                student_nationality=current_user.nationality,
+                student_phone=current_user.phone_number,
+                subject=trial_subject,
+                class_start_local=format_local_datetime(trial_start, teacher.timezone),
+                duration_minutes=30,
+                is_trial=True,
+            )
+        send_class_booking_confirmation(
+            to_email=current_user.email,
+            student_name=current_user.name,
+            teacher_name=f"{teacher.user.name} {teacher.user.surname}" if teacher.user else "",
+            subject=trial_subject,
+            class_start_local=format_local_datetime(trial_start, current_user.student_profile.timezone),
+            duration_minutes=30,
+            is_trial=True,
+        )
 
         return {
             "class_id": trial_class.id,
@@ -460,9 +467,8 @@ def book_class(
             student_name=current_user.name,
             teacher_name=f"{teacher_user.name} {teacher_user.surname}" if teacher_user else "",
             subject=new_class.subject or "Clase",
-            class_start_utc=new_class.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            class_start_local=format_local_datetime(new_class.start_time_utc, current_user.student_profile.timezone),
             duration_minutes=new_class.duration,
-            meet_link=new_class.meet_link or "",
         )
         if teacher_user:
             send_class_confirmed_teacher_email(
@@ -470,9 +476,8 @@ def book_class(
                 teacher_name=teacher_user.name,
                 student_name=f"{current_user.name} {current_user.surname}",
                 subject=new_class.subject or "Clase",
-                class_start_utc=new_class.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+                class_start_local=format_local_datetime(new_class.start_time_utc, enrollment.teacher.timezone),
                 duration_minutes=new_class.duration,
-                meet_link=new_class.meet_link or "",
             )
 
         return {
@@ -525,9 +530,8 @@ def book_class(
                 student_name=current_user.name,
                 teacher_name=f"{teacher_user.name} {teacher_user.surname}" if teacher_user else "",
                 subject=new_class.subject or "Clase",
-                class_start_utc=new_class.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+                class_start_local=format_local_datetime(new_class.start_time_utc, current_user.student_profile.timezone),
                 duration_minutes=new_class.duration,
-                meet_link=new_class.meet_link or "",
             )
             if teacher_user:
                 send_class_confirmed_teacher_email(
@@ -535,9 +539,8 @@ def book_class(
                     teacher_name=teacher_user.name,
                     student_name=f"{current_user.name} {current_user.surname}",
                     subject=new_class.subject or "Clase",
-                    class_start_utc=new_class.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+                    class_start_local=format_local_datetime(new_class.start_time_utc, enrollment.teacher.timezone),
                     duration_minutes=new_class.duration,
-                    meet_link=new_class.meet_link or "",
                 )
 
             return {
@@ -552,19 +555,19 @@ def book_class(
             student_name=current_user.name,
             teacher_name=f"{teacher_user.name} {teacher_user.surname}" if teacher_user else "",
             subject=new_class.subject or "Clase",
-            class_start_utc=new_class.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            class_start_local=format_local_datetime(new_class.start_time_utc, current_user.student_profile.timezone),
             duration_minutes=new_class.duration,
         )
-        #if teacher_user:
-        #    send_new_booking_teacher_email(
-        #        to_email=teacher_user.email,
-        #        teacher_name=teacher_user.name,
-        #        student_name=f"{current_user.name} {current_user.surname}",
-        #        subject=new_class.subject or "Clase",
-        #        class_start_utc=new_class.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
-        #        duration_minutes=new_class.duration,
-        #        is_trial=False,
-        #    )
+        if teacher_user:
+            send_new_booking_teacher_email(
+                to_email=teacher_user.email,
+                teacher_name=teacher_user.name,
+                student_name=f"{current_user.name} {current_user.surname}",
+                subject=new_class.subject or "Clase",
+                class_start_local=format_local_datetime(new_class.start_time_utc, enrollment.teacher.timezone),
+                duration_minutes=new_class.duration,
+                is_trial=False,
+            )
 
         config = db.query(PaymentConfig).first()
         return {
@@ -654,6 +657,17 @@ def validate_payment(
             if class_:
                 class_.status = "pending"
 
+        student_user = payment.student.user if payment.student else None
+        if student_user:
+            concept_map = {"single_class": "Clase suelta", "package": "Paquete", "renewal": "Renovación", "package_change": "Cambio de paquete", "unlimited_recharge": "Recarga de créditos"}
+            send_payment_failed_email(
+                to_email=student_user.email,
+                student_name=student_user.name,
+                concept=concept_map.get(payment.payment_type, "Pago"),
+                amount=payment.amount_total,
+                rejection_reason=data.rejection_reason,
+            )
+
         db.commit()
         return {"message": "Pago rechazado"}
 
@@ -693,9 +707,8 @@ def validate_payment(
                     student_name=student_user.name,
                     teacher_name=f"{teacher_profile.user.name} {teacher_profile.user.surname}" if teacher_profile and teacher_profile.user else "",
                     subject=class_.subject or "Clase",
-                    class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+                    class_start_local=format_local_datetime(class_.start_time_utc, student_user.student_profile.timezone),
                     duration_minutes=class_.duration,
-                    meet_link=data.meet_link,
                 )
             if teacher_profile and teacher_profile.user:
                 send_class_confirmed_teacher_email(
@@ -703,9 +716,8 @@ def validate_payment(
                     teacher_name=teacher_profile.user.name,
                     student_name=f"{student_user.name} {student_user.surname}" if student_user else "",
                     subject=class_.subject or "Clase",
-                    class_start_utc=class_.start_time_utc.strftime("%Y-%m-%d %H:%M UTC"),
+                    class_start_local=format_local_datetime(class_.start_time_utc, teacher_profile.timezone),
                     duration_minutes=class_.duration,
-                    meet_link=data.meet_link,
                 )
 
     elif payment.payment_type == "unlimited_recharge":
@@ -755,6 +767,18 @@ def validate_payment(
 
             if enrollment.activated_at is None and enrollment.payment_status in ("paid", "partially_paid"):
                 enrollment.activated_at = now
+
+    student_user = payment.student.user if payment.student else None
+    if student_user and not payment.is_manual_grant:
+        concept_map = {"single_class": "Clase suelta", "package": "Paquete", "renewal": "Renovación", "package_change": "Cambio de paquete", "unlimited_recharge": "Recarga de créditos"}
+        send_payment_receipt_email(
+            to_email=student_user.email,
+            student_name=student_user.name,
+            concept=concept_map.get(payment.payment_type, "Pago"),
+            amount=payment.amount_total,
+            payment_method=payment.payment_method,
+            transaction_reference=payment.transaction_id,
+        )
 
     db.commit()
     return {"message": "Pago aprobado correctamente", "amount_credited": amount_teacher}
@@ -907,6 +931,18 @@ def request_withdrawal_v2(
     db.add(withdrawal)
     db.commit()
     db.refresh(withdrawal)
+
+    send_withdrawal_requested_teacher_email(
+        to_email=current_user.email, teacher_name=current_user.name,
+        amount=data.amount, destination_method="Transferencia",
+    )
+    admin_emails = [a.email for a in db.query(User).filter(User.role == UserRole.superadmin, User.is_active == True).all()]
+    for admin_email in admin_emails:
+        send_admin_withdrawal_requested_email(
+            to_email=admin_email, teacher_name=f"{current_user.name} {current_user.surname}",
+            amount=data.amount, destination_details=data.payment_info,
+        )
+
     return withdrawal
 
 
@@ -944,6 +980,15 @@ def process_withdrawal_v2(
             wallet.available_balance += withdrawal.amount
 
     db.commit()
+
+    teacher_user = teacher.user if (teacher := db.query(TeacherProfile).filter(TeacherProfile.id == withdrawal.teacher_id).first()) else None
+    if teacher_user:
+        send_withdrawal_processed_email(
+            to_email=teacher_user.email, teacher_name=teacher_user.name,
+            status="completed" if data.action == "complete" else "rejected",
+            amount=withdrawal.amount, reference=data.reference, rejection_reason=data.rejection_reason,
+        )
+
     return {"message": f"Retiro {'completado' if data.action == 'complete' else 'rechazado'}"}
 
 
@@ -1052,6 +1097,18 @@ def notify_payment(
         db.add(payment)
         db.commit()
         db.refresh(payment)
+        
+        admin_emails = [a.email for a in db.query(User).filter(User.role == UserRole.superadmin, User.is_active == True).all()]
+        for admin_email in admin_emails:
+            send_admin_payment_pending_email(
+                to_email=admin_email,
+                student_name=current_user.name,
+                amount=amount,
+                concept="single_class",
+                payment_method="manual",
+                transaction_reference=data.transaction_reference,
+            )
+            
         return {"payment_id": payment.id, "class_status": class_.status, "expires_at": expires_at}
 
     # ── Recarga prepagada ilimitada ──
@@ -1076,6 +1133,18 @@ def notify_payment(
         db.add(payment)
         db.commit()
         db.refresh(payment)
+        
+        admin_emails = [a.email for a in db.query(User).filter(User.role == UserRole.superadmin, User.is_active == True).all()]
+        for admin_email in admin_emails:
+            send_admin_payment_pending_email(
+                to_email=admin_email,
+                student_name=current_user.name,
+                amount=amount,
+                concept="unlimited_recharge",
+                payment_method="manual",
+                transaction_reference=data.transaction_reference,
+            )
+            
         return {"payment_id": payment.id, "message": "Recarga notificada, en espera de aprobación"}
 
     # ── Paquete (inicial, renovación o cambio) ──
@@ -1239,6 +1308,18 @@ def notify_payment(
     db.add(payment)
     db.commit()
     db.refresh(payment)
+    
+    admin_emails = [a.email for a in db.query(User).filter(User.role == UserRole.superadmin, User.is_active == True).all()]
+    for admin_email in admin_emails:
+        send_admin_payment_pending_email(
+            to_email=admin_email,
+            student_name=current_user.name,
+            amount=amount,
+            concept=payment_type,
+            payment_method="manual",
+            transaction_reference=data.transaction_reference,
+        )
+        
     return {"payment_id": payment.id, "message": "Pago notificado, en espera de aprobación"}
 
 @router.get("/admin/withdrawals/pending")

@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, time
 from zoneinfo import ZoneInfo
 from typing import List, Tuple
 import logging
+from typing import Optional 
 
 logger = logging.getLogger(__name__)
 
@@ -281,3 +282,17 @@ def validate_timezone(tz_str: str) -> bool:
         return True
     except Exception:
         return False
+
+def format_local_datetime(dt_utc: datetime, tz_str: Optional[str] = None) -> str:
+    """
+    Formatea un datetime UTC en la hora LOCAL del destinatario, para usar
+    en emails. Si tz_str es None o inválido, cae a UTC sin romper el envío.
+    """
+    MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+              "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+    try:
+        local_dt = from_utc(dt_utc, tz_str) if tz_str else dt_utc.astimezone(UTC)
+    except Exception:
+        local_dt = dt_utc if dt_utc.tzinfo else dt_utc.replace(tzinfo=UTC)
+
+    return f"{local_dt.day} de {MESES[local_dt.month - 1]} de {local_dt.year} · {local_dt.strftime('%H:%M')}"

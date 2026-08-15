@@ -9,10 +9,8 @@ resend.api_key = settings.RESEND_API_KEY
 PLATFORM_NAME = "TuProfeMaria"
 LOGO_URL = f"{settings.FRONTEND_URL}/assets/logo.png"
 
-# ─── Paleta (igual que tailwind.config.ts) ───────────────────────────────────
 COLOR_PRIMARY = "#E91E8C"
 COLOR_PRIMARY_LIGHT = "#F06DB3"
-COLOR_PRIMARY_DARK = "#C0166F"
 COLOR_INK = "#1a1a2e"
 COLOR_MUTED = "#6B7280"
 COLOR_SUBTLE = "#9CA3AF"
@@ -22,6 +20,7 @@ COLOR_GREEN = "#22C55E"
 COLOR_AMBER = "#F59E0B"
 COLOR_RED = "#EF4444"
 COLOR_BLUE = "#3B82F6"
+COLOR_PURPLE = "#8b5cf6"
 
 
 # ─── Bloques reutilizables ────────────────────────────────────────────────────
@@ -64,7 +63,6 @@ def _badge(text: str, color: str) -> str:
 
 
 def _base_template(preheader: str, badge_html: str, heading: str, body_html: str) -> str:
-    """Envoltorio de marca: header con logo + gradiente, tarjeta blanca, footer."""
     return f"""
 <!DOCTYPE html>
 <html lang="es">
@@ -74,15 +72,11 @@ def _base_template(preheader: str, badge_html: str, heading: str, body_html: str
   <title>{PLATFORM_NAME}</title>
 </head>
 <body style="margin:0;padding:0;background:{COLOR_SURFACE_SOFT};font-family:Arial,sans-serif;">
-  <!-- preheader oculto -->
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;">{preheader}</div>
-
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:{COLOR_SURFACE_SOFT};padding:32px 16px;">
     <tr>
       <td align="center">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
-
-          <!-- Header -->
           <tr>
             <td style="background:linear-gradient(135deg,{COLOR_PRIMARY},{COLOR_PRIMARY_LIGHT});
                        border-radius:28px 28px 0 0;padding:32px 32px 28px;text-align:center;">
@@ -91,8 +85,6 @@ def _base_template(preheader: str, badge_html: str, heading: str, body_html: str
               <div style="color:#ffffff;font-size:18px;font-weight:800;letter-spacing:-0.3px;">{PLATFORM_NAME}</div>
             </td>
           </tr>
-
-          <!-- Card -->
           <tr>
             <td style="background:#ffffff;padding:36px 32px;border-radius:0 0 28px 28px;
                        box-shadow:0 20px 45px rgba(26,26,46,0.06);">
@@ -105,8 +97,6 @@ def _base_template(preheader: str, badge_html: str, heading: str, body_html: str
               </div>
             </td>
           </tr>
-
-          <!-- Footer -->
           <tr>
             <td style="text-align:center;padding:24px 12px 8px;">
               <p style="font-size:11px;color:{COLOR_SUBTLE};font-weight:700;letter-spacing:0.4px;text-transform:uppercase;margin:0;">
@@ -117,7 +107,6 @@ def _base_template(preheader: str, badge_html: str, heading: str, body_html: str
               </p>
             </td>
           </tr>
-
         </table>
       </td>
     </tr>
@@ -140,7 +129,9 @@ def _send(to_email: str, subject: str, html: str) -> bool:
         return False
 
 
-# ─── Autenticación ────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════
+# AUTENTICACIÓN
+# ══════════════════════════════════════════════════════════════════════════
 
 def send_password_reset_email(to_email: str, user_name: str, reset_token: str) -> bool:
     reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
@@ -150,220 +141,134 @@ def send_password_reset_email(to_email: str, user_name: str, reset_token: str) -
       Si no fuiste tú, puedes ignorar este correo con total tranquilidad.</p>
       {_cta_button("Restablecer contraseña", reset_url)}
     """
-    html = _base_template(
-        preheader="Restablece tu contraseña",
-        badge_html=_badge("Seguridad", COLOR_BLUE),
-        heading="Recuperar contraseña",
-        body_html=body,
-    )
+    html = _base_template("Restablece tu contraseña", _badge("Seguridad", COLOR_BLUE), "Recuperar contraseña", body)
     return _send(to_email, f"Restablecer contraseña — {PLATFORM_NAME}", html)
 
 
 def send_username_recovery_email(to_email: str, user_name: str, username: str) -> bool:
     body = f"""
       <p>Hola {user_name},</p>
-      <p>Recibimos una solicitud para recordarte tu nombre de usuario para acceder a la plataforma.</p>
+      <p>Recibimos una solicitud para recordarte tu nombre de usuario.</p>
       <div style="background:{COLOR_SURFACE_SOFT};border-radius:16px;padding:18px;margin:20px 0;text-align:center;">
         <p style="margin:0;font-size:12px;color:{COLOR_MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Tu nombre de usuario</p>
         <p style="margin:8px 0 0;font-size:22px;font-weight:800;color:{COLOR_PRIMARY};letter-spacing:-0.3px;">{username}</p>
       </div>
       <p>Si no fuiste tú, puedes ignorar este correo con total tranquilidad.</p>
     """
-    html = _base_template(
-        preheader="Recuperación de nombre de usuario",
-        badge_html=_badge("Seguridad", COLOR_BLUE),
-        heading="Tu nombre de usuario 👤",
-        body_html=body,
-    )
+    html = _base_template("Recuperación de nombre de usuario", _badge("Seguridad", COLOR_BLUE), "Tu nombre de usuario 👤", body)
     return _send(to_email, f"Recuperación de usuario — {PLATFORM_NAME}", html)
 
 
-# ─── Reservas / clases (ESTUDIANTE) ──────────────────────────────────────────
+def send_welcome_email(to_email: str, user_name: str, role: str) -> bool:
+    role_label = {"student": "Estudiante", "teacher": "Profesor(a)"}.get(role, "Usuario")
+    next_steps = (
+        "Explora nuestro catálogo de profesores y agenda tu primera clase de prueba — es gratis."
+        if role == "student" else
+        "Completa tu perfil público y configura tu disponibilidad para empezar a recibir estudiantes."
+    )
+    body = f"""
+      <p>Hola {user_name}, ¡qué gusto tenerte aquí!</p>
+      <p>Tu cuenta como <strong style="color:{COLOR_INK};">{role_label}</strong> ya está lista.</p>
+      <div style="background:{COLOR_SURFACE_SOFT};border-radius:16px;padding:16px 18px;margin:18px 0;">
+        <p style="margin:0;font-size:13px;color:{COLOR_INK};"><strong>Primer paso:</strong> {next_steps}</p>
+      </div>
+      {_cta_button("Ir a la plataforma", settings.FRONTEND_URL)}
+    """
+    html = _base_template("¡Bienvenido!", _badge("Bienvenida", COLOR_GREEN), f"¡Bienvenido, {user_name}! 🎉", body)
+    return _send(to_email, f"¡Bienvenido a {PLATFORM_NAME}!", html)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ESTUDIANTE
+# ══════════════════════════════════════════════════════════════════════════
 
 def send_class_booking_confirmation(
     to_email: str, student_name: str, teacher_name: str, subject: str,
-    class_start_utc: str, duration_minutes: int,
+    class_start_local: str, duration_minutes: int, is_trial: bool = False,
 ) -> bool:
     body = f"""
       <p>Hola {student_name},</p>
-      <p>Tu reserva ha sido registrada. Recuerda subir el comprobante de pago para confirmarla.</p>
+      <p>Tu {"clase de prueba" if is_trial else "reserva"} ha sido registrada.</p>
       {_detail_table([
         _detail_row("Profesor", teacher_name),
         _detail_row("Materia", subject),
-        _detail_row("Fecha/Hora (UTC)", class_start_utc),
+        _detail_row("Fecha y hora", class_start_local),
         _detail_row("Duración", f"{duration_minutes} minutos"),
       ])}
-      <p>Una vez el staff verifique tu pago recibirás el link de Google Meet.</p>
+      <p>Podrás ver el estado de tu clase desde tu panel en cualquier momento.</p>
+      {_cta_button("Ver mis clases", f"{settings.FRONTEND_URL}/dashboard/classes")}
     """
-    html = _base_template(
-        preheader="Tu reserva fue registrada",
-        badge_html=_badge("Reserva recibida", COLOR_AMBER),
-        heading="Reserva recibida 📅",
-        body_html=body,
-    )
+    html = _base_template("Tu reserva fue registrada", _badge("Reserva recibida", COLOR_AMBER), "Reserva recibida 📅", body)
     return _send(to_email, f"Reserva recibida — {PLATFORM_NAME}", html)
 
 
-def send_class_confirmed_email(
-    to_email: str, student_name: str, teacher_name: str, subject: str,
-    class_start_utc: str, duration_minutes: int, meet_link: str,
+def send_class_rescheduled_student_email(
+    to_email: str, student_name: str, teacher_name: str,
+    old_start_local: str, new_start_local: str, changed_by: str,
 ) -> bool:
+    who = {"student": "tú", "teacher": "tu profesor(a)", "admin": "el equipo de soporte"}.get(changed_by, changed_by)
     body = f"""
-      <p>Hola {student_name}, tu pago fue verificado. ¡Ya tienes tu clase confirmada!</p>
+      <p>Hola {student_name}, tu clase con <strong style="color:{COLOR_INK};">{teacher_name}</strong> fue reagendada por {who}.</p>
       {_detail_table([
-        _detail_row("Profesor", teacher_name),
-        _detail_row("Materia", subject),
-        _detail_row("Fecha/Hora (UTC)", class_start_utc),
-        _detail_row("Duración", f"{duration_minutes} minutos"),
+        _detail_row("Horario anterior", old_start_local),
+        _detail_row("Nuevo horario", new_start_local),
       ])}
-      {_cta_button("Unirme a la clase", meet_link)}
-      <p style="font-size:12px;color:{COLOR_SUBTLE};">Guarda este correo — el enlace lo necesitarás el día de la clase.</p>
+      {_cta_button("Ver mis clases", f"{settings.FRONTEND_URL}/dashboard/classes")}
     """
-    html = _base_template(
-        preheader="Tu clase fue confirmada",
-        badge_html=_badge("Confirmada", COLOR_GREEN),
-        heading="Clase confirmada ✅",
-        body_html=body,
-    )
-    return _send(to_email, f"Clase confirmada — {PLATFORM_NAME}", html)
+    html = _base_template("Tu clase fue reagendada", _badge("Reagendada", COLOR_BLUE), "Clase reagendada 🔄", body)
+    return _send(to_email, f"Clase reagendada — {PLATFORM_NAME}", html)
 
 
 def send_class_reminder_email(
-    to_email: str, student_name: str, teacher_name: str,
-    class_start_utc: str, meet_link: str, hours_before: int = 24,
+    to_email: str, student_name: str, teacher_name: str, subject: str,
+    class_start_local: str, hours_before: int = 24,
 ) -> bool:
     body = f"""
       <p>Hola {student_name},</p>
       <p>Tu clase con <strong style="color:{COLOR_INK};">{teacher_name}</strong> es en
       <strong style="color:{COLOR_PRIMARY};">{hours_before} horas</strong>.</p>
-      {_detail_table([_detail_row("Fecha/Hora (UTC)", class_start_utc)])}
-      {_cta_button("Unirme a la clase", meet_link) if meet_link else ""}
+      {_detail_table([
+        _detail_row("Materia", subject),
+        _detail_row("Fecha y hora", class_start_local),
+      ])}
+      <p style="font-size:12px;color:{COLOR_SUBTLE};">Recuerda tener tu cámara y micrófono listos antes de conectarte.</p>
+      {_cta_button("Ver mis clases", f"{settings.FRONTEND_URL}/dashboard/classes")}
     """
-    html = _base_template(
-        preheader=f"Tu clase es en {hours_before} horas",
-        badge_html=_badge("Recordatorio", COLOR_BLUE),
-        heading="Recordatorio de clase 🔔",
-        body_html=body,
-    )
+    html = _base_template(f"Tu clase es en {hours_before} horas", _badge("Recordatorio", COLOR_BLUE), "Recordatorio de clase 🔔", body)
     return _send(to_email, f"Recordatorio: clase en {hours_before}h — {PLATFORM_NAME}", html)
 
 
 def send_class_cancelled_email(
-    to_email: str, student_name: str, class_start_utc: str, cancelled_by: str,
+    to_email: str, student_name: str, class_start_local: str, cancelled_by: str,
+    reason: str | None = None, credit_returned: bool | None = None,
 ) -> bool:
-    reason = "cancelaste tu clase" if cancelled_by == "student" else "tu clase fue cancelada"
+    who = {"student": "cancelaste tu clase", "teacher": "tu profesor(a) canceló la clase", "staff": "el equipo canceló tu clase"}.get(cancelled_by, "tu clase fue cancelada")
+    credit_line = ""
+    if credit_returned is True:
+        credit_line = f'<p style="font-size:13px;color:{COLOR_GREEN};font-weight:700;">✓ La clase fue devuelta a tu paquete.</p>'
+    elif credit_returned is False:
+        credit_line = f'<p style="font-size:13px;color:{COLOR_AMBER};font-weight:700;">Esta clase se descontó de tu paquete según nuestra política de cancelación.</p>'
     body = f"""
-      <p>Hola {student_name}, {reason}.</p>
-      {_detail_table([_detail_row("Fecha/Hora (UTC)", class_start_utc)])}
-      <p>Si tienes dudas, contacta al staff o a tu profesor(a).</p>
+      <p>Hola {student_name}, {who}.</p>
+      {_detail_table([_detail_row("Fecha y hora", class_start_local)])}
+      {f'<p style="font-size:13px;color:{COLOR_MUTED};"><strong>Motivo:</strong> {reason}</p>' if reason else ""}
+      {credit_line}
       {_cta_button("Ir a la plataforma", settings.FRONTEND_URL)}
     """
-    html = _base_template(
-        preheader="Tu clase fue cancelada",
-        badge_html=_badge("Cancelada", COLOR_RED),
-        heading="Clase cancelada ❌",
-        body_html=body,
-    )
+    html = _base_template("Tu clase fue cancelada", _badge("Cancelada", COLOR_RED), "Clase cancelada ❌", body)
     return _send(to_email, f"Clase cancelada — {PLATFORM_NAME}", html)
 
 
-# ─── Reservas / clases (PROFESOR) ────────────────────────────────────────────
-
-def send_new_booking_teacher_email(
-    to_email: str, teacher_name: str, student_first_name: str, student_last_name: str,
-    student_nationality: str, student_phone: str, subject: str,
-    class_start_utc: str, duration_minutes: int, is_trial: bool = False,
-) -> bool:
-    student_full_name = f"{student_first_name} {student_last_name}".strip()
-
+def send_class_no_show_email(to_email: str, student_name: str, class_start_local: str) -> bool:
     body = f"""
-      <p>Hola {teacher_name}, tienes una nueva {"clase de prueba" if is_trial else "clase"} reservada.</p>
-      <p><strong style="color:{COLOR_INK};">Datos del estudiante:</strong></p>
-      {_detail_table([
-        _detail_row("Estudiante", student_full_name),
-        _detail_row("Nacionalidad", student_nationality if student_nationality else "No especificada"),
-        _detail_row("Teléfono / WhatsApp", student_phone if student_phone else "No especificado"),
-        _detail_row("Materia", subject),
-        _detail_row("Fecha/Hora (UTC)", class_start_utc),
-        _detail_row("Duración", f"{duration_minutes} minutos"),
-      ])}
-      <p>{"El staff confirmará la clase de prueba en breve." if is_trial else "La clase quedará confirmada una vez se valide el pago del estudiante."}</p>
-      {_cta_button("Ir a la plataforma", settings.FRONTEND_URL)}
+      <p>Hola {student_name}, tu profesor(a) marcó esta clase como inasistencia (no-show).</p>
+      {_detail_table([_detail_row("Fecha y hora", class_start_local)])}
+      <p>Esta clase fue descontada de tu paquete. Si crees que esto es un error o tuviste fuerza mayor, contacta a soporte.</p>
+      {_cta_button("Contactar soporte", settings.FRONTEND_URL)}
     """
-    html = _base_template(
-        preheader="Nueva clase reservada",
-        badge_html=_badge("Prueba" if is_trial else "Nueva reserva", COLOR_BLUE if is_trial else COLOR_AMBER),
-        heading="Nueva clase reservada 📥",
-        body_html=body,
-    )
-    return _send(to_email, f"Nueva reserva — {PLATFORM_NAME}", html)
+    html = _base_template("Inasistencia registrada", _badge("No-show", COLOR_AMBER), "Inasistencia registrada ⚠️", body)
+    return _send(to_email, f"Inasistencia registrada — {PLATFORM_NAME}", html)
 
-
-def send_class_confirmed_teacher_email(
-    to_email: str, teacher_name: str, student_name: str, subject: str,
-    class_start_utc: str, duration_minutes: int, meet_link: str,
-) -> bool:
-    body = f"""
-      <p>Hola {teacher_name}, el pago de <strong style="color:{COLOR_INK};">{student_name}</strong> fue verificado. La clase queda confirmada.</p>
-      {_detail_table([
-        _detail_row("Estudiante", student_name),
-        _detail_row("Materia", subject),
-        _detail_row("Fecha/Hora (UTC)", class_start_utc),
-        _detail_row("Duración", f"{duration_minutes} minutos"),
-      ])}
-      {_cta_button("Ver enlace de Meet", meet_link)}
-    """
-    html = _base_template(
-        preheader="Clase confirmada",
-        badge_html=_badge("Confirmada", COLOR_GREEN),
-        heading="Clase confirmada ✅",
-        body_html=body,
-    )
-    return _send(to_email, f"Clase confirmada — {PLATFORM_NAME}", html)
-
-
-def send_class_reminder_teacher_email(
-    to_email: str, teacher_name: str, student_name: str,
-    class_start_utc: str, meet_link: str, hours_before: int = 24,
-) -> bool:
-    body = f"""
-      <p>Hola {teacher_name},</p>
-      <p>Tu clase con <strong style="color:{COLOR_INK};">{student_name}</strong> es en
-      <strong style="color:{COLOR_PRIMARY};">{hours_before} horas</strong>.</p>
-      {_detail_table([_detail_row("Fecha/Hora (UTC)", class_start_utc)])}
-      {_cta_button("Unirme a la clase", meet_link) if meet_link else ""}
-    """
-    html = _base_template(
-        preheader=f"Tu clase es en {hours_before} horas",
-        badge_html=_badge("Recordatorio", COLOR_BLUE),
-        heading="Recordatorio de clase 🔔",
-        body_html=body,
-    )
-    return _send(to_email, f"Recordatorio: clase en {hours_before}h — {PLATFORM_NAME}", html)
-
-
-def send_class_cancelled_teacher_email(
-    to_email: str, teacher_name: str, student_name: str, class_start_utc: str, cancelled_by: str,
-) -> bool:
-    reason = f"{student_name} canceló su clase" if cancelled_by == "student" else "cancelaste esta clase"
-    body = f"""
-      <p>Hola {teacher_name}, {reason}.</p>
-      {_detail_table([
-        _detail_row("Estudiante", student_name),
-        _detail_row("Fecha/Hora (UTC)", class_start_utc),
-      ])}
-      {_cta_button("Ir a la plataforma", settings.FRONTEND_URL)}
-    """
-    html = _base_template(
-        preheader="Una clase fue cancelada",
-        badge_html=_badge("Cancelada", COLOR_RED),
-        heading="Clase cancelada ❌",
-        body_html=body,
-    )
-    return _send(to_email, f"Clase cancelada — {PLATFORM_NAME}", html)
-
-
-# ─── Tareas ───────────────────────────────────────────────────────────────────
 
 def send_homework_graded_email(
     to_email: str, student_name: str, homework_title: str, score: float, feedback: str | None,
@@ -375,18 +280,11 @@ def send_homework_graded_email(
         <span style="display:inline-block;font-size:32px;font-weight:900;color:{score_color};">{score}<span style="font-size:16px;color:{COLOR_SUBTLE};">/10</span></span>
       </div>
       {f'<div style="background:{COLOR_SURFACE_SOFT};border-radius:16px;padding:16px 18px;margin-top:8px;"><p style="margin:0;font-size:13px;color:{COLOR_INK};"><strong>Retroalimentación:</strong> {feedback}</p></div>' if feedback else ''}
-      {_cta_button("Ir a la plataforma", settings.FRONTEND_URL)}
+      {_cta_button("Ver mis tareas", f"{settings.FRONTEND_URL}/dashboard/homework")}
     """
-    html = _base_template(
-        preheader="Tu tarea fue calificada",
-        badge_html=_badge("Tarea calificada", COLOR_GREEN),
-        heading="¡Tienes una nueva calificación! ⭐",
-        body_html=body,
-    )
+    html = _base_template("Tu tarea fue calificada", _badge("Tarea calificada", COLOR_GREEN), "¡Tienes una nueva calificación! ⭐", body)
     return _send(to_email, f"Tarea calificada — {PLATFORM_NAME}", html)
 
-
-# ─── Materiales ───────────────────────────────────────────────────────────────
 
 def send_material_assigned_email(
     to_email: str, student_name: str, teacher_name: str, material_title: str, category: str,
@@ -397,13 +295,281 @@ def send_material_assigned_email(
         _detail_row("Material", material_title),
         _detail_row("Categoría", category),
       ])}
-      <p>Entra a tu panel de materiales para revisarlo.</p>
-      {_cta_button("Ir a la plataforma", settings.FRONTEND_URL)}
+      {_cta_button("Ver mis materiales", f"{settings.FRONTEND_URL}/dashboard/materials")}
     """
-    html = _base_template(
-        preheader="Nuevo material asignado",
-        badge_html=_badge("Nuevo material", COLOR_BLUE),
-        heading="Nuevo material asignado 📚",
-        body_html=body,
-    )
+    html = _base_template("Nuevo material asignado", _badge("Nuevo material", COLOR_BLUE), "Nuevo material asignado 📚", body)
     return _send(to_email, f"Nuevo material asignado — {PLATFORM_NAME}", html)
+
+
+def send_payment_receipt_email(
+    to_email: str, student_name: str, concept: str, amount: float,
+    payment_method: str, transaction_reference: str | None = None,
+) -> bool:
+    rows = [
+        _detail_row("Concepto", concept),
+        _detail_row("Monto", f"${amount:.2f}"),
+        _detail_row("Método de pago", payment_method),
+    ]
+    if transaction_reference:
+        rows.append(_detail_row("Referencia", transaction_reference))
+    body = f"""
+      <p>Hola {student_name}, confirmamos tu pago. ¡Gracias!</p>
+      {_detail_table(rows)}
+    """
+    html = _base_template("Confirmación de pago", _badge("Pago aprobado", COLOR_GREEN), "Pago confirmado ✅", body)
+    return _send(to_email, f"Pago confirmado — {PLATFORM_NAME}", html)
+
+
+def send_payment_failed_email(
+    to_email: str, student_name: str, concept: str, amount: float, rejection_reason: str,
+) -> bool:
+    body = f"""
+      <p>Hola {student_name}, tu pago no pudo ser validado.</p>
+      {_detail_table([
+        _detail_row("Concepto", concept),
+        _detail_row("Monto", f"${amount:.2f}"),
+      ])}
+      <p style="font-size:13px;color:{COLOR_RED};font-weight:700;">Motivo: {rejection_reason}</p>
+      {_cta_button("Reintentar pago", settings.FRONTEND_URL)}
+    """
+    html = _base_template("Tu pago no fue validado", _badge("Pago rechazado", COLOR_RED), "Pago rechazado", body)
+    return _send(to_email, f"Pago rechazado — {PLATFORM_NAME}", html)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# PROFESOR
+# ══════════════════════════════════════════════════════════════════════════
+
+def send_teacher_status_update_email(
+    to_email: str, teacher_name: str, new_status: str, reason: str | None = None,
+) -> bool:
+    STATUS_MAP = {
+        "approved": ("Aprobado", COLOR_GREEN, "¡Tu perfil ya es público! Ya puedes recibir estudiantes."),
+        "rejected": ("Rechazado", COLOR_RED, "Revisa el motivo y actualiza tu perfil para volver a enviarlo a revisión."),
+        "suspended": ("Suspendido", COLOR_AMBER, "Tu perfil dejó de ser visible temporalmente. Contacta a soporte para más detalles."),
+        "pending": ("En revisión", COLOR_BLUE, "Tu perfil está siendo revisado nuevamente por nuestro equipo."),
+    }
+    label, color, next_step = STATUS_MAP.get(new_status, (new_status, COLOR_MUTED, ""))
+    body = f"""
+      <p>Hola {teacher_name}, el estado de tu perfil ha sido actualizado.</p>
+      {_detail_table([_detail_row("Nuevo estado", label)])}
+      {f'<p style="font-size:13px;color:{COLOR_MUTED};"><strong>Nota del equipo:</strong> {reason}</p>' if reason else ""}
+      <p>{next_step}</p>
+      {_cta_button("Ir a mi perfil", f"{settings.FRONTEND_URL}/teacher/profile")}
+    """
+    html = _base_template("Actualización de tu perfil", _badge(label, color), "Estado de tu perfil actualizado", body)
+    return _send(to_email, f"Estado de tu perfil: {label} — {PLATFORM_NAME}", html)
+
+
+def send_new_booking_teacher_email(
+    to_email: str, teacher_name: str, student_first_name: str, student_last_name: str,
+    student_nationality: str | None, student_phone: str | None, subject: str,
+    class_start_local: str, duration_minutes: int, is_trial: bool = False,
+) -> bool:
+    student_full_name = f"{student_first_name} {student_last_name}".strip()
+    body = f"""
+      <p>Hola {teacher_name}, tienes una nueva {"clase de prueba" if is_trial else "clase"} reservada.</p>
+      {_detail_table([
+        _detail_row("Estudiante", student_full_name),
+        _detail_row("Nacionalidad", student_nationality or "No especificada"),
+        _detail_row("Teléfono / WhatsApp", student_phone or "No especificado"),
+        _detail_row("Materia", subject),
+        _detail_row("Fecha y hora", class_start_local),
+        _detail_row("Duración", f"{duration_minutes} minutos"),
+      ])}
+      {_cta_button("Ver mi agenda", f"{settings.FRONTEND_URL}/teacher/dashboard")}
+    """
+    html = _base_template("Nueva clase reservada", _badge("Prueba" if is_trial else "Nueva reserva", COLOR_BLUE if is_trial else COLOR_AMBER), "Nueva clase reservada 📥", body)
+    return _send(to_email, f"Nueva reserva — {PLATFORM_NAME}", html)
+
+
+def send_class_rescheduled_teacher_email(
+    to_email: str, teacher_name: str, student_name: str,
+    old_start_local: str, new_start_local: str, changed_by: str,
+) -> bool:
+    who = {"student": "tu estudiante", "teacher": "tú", "admin": "el equipo de soporte"}.get(changed_by, changed_by)
+    body = f"""
+      <p>Hola {teacher_name}, la clase con <strong style="color:{COLOR_INK};">{student_name}</strong> fue reagendada por {who}.</p>
+      {_detail_table([
+        _detail_row("Horario anterior", old_start_local),
+        _detail_row("Nuevo horario", new_start_local),
+      ])}
+      {_cta_button("Ver mi agenda", f"{settings.FRONTEND_URL}/teacher/dashboard")}
+    """
+    html = _base_template("Una clase fue reagendada", _badge("Reagendada", COLOR_BLUE), "Clase reagendada 🔄", body)
+    return _send(to_email, f"Clase reagendada — {PLATFORM_NAME}", html)
+
+
+def send_class_reminder_teacher_email(
+    to_email: str, teacher_name: str, student_name: str, subject: str,
+    class_start_local: str, hours_before: int = 24,
+) -> bool:
+    body = f"""
+      <p>Hola {teacher_name},</p>
+      <p>Tu clase con <strong style="color:{COLOR_INK};">{student_name}</strong> es en
+      <strong style="color:{COLOR_PRIMARY};">{hours_before} horas</strong>.</p>
+      {_detail_table([
+        _detail_row("Materia", subject),
+        _detail_row("Fecha y hora", class_start_local),
+      ])}
+      {_cta_button("Ver mi agenda", f"{settings.FRONTEND_URL}/teacher/dashboard")}
+    """
+    html = _base_template(f"Tu clase es en {hours_before} horas", _badge("Recordatorio", COLOR_BLUE), "Recordatorio de clase 🔔", body)
+    return _send(to_email, f"Recordatorio: clase en {hours_before}h — {PLATFORM_NAME}", html)
+
+
+def send_class_cancelled_teacher_email(
+    to_email: str, teacher_name: str, student_name: str, class_start_local: str,
+    cancelled_by: str, reason: str | None = None,
+) -> bool:
+    who = {"student": f"{student_name} canceló su clase", "teacher": "cancelaste esta clase", "staff": "el equipo canceló esta clase"}.get(cancelled_by, "esta clase fue cancelada")
+    body = f"""
+      <p>Hola {teacher_name}, {who}.</p>
+      {_detail_table([
+        _detail_row("Estudiante", student_name),
+        _detail_row("Fecha y hora", class_start_local),
+      ])}
+      {f'<p style="font-size:13px;color:{COLOR_MUTED};"><strong>Motivo:</strong> {reason}</p>' if reason else ""}
+      {_cta_button("Ver mi agenda", f"{settings.FRONTEND_URL}/teacher/dashboard")}
+    """
+    html = _base_template("Una clase fue cancelada", _badge("Cancelada", COLOR_RED), "Clase cancelada ❌", body)
+    return _send(to_email, f"Clase cancelada — {PLATFORM_NAME}", html)
+
+
+def send_homework_submitted_email(
+    to_email: str, teacher_name: str, student_name: str, homework_title: str, submitted_at_local: str,
+) -> bool:
+    body = f"""
+      <p>Hola {teacher_name}, <strong style="color:{COLOR_INK};">{student_name}</strong> entregó una tarea.</p>
+      {_detail_table([
+        _detail_row("Tarea", homework_title),
+        _detail_row("Entregada", submitted_at_local),
+      ])}
+      {_cta_button("Ir a calificar", f"{settings.FRONTEND_URL}/teacher/homework")}
+    """
+    html = _base_template("Nueva entrega de tarea", _badge("Nueva entrega", COLOR_BLUE), "Nueva entrega para revisar 📝", body)
+    return _send(to_email, f"Nueva entrega de tarea — {PLATFORM_NAME}", html)
+
+
+def send_new_review_received_email(
+    to_email: str, teacher_name: str, student_name: str, rating: float, comment: str | None,
+) -> bool:
+    stars = "⭐" * int(round(rating))
+    body = f"""
+      <p>Hola {teacher_name}, <strong style="color:{COLOR_INK};">{student_name}</strong> dejó una reseña sobre tus clases.</p>
+      <div style="text-align:center;margin:18px 0;font-size:22px;">{stars} <span style="font-size:14px;color:{COLOR_MUTED};">({rating}/5)</span></div>
+      {f'<div style="background:{COLOR_SURFACE_SOFT};border-radius:16px;padding:16px 18px;"><p style="margin:0;font-size:13px;color:{COLOR_INK};font-style:italic;">"{comment}"</p></div>' if comment else ""}
+      {_cta_button("Ver mi perfil público", f"{settings.FRONTEND_URL}/teacher/profile/preview")}
+    """
+    html = _base_template("Nueva reseña recibida", _badge("Nueva reseña", COLOR_PURPLE), "Nueva reseña recibida ⭐", body)
+    return _send(to_email, f"Nueva reseña recibida — {PLATFORM_NAME}", html)
+
+
+def send_withdrawal_requested_teacher_email(
+    to_email: str, teacher_name: str, amount: float, destination_method: str,
+) -> bool:
+    body = f"""
+      <p>Hola {teacher_name}, recibimos tu solicitud de retiro.</p>
+      {_detail_table([
+        _detail_row("Monto solicitado", f"${amount:.2f}"),
+        _detail_row("Método", destination_method),
+      ])}
+      <p>El equipo procesará tu solicitud en breve.</p>
+      {_cta_button("Ver mis ganancias", f"{settings.FRONTEND_URL}/teacher/wallet")}
+    """
+    html = _base_template("Solicitud de retiro recibida", _badge("Retiro solicitado", COLOR_BLUE), "Solicitud de retiro recibida 💸", body)
+    return _send(to_email, f"Solicitud de retiro recibida — {PLATFORM_NAME}", html)
+
+
+def send_withdrawal_processed_email(
+    to_email: str, teacher_name: str, status: str, amount: float,
+    reference: str | None = None, rejection_reason: str | None = None,
+) -> bool:
+    is_completed = status == "completed"
+    label = "Pagado" if is_completed else "Rechazado"
+    color = COLOR_GREEN if is_completed else COLOR_RED
+    rows = [_detail_row("Monto", f"${amount:.2f}")]
+    if is_completed and reference:
+        rows.append(_detail_row("Referencia", reference))
+    body = f"""
+      <p>Hola {teacher_name}, tu solicitud de retiro fue {"procesada" if is_completed else "rechazada"}.</p>
+      {_detail_table(rows)}
+      {f'<p style="font-size:13px;color:{COLOR_RED};font-weight:700;">Motivo: {rejection_reason}</p>' if not is_completed and rejection_reason else ""}
+      {_cta_button("Ver mis ganancias", f"{settings.FRONTEND_URL}/teacher/wallet")}
+    """
+    html = _base_template("Retiro procesado", _badge(label, color), f"Retiro {label.lower()}", body)
+    return _send(to_email, f"Retiro {label.lower()} — {PLATFORM_NAME}", html)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# SUPERADMIN / STAFF
+# ══════════════════════════════════════════════════════════════════════════
+
+def send_admin_new_teacher_pending_email(
+    to_email: str, teacher_name: str, teacher_email: str, subjects_or_languages: list[str],
+) -> bool:
+    body = f"""
+      <p>Un nuevo profesor completó su perfil y espera revisión.</p>
+      {_detail_table([
+        _detail_row("Nombre", teacher_name),
+        _detail_row("Correo", teacher_email),
+        _detail_row("Materias/Idiomas", ", ".join(subjects_or_languages) if subjects_or_languages else "No especificado"),
+      ])}
+      {_cta_button("Revisar profesor", f"{settings.FRONTEND_URL}/admin/teachers")}
+    """
+    html = _base_template("Nuevo profesor pendiente", _badge("Pendiente de revisión", COLOR_AMBER), "Nuevo profesor pendiente 👩‍🏫", body)
+    return _send(to_email, f"Nuevo profesor pendiente — {PLATFORM_NAME}", html)
+
+
+def send_admin_payment_pending_email(
+    to_email: str, student_name: str, amount: float, concept: str,
+    payment_method: str, transaction_reference: str | None = None,
+) -> bool:
+    rows = [
+        _detail_row("Estudiante", student_name),
+        _detail_row("Concepto", concept),
+        _detail_row("Monto", f"${amount:.2f}"),
+        _detail_row("Método", payment_method),
+    ]
+    if transaction_reference:
+        rows.append(_detail_row("Referencia", transaction_reference))
+    body = f"""
+      <p>Hay un pago esperando validación.</p>
+      {_detail_table(rows)}
+      {_cta_button("Revisar pago", f"{settings.FRONTEND_URL}/admin/payments")}
+    """
+    html = _base_template("Pago pendiente de revisión", _badge("Pendiente", COLOR_AMBER), "Pago pendiente de revisión 💳", body)
+    return _send(to_email, f"Pago pendiente de revisión — {PLATFORM_NAME}", html)
+
+
+def send_admin_withdrawal_requested_email(
+    to_email: str, teacher_name: str, amount: float, destination_details: str,
+) -> bool:
+    body = f"""
+      <p>Un profesor solicitó un retiro de sus ganancias.</p>
+      {_detail_table([
+        _detail_row("Profesor", teacher_name),
+        _detail_row("Monto solicitado", f"${amount:.2f}"),
+        _detail_row("Destino", destination_details),
+      ])}
+      {_cta_button("Procesar retiro", f"{settings.FRONTEND_URL}/admin/payments")}
+    """
+    html = _base_template("Nueva solicitud de retiro", _badge("Retiro pendiente", COLOR_AMBER), "Nueva solicitud de retiro 💸", body)
+    return _send(to_email, f"Nueva solicitud de retiro — {PLATFORM_NAME}", html)
+
+def send_package_expiring_email(
+    to_email: str, student_name: str, package_name: str, classes_remaining: int,
+) -> bool:
+    plural = "clase" if classes_remaining == 1 else "clases"
+    body = f"""
+      <p>Hola {student_name},</p>
+      <p>Tu paquete <strong style="color:{COLOR_INK};">{package_name}</strong> está por agotarse.</p>
+      <div style="background:{COLOR_SURFACE_SOFT};border-radius:16px;padding:16px 18px;margin:18px 0;text-align:center;">
+        <p style="margin:0;font-size:28px;font-weight:900;color:{COLOR_AMBER};">{classes_remaining}</p>
+        <p style="margin:4px 0 0;font-size:12px;color:{COLOR_MUTED};font-weight:700;text-transform:uppercase;">{plural} restante{"s" if classes_remaining != 1 else ""}</p>
+      </div>
+      <p>Renueva ahora para no perder continuidad en tus clases.</p>
+      {_cta_button("Renovar paquete", f"{settings.FRONTEND_URL}/dashboard/schedule")}
+    """
+    html = _base_template("Tu paquete está por agotarse", _badge("Por vencer", COLOR_AMBER), "Tu paquete se está agotando ⏳", body)
+    return _send(to_email, f"Tu paquete está por agotarse — {PLATFORM_NAME}", html)

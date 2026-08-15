@@ -2,13 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
-from app.core.email import send_homework_graded_email
+from app.core.email import send_homework_graded_email, send_homework_submitted_email
 from app.db.base import get_db
 from app.auth.dependencies import get_current_teacher, get_current_student, get_current_approved_teacher
 from app.models.user import User
 from app.models.homework import Homework, HomeworkAssignment
 from app.models.student import StudentProfile
-from app.core.timezone import utc_now
+from app.core.timezone import utc_now, format_local_datetime
 from app.schemas.homework import (
     HomeworkCreate,
     HomeworkResponse,
@@ -291,5 +291,15 @@ def submit_homework(
     assignment.submitted_at = utc_now()
 
     db.commit()
+
+    teacher = homework.teacher
+    teacher_user = teacher.user if teacher else None
+    if teacher_user:
+        send_homework_submitted_email(
+            to_email=teacher_user.email, teacher_name=teacher_user.name,
+            student_name=f"{current_user.name} {current_user.surname}",
+            homework_title=homework.title,
+            submitted_at_local=format_local_datetime(assignment.submitted_at, teacher.timezone),
+        )
 
     return {"message": "Tarea entregada correctamente"}

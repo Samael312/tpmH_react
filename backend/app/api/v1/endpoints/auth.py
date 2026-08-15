@@ -17,6 +17,7 @@ from app.core.email import send_password_reset_email, send_username_recovery_ema
 from app.core.timezone import utc_now
 from pydantic import BaseModel, EmailStr
 from app.core.storage import upload_file
+from app.core.email import send_welcome_email
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,7 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
+    send_welcome_email(to_email=user.email, user_name=user.name, role=user.role)
     token = create_access_token(user.id, user.role)
     return TokenResponse(
         access_token=token,
@@ -216,7 +218,7 @@ async def google_register(data: GoogleRegisterRequest, db: Session = Depends(get
 
     db.commit()
     db.refresh(user)
-
+    send_welcome_email(to_email=user.email, user_name=user.name, role=user.role)
     token = create_access_token(user.id, user.role)
     return GoogleAuthResponse(
         access_token=token,

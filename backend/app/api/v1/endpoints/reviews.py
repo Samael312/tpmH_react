@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
-
+from app.core.email import send_new_review_received_email
 from app.db.base import get_db
 from app.auth.dependencies import get_current_student, get_current_user
 from app.models.user import User
@@ -87,6 +87,14 @@ def create_review(
     # Añadir datos del estudiante a la respuesta
     review.student_name = f"{current_user.name} {current_user.surname}"
     review.student_username = current_user.username
+
+    teacher_user = teacher.user if teacher else None
+    if teacher_user:
+        send_new_review_received_email(
+            to_email=teacher_user.email, teacher_name=teacher_user.name,
+            student_name=f"{current_user.name} {current_user.surname}",
+            rating=data.rating, comment=data.comment,
+        )
 
     return review
 
