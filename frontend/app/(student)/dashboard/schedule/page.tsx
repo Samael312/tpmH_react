@@ -612,17 +612,11 @@ function PackagePendingPaymentScreen({
         <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <Hourglass className="w-8 h-8 text-amber-500" />
         </div>
-        <h3 className="text-xl font-black text-slate-800 mb-2">Pago pendiente de notificación</h3>
+        <h3 className="text-xl font-black text-slate-800 mb-2">Pago pendiente de confirmación</h3>
         <p className="text-slate-500 text-sm leading-relaxed mb-6">
-          Elegiste este paquete pero aún no notificaste tu pago. El calendario permanecerá
+          Elegiste este paquete pero aún no se ha confirmado tu pago. El calendario permanecerá
           bloqueado hasta que lo hagas y sea confirmado.
         </p>
-        <button
-          onClick={() => setCheckoutOpen(true)}
-          className="px-6 py-3 bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 text-white text-sm font-bold rounded-xl shadow-md transition-all duration-200 active:scale-[0.98]"
-        >
-          Notificar pago
-        </button>
       </div>
 
       {checkoutOpen && pkg && (

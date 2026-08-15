@@ -1,14 +1,14 @@
 """add paid_via_installments to enrollments
 
 Revision ID: f8a2c4d6e8b0
-Revises: 46d2eba190a4
+Revises: b7f3a1c9d2e4
 Create Date: 2026-08-15 00:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = 'f8a2c4d6e8b0'
-down_revision = '46d2eba190a4'
+down_revision = 'b7f3a1c9d2e4'
 branch_labels = None
 depends_on = None
 
