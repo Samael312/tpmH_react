@@ -25,9 +25,11 @@ const GOALS = [
 ];
 
 const PAYMENT_METHODS = [
-  { value: "Paypal", label: "PayPal", icon: "💳", color: "text-blue-600" },
-  { value: "Binance", label: "Binance (USDT)", icon: "🔶", color: "text-yellow-500" },
-  { value: "Zelle", label: "Zelle", icon: "💜", color: "text-purple-600" },
+  { value: "Paypal",       label: "PayPal",             icon: "💳", color: "text-blue-600" },
+  { value: "Binance",      label: "Binance (USDT)",     icon: "🔶", color: "text-yellow-500" },
+  { value: "Zelle",        label: "Zelle",              icon: "💜", color: "text-purple-600" },
+  { value: "BankTransfer", label: "Transferencia bancaria", icon: "🏦", color: "text-emerald-600" },
+  { value: "MobilePayment", label: "Pago móvil/Bizum",  icon: "📱", color: "text-pink-600" },
 ];
 
 const DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];

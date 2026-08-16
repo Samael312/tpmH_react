@@ -184,6 +184,8 @@ def _ensure_teacher_linked(current_user: User, teacher: TeacherProfile, db: Sess
 
 # ─── CONFIGURACIÓN DE PAGOS ──────────────────────────────────────────────────
 
+# backend/app/api/v1/endpoints/payments.py
+
 @router.get("/config", response_model=PaymentConfigResponse)
 def get_payment_config(db: Session = Depends(get_db)):
     config = db.query(PaymentConfig).first()
@@ -193,14 +195,23 @@ def get_payment_config(db: Session = Depends(get_db)):
         db.commit()
         db.refresh(config)
 
-    has_any = config.paypal_enabled or config.binance_enabled
+    has_any = (
+        config.paypal_enabled
+        or config.binance_enabled
+        or config.bank_transfer_enabled
+        or config.mobile_payment_enabled
+    )
 
     return PaymentConfigResponse(
         paypal_enabled=config.paypal_enabled,
         binance_enabled=config.binance_enabled,
+        bank_transfer_enabled=config.bank_transfer_enabled,
+        mobile_payment_enabled=config.mobile_payment_enabled,
         paypal_email=config.paypal_email if config.paypal_enabled else None,
         binance_address=config.binance_address if config.binance_enabled else None,
         binance_network=config.binance_network if config.binance_enabled else None,
+        bank_transfer_details=config.bank_transfer_details if config.bank_transfer_enabled else None,
+        mobile_payment_details=config.mobile_payment_details if config.mobile_payment_enabled else None,
         whatsapp_number=config.whatsapp_number,
         default_commission_rate=config.default_commission_rate or 0.15,
         has_any_method=has_any,
@@ -250,15 +261,16 @@ def submit_payment_receipt(
 
     config = db.query(PaymentConfig).first()
     if config:
-        if data.payment_method == "paypal" and not config.paypal_enabled:
+        method_enabled_map = {
+            "paypal": config.paypal_enabled,
+            "binance": config.binance_enabled,
+            "bank_transfer": config.bank_transfer_enabled,
+            "mobile_payment": config.mobile_payment_enabled,
+        }
+        if data.payment_method in method_enabled_map and not method_enabled_map[data.payment_method]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="PayPal no está habilitado actualmente"
-            )
-        if data.payment_method == "binance" and not config.binance_enabled:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Binance no está habilitado actualmente"
+                detail="Este método de pago no está habilitado actualmente"
             )
 
     teacher = db.query(TeacherProfile).filter(TeacherProfile.id == class_.teacher_id).first()
@@ -586,9 +598,13 @@ def book_class(
             "payment_instructions": {
                 "paypal_enabled": config.paypal_enabled if config else False,
                 "binance_enabled": config.binance_enabled if config else False,
+                "bank_transfer_enabled": config.bank_transfer_enabled if config else False,
+                "mobile_payment_enabled": config.mobile_payment_enabled if config else False,
                 "paypal_email": config.paypal_email if config else None,
                 "binance_address": config.binance_address if config else None,
                 "binance_network": config.binance_network if config else None,
+                "bank_transfer_details": config.bank_transfer_details if config else None,
+                "mobile_payment_details": config.mobile_payment_details if config else None,
                 "whatsapp_number": config.whatsapp_number if config else None,
             }
         }

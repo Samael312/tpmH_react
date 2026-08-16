@@ -8,9 +8,13 @@ import ChipiWidget from '@/components/chipi/ChipiWidget'
 interface PaymentConfig {
   paypal_enabled: boolean
   binance_enabled: boolean
+  bank_transfer_enabled: boolean
+  mobile_payment_enabled: boolean
   paypal_email: string | null
   binance_address: string | null
   binance_network: string | null
+  bank_transfer_details: string | null
+  mobile_payment_details: string | null
   whatsapp_number: string | null
   default_commission_rate: number
 }
@@ -204,6 +208,96 @@ export default function SettingsPage() {
                       })}
                       placeholder="Red (ej: USDT TRC20)"
                       className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-50 focus:border-emerald-300 transition-all"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Transferencia bancaria */}
+              <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 space-y-4 transition-all hover:border-slate-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">🏦</span>
+                    <div>
+                      <p className="text-slate-800 text-sm font-bold">Transferencia bancaria</p>
+                      <p className="text-slate-500 text-xs font-medium mt-0.5">
+                        Los estudiantes transfieren a tu cuenta bancaria
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setPaymentConfig({
+                      ...paymentConfig,
+                      bank_transfer_enabled: !paymentConfig.bank_transfer_enabled
+                    })}
+                    className={`
+                      relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none
+                      ${paymentConfig.bank_transfer_enabled ? 'bg-emerald-500 shadow-inner' : 'bg-slate-200'}
+                    `}
+                  >
+                    <span className={`
+                      absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform duration-300 shadow-sm
+                      ${paymentConfig.bank_transfer_enabled ? 'translate-x-6' : 'translate-x-0'}
+                    `}/>
+                  </button>
+                </div>
+
+                {paymentConfig.bank_transfer_enabled && (
+                  <div className="pt-2 animate-in fade-in slide-in-from-top-2">
+                    <textarea
+                      value={paymentConfig.bank_transfer_details || ''}
+                      onChange={e => setPaymentConfig({
+                        ...paymentConfig,
+                        bank_transfer_details: e.target.value
+                      })}
+                      rows={3}
+                      placeholder="Banco, titular de la cuenta, número de cuenta, IBAN/SWIFT si aplica..."
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-50 focus:border-emerald-300 transition-all resize-none"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Pago móvil / Bizum */}
+              <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 space-y-4 transition-all hover:border-slate-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">📱</span>
+                    <div>
+                      <p className="text-slate-800 text-sm font-bold">Pago móvil / Bizum</p>
+                      <p className="text-slate-500 text-xs font-medium mt-0.5">
+                        Pago instantáneo desde el móvil (Pago Móvil, Bizum, etc.)
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setPaymentConfig({
+                      ...paymentConfig,
+                      mobile_payment_enabled: !paymentConfig.mobile_payment_enabled
+                    })}
+                    className={`
+                      relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none
+                      ${paymentConfig.mobile_payment_enabled ? 'bg-emerald-500 shadow-inner' : 'bg-slate-200'}
+                    `}
+                  >
+                    <span className={`
+                      absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform duration-300 shadow-sm
+                      ${paymentConfig.mobile_payment_enabled ? 'translate-x-6' : 'translate-x-0'}
+                    `}/>
+                  </button>
+                </div>
+
+                {paymentConfig.mobile_payment_enabled && (
+                  <div className="pt-2 animate-in fade-in slide-in-from-top-2">
+                    <textarea
+                      value={paymentConfig.mobile_payment_details || ''}
+                      onChange={e => setPaymentConfig({
+                        ...paymentConfig,
+                        mobile_payment_details: e.target.value
+                      })}
+                      rows={2}
+                      placeholder="Ej: Teléfono, cédula/DNI y banco (Pago Móvil) o número de Bizum..."
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-50 focus:border-emerald-300 transition-all resize-none"
                     />
                   </div>
                 )}

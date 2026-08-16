@@ -8,9 +8,13 @@ from datetime import datetime
 class PaymentConfigResponse(BaseModel):
     paypal_enabled: bool
     binance_enabled: bool
+    bank_transfer_enabled: bool
+    mobile_payment_enabled: bool
     paypal_email: Optional[str]
     binance_address: Optional[str]
     binance_network: Optional[str]
+    bank_transfer_details: Optional[str]
+    mobile_payment_details: Optional[str]
     whatsapp_number: Optional[str]
     default_commission_rate: float
     has_any_method: bool
@@ -22,12 +26,15 @@ class PaymentConfigResponse(BaseModel):
 class UpdatePaymentConfigRequest(BaseModel):
     paypal_enabled: Optional[bool] = None
     binance_enabled: Optional[bool] = None
+    bank_transfer_enabled: Optional[bool] = None
+    mobile_payment_enabled: Optional[bool] = None
     paypal_email: Optional[str] = None
     binance_address: Optional[str] = None
     binance_network: Optional[str] = None
+    bank_transfer_details: Optional[str] = None
+    mobile_payment_details: Optional[str] = None
     whatsapp_number: Optional[str] = None
     default_commission_rate: Optional[float] = None
-
 
 # ─── Reserva y pago ─────────────────────────────────────────────────────────
 
