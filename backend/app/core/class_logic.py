@@ -1,7 +1,10 @@
+# backend/app/core/class_logic.py
+
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from app.models.class_ import Class, ClassType
 from app.models.package import Enrollment, EnrollmentStatus
+from app.models.payment import Payment
 from app.models.student import StudentProfile
 from app.models.teacher import TeacherProfile
 from app.core.timezone import utc_now, UTC
@@ -194,9 +197,21 @@ def get_student_booking_stage(student_id: int, teacher_id: int, db: Session) -> 
     ).first()
 
     if active_enrollment:
-        # Paquete finito sin confirmar aún → bloquea el calendario
         if active_enrollment.package.classes_count is not None and active_enrollment.payment_status == "unpaid":
-            return "package_pending_payment"
+            has_pending_payment = db.query(Payment).filter(
+                Payment.enrollment_id == active_enrollment.id,
+                Payment.status == "pending_review",
+            ).first() is not None
+
+            if has_pending_payment:
+                return "package_pending_payment"
+
+            # Nunca se notificó el pago, o fue rechazado y no se reintentó.
+            # No hay nada que confirmar: liberamos este enrollment obsoleto
+            # para que el estudiante pueda elegir paquete de nuevo.
+            active_enrollment.status = EnrollmentStatus.cancelled
+            db.commit()
+            return "needs_package"
         return "ready"
 
     package_change_pending = db.query(Enrollment).filter(

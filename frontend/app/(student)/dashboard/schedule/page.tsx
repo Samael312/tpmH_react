@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAvailableSlots, useEnrollments, useMyTeachers } from "@/hooks/useStudentData";
+import { useAvailableSlots, useEnrollments, useMyTeachers, useStudentClasses } from "@/hooks/useStudentData";
 import {
   Calendar, Clock, CreditCard,
   Check, X, ChevronLeft,
@@ -587,59 +587,70 @@ function TrialInProgressScreen() {
 }
 
 // ─── Pantalla: bloqueo package_pending_payment / needs_payment ────────────────
-function PackagePendingPaymentScreen({
-  enrollmentId,
-  onNotified,
-}: {
-  enrollmentId: number;
-  onNotified: () => void;
-}) {
-  const [pkg, setPkg] = useState<any>(null);
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [installmentsPaid, setInstallmentsPaid] = useState(0);
-
-  useEffect(() => {
-    if (!enrollmentId) return;
-    api.get(`/packages/enrollment/${enrollmentId}`).then(r => {
-      setPkg(r.data.package);
-      setInstallmentsPaid(r.data.installments_paid ?? 0);
-    });
-  }, [enrollmentId]);
-
+function PackagePendingPaymentScreen() {
   return (
     <div className="max-w-lg mx-auto">
       <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-10 text-center">
         <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <Hourglass className="w-8 h-8 text-amber-500" />
         </div>
-        <h3 className="text-xl font-black text-slate-800 mb-2">Pago pendiente de confirmación</h3>
-        <p className="text-slate-500 text-sm leading-relaxed mb-6">
-          Elegiste este paquete pero aún no se ha confirmado tu pago. El calendario permanecerá
-          bloqueado hasta que lo hagas y sea confirmado.
+        <h3 className="text-xl font-black text-slate-800 mb-2">Tu pago está en revisión</h3>
+        <p className="text-slate-500 text-sm leading-relaxed">
+          Ya notificaste tu comprobante de pago. Tu profesor(a) o el equipo lo confirmará
+          en breve y tu calendario se desbloqueará automáticamente.
         </p>
       </div>
+    </div>
+  );
+}
 
-      {checkoutOpen && pkg && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setCheckoutOpen(false)} />
-          <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-black text-slate-800">Completar pago</h2>
-              <button onClick={() => setCheckoutOpen(false)} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
-                <X className="w-4 h-4 text-slate-500" />
-              </button>
+const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
+  pending: { label: "Pendiente de pago", cls: "bg-amber-100 text-amber-700" },
+  pending_payment: { label: "En revisión", cls: "bg-blue-100 text-blue-700" },
+  confirmed: { label: "Confirmada", cls: "bg-emerald-100 text-emerald-700" },
+  completed: { label: "Completada", cls: "bg-slate-100 text-slate-600" },
+  cancelled: { label: "Cancelada", cls: "bg-red-100 text-red-600" },
+  no_show: { label: "No asistió", cls: "bg-red-100 text-red-600" },
+  finalized: { label: "Finalizada", cls: "bg-slate-100 text-slate-600" },
+};
+
+function EnrollmentClassesList({ classes }: { classes: any[] }) {
+  const myTz = getMyDisplayTimezone();
+  if (classes.length === 0) {
+    return (
+      <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-white shadow-lg p-6 text-center">
+        <p className="text-sm text-slate-400 font-bold">Aún no has agendado clases con este paquete</p>
+      </div>
+    );
+  }
+  return (
+    <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-white shadow-lg overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-slate-100">
+        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
+          Clases agendadas con este paquete ({classes.length})
+        </p>
+      </div>
+      <div className="divide-y divide-slate-50 max-h-80 overflow-y-auto">
+        {classes.map((c) => {
+          const st = STATUS_LABELS[c.status] ?? { label: c.status, cls: "bg-slate-100 text-slate-500" };
+          return (
+            <div key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-slate-800 truncate capitalize">
+                  {formatDateHumanTz(c.start_time_utc, myTz)}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {formatTimeTz(c.start_time_utc, myTz)} · {c.duration_minutes ?? 60} min
+                  {c.subject ? ` · ${c.subject}` : ""}
+                </p>
+              </div>
+              <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full flex-shrink-0 ${st.cls}`}>
+                {st.label}
+              </span>
             </div>
-            <PackageCheckout
-              pkg={pkg}
-              mode="initial"
-              enrollmentId={enrollmentId}
-              installmentsPaid={installmentsPaid}
-              onClose={() => setCheckoutOpen(false)}
-              onDone={onNotified}
-            />
-          </div>
-        </div>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -953,6 +964,7 @@ export default function SchedulePage() {
   const [selectedTeacherUsername, setSelectedTeacherUsername] = useState<string | null>(null);
 
   const { enrollments, refetch: refetchEnrollments } = useEnrollments();
+  const { classes: allClasses, refetch: refetchClasses } = useStudentClasses(true);
   const { teachers: myTeachers, loading: teachersLoading, isSingleTenant } = useMyTeachers();
 
   const needsTeacherSelection = !isSingleTenant && myTeachers.length > 1 && !selectedTeacherUsername;
@@ -1004,6 +1016,12 @@ export default function SchedulePage() {
     setSelectedSubject(undefined);
   };
 
+  const handleBookingSuccess = () => {
+    refetchEnrollments();
+    refetchClasses();
+    resetToSelect();
+  };
+
   return (
     <>
     <div className="min-h-screen bg-slate-50 relative overflow-hidden">
@@ -1029,7 +1047,8 @@ export default function SchedulePage() {
                 {stage === "needs_trial" && step === "payment" && "Confirmar clase de prueba"}
                 {stage === "trial_in_progress" && "Clase de prueba pendiente"}
                 {stage === "needs_package" && "Elige tu paquete"}
-                {(stage === "package_pending_payment" || stage === "needs_payment") && "Pago pendiente de notificación"}
+                {stage === "package_pending_payment" && "Pago pendiente de confirmación"}
+                {stage === "needs_payment" && "Pago pendiente de notificación"}
                 {(stage === "needs_renewal" || stage === "renew_required") && "Renueva tu paquete"}
                 {stage === "renewal_pending" && "Renovación en revisión"}
                 {stage === "ready" && step === "select" && "Agendar Clase"}
@@ -1040,7 +1059,8 @@ export default function SchedulePage() {
                 {stage === "needs_trial" && "Tu primera clase es gratuita, sin compromiso"}
                 {stage === "trial_in_progress" && "Prepárate para tu clase de prueba gratuita"}
                 {stage === "needs_package" && "Selecciona el paquete que mejor se adapte a ti"}
-                {(stage === "package_pending_payment" || stage === "needs_payment") && "Notifica tu pago para desbloquear el calendario de agendamiento"}
+                {stage === "package_pending_payment" && "Tu pago está en revisión. Te avisaremos cuando se confirme."}
+                {stage === "needs_payment" && "Notifica tu pago para desbloquear el calendario de agendamiento"}
                 {(stage === "needs_renewal" || stage === "renew_required") && "Renueva tu paquete para continuar con tu aprendizaje"}
                 {stage === "renewal_pending" && "Tu solicitud de renovación está en revisión"}
                 {stage === "ready" && step === "select" && "Selecciona fecha y horario disponible"}
@@ -1112,7 +1132,7 @@ export default function SchedulePage() {
         )}
 
         {stage === "ready" && activeEnrollment && (
-          <div className="max-w-2xl mx-auto w-full">
+          <div className="max-w-2xl mx-auto w-full space-y-4">
             {activeEnrollment.package?.classes_count == null ? (
               <div className="bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-4 flex items-center justify-between gap-4">
                 <div className="flex items-start gap-3">
@@ -1141,6 +1161,9 @@ export default function SchedulePage() {
                 </p>
               </div>
             )}
+            <EnrollmentClassesList
+              classes={allClasses.filter((c: any) => c.enrollment_id === activeEnrollment.id)}
+            />
           </div>
         )}
 
@@ -1206,11 +1229,8 @@ export default function SchedulePage() {
               />
             )}
 
-            {(stage === "package_pending_payment" || stage === "needs_payment") && enrollmentId && (
-              <PackagePendingPaymentScreen
-                enrollmentId={enrollmentId}
-                onNotified={loadStage}
-              />
+            {(stage === "package_pending_payment" || stage === "needs_payment") && (
+              <PackagePendingPaymentScreen />
             )}
 
             {(stage === "needs_renewal" || stage === "renew_required") && (
@@ -1237,7 +1257,7 @@ export default function SchedulePage() {
                 enrollmentId={activeEnrollment?.id}
                 teacherUsername={selectedTeacherUsername}
                 onBack={resetToSelect}
-                onSuccess={resetToSelect}
+                onSuccess={handleBookingSuccess}
               />
             )}
           </div>

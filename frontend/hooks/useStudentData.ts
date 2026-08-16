@@ -16,6 +16,7 @@ export type BookingStage =
 export interface StudentClass {
   id: number;
   class_type: "trial" | "regular";
+  enrollment_id: number | null;
   subject: string | null;
   start_time_utc: string;
   end_time_utc: string;
