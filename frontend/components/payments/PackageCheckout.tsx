@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { Check, X, Loader2, CreditCard, Split } from "lucide-react";
 import api from "@/lib/api";
+import PaymentMethodsInfo from "./PaymentMethodsInfo";
 
 export interface PackageLite {
   id: number;
@@ -171,10 +172,10 @@ export default function PackageCheckout({
         </p>
         <p className="text-3xl font-black text-pink-600">${amount.toFixed(2)} USD</p>
       </div>
-
+      <PaymentMethodsInfo />
       <div>
         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-          Referencia de transacción (opcional)
+          Mensaje de transacción (opcional)
         </label>
         <input
           type="text" value={reference} onChange={(e) => setReference(e.target.value)}

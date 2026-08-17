@@ -5,7 +5,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
-
+from app.core.phone import normalize_phone
 from app.db.base import get_db
 from app.auth.dependencies import get_current_student, get_current_user
 from app.auth.passwords import hash_password, verify_password
@@ -148,6 +148,21 @@ def update_profile(
             )
 
     update_data = data.model_dump(exclude_unset=True)
+
+    if "phone_number" in update_data:
+        normalized_phone = normalize_phone(update_data["phone_number"])
+        if normalized_phone and normalized_phone != current_user.phone_number:
+            existing_phone = db.query(User).filter(
+                User.phone_number == normalized_phone,
+                User.id != current_user.id
+            ).first()
+            if existing_phone:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Este número de teléfono ya está registrado por otro usuario"
+                )
+        update_data["phone_number"] = normalized_phone
+
     for field, value in update_data.items():
         setattr(current_user, field, value)
 

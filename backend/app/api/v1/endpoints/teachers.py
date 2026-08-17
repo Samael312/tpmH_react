@@ -15,6 +15,7 @@ from app.core.storage import upload_file, delete_file
 from app.models.package import Enrollment
 from app.models.material import Material, MaterialAssignment
 from app.core.email import send_admin_new_teacher_pending_email
+from app.core.phone import normalize_phone
 
 router = APIRouter()
 
@@ -124,6 +125,12 @@ def update_my_teacher_profile(
         )
 
     update_data = data.model_dump(exclude_unset=True)
+
+    if "social_links" in update_data and update_data["social_links"]:
+        wa = update_data["social_links"].get("whatsapp")
+        if wa:
+            update_data["social_links"]["whatsapp"] = normalize_phone(wa) or wa
+
     for field, value in update_data.items():
         setattr(profile, field, value)
 

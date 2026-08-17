@@ -14,6 +14,7 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 import PackageCheckout from "@/components/payments/PackageCheckout";
 import { formatTimeTz, formatDateHumanTz, getHourMinuteTz, getMyDisplayTimezone } from "@/lib/tzFormat";
 import { priceLabelSuffix } from "@/lib/packageThemes";
+import PaymentMethodsInfo from "@/components/payments/PaymentMethodsInfo";
 
 type BookingStage =
   | "loading"
@@ -543,6 +544,8 @@ function StepPayment({
               y confirma abajo — tienes una ventana de tiempo limitada antes de que se libere.
             </p>
           </div>
+
+          <PaymentMethodsInfo />
 
           <div>
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">

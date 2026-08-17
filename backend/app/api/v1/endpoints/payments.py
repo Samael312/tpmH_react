@@ -105,6 +105,48 @@ def _installment_amount(package: Package, index: int) -> float:
         return base
     return round(package.price - base * (n - 1), 2)
 
+
+def _apply_instant_package_change(
+    enrollment: Enrollment,
+    new_package: Package,
+    available_credits: int,
+    db: Session,) -> None:
+    """    Cambio de paquete sin cobro adicional: el nuevo paquete finito tiene    cupo suficiente para cubrir los créditos que el estudiante ya tenía    disponibles (deficit <= 0). classes_used NO se toca.    """
+    enrollment.package_id = new_package.id
+    enrollment.classes_total = new_package.classes_count
+    enrollment.unlocked_credits = new_package.classes_count
+    enrollment.prepaid_unlimited_credits = 0
+    enrollment.change_requested_package_id = None
+    enrollment.status = EnrollmentStatus.active
+    db.commit()
+
+
+def _apply_instant_switch_to_unlimited(
+    enrollment: Enrollment,
+    new_package: Package,
+    available_credits: int,
+    db: Session,) -> None:
+    """    Cambio a un paquete ilimitado: los créditos finitos que le quedaban al    estudiante se transfieren tal cual a prepaid_unlimited_credits, sin    cobro. Desde ahí puede comprar más créditos con el flujo normal de    recarga (que suma sobre lo existente).    """
+    enrollment.package_id = new_package.id
+    enrollment.classes_total = None
+    enrollment.unlocked_credits = 0
+    enrollment.prepaid_unlimited_credits = (enrollment.prepaid_unlimited_credits or 0) + available_credits
+    enrollment.change_requested_package_id = None
+    enrollment.status = EnrollmentStatus.active
+    db.commit()
+
+
+def _get_enrollment_available_credits(enrollment: Enrollment, db: Session) -> int:
+    """Créditos disponibles del enrollment ANTES del cambio de paquete."""
+    if enrollment.package.classes_count is not None:
+        occupied_slots = db.query(Class).filter(
+            Class.enrollment_id == enrollment.id,
+            Class.status != "cancelled",
+        ).count()
+        return max((enrollment.unlocked_credits or 0) - occupied_slots, 0)
+    return enrollment.prepaid_unlimited_credits or 0
+
+
 def _installment_credit_amount(classes_count: int, installment_count: int, installment_index: int) -> int:
     """
     Créditos que se liberan al pagar la cuota `installment_index` (1-based).
@@ -116,6 +158,7 @@ def _installment_credit_amount(classes_count: int, installment_count: int, insta
         already_unlocked = per_installment * (installment_count - 1)
         return max(classes_count - already_unlocked, 0)
     return per_installment
+
 
 def _sync_student_teacher_username(current_user: User, teacher: TeacherProfile, db: Session):
     """
@@ -168,7 +211,7 @@ def _ensure_teacher_linked(current_user: User, teacher: TeacherProfile, db: Sess
     from app.models.student_teacher_link import StudentTeacherLink
 
     config = db.query(PlatformConfig).first()
-    if not config or config.is_single_tenant:
+    if not config or not config.is_single_tenant:
         return
 
     profile = current_user.student_profile
@@ -183,8 +226,6 @@ def _ensure_teacher_linked(current_user: User, teacher: TeacherProfile, db: Sess
 
 
 # ─── CONFIGURACIÓN DE PAGOS ──────────────────────────────────────────────────
-
-# backend/app/api/v1/endpoints/payments.py
 
 @router.get("/config", response_model=PaymentConfigResponse)
 def get_payment_config(db: Session = Depends(get_db)):
@@ -442,10 +483,6 @@ def book_class(
         if enrollment.payment_status == "unpaid":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Tu paquete está pendiente de confirmación de pago")
 
-        # Los créditos se consumen al AGENDAR (no al completar la clase), para
-        # limitar cuántas clases puede reservar el estudiante. classes_used
-        # sigue siendo el contador de seguimiento del profesor y solo se
-        # actualiza cuando la clase se marca completed/no_show/cancelación tardía.
         occupied_slots = db.query(Class).filter(
             Class.enrollment_id == enrollment.id,
             Class.status != "cancelled",
@@ -481,7 +518,6 @@ def book_class(
         db.commit()
         db.refresh(new_class)
 
-        # Notificar por correo a ambas partes
         teacher_user = enrollment.teacher.user if enrollment.teacher and enrollment.teacher.user else None
         send_class_confirmed_email(
             to_email=current_user.email,
@@ -570,7 +606,6 @@ def book_class(
                 "message": "Clase agendada usando tu saldo prepagado."
             }
 
-        # Sin prepago -> Notificaciones de reserva previa
         send_class_booking_confirmation(
             to_email=current_user.email,
             student_name=current_user.name,
@@ -722,7 +757,6 @@ def validate_payment(
             class_.meet_link = data.meet_link
             class_.payment_expires_at = None
 
-            # Enviar correos de confirmación al estudiante y al profesor
             student_user = payment.student.user if payment.student else None
             teacher_profile = db.query(TeacherProfile).filter(TeacherProfile.id == payment.teacher_id).first()
             
@@ -771,6 +805,8 @@ def validate_payment(
                 enrollment.package_id = target_package.id
                 enrollment.classes_total = target_package.classes_count
                 enrollment.unlocked_credits = 0  # arranca limpio con el paquete nuevo
+                if target_package.classes_count is not None:
+                    enrollment.prepaid_unlimited_credits = 0   # <-- NUEVO
                 if is_renewal:
                     enrollment.classes_used = 0
                 enrollment.status = EnrollmentStatus.active
@@ -885,7 +921,7 @@ def get_my_income(
     return [
         {
             "id": p.id, "amount_teacher": p.amount_teacher,
-            "payment_type": p.payment_type, "installment_number": p.installment_number,
+            "payment_type": p.payment_type, "installment_number": p.installment_index,
             "status": p.status, "created_at": p.created_at, "validated_at": p.validated_at,
         }
         for p in payments
@@ -1177,8 +1213,6 @@ def notify_payment(
 
     if data.type == "package":
         if data.enrollment_id:
-            # Reanudar notificación de un enrollment "unpaid" ya existente
-            # (caso legado / reintento tras un fallo previo).
             enrollment = db.query(Enrollment).filter(
                 Enrollment.id == data.enrollment_id, Enrollment.student_id == student_id,
             ).first()
@@ -1276,23 +1310,69 @@ def notify_payment(
         if new_package.id == current_enrollment.package_id:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya tienes este paquete activo")
 
-        if new_package.classes_count is not None:
-            occupied_slots = db.query(Class).filter(
-                Class.enrollment_id == current_enrollment.id,
-                Class.status.in_(PACKAGE_CHANGE_BLOCKING_STATUSES)
-            ).count()
-            if occupied_slots > new_package.classes_count:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    f"No puedes cambiar a este paquete: tienes {occupied_slots} clases usadas o "
-                    f"agendadas y el nuevo paquete solo permite {new_package.classes_count}."
-                )
+        available_credits = _get_enrollment_available_credits(current_enrollment, db)
+
+        # ── Paquete nuevo ilimitado: cambio instantáneo, sin cobro ──
+        if new_package.classes_count is None:
+            _apply_instant_switch_to_unlimited(current_enrollment, new_package, available_credits, db)
+            return {
+                "message": "Cambiaste a un paquete ilimitado. Tus créditos disponibles se transfirieron "
+                           "sin costo adicional. Puedes comprar más créditos cuando quieras."
+            }
+
+        # ── Paquete nuevo finito ──
+        deficit = new_package.classes_count - available_credits
+        if deficit < 0:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"No puedes cambiar a este paquete: ya tienes {available_credits} créditos disponibles "
+                f"y el nuevo paquete solo permite {new_package.classes_count}. Elige un paquete con más cupo."
+            )
+
+        if deficit == 0:
+            _apply_instant_package_change(current_enrollment, new_package, available_credits, db)
+            return {"message": "Cambio de paquete aplicado sin costo adicional (tus créditos ya cubren el nuevo paquete)."}
+
+        if db.query(Payment).filter(
+            Payment.enrollment_id == current_enrollment.id,
+            Payment.status == "pending_review",
+            Payment.payment_type.in_(["package", "renewal", "package_change"]),
+        ).first():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay un pago pendiente de revisión")
+
+        price_per_class = new_package.price / new_package.classes_count
+        amount = round(price_per_class * deficit, 2)
 
         current_enrollment.status = EnrollmentStatus.pending_package_change
         current_enrollment.change_requested_package_id = new_package.id
-        enrollment = current_enrollment
-        package = new_package
-        payment_type = "package_change"
+        db.commit()
+
+        payment = Payment(
+            enrollment_id=current_enrollment.id, student_id=student_id, teacher_id=current_enrollment.teacher_id,
+            amount_total=amount, amount_teacher=0, amount_platform=0,
+            payment_method="manual", transaction_id=data.transaction_reference,
+            status="pending_review", payment_type="package_change",
+            installment_index=None,
+        )
+        db.add(payment)
+        db.commit()
+        db.refresh(payment)
+
+        admin_emails = [a.email for a in db.query(User).filter(User.role == UserRole.superadmin, User.is_active == True).all()]
+        for admin_email in admin_emails:
+            send_admin_payment_pending_email(
+                to_email=admin_email,
+                student_name=current_user.name,
+                amount=amount,
+                concept="package_change",
+                payment_method="manual",
+                transaction_reference=data.transaction_reference,
+            )
+
+        return {
+            "payment_id": payment.id,
+            "message": f"Pago notificado por {deficit} créditos faltantes (${amount:.2f}). En espera de aprobación.",
+        }
 
     else:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"type inválido: {data.type}")

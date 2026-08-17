@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from app.core.phone import normalize_phone
 from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -577,7 +578,15 @@ def admin_update_user(
         user.is_active = data.is_active
 
     if data.phone_number is not None:
-        user.phone_number = data.phone_number
-
+            normalized = normalize_phone(data.phone_number)
+            if normalized and normalized != user.phone_number:
+                existing = db.query(User).filter(
+                    User.phone_number == normalized,
+                    User.id != user.id
+                ).first()
+                if existing:
+                    raise HTTPException(400, "Este número de teléfono ya está en uso por otro usuario")
+            user.phone_number = normalized
+            
     db.commit()
     return {"ok": True}
