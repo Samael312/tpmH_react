@@ -569,6 +569,8 @@ def admin_update_user(
 
     if data.role is not None:
         user.role = data.role
+        if data.role in ("teacher", "teacher_admin") and not user.teacher_profile:
+            db.add(TeacherProfile(user_id=user.id, user_username=user.username))
 
     if data.is_active is not None:
         if user.id == current_user.id:

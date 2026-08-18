@@ -14,7 +14,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (!hasHydrated) return
-    if (!user || user.role !== 'superadmin') {
+    if (!user || !["superadmin", "teacher_admin"].includes(user.role)) {
       router.push('/login')
     }
   }, [user, hasHydrated])
