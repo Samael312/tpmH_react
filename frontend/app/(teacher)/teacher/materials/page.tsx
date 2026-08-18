@@ -1037,8 +1037,10 @@ export default function MaterialsPage() {
                     onChange={e => {
                       const selectedFile = e.target.files?.[0] ?? null;
                       if (selectedFile) {
-                        const MAX_SIZE = 10 * 1024 * 1024; // 10MB
-                        if (selectedFile.size > MAX_SIZE) {
+                        // Límite específico de documentos/materiales — independiente
+                        // del límite de video de perfil de profesor (100 MB).
+                        const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024; // 10MB
+                        if (selectedFile.size > MAX_DOCUMENT_SIZE) {
                           setFileError("El archivo supera el límite permitido de 10 MB.");
                           setFile(null);
                           if (fileRef.current) fileRef.current.value = "";

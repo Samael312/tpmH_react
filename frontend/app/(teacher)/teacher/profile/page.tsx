@@ -18,6 +18,10 @@ import { SUBJECTS, LANGUAGES, SKILL_SUGGESTIONS } from "@/lib/teacherOptions";
 import { COUNTRY_OPTIONS, DEFAULT_COUNTRY, parsePhoneNumber, CountryInfo, TIMEZONE_OPTIONS } from "@/lib/timezones";
 import { NATIONALITIES, getFlagForNationality } from "@/lib/nationalities";
 
+
+const MAX_VIDEO_SIZE_MB = 100;
+const ALLOWED_VIDEO_MIME_TYPES = ["video/mp4", "video/quicktime"];
+
 // ─── Helpers ──────────────────────────────────────────────────────────────
 function formatErrorMessage(error: any, fallbackMessage: string): string {
   const detail = error?.response?.data?.detail;
@@ -260,8 +264,25 @@ function VideoUploadSection({
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploading(true);
+
     setFeedback(null);
+
+    if (!ALLOWED_VIDEO_MIME_TYPES.includes(file.type)) {
+      setFeedback({ msg: "Formato no permitido. Usa MP4 o MOV.", type: "error" });
+      if (videoRef.current) videoRef.current.value = "";
+      return;
+    }
+
+    if (file.size > MAX_VIDEO_SIZE_MB * 1024 * 1024) {
+      setFeedback({
+        msg: `El video supera el tamaño máximo permitido de ${MAX_VIDEO_SIZE_MB} MB.`,
+        type: "error",
+      });
+      if (videoRef.current) videoRef.current.value = "";
+      return;
+    }
+
+    setUploading(true);
     try {
       const form = new FormData();
       form.append("file", file);
@@ -347,7 +368,7 @@ function VideoUploadSection({
           )}
           <input ref={videoRef} type="file" accept="video/mp4,video/quicktime" className="hidden" onChange={handleUpload} />
         </div>
-        <p className="text-[11px] text-slate-400 font-bold">Formatos aceptados: MP4, MOV. Máximo 150MB.</p>
+        <p className="text-[11px] text-slate-400 font-bold">Formatos aceptados: MP4, MOV. Máximo 100MB.</p>
       </div>
     </Section>
   );
