@@ -1,33 +1,34 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
-from app.core.phone import normalize_phone
-from sqlalchemy import func
-from typing import List, Optional
 from datetime import datetime, timedelta
-from app.schemas.admin import AdminUserUpdate
-from app.db.base import get_db
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
 from app.auth.dependencies import get_current_user
-from app.models.user import User, UserRole
-from app.models.teacher import TeacherProfile, TeacherStatus
-from app.models.student import StudentProfile
-from app.models.class_ import Class
-from app.models.payment import Payment, Withdrawal
-from app.models.package import Enrollment
 from app.core.email import send_teacher_status_update_email
-from app.core.timezone import utc_now, UTC
-from app.models.student_teacher_link import StudentTeacherLink
+from app.core.phone import normalize_phone
 from app.core.teacher_students import link_student_to_teacher
+from app.core.timezone import UTC, utc_now
+from app.db.base import get_db
+from app.models.class_ import Class
+from app.models.package import Enrollment
+from app.models.payment import Payment, Withdrawal
+from app.models.payment_config import PlatformConfig
+from app.models.student import StudentProfile
+from app.models.student_teacher_link import StudentTeacherLink
+from app.models.teacher import TeacherProfile, TeacherStatus
+from app.models.user import User, UserRole
 from app.schemas.admin import (
+    AdminUserUpdate,
     PlatformStatsResponse,
     TeacherAdminResponse,
-    UpdateTeacherStatusRequest,
     UpdateCommissionRequest,
-    UserAdminResponse,
+    UpdateTeacherStatusRequest,
     UpdateUserStatusRequest,
+    UserAdminResponse,
 )
-from app.models.payment_config import PlatformConfig
-
 
 router = APIRouter()
 
@@ -108,7 +109,6 @@ def get_platform_stats(
     ).count()
 
     # ─── Finanzas ────────────────────────────────────────────────────────────
-    # Total revenue: suma de todos los pagos completados
     revenue_result = db.query(
         func.sum(Payment.amount_total)
     ).filter(
@@ -116,7 +116,6 @@ def get_platform_stats(
     ).scalar()
     total_revenue = float(revenue_result or 0)
 
-    # Total pagado a profesores
     teacher_payments_result = db.query(
         func.sum(Payment.amount_teacher)
     ).filter(
@@ -124,7 +123,6 @@ def get_platform_stats(
     ).scalar()
     total_paid_to_teachers = float(teacher_payments_result or 0)
 
-    # Ganancias de la plataforma (comisiones)
     platform_result = db.query(
         func.sum(Payment.amount_platform)
     ).filter(
@@ -132,7 +130,6 @@ def get_platform_stats(
     ).scalar()
     total_platform_earnings = float(platform_result or 0)
 
-    # Retiros pendientes
     pending_withdrawals_result = db.query(
         func.sum(Withdrawal.amount)
     ).filter(
@@ -190,7 +187,6 @@ def list_all_teachers(
     result = []
 
     for teacher in teachers:
-        # Métricas por profesor
         total_classes = db.query(Class).filter(
             Class.teacher_id == teacher.id
         ).count()
@@ -233,7 +229,6 @@ def update_teacher_status(
 ):
     """
     Aprueba, rechaza o suspende un profesor.
-    Es el flujo principal de onboarding de nuevos profesores.
     """
     teacher = db.query(TeacherProfile).filter(
         TeacherProfile.id == teacher_id
@@ -263,7 +258,6 @@ def update_teacher_status(
     teacher.status = new_status
     db.commit()
 
-    # Log del cambio para auditoría
     action_map = {
         TeacherStatus.approved: "aprobado",
         TeacherStatus.rejected: "rechazado",
@@ -297,7 +291,6 @@ def update_teacher_commission(
 ):
     """
     Actualiza la comisión de un profesor específico.
-    Permite personalizar la comisión por profesor.
     """
     if not 0.0 <= data.commission_rate <= 1.0:
         raise HTTPException(
@@ -338,7 +331,7 @@ def list_all_users(
     is_active: Optional[bool] = Query(None),
     search: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=1000),  # Límite incrementado a 1000
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -360,7 +353,6 @@ def list_all_users(
     if is_active is not None:
         query = query.filter(User.is_active == is_active)
 
-    # Búsqueda por nombre, apellido, email o username
     if search:
         search_term = f"%{search}%"
         query = query.filter(
@@ -370,7 +362,6 @@ def list_all_users(
             User.username.ilike(search_term)
         )
 
-    total = query.count()
     users = query.order_by(
         User.created_at.desc()
     ).offset(skip).limit(limit).all()
@@ -389,7 +380,6 @@ def update_user_status(
 ):
     """
     Activa o desactiva un usuario.
-    No se puede desactivar a sí mismo ni a otro superadmin.
     """
     user = db.query(User).filter(User.id == user_id).first()
 
@@ -399,7 +389,6 @@ def update_user_status(
             detail="Usuario no encontrado"
         )
 
-    # Protecciones
     if user.id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -430,7 +419,6 @@ def update_user_status(
 def get_platform_config(db: Session = Depends(get_db)):
     """
     Configuración pública de la plataforma.
-    Endpoint público — el frontend lo consulta al cargar.
     """
     config = db.query(PlatformConfig).first()
 
@@ -500,14 +488,6 @@ def update_platform_config(
     if data.is_single_tenant is not None:
         config.is_single_tenant = data.is_single_tenant
 
-    # ─── Backfill de StudentTeacherLink al salir de single-tenant ───
-    # Mientras la plataforma corrió en single-tenant, el vínculo
-    # estudiante-profesor se guardaba solo en student_profiles.teacher_username
-    # (ver _sync_student_teacher_username en payments.py), NUNCA en
-    # StudentTeacherLink. El modo multi-tenant resuelve "mis profesores"
-    # exclusivamente vía StudentTeacherLink, así que sin este backfill
-    # todo estudiante con historial previo bajo single-tenant aparecería
-    # como "sin profesor" (needs_teacher) al cambiar de modo.
     switching_to_multi = (
         was_single_tenant
         and data.is_single_tenant is False
@@ -541,8 +521,6 @@ def update_platform_config(
                 teacher_id=previous_featured_id,
             ))
 
-            # También sincroniza teacher_profiles.students (JSONB) para
-            # que aparezca en /teachers/me/students y /me/students-full
             if featured_teacher:
                 student_profile = db.query(StudentProfile).filter(
                     StudentProfile.id == student_id
@@ -555,6 +533,7 @@ def update_platform_config(
 
     db.commit()
     return {"message": "Configuración actualizada"}
+
 
 @router.patch("/users/{user_id}")
 def admin_update_user(
@@ -580,15 +559,18 @@ def admin_update_user(
         user.is_active = data.is_active
 
     if data.phone_number is not None:
-            normalized = normalize_phone(data.phone_number)
-            if normalized and normalized != user.phone_number:
-                existing = db.query(User).filter(
-                    User.phone_number == normalized,
-                    User.id != user.id
-                ).first()
-                if existing:
-                    raise HTTPException(400, "Este número de teléfono ya está en uso por otro usuario")
-            user.phone_number = normalized
+        normalized = normalize_phone(data.phone_number)
+        if normalized and normalized != user.phone_number:
+            existing = db.query(User).filter(
+                User.phone_number == normalized,
+                User.id != user.id
+            ).first()
+            if existing:
+                raise HTTPException(400, "Este número de teléfono ya está en uso por otro usuario")
+        user.phone_number = normalized
+
+    if hasattr(data, "nationality") and data.nationality is not None:
+        user.nationality = data.nationality
             
     db.commit()
     return {"ok": True}

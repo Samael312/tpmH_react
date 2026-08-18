@@ -117,6 +117,7 @@ export default function DashboardSidebar() {
               <NavItem href="/admin/dashboard" icon={<LayoutDashboard size={20} />} label="Vista Global" active={pathname === "/admin/dashboard"} collapsed={collapsed} />
               <NavItem href="/admin/teachers" icon={<Book size={20} />} label="Profesores" active={isActive("/admin/teachers")} collapsed={collapsed} />
               <NavItem href="/admin/students" icon={<GraduationCap size={20} />} label="Estudiantes" active={isActive("/admin/students")} collapsed={collapsed} />
+              <NavItem href="/admin/users" icon={<Users size={20}/>} label="Edicion de Usuarios" active={isActive("/admin/users")} collapsed={collapsed} />
               <NavItem href="/admin/payments" icon={<CreditCard size={20} />} label="Pagos y Facturas" active={isActive("/admin/payments")} collapsed={collapsed} />
               <NavItem href="/admin/settings" icon={<Settings size={20} />} label="Configuración" active={isActive("/admin/settings")} collapsed={collapsed} />
               <NavItem href="/admin/flow-tester" icon={<CheckCheck size={20} />} label="Flow Tester" active={isActive("/admin/flow-tester")} collapsed={collapsed} /> 

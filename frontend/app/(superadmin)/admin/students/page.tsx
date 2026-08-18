@@ -2,11 +2,22 @@
 
 import { useState, useEffect } from 'react'
 import { useStudents } from '@/hooks/useAdminData'
-import { Card, Badge, Button } from '@/components/ui'
+import { Card } from '@/components/ui'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 import { useRouter } from 'next/navigation'
-import { Users } from 'lucide-react'
+import {
+  Users,
+  Search,
+  X,
+  UserCheck,
+  UserX,
+  Phone,
+  Calendar,
+  Loader2,
+  Sparkles,
+  SlidersHorizontal,
+} from 'lucide-react'
 import { getFlagForNationality } from '@/lib/nationalities'
 
 export default function StudentsPage() {
@@ -16,7 +27,7 @@ export default function StudentsPage() {
   const { students, loading, total, refetch } = useStudents(debouncedSearch)
   const router = useRouter()
 
-  // Debounce del buscador — espera 400ms antes de buscar
+  // Debounce del buscador (400ms)
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 400)
     return () => clearTimeout(timer)
@@ -27,173 +38,248 @@ export default function StudentsPage() {
     try {
       await api.patch(`/admin/users/${userId}/status`, {
         is_active: !currentStatus,
-        reason: !currentStatus ? 'Reactivado por admin' : 'Desactivado por admin'
+        reason: !currentStatus ? 'Reactivado por admin' : 'Desactivado por admin',
       })
       refetch()
     } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error')
+      alert(e.response?.data?.detail || 'Error al cambiar estado')
     } finally {
       setActioning(null)
     }
   }
 
+  // Métricas rápidas
+  const activeCount = students.filter((s) => s.is_active !== false).length
+  const inactiveCount = students.length - activeCount
+
   return (
     <>
-    <div className="space-y-8 animate-fade-up bg-white min-h-screen p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
-
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div>
-          <h1 className="font-display text-4xl font-bold text-slate-800 mb-2 tracking-tight">
-            Estudiantes
-          </h1>
-          <p className="text-sm text-slate-500 font-medium flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            {total} usuarios registrados en la plataforma
-          </p>
-        </div>
-
-        {/* Buscador Moderno */}
-        <div className="relative w-full md:max-w-md">
-          <svg
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-          >
-            <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd"/>
-          </svg>
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por nombre, email o usuario..."
-            className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-10 py-3.5 text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300 transition-all"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-pink-500 transition-colors p-1"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-        <button
-          onClick={() => router.push("/admin/students/bulk-edit")}
-          className="flex items-center gap-2 px-4 py-2.5 bg-white border-2
-                    border-slate-200 text-slate-700 text-sm font-bold rounded-xl
-                    shadow-sm hover:border-pink-300 hover:bg-pink-50
-                    transition-all duration-200"
-        >
-          <Users className="w-4 h-4" />
-          Edición masiva
-        </button>
-      </div>
-
-      {/* Tarjeta con Lista/Tabla */}
-      <Card className="overflow-hidden border-slate-100 shadow-sm rounded-3xl">
-        {/* Header tabla */}
-        <div className="hidden md:grid grid-cols-[1fr_1fr_auto_auto] gap-4 px-8 py-4 border-b border-slate-100 bg-slate-50/50">
-          {['Estudiante', 'Contacto', 'Estado', 'Acción'].map(h => (
-            <span key={h} className="text-[10px] text-slate-400 uppercase tracking-widest font-black">
-              {h}
-            </span>
-          ))}
-        </div>
-
-        {loading ? (
-          <div className="divide-y divide-slate-50">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="px-8 py-5 animate-pulse flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-slate-100 flex-shrink-0" />
-                <div className="flex-1">
-                  <div className="h-4 bg-slate-100 rounded-full w-48 mb-2" />
-                  <div className="h-3 bg-slate-50 rounded-full w-32" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : students.length === 0 ? (
-          <div className="py-20 text-center">
-            <div className="text-5xl mb-4 opacity-50">🔍</div>
-            <p className="text-slate-500 font-bold text-lg">
-              {search ? 'No se encontraron resultados para tu búsqueda' : 'Aún no hay estudiantes registrados'}
+      <div className="min-h-screen bg-slate-50/50 p-4 md:p-8 space-y-6 animate-fade-up">
+        {/* ─── Header & Acciones Principal ─── */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="font-display text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
+                Estudiantes
+              </h1>
+              <span className="bg-pink-100 text-pink-700 text-xs font-black px-3 py-1 rounded-full border border-pink-200">
+                Gestión
+              </span>
+            </div>
+            <p className="text-slate-500 text-xs md:text-sm font-medium mt-1 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              {total} usuarios registrados en la plataforma
             </p>
           </div>
-        ) : (
-          <div className="divide-y divide-slate-50">
-            {students.map((student) => (
-              <div
-                key={student.id}
-                className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto_auto] gap-4 px-6 md:px-8 py-5 items-center hover:bg-slate-50/50 transition-colors group"
+        </div>
+
+        {/* ─── Tarjetas de Resumen (KPIs) ─── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-white rounded-3xl p-4 border border-slate-200/60 shadow-sm flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-pink-50 text-pink-500">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                Total Registrados
+              </p>
+              <p className="text-xl font-black text-slate-800">{total}</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl p-4 border border-slate-200/60 shadow-sm flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-500">
+              <UserCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                Activos en Vista
+              </p>
+              <p className="text-xl font-black text-emerald-600">{activeCount}</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl p-4 border border-slate-200/60 shadow-sm flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-rose-50 text-rose-500">
+              <UserX className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                Inactivos en Vista
+              </p>
+              <p className="text-xl font-black text-rose-500">{inactiveCount}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Buscador ─── */}
+        <div className="bg-white rounded-3xl p-3 border border-slate-200/80 shadow-sm">
+          <div className="relative w-full">
+            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar estudiante por nombre, apellido, email o usuario..."
+              className="w-full bg-slate-50/80 border border-transparent rounded-2xl pl-11 pr-10 py-3 text-xs md:text-sm font-semibold text-slate-700 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-pink-300 focus:ring-4 focus:ring-pink-50 transition-all"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500 transition-colors p-1.5"
               >
-                {/* Nombre y Avatar */}
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-pink-100 to-rose-50 border border-pink-200 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform shadow-inner">
-                    <span className="text-pink-600 text-sm font-black uppercase">
-                      {student.name[0]}{student.surname[0]}
-                    </span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-slate-800 text-sm font-bold truncate">
-                      {student.name} {student.surname}
-                    </p>
-                    <p className="text-slate-400 text-xs font-medium truncate mt-0.5">
-                      @{student.username}
-                    </p>
-                  </div>
-                </div>
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
 
-                {/* Contacto */}
-                <div className="min-w-0">
-                  <p className="text-slate-600 text-sm font-medium truncate">
-                    {student.email}
-                  </p>
-                  <p className="text-slate-400 text-[11px] font-bold mt-1 uppercase tracking-wide">
-                    Desde {new Date(student.created_at).toLocaleDateString('es', {
-                      day: 'numeric', month: 'short', year: 'numeric'
-                    })}
-                  </p>
-                </div>
-
-                {/* Estado */}
-                <div className="flex items-center gap-2">
-                  <span className="inline-block w-3 h-3 rounded-full bg-emerald-400" />
-                  <span className="text-sm font-bold text-slate-600">Activo</span>
-                </div>
-
-                {/* Contacto */}
-                <div className="min-w-0">
-                  <p className="text-slate-600 text-sm font-medium truncate">
-                    {student.email}
-                  </p>
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    {student.phone_number && (
-                      <span className="text-slate-400 text-[11px] font-bold">
-                        {student.phone_number}
-                      </span>
-                    )}
-                    {student.nationality && (
-                      <span className="text-slate-400 text-[11px] font-bold">
-                        {getFlagForNationality(student.nationality)} {student.nationality}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-slate-400 text-[11px] font-bold mt-1 uppercase tracking-wide">
-                    Desde {new Date(student.created_at).toLocaleDateString('es', {
-                      day: 'numeric', month: 'short', year: 'numeric'
-                    })}
-                  </p>
-                </div>
-
-              </div>
+        {/* ─── Tabla / Lista ─── */}
+        <Card className="overflow-hidden border-slate-200/80 shadow-sm rounded-3xl bg-white">
+          {/* Header de la Tabla (Desktop) */}
+          <div className="hidden md:grid grid-cols-[2.5fr_2fr_1.5fr_1.5fr] gap-4 px-8 py-4 border-b border-slate-100 bg-slate-50/60">
+            {['Estudiante', 'Contacto & Origen', 'Estado', 'Acción'].map((h) => (
+              <span
+                key={h}
+                className="text-[10px] text-slate-400 uppercase tracking-widest font-black"
+              >
+                {h}
+              </span>
             ))}
           </div>
-        )}
-      </Card>
-      
-    </div>
-    <ChipiWidget screenName="admin_students" /> 
+
+          {loading ? (
+            <div className="divide-y divide-slate-100">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="px-8 py-5 animate-pulse flex items-center gap-4">
+                  <div className="w-11 h-11 rounded-2xl bg-slate-100 flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-slate-100 rounded-full w-48" />
+                    <div className="h-3 bg-slate-100 rounded-full w-32" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : students.length === 0 ? (
+            <div className="py-20 text-center px-4">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mx-auto mb-3">
+                <Search className="w-6 h-6" />
+              </div>
+              <p className="text-slate-700 font-extrabold text-base">
+                {search
+                  ? 'No se encontraron estudiantes para la búsqueda'
+                  : 'Aún no hay estudiantes registrados'}
+              </p>
+              <p className="text-slate-400 text-xs font-medium mt-1">
+                {search ? 'Intenta ajustando los términos ingresados' : 'Los nuevos estudiantes aparecerán aquí.'}
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {students.map((student) => {
+                const isActive = student.is_active !== false
+                const isProcessing = actioning === student.id
+
+                return (
+                  <div
+                    key={student.id}
+                    className="grid grid-cols-1 md:grid-cols-[2.5fr_2fr_1.5fr_1.5fr] gap-4 px-6 md:px-8 py-4 items-center hover:bg-slate-50/60 transition-colors group"
+                  >
+                    {/* Estudiante (Avatar + Nombre + User) */}
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-pink-100 to-rose-50 border border-pink-200/80 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform shadow-inner">
+                        <span className="text-pink-600 text-xs font-black uppercase">
+                          {student.name?.[0] || 'U'}
+                          {student.surname?.[0] || ''}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-slate-800 text-xs md:text-sm font-extrabold truncate">
+                          {student.name} {student.surname}
+                        </p>
+                        <p className="text-slate-400 text-[11px] font-semibold truncate">
+                          @{student.username}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Contacto & Origen */}
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-slate-700 text-xs font-bold truncate">
+                        {student.email}
+                      </p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {student.phone_number && (
+                          <span className="text-slate-500 text-[10px] font-bold flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md">
+                            <Phone className="w-2.5 h-2.5 text-slate-400" />
+                            {student.phone_number}
+                          </span>
+                        )}
+                        {student.nationality && (
+                          <span className="text-slate-500 text-[10px] font-bold bg-slate-100 px-2 py-0.5 rounded-md">
+                            {getFlagForNationality(student.nationality)} {student.nationality}
+                          </span>
+                        )}
+                      </div>
+                      {student.created_at && (
+                        <p className="text-slate-400 text-[10px] font-bold flex items-center gap-1 uppercase tracking-wide">
+                          <Calendar className="w-2.5 h-2.5" />
+                          {new Date(student.created_at).toLocaleDateString('es', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Estado */}
+                    <div className="flex items-center">
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold border ${
+                          isActive
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-slate-100 text-slate-500 border-slate-200'
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                          }`}
+                        />
+                        {isActive ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </div>
+
+                    {/* Botón de Acción */}
+                    <div>
+                      <button
+                        onClick={() => toggleStatus(student.id, isActive)}
+                        disabled={isProcessing}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all active:scale-95 flex items-center gap-1.5 ${
+                          isActive
+                            ? 'border-slate-200 bg-white text-slate-600 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'
+                            : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                        } disabled:opacity-50`}
+                      >
+                        {isProcessing ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : isActive ? (
+                          'Desactivar'
+                        ) : (
+                          'Activar'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <ChipiWidget screenName="admin_students" />
     </>
   )
 }
