@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Check, X, Clock, Package as PackageIcon, Loader2 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import { useAuthStore } from "@/store/authStore";
 
 const TYPE_BADGE: Record<string, { label: (p: any) => string; cls: string }> = {
   single_class:       { label: () => "Clase única", cls: "bg-blue-100 text-blue-700" },
@@ -15,6 +16,8 @@ const TYPE_BADGE: Record<string, { label: (p: any) => string; cls: string }> = {
 };
 
 export default function TeacherPaymentsPage() {
+  const role = useAuthStore(s => s.user?.role);
+  const canManagePayments = role === "teacher_admin" || role === "superadmin";
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [meetLink, setMeetLink] = useState("");
@@ -99,7 +102,13 @@ export default function TeacherPaymentsPage() {
                   </p>
                 )}
 
-                {active === p.payment_id && p.payment_type === "single_class" ? (
+                {!canManagePayments ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-2 rounded-xl">
+                      En espera de confirmación por el staff
+                    </span>
+                  </div>
+                ) : active === p.payment_id && p.payment_type === "single_class" ? (
                   <div className="flex gap-2">
                     <input value={meetLink} onChange={e => setMeetLink(e.target.value)}
                       placeholder="Link de Google Meet" className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm" />

@@ -43,8 +43,8 @@ def get_current_user(
     return user
 
 def get_current_teacher(current_user: User = Depends(get_current_user)) -> User:
-    """Solo permite acceso a profesores"""
-    if current_user.role != UserRole.teacher:
+    """Permite acceso a profesores y a teacher_admin (actúan como profesores)"""
+    if current_user.role not in [UserRole.teacher, UserRole.teacher_admin]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acceso solo para profesores"

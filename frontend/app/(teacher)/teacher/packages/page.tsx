@@ -11,6 +11,7 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { SUBJECTS, LANGUAGES } from "@/lib/teacherOptions";
 import { getSuggestedTheme, ICON_PICKER_OPTIONS, DEFAULT_PACKAGE_THEME, priceLabelSuffix } from "@/lib/packageThemes";
 import { THEME_PRESETS } from "@/lib/color";
+import { useAuthStore } from "@/store/authStore";
 
 interface Package {
   id: number;
@@ -94,6 +95,8 @@ export default function TeacherPackagesPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
   const formRef = useRef<HTMLDivElement>(null);
+  const role = useAuthStore(s => s.user?.role);
+  const canManagePayments = role === "teacher_admin" || role === "superadmin";
 
   const scrollToForm = () => {
     setTimeout(() => {
@@ -242,15 +245,12 @@ export default function TeacherPackagesPage() {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <Link href="/teacher/payments" className="text-sm font-bold text-pink-600 hover:text-pink-700 flex items-center gap-1.5">
-              Ver pagos pendientes <ChevronRight className="w-4 h-4" />
-            </Link>
-            <button
-              onClick={openCreate}
-              className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-pink-500 to-rose-400
-                         text-white text-sm font-bold rounded-xl shadow-lg shadow-pink-200
-                         hover:shadow-pink-300 active:scale-[0.98] transition-all duration-200"
-            >
+            {canManagePayments && (
+              <Link href="/teacher/payments" className="text-sm font-bold text-pink-600 hover:text-pink-700 flex items-center gap-1.5">
+                Ver pagos pendientes <ChevronRight className="w-4 h-4" />
+              </Link>
+            )}
+            <button onClick={openCreate} className="...">
               <Plus className="w-4 h-4" /> Nuevo paquete
             </button>
           </div>
