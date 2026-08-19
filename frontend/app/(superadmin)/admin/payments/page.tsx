@@ -3,7 +3,7 @@
 'use client'
 
 import { useState } from 'react'
-import { usePendingPayments, useWithdrawals, useTeachers } from '@/hooks/useAdminData'
+import { usePendingPayments, useWithdrawals, useTeachers, usePaymentsHistory } from '@/hooks/useAdminData'
 import { Card, Badge, Button } from '@/components/ui'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
@@ -42,7 +42,7 @@ const TYPE_BADGE: Record<string, { label: (p: any) => string; cls: string }> = {
 }
 
 export default function PaymentsPage() {
-  const [activeTab, setActiveTab] = useState<'payments' | 'withdrawals' | 'teachers'>('payments')
+  const [activeTab, setActiveTab] = useState<'payments' | 'withdrawals' | 'teachers' | 'history'>('payments')
   const [validating, setValidating] = useState<number | null>(null)
   const [processing, setProcessing] = useState<number | null>(null)
   const [meetLink, setMeetLink] = useState('')
@@ -51,6 +51,7 @@ export default function PaymentsPage() {
   const { payments, loading: paymentsLoading, refetch: refetchPayments } = usePendingPayments()
   const { withdrawals, loading: withdrawalsLoading, refetch: refetchWithdrawals } = useWithdrawals()
   const { teachers: pendingTeachers, loading: teachersLoading } = useTeachers('pending')
+  const { history, loading: historyLoading } = usePaymentsHistory()
 
   const handleApprove = async (p: any) => {
     setValidating(p.payment_id)
@@ -129,6 +130,7 @@ export default function PaymentsPage() {
           { key: 'payments',    label: `Pagos por confirmar (${payments?.length || 0})` },
           { key: 'withdrawals', label: `Retiros (${withdrawals?.length || 0})` },
           { key: 'teachers',    label: `Profesores por validar (${pendingTeachers?.length || 0})` },
+          { key: 'history',     label: 'Historial' },
         ].map(tab => (
           <button
             key={tab.key}
@@ -334,6 +336,92 @@ export default function PaymentsPage() {
                 Ir a revisar todos los profesores <ChevronRight className="w-4 h-4" />
               </Link>
             </>
+          )}
+        </div>
+      )}
+
+      {/* Tab 4: History */}
+      {activeTab === 'history' && (
+        <div className="space-y-4 pt-2">
+          {historyLoading ? (
+            Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="bg-slate-50 rounded-3xl h-32 animate-pulse" />
+            ))
+          ) : history?.length === 0 ? (
+            <Card className="p-16 text-center bg-slate-50/50 border-2 border-dashed border-slate-200 rounded-3xl shadow-none">
+              <div className="text-5xl mb-4 opacity-60">🕒</div>
+              <p className="text-slate-500 font-bold text-lg">Sin historial todavía</p>
+            </Card>
+          ) : (
+            history?.map((p: any) => {
+              const badge = TYPE_BADGE[p.payment_type] || {
+                label: () => p.payment_type || "Pago",
+                cls: "bg-slate-100 text-slate-700 border-slate-200"
+              }
+
+              return (
+                <Card key={p.payment_id} hover className="p-6 border-slate-100 shadow-sm rounded-3xl">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-3">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full border ${badge.cls}`}>
+                        {badge.label(p)}
+                      </span>
+                      <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                        <User className="w-4 h-4 text-slate-400" />
+                        <span>{p.student_name}</span>
+                        <span className="text-xs text-slate-400 font-normal">(@{p.student_username})</span>
+                      </div>
+                    </div>
+                    <span className="text-pink-600 font-black text-xl bg-pink-50 px-4 py-1.5 rounded-2xl w-fit">
+                      ${p.amount.toFixed(2)}
+                    </span>
+                  </div>
+
+                  {/* Detalle adicional */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs text-slate-500 mb-4 bg-slate-50/70 p-3 rounded-2xl border border-slate-100">
+                    {(p.package_name || p.requested_package_name) && (
+                      <div className="flex items-center gap-1.5">
+                        <PackageIcon className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Paquete: <strong className="text-slate-700">{p.requested_package_name || p.package_name}</strong></span>
+                      </div>
+                    )}
+                    {p.teacher_name && (
+                      <div>
+                        Profesor: <strong className="text-slate-700">{p.teacher_name}</strong>
+                      </div>
+                    )}
+                    {p.transaction_reference && (
+                      <div className="font-mono text-slate-400">
+                        Ref: <strong className="text-slate-600">{p.transaction_reference}</strong>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Estado / Historial Badge */}
+                  <div>
+                    {p.status === 'approved' ? (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="success">Aprobado</Badge>
+                        {p.validated_at && (
+                          <span className="text-xs text-slate-400">
+                            {new Date(p.validated_at).toLocaleString('es')}
+                          </span>
+                        )}
+                      </div>
+                    ) : p.status === 'rejected' ? (
+                      <div className="space-y-1">
+                        <Badge variant="danger">Rechazado</Badge>
+                        {p.rejection_reason && (
+                          <p className="text-xs text-slate-500">{p.rejection_reason}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <Badge variant="warning">{p.status}</Badge>
+                    )}
+                  </div>
+                </Card>
+              )
+            })
           )}
         </div>
       )}

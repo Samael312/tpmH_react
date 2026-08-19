@@ -685,6 +685,55 @@ def get_payments_pending_review(
 
     return result
 
+@router.get("/history")
+def get_payments_history(
+    current_user: User = Depends(get_current_staff_or_teacher),
+    db: Session = Depends(get_db),
+):
+    """
+    Historial de pagos ya resueltos (aprobados o rechazados).
+    Teacher solo ve los suyos; staff ve todos.
+    """
+    query = db.query(Payment).filter(Payment.status.in_(["approved", "rejected"]))
+    if current_user.role == "teacher":
+        query = query.filter(Payment.teacher_id == current_user.teacher_profile.id)
+
+    payments = query.order_by(
+        Payment.validated_at.desc().nullslast(), Payment.created_at.desc()
+    ).all()
+
+    result = []
+    for p in payments:
+        student_user = p.student.user if p.student else None
+        entry = {
+            "payment_id": p.id,
+            "payment_type": p.payment_type,
+            "installment_index": p.installment_index,
+            "amount": p.amount_total,
+            "transaction_reference": p.transaction_id,
+            "submitted_at": p.created_at,
+            "validated_at": p.validated_at,
+            "status": p.status,               # "approved" | "rejected"
+            "rejection_reason": p.rejection_reason,
+            "student_name": f"{student_user.name} {student_user.surname}" if student_user else "Desconocido",
+            "student_username": student_user.username if student_user else None,
+        }
+        if p.payment_type == "single_class" and p.class_id:
+            class_ = db.query(Class).filter(Class.id == p.class_id).first()
+            entry["class_start_utc"] = class_.start_time_utc if class_ else None
+        elif p.enrollment_id:
+            enrollment = db.query(Enrollment).filter(Enrollment.id == p.enrollment_id).first()
+            pkg_id = (
+                enrollment.renewal_requested_package_id
+                or enrollment.change_requested_package_id
+                or enrollment.package_id
+            ) if enrollment else None
+            pkg = db.query(Package).filter(Package.id == pkg_id).first() if pkg_id else None
+            entry["package_name"] = pkg.name if pkg else None
+            entry["installment_total"] = pkg.installment_count if pkg else None
+        result.append(entry)
+
+    return result
 
 @router.patch("/{payment_id}/validate")
 def validate_payment(

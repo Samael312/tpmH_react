@@ -91,6 +91,28 @@ interface WithdrawalRecord {
   created_at: string
 }
 
+interface PaymentHistoryItem extends PendingPayment {
+  status: 'approved' | 'rejected'
+  validated_at: string | null
+  rejection_reason?: string | null
+}
+
+export function usePaymentsHistory() {
+  const [history, setHistory] = useState<PaymentHistoryItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetch = useCallback(async () => {
+    try {
+      setLoading(true)
+      const res = await api.get('/payments/history')
+      setHistory(res.data)
+    } catch { } finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => { fetch() }, [fetch])
+  return { history, loading, refetch: fetch }
+}
+
 export function useStudents(search?: string) {
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
