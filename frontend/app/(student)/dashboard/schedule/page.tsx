@@ -770,21 +770,24 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
       {checkoutTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setCheckoutTarget(null)} />
-          <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8">
-            <div className="flex items-center justify-between mb-5">
+          {/* Cambiado de max-w-md a max-w-4xl para aprovechar todo el ancho */}
+          <div className="relative w-full max-w-4xl bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between mb-5 flex-shrink-0">
               <h2 className="text-lg font-black text-slate-800">Completar pago</h2>
-              <button onClick={() => setCheckoutTarget(null)} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
+              <button onClick={() => setCheckoutTarget(null)} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
                 <X className="w-4 h-4 text-slate-500" />
               </button>
             </div>
-            <PackageCheckout
-              pkg={checkoutTarget.pkg}
-              mode="initial"
-              enrollmentId={checkoutTarget.enrollmentId}
-              installmentsPaid={0}
-              onClose={() => setCheckoutTarget(null)}
-              onDone={onSelected}
-            />
+            <div className="overflow-y-auto pr-2">
+              <PackageCheckout
+                pkg={checkoutTarget.pkg}
+                mode="initial" // (o 'renewal' según corresponda en cada pantalla)
+                enrollmentId={checkoutTarget.enrollmentId}
+                installmentsPaid={0}
+                onClose={() => setCheckoutTarget(null)}
+                onDone={onSelected}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -915,21 +918,24 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
       {checkoutTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setCheckoutTarget(null)} />
-          <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8">
-            <div className="flex items-center justify-between mb-5">
+          {/* Cambiado de max-w-md a max-w-4xl para aprovechar todo el ancho */}
+          <div className="relative w-full max-w-4xl bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between mb-5 flex-shrink-0">
               <h2 className="text-lg font-black text-slate-800">Completar pago</h2>
-              <button onClick={() => setCheckoutTarget(null)} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
+              <button onClick={() => setCheckoutTarget(null)} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
                 <X className="w-4 h-4 text-slate-500" />
               </button>
             </div>
-            <PackageCheckout
-              pkg={checkoutTarget.pkg}
-              mode="renewal"
-              enrollmentId={checkoutTarget.enrollmentId}
-              installmentsPaid={0}
-              onClose={() => setCheckoutTarget(null)}
-              onDone={onRequested}
-            />
+            <div className="overflow-y-auto pr-2">
+              <PackageCheckout
+                pkg={checkoutTarget.pkg}
+                mode="initial" // (o 'renewal' según corresponda en cada pantalla)
+                enrollmentId={checkoutTarget.enrollmentId}
+                installmentsPaid={0}
+                onClose={() => setCheckoutTarget(null)}
+                onDone={onRequested}
+              />
+            </div>
           </div>
         </div>
       )}

@@ -51,7 +51,8 @@ function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: an
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
-        <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8">
+        {/* Contenedor actualizado con altura máxima y scroll vertical */}
+        <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
           <h2 className="text-lg font-black text-slate-800 mb-5">Completar pago</h2>
           <PackageCheckout
             pkg={checkoutTarget}
@@ -295,7 +296,6 @@ export default function StudentDashboard() {
           </div>
         )}
 
-        {/* Punto 2: Banner de Pago Pendiente de Notificación */}
         {stage === "package_pending_payment" && (
           <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-[2rem] p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-amber-200 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="absolute top-[-40px] right-[-40px] w-48 h-48 bg-white/10 rounded-full blur-2xl" />
@@ -367,7 +367,6 @@ export default function StudentDashboard() {
           </div>
         )}
 
-        {/* Punto 5 y 7: Mostrar cuotas y créditos prepagados corregidos */}
         {stage === "ready" && activeOrChangingEnrollments.length > 0 && (
           <div className={`grid gap-4 ${activeOrChangingEnrollments.length > 1 ? "sm:grid-cols-2" : ""}`}>
             {activeOrChangingEnrollments.map((enr) => {
@@ -489,7 +488,8 @@ export default function StudentDashboard() {
         {installmentTarget && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setInstallmentTarget(null)} />
-            <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8">
+            {/* Contenedor actualizado con altura máxima y scroll vertical */}
+            <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-lg font-black text-slate-800">Pagar siguiente cuota</h2>
                 <button onClick={() => setInstallmentTarget(null)} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
@@ -511,7 +511,8 @@ export default function StudentDashboard() {
         {rechargeTarget && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setRechargeTarget(null)} />
-            <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8">
+            {/* Contenedor actualizado con altura máxima y scroll vertical */}
+            <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-lg font-black text-slate-800">Comprar créditos</h2>
                 <button onClick={() => setRechargeTarget(null)} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
