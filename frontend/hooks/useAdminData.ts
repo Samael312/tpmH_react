@@ -310,3 +310,35 @@ export function useBannedStudents() {
   useEffect(() => { fetch() }, [fetch])
   return { students, loading, refetch: fetch }
 }
+
+// ─── Detalle de un estudiante (bajo demanda, para el desplegable) ────────────
+export interface StudentDetailEnrollment {
+  id: number
+  package_name: string
+  subject: string | null
+  teacher_name: string | null
+  classes_used: number
+  classes_total: number | null
+  status: string
+  created_at: string
+}
+
+export interface StudentDetailMaterial {
+  id: number
+  title: string
+  category: string
+  progress: string
+  assigned_at: string
+}
+
+export interface StudentDetail {
+  created_at: string
+  goal: string | null
+  timezone: string | null
+  enrollments: StudentDetailEnrollment[]
+  materials: StudentDetailMaterial[]
+}
+
+export function fetchStudentDetail(userId: number) {
+  return api.get<StudentDetail>(`/admin/students/${userId}/detail`)
+}

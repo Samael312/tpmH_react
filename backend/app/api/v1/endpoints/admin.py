@@ -753,6 +753,77 @@ def unban_student(
     return {"message": "Estudiante reactivado correctamente", "user_id": user_id}
 
 
+@router.get("/students/{user_id}/detail")
+def get_student_detail(
+    user_id: int,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    Detalle completo de un estudiante para el desplegable en /admin/students:
+    enrollments (paquetes) y materiales asignados, con nombre del profesor
+    y del recurso. Usado bajo demanda al expandir la card.
+    """
+    from app.models.material import MaterialAssignment, Material
+
+    user = db.query(User).filter(User.id == user_id, User.role == UserRole.student).first()
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Estudiante no encontrado")
+
+    student_profile = user.student_profile
+    if not student_profile:
+        return {
+            "created_at": user.created_at,
+            "goal": None,
+            "timezone": None,
+            "enrollments": [],
+            "materials": [],
+        }
+
+    enrollments = db.query(Enrollment).filter(
+        Enrollment.student_id == student_profile.id
+    ).order_by(Enrollment.created_at.desc()).all()
+
+    enrollment_list = []
+    for e in enrollments:
+        teacher_user = e.teacher.user if e.teacher and e.teacher.user else None
+        enrollment_list.append({
+            "id": e.id,
+            "package_name": e.package.name if e.package else "N/A",
+            "subject": e.package.subject if e.package else None,
+            "teacher_name": f"{teacher_user.name} {teacher_user.surname}" if teacher_user else None,
+            "classes_used": e.classes_used,
+            "classes_total": e.classes_total,
+            "status": e.status,
+            "created_at": e.created_at,
+        })
+
+    material_assignments = db.query(MaterialAssignment).filter(
+        MaterialAssignment.student_id == student_profile.id
+    ).join(Material).all()
+
+    materials_list = [
+        {
+            "id": ma.id,
+            "title": ma.material.title,
+            "category": ma.material.category,
+            "progress": ma.progress,
+            "assigned_at": ma.assigned_at,
+        }
+        for ma in material_assignments
+    ]
+
+    return {
+        "created_at": user.created_at,
+        "goal": student_profile.goal,
+        "timezone": student_profile.timezone,
+        "enrollments": enrollment_list,
+        "materials": materials_list,
+    }
+
+
+# ─── CONFIGURACIÓN DE PLATAFORMA ─────────────────────────────────────────────
+
 # ─── CONFIGURACIÓN DE PLATAFORMA ─────────────────────────────────────────────
 
 @router.get("/platform-config")

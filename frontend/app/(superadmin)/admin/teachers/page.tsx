@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTeachers, TeacherAppeal } from '@/hooks/useAdminData'
 import { Card, Badge, Button } from '@/components/ui'
 import api from '@/lib/api'
@@ -46,13 +46,18 @@ function TeacherDetailModal({
   const [resolvingAppealId, setResolvingAppealId] = useState<number | null>(null)
   const [adminResponse, setAdminResponse] = useState('')
 
-  const loadAppeals = async () => {
+   const loadAppeals = async () => {
     setLoadingAppeals(true)
     try {
       const res = await api.get(`/admin/teachers/${teacher.id}/appeals`)
       setAppeals(res.data)
-    } catch { } finally { setLoadingAppeals(false) }
-  }
+      } catch { } finally { setLoadingAppeals(false) }
+    }
+
+    useEffect(() => {
+      loadAppeals()
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [teacher.id])
 
   useState(() => { loadAppeals() })
 
