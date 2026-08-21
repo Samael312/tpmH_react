@@ -171,36 +171,50 @@ export function useTeacherStudentsFull() {
 }
 
 // ─── Clases del profesor ─────────────────────────────────────────────────────
-export function useTeacherClasses(filters?: {
+interface TeacherClassesFilters {
   date?: string
   status?: string
   includeHistory?: boolean
-}) {
-  const [classes, setClasses] = useState<TeacherClass[]>([])
-  const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState({ total: 0, upcoming: 0, completed: 0 })
+}
 
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
+interface TeacherClassesResponse {
+  classes: TeacherClass[]
+  total: number
+  upcoming: number
+  completed: number
+}
+
+export function useTeacherClasses(filters?: TeacherClassesFilters) {
+  const query = useQuery({
+    queryKey: ["teacher", "classes", filters ?? {}],
+    queryFn: async () => {
       const params = new URLSearchParams()
       if (filters?.date) params.append('date', filters.date)
       if (filters?.status) params.append('status_filter', filters.status)
       if (filters?.includeHistory) params.append('include_history', 'true')
 
       const res = await api.get(`/classes/teacher/classes?${params}`)
-      setClasses(res.data.classes)
-      setStats({
-        total: res.data.total,
-        upcoming: res.data.upcoming,
-        completed: res.data.completed,
-      })
-    } catch { }
-    finally { setLoading(false) }
-  }, [filters?.date, filters?.status, filters?.includeHistory])
+      return {
+        classes: res.data.classes as TeacherClass[],
+        total: res.data.total as number,
+        upcoming: res.data.upcoming as number,
+        completed: res.data.completed as number,
+      } satisfies TeacherClassesResponse
+    },
+  })
 
-  useEffect(() => { fetch() }, [fetch])
-  return { classes, loading, stats, refetch: fetch }
+  return {
+    classes: query.data?.classes ?? [],
+    stats: {
+      total: query.data?.total ?? 0,
+      upcoming: query.data?.upcoming ?? 0,
+      completed: query.data?.completed ?? 0,
+    },
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }
 
 // ─── Perfil del profesor ─────────────────────────────────────────────────────

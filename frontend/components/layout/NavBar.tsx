@@ -274,10 +274,22 @@ export default function DashboardSidebar() {
               </nav>
             </div>
           )}
+
+          
         </div>
 
         {/* Footer del Sidebar Desktop */}
         <div className="p-3 border-t border-pink-100">
+
+          {!collapsed && user && (
+          <div className="px-4 py-3 mb-2 bg-slate-50 rounded-2xl border border-slate-100 animate-in fade-in">
+            <p className="text-slate-800 text-xs font-bold truncate">{user.name}</p>
+            <p className="text-pink-400 text-[10px] font-black uppercase tracking-tighter">
+              {role.replace("_", " ")}
+            </p>
+          </div>
+        )}
+        
           <button
             onClick={handleLogout}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-rose-500 hover:bg-rose-50 transition-colors ${
