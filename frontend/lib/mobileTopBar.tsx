@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
 
 interface MobileTopBarState {
   title: string;
@@ -41,9 +41,25 @@ export function useMobileTopBar() {
 /** Hook de conveniencia: cada página lo llama una vez para registrar su título/refresh */
 export function usePageTopBar(opts: { title: string; onRefresh?: () => void; isFetching?: boolean }) {
   const { setTopBar } = useMobileTopBar();
+
+  // Store the latest callback in a ref to avoid triggers on function identity changes
+  const onRefreshRef = useRef(opts.onRefresh);
+  onRefreshRef.current = opts.onRefresh;
+
+  // Extract primitive dependencies
+  const hasOnRefresh = Boolean(opts.onRefresh);
+  const isFetching = Boolean(opts.isFetching);
+  const title = opts.title;
+
   useEffect(() => {
-    setTopBar({ title: opts.title, onRefresh: opts.onRefresh ?? null, isFetching: !!opts.isFetching });
+    const handleRefresh = hasOnRefresh ? () => onRefreshRef.current?.() : null;
+
+    setTopBar({
+      title,
+      onRefresh: handleRefresh,
+      isFetching,
+    });
+
     return () => setTopBar({ title: "", onRefresh: null, isFetching: false });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opts.title, opts.onRefresh, opts.isFetching]);
+  }, [setTopBar, title, hasOnRefresh, isFetching]);
 }
