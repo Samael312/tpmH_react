@@ -44,13 +44,14 @@ interface Teacher {
   status: string
   commission_rate: number
   balance: number
+  has_pending_appeal: boolean
   total_classes: number
   total_students: number
   created_at: string
 }
 
 interface Student {
-    id: number
+  id: number
   username: string
   name: string
   surname: string
@@ -60,6 +61,9 @@ interface Student {
   role: string
   is_active: boolean
   is_verified: boolean
+  is_banned?: boolean
+  ban_reason?: string | null
+  banned_at?: string | null
   created_at: string
 }
 
@@ -77,6 +81,7 @@ interface PaymentRecord {
   status: string
   created_at: string
   validated_at: string | null
+  
 }
 
 interface WithdrawalRecord {
@@ -121,7 +126,7 @@ export function useStudents(search?: string) {
   const fetch = useCallback(async () => {
     try {
       setLoading(true)
-      const params = new URLSearchParams({ role: 'student' })
+      const params = new URLSearchParams({ role: 'student', is_banned: 'false' })
       if (search) params.append('search', search)
       const res = await api.get(`/admin/users?${params}`)
       setStudents(res.data)
@@ -208,4 +213,100 @@ export function useTeachers(statusFilter?: string) {
 
   useEffect(() => { fetch() }, [fetch])
   return { teachers, loading, refetch: fetch }
+}
+
+// ─── Notificaciones del panel de staff ───────────────────────────────────────
+export interface AdminNotification {
+  id: number
+  type: string
+  title: string
+  message: string | null
+  related_teacher_id: number | null
+  is_read: boolean
+  created_at: string
+}
+
+export function useUnreadNotificationCount() {
+  const [count, setCount] = useState(0)
+
+  const fetch = useCallback(async () => {
+    try {
+      const res = await api.get('/admin/notifications/unread-count')
+      setCount(res.data.unread_count)
+    } catch { }
+  }, [])
+
+  useEffect(() => {
+    fetch()
+    const interval = setInterval(fetch, 30000) // refresco cada 30s
+    return () => clearInterval(interval)
+  }, [fetch])
+
+  return { count, refetch: fetch }
+}
+
+export function useNotifications(unreadOnly = false) {
+  const [notifications, setNotifications] = useState<AdminNotification[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetch = useCallback(async () => {
+    try {
+      setLoading(true)
+      const res = await api.get(`/admin/notifications?unread_only=${unreadOnly}`)
+      setNotifications(res.data)
+    } catch { } finally { setLoading(false) }
+  }, [unreadOnly])
+
+  useEffect(() => { fetch() }, [fetch])
+  return { notifications, loading, refetch: fetch }
+}
+
+// ─── Apelaciones de profesores ────────────────────────────────────────────────
+export interface TeacherAppeal {
+  id: number
+  teacher_id: number
+  appeal_number: number
+  message: string
+  status: string
+  admin_response: string | null
+  created_at: string
+  resolved_at: string | null
+  teacher_username: string
+  teacher_name: string
+  teacher_surname: string
+  teacher_status: string
+}
+
+export function useAppeals(statusFilter?: string) {
+  const [appeals, setAppeals] = useState<TeacherAppeal[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetch = useCallback(async () => {
+    try {
+      setLoading(true)
+      const params = statusFilter ? `?status_filter=${statusFilter}` : ''
+      const res = await api.get(`/admin/appeals${params}`)
+      setAppeals(res.data)
+    } catch { } finally { setLoading(false) }
+  }, [statusFilter])
+
+  useEffect(() => { fetch() }, [fetch])
+  return { appeals, loading, refetch: fetch }
+}
+
+// ─── Estudiantes baneados ─────────────────────────────────────────────────────
+export function useBannedStudents() {
+  const [students, setStudents] = useState<Student[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetch = useCallback(async () => {
+    try {
+      setLoading(true)
+      const res = await api.get('/admin/users?role=student&is_banned=true&limit=200')
+      setStudents(res.data)
+    } catch { } finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => { fetch() }, [fetch])
+  return { students, loading, refetch: fetch }
 }

@@ -43,12 +43,27 @@ class TeacherProfile(Base):
     # ─── Personalización visual del perfil público ───
     theme_color = Column(String, nullable=True, default="#ec4899")
 
+    # ─── Rechazo, retroalimentación y apelaciones ───
+    # Motivo del rechazo más reciente. Se limpia cuando el profesor
+    # vuelve a estar approved/pending tras subir un nuevo video.
+    rejection_reason = Column(String, nullable=True)
+    # False mientras el profesor no ha visto el banner de retroalimentación
+    # en su dashboard tras un rechazo. Se pone en True al verlo.
+    rejection_feedback_seen = Column(Boolean, default=True)
+    # Cuántas apelaciones ha presentado en el ciclo de rechazo actual (0-2).
+    appeal_count = Column(Integer, default=0)
+    # True cuando agotó sus 2 apelaciones — status sigue "rejected" pero
+    # se le habilita la opción de subir un nuevo video para reiniciar
+    # el ciclo completo de revisión.
+    appeal_exhausted = Column(Boolean, default=False)
+
     # Relaciones
     user = relationship("User", back_populates="teacher_profile", foreign_keys="TeacherProfile.user_id")
     packages = relationship("Package", back_populates="teacher")
     availability = relationship("TeacherAvailability", back_populates="teacher")
     availability_exceptions = relationship("TeacherAvailabilityException", back_populates="teacher")
     enrollments = relationship("Enrollment", back_populates="teacher")
+    appeals = relationship("TeacherAppeal", back_populates="teacher", order_by="TeacherAppeal.created_at")
 
     # ─── Propiedades derivadas del usuario, expuestas en los schemas ───
     @property

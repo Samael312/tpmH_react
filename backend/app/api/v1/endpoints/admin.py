@@ -1,34 +1,43 @@
-from datetime import datetime, timedelta
-from typing import List, Optional
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
-from sqlalchemy import func
 from sqlalchemy.orm import Session
-
-from app.auth.dependencies import get_current_user
-from app.core.email import send_teacher_status_update_email
 from app.core.phone import normalize_phone
-from app.core.teacher_students import link_student_to_teacher
-from app.core.timezone import UTC, utc_now
+from sqlalchemy import func
+from typing import List, Optional
+from datetime import datetime, timedelta
+from app.schemas.admin import AdminUserUpdate, BanStudentRequest
 from app.db.base import get_db
-from app.models.class_ import Class
-from app.models.package import Enrollment
-from app.models.payment import Payment, Withdrawal
-from app.models.payment_config import PlatformConfig
-from app.models.student import StudentProfile
-from app.models.student_teacher_link import StudentTeacherLink
-from app.models.teacher import TeacherProfile, TeacherStatus
+from app.auth.dependencies import get_current_user, get_current_staff
 from app.models.user import User, UserRole
+from app.models.teacher import TeacherProfile, TeacherStatus
+from app.models.student import StudentProfile
+from app.models.class_ import Class
+from app.models.payment import Payment, Withdrawal
+from app.models.package import Enrollment, EnrollmentStatus
+from app.models.teacher_appeal import TeacherAppeal
+from app.models.notification import Notification
+from app.core.email import send_teacher_status_update_email
+from app.core.timezone import utc_now, UTC
+from app.core.notifications import create_notification, get_unread_count
+from app.models.student_teacher_link import StudentTeacherLink
+from app.core.teacher_students import link_student_to_teacher
 from app.schemas.admin import (
-    AdminUserUpdate,
     PlatformStatsResponse,
     TeacherAdminResponse,
-    UpdateCommissionRequest,
     UpdateTeacherStatusRequest,
-    UpdateUserStatusRequest,
+    UpdateCommissionRequest,
     UserAdminResponse,
+    UpdateUserStatusRequest,
 )
+from app.schemas.notifications import (
+    NotificationResponse,
+    UnreadCountResponse,
+    ResolveAppealRequest,
+    TeacherAppealResponse,
+    TeacherAppealWithTeacherResponse,
+)
+from app.models.payment_config import PlatformConfig
+
 
 router = APIRouter()
 
@@ -184,6 +193,15 @@ def list_all_teachers(
             )
 
     teachers = query.all()
+
+    # Profesores con al menos una apelación "pending" — para el indicador
+    # en la pestaña "Rechazados" del admin.
+    pending_appeal_teacher_ids = {
+        row[0] for row in db.query(TeacherAppeal.teacher_id).filter(
+            TeacherAppeal.status == "pending"
+        ).distinct().all()
+    }
+
     result = []
 
     for teacher in teachers:
@@ -213,9 +231,78 @@ def list_all_teachers(
             profile_photo_url=teacher.profile_photo_url,
             phone_number=teacher.user.phone_number,
             nationality=teacher.nationality,
+            rejection_reason=teacher.rejection_reason,
+            appeal_count=teacher.appeal_count or 0,
+            appeal_exhausted=teacher.appeal_exhausted or False,
+            has_pending_appeal=teacher.id in pending_appeal_teacher_ids,
         ))
 
     return result
+
+
+@router.get("/teachers/{teacher_id}", response_model=TeacherAdminResponse)
+def get_teacher_detail(
+    teacher_id: int,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    Detalle de un profesor para el modal de revisión: incluye video,
+    motivo de rechazo y estado de apelaciones. Usado por /admin/teachers
+    al abrir el modal de detalle.
+    """
+    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == teacher_id).first()
+    if not teacher:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesor no encontrado")
+
+    total_classes = db.query(Class).filter(Class.teacher_id == teacher.id).count()
+    total_students = db.query(Enrollment).filter(
+        Enrollment.teacher_id == teacher.id
+    ).distinct(Enrollment.student_id).count()
+
+    has_pending_appeal = db.query(TeacherAppeal).filter(
+        TeacherAppeal.teacher_id == teacher.id,
+        TeacherAppeal.status == "pending",
+    ).first() is not None
+
+    return TeacherAdminResponse(
+        id=teacher.id,
+        user_id=teacher.user_id,
+        username=teacher.user.username,
+        name=teacher.user.name,
+        surname=teacher.user.surname,
+        email=teacher.user.email,
+        status=teacher.status,
+        commission_rate=teacher.commission_rate,
+        balance=teacher.balance,
+        total_classes=total_classes,
+        total_students=total_students,
+        created_at=teacher.created_at,
+        video_url=teacher.video_url,
+        theme_color=teacher.theme_color,
+        profile_photo_url=teacher.profile_photo_url,
+        phone_number=teacher.user.phone_number,
+        nationality=teacher.nationality,
+        rejection_reason=teacher.rejection_reason,
+        appeal_count=teacher.appeal_count or 0,
+        appeal_exhausted=teacher.appeal_exhausted or False,
+        has_pending_appeal=has_pending_appeal,
+    )
+
+
+@router.get(
+    "/teachers/{teacher_id}/appeals",
+    response_model=List[TeacherAppealResponse],
+)
+def get_teacher_appeals(
+    teacher_id: int,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """Historial de apelaciones de un profesor, para el modal de detalle."""
+    return db.query(TeacherAppeal).filter(
+        TeacherAppeal.teacher_id == teacher_id
+    ).order_by(TeacherAppeal.created_at.asc()).all()
 
 
 @router.patch(
@@ -229,6 +316,7 @@ def update_teacher_status(
 ):
     """
     Aprueba, rechaza o suspende un profesor.
+    Es el flujo principal de onboarding de nuevos profesores.
     """
     teacher = db.query(TeacherProfile).filter(
         TeacherProfile.id == teacher_id
@@ -256,6 +344,20 @@ def update_teacher_status(
 
     old_status = teacher.status
     teacher.status = new_status
+
+    if new_status == TeacherStatus.rejected:
+        teacher.rejection_reason = data.reason
+        teacher.rejection_feedback_seen = False
+        # Nuevo rechazo → reinicia el contador de apelaciones de este ciclo
+        teacher.appeal_count = 0
+        teacher.appeal_exhausted = False
+    elif new_status == TeacherStatus.approved:
+        # Al aprobar, limpiamos cualquier rastro del ciclo de rechazo anterior
+        teacher.rejection_reason = None
+        teacher.rejection_feedback_seen = True
+        teacher.appeal_count = 0
+        teacher.appeal_exhausted = False
+
     db.commit()
 
     action_map = {
@@ -291,6 +393,7 @@ def update_teacher_commission(
 ):
     """
     Actualiza la comisión de un profesor específico.
+    Permite personalizar la comisión por profesor.
     """
     if not 0.0 <= data.commission_rate <= 1.0:
         raise HTTPException(
@@ -320,6 +423,159 @@ def update_teacher_commission(
     }
 
 
+# ─── APELACIONES DE PROFESORES (bandeja del admin) ──────────────────────────
+
+@router.get(
+    "/appeals",
+    response_model=List[TeacherAppealWithTeacherResponse],
+)
+def list_appeals(
+    status_filter: Optional[str] = Query(None, description="pending | approved | rejected"),
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    Bandeja global de apelaciones — usada en Visión Global y en la pestaña
+    Rechazados de Profesores. Por defecto muestra todas; filtrable por status.
+    """
+    query = db.query(TeacherAppeal)
+    if status_filter:
+        query = query.filter(TeacherAppeal.status == status_filter)
+
+    appeals = query.order_by(TeacherAppeal.created_at.desc()).all()
+
+    result = []
+    for a in appeals:
+        teacher = a.teacher
+        if not teacher or not teacher.user:
+            continue
+        result.append(TeacherAppealWithTeacherResponse(
+            id=a.id,
+            teacher_id=a.teacher_id,
+            appeal_number=a.appeal_number,
+            message=a.message,
+            status=a.status,
+            admin_response=a.admin_response,
+            created_at=a.created_at,
+            resolved_at=a.resolved_at,
+            teacher_username=teacher.user.username,
+            teacher_name=teacher.user.name,
+            teacher_surname=teacher.user.surname,
+            teacher_status=teacher.status,
+        ))
+    return result
+
+
+@router.patch("/appeals/{appeal_id}/resolve")
+def resolve_appeal(
+    appeal_id: int,
+    data: ResolveAppealRequest,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    Resuelve una apelación pendiente.
+    - approve: el profesor vuelve a "approved" (perfil público).
+    - reject: incrementa el conteo de apelaciones agotadas. Al llegar a 2,
+      el perfil permanece "rejected" pero se marca appeal_exhausted=True,
+      lo que habilita en el dashboard del profesor la opción de subir un
+      nuevo video para reiniciar el ciclo completo de revisión.
+    """
+    appeal = db.query(TeacherAppeal).filter(
+        TeacherAppeal.id == appeal_id,
+        TeacherAppeal.status == "pending",
+    ).first()
+    if not appeal:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Apelación no encontrada o ya resuelta")
+
+    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == appeal.teacher_id).first()
+    if not teacher:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesor no encontrado")
+
+    now = utc_now()
+    appeal.admin_response = data.admin_response
+    appeal.resolved_at = now
+    appeal.resolved_by = current_user.id
+
+    if data.action == "approve":
+        appeal.status = "approved"
+        teacher.status = TeacherStatus.approved
+        teacher.rejection_reason = None
+        teacher.rejection_feedback_seen = True
+        teacher.appeal_count = 0
+        teacher.appeal_exhausted = False
+    else:
+        appeal.status = "rejected"
+        if (teacher.appeal_count or 0) >= 2:
+            teacher.appeal_exhausted = True
+        teacher.rejection_feedback_seen = False  # nueva retroalimentación por ver
+
+    db.commit()
+
+    if teacher.user:
+        send_teacher_status_update_email(
+            to_email=teacher.user.email,
+            teacher_name=teacher.user.name,
+            new_status=teacher.status,
+            reason=data.admin_response or teacher.rejection_reason,
+        )
+
+    return {
+        "message": "Apelación aprobada" if data.action == "approve" else "Apelación rechazada",
+        "appeal_exhausted": teacher.appeal_exhausted,
+    }
+
+
+# ─── NOTIFICACIONES (panel de staff) ─────────────────────────────────────────
+
+@router.get("/notifications", response_model=List[NotificationResponse])
+def list_notifications(
+    unread_only: bool = Query(False),
+    limit: int = Query(50, ge=1, le=200),
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Notification).filter(Notification.recipient_role == "staff")
+    if unread_only:
+        query = query.filter(Notification.is_read == False)
+    return query.order_by(Notification.created_at.desc()).limit(limit).all()
+
+
+@router.get("/notifications/unread-count", response_model=UnreadCountResponse)
+def unread_notification_count(
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    return UnreadCountResponse(unread_count=get_unread_count(db, "staff"))
+
+
+@router.patch("/notifications/{notification_id}/read")
+def mark_notification_read(
+    notification_id: int,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    notif = db.query(Notification).filter(Notification.id == notification_id).first()
+    if not notif:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Notificación no encontrada")
+    notif.is_read = True
+    db.commit()
+    return {"message": "Notificación marcada como leída"}
+
+
+@router.post("/notifications/mark-all-read")
+def mark_all_notifications_read(
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    db.query(Notification).filter(
+        Notification.recipient_role == "staff",
+        Notification.is_read == False,
+    ).update({"is_read": True})
+    db.commit()
+    return {"message": "Todas las notificaciones marcadas como leídas"}
+
+
 # ─── GESTIÓN DE USUARIOS ─────────────────────────────────────────────────────
 
 @router.get(
@@ -329,14 +585,18 @@ def update_teacher_commission(
 def list_all_users(
     role: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
+    is_banned: Optional[bool] = Query(None),
     search: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=1000),  # Límite incrementado a 1000
+    limit: int = Query(50, ge=1, le=200),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Lista todos los usuarios con filtros y paginación.
+    Por defecto NO incluye baneados en /admin/students — ese listado usa
+    is_banned=False explícitamente desde el frontend; este endpoint general
+    deja el filtro abierto para la vista separada de baneados.
     """
     query = db.query(User)
 
@@ -353,6 +613,9 @@ def list_all_users(
     if is_active is not None:
         query = query.filter(User.is_active == is_active)
 
+    if is_banned is not None:
+        query = query.filter(User.is_banned == is_banned)
+
     if search:
         search_term = f"%{search}%"
         query = query.filter(
@@ -362,6 +625,7 @@ def list_all_users(
             User.username.ilike(search_term)
         )
 
+    total = query.count()
     users = query.order_by(
         User.created_at.desc()
     ).offset(skip).limit(limit).all()
@@ -379,7 +643,8 @@ def update_user_status(
     db: Session = Depends(get_db)
 ):
     """
-    Activa o desactiva un usuario.
+    Activa o desactiva un usuario (distinto de banear).
+    No se puede desactivar a sí mismo ni a otro superadmin.
     """
     user = db.query(User).filter(User.id == user_id).first()
 
@@ -413,12 +678,88 @@ def update_user_status(
     }
 
 
+# ─── BANEO DE ESTUDIANTES ────────────────────────────────────────────────────
+
+@router.post("/students/{user_id}/ban")
+def ban_student(
+    user_id: int,
+    data: BanStudentRequest,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    Banea a un estudiante: lo desactiva, cancela sus enrollments activos y
+    sus clases futuras/pendientes, y deja registrado el motivo. El email
+    queda "quemado" por el unique constraint existente en users.email, así
+    que no puede volver a registrarse con el mismo correo.
+    """
+    user = db.query(User).filter(User.id == user_id, User.role == UserRole.student).first()
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Estudiante no encontrado")
+
+    if user.is_banned:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este estudiante ya está baneado")
+
+    student_profile = user.student_profile
+    now = utc_now()
+
+    user.is_active = False
+    user.is_banned = True
+    user.ban_reason = data.reason
+    user.banned_at = now
+
+    if student_profile:
+        # Cancelar enrollments activos / pendientes
+        db.query(Enrollment).filter(
+            Enrollment.student_id == student_profile.id,
+            Enrollment.status.in_([
+                EnrollmentStatus.active,
+                EnrollmentStatus.pending_renewal,
+                EnrollmentStatus.pending_package_change,
+            ]),
+        ).update({"status": EnrollmentStatus.cancelled}, synchronize_session=False)
+
+        # Cancelar clases futuras/pendientes
+        db.query(Class).filter(
+            Class.student_id == student_profile.id,
+            Class.status.in_(["pending", "pending_trial", "pending_payment", "confirmed"]),
+        ).update({"status": "cancelled"}, synchronize_session=False)
+
+    db.commit()
+
+    return {"message": "Estudiante baneado correctamente", "user_id": user_id}
+
+
+@router.post("/students/{user_id}/unban")
+def unban_student(
+    user_id: int,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """Revierte el baneo. No reactiva enrollments/clases canceladas automáticamente."""
+    user = db.query(User).filter(User.id == user_id, User.role == UserRole.student).first()
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Estudiante no encontrado")
+
+    if not user.is_banned:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este estudiante no está baneado")
+
+    user.is_banned = False
+    user.ban_reason = None
+    user.banned_at = None
+    user.is_active = True
+    db.commit()
+
+    return {"message": "Estudiante reactivado correctamente", "user_id": user_id}
+
+
 # ─── CONFIGURACIÓN DE PLATAFORMA ─────────────────────────────────────────────
 
 @router.get("/platform-config")
 def get_platform_config(db: Session = Depends(get_db)):
     """
     Configuración pública de la plataforma.
+    Endpoint público — el frontend lo consulta al cargar.
     """
     config = db.query(PlatformConfig).first()
 
@@ -534,7 +875,6 @@ def update_platform_config(
     db.commit()
     return {"message": "Configuración actualizada"}
 
-
 @router.patch("/users/{user_id}")
 def admin_update_user(
     user_id: int,
@@ -548,8 +888,6 @@ def admin_update_user(
 
     if data.role is not None:
         user.role = data.role
-        if data.role in ("teacher", "teacher_admin") and not user.teacher_profile:
-            db.add(TeacherProfile(user_id=user.id, user_username=user.username))
 
     if data.is_active is not None:
         if user.id == current_user.id:
@@ -559,18 +897,15 @@ def admin_update_user(
         user.is_active = data.is_active
 
     if data.phone_number is not None:
-        normalized = normalize_phone(data.phone_number)
-        if normalized and normalized != user.phone_number:
-            existing = db.query(User).filter(
-                User.phone_number == normalized,
-                User.id != user.id
-            ).first()
-            if existing:
-                raise HTTPException(400, "Este número de teléfono ya está en uso por otro usuario")
-        user.phone_number = normalized
-
-    if hasattr(data, "nationality") and data.nationality is not None:
-        user.nationality = data.nationality
+            normalized = normalize_phone(data.phone_number)
+            if normalized and normalized != user.phone_number:
+                existing = db.query(User).filter(
+                    User.phone_number == normalized,
+                    User.id != user.id
+                ).first()
+                if existing:
+                    raise HTTPException(400, "Este número de teléfono ya está en uso por otro usuario")
+            user.phone_number = normalized
             
     db.commit()
     return {"ok": True}

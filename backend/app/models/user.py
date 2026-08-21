@@ -30,6 +30,15 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     onboarding_completed = Column(Boolean, default=False)
 
+    # ─── Baneo (distinto de la desactivación simple is_active) ───
+    # Un usuario baneado también queda con is_active=False, pero el baneo
+    # además cancela sus enrollments/clases y queda registrado con motivo.
+    # El email queda "quemado" (unique constraint existente) por lo que
+    # no puede volver a registrarse con el mismo correo.
+    is_banned = Column(Boolean, default=False)
+    ban_reason = Column(String, nullable=True)
+    banned_at = Column(DateTime(timezone=True), nullable=True)
+
     # Relaciones
     teacher_profile = relationship("TeacherProfile", back_populates="user", uselist=False)
     student_profile = relationship("StudentProfile", back_populates="user", uselist=False)

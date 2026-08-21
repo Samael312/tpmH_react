@@ -9,8 +9,11 @@ import {
   MonitorPlay, UserCircle, ClipboardEdit, CreditCard, Book, BarChart, ChevronLeft, Check,
   CheckCheck,
   NewspaperIcon,
-  Package as PackageIcon
+  Package as PackageIcon,
+  Bell,
+  UserX,
 } from "lucide-react";
+import { useUnreadNotificationCount } from "@/hooks/useAdminData";
 
 export default function DashboardSidebar() {
   const pathname = usePathname();
@@ -34,7 +37,9 @@ export default function DashboardSidebar() {
   // 🧠 Lógica de permisos
   const showAdminMenu = ["superadmin", "teacher_admin"].includes(role);
   const showTeacherMenu = ["teacher", "teacher_admin"].includes(role);
+  
   const showStudentMenu = role === "student";
+  const { count: unreadCount } = useUnreadNotificationCount();
 
   // Función auxiliar para saber si un link está activo
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
@@ -106,6 +111,7 @@ export default function DashboardSidebar() {
         )}
 
         {/* 👑 MENÚ ADMIN */}
+                {/* 👑 MENÚ ADMIN */}
         {showAdminMenu && (
           <div>
             {!collapsed ? (
@@ -114,9 +120,23 @@ export default function DashboardSidebar() {
               <div className="h-px bg-pink-100 my-4 mx-4"></div>
             )}
             <nav className="space-y-1">
-              <NavItem href="/admin/dashboard" icon={<LayoutDashboard size={20} />} label="Vista Global" active={pathname === "/admin/dashboard"} collapsed={collapsed} />
-              <NavItem href="/admin/teachers" icon={<Book size={20} />} label="Profesores" active={isActive("/admin/teachers")} collapsed={collapsed} />
+              <NavItem
+                href="/admin/dashboard"
+                icon={<LayoutDashboard size={20} />}
+                label="Vista Global"
+                active={pathname === "/admin/dashboard"}
+                collapsed={collapsed}
+                badge={unreadCount > 0 ? unreadCount : undefined}
+              />
+              <NavItem
+                href="/admin/teachers"
+                icon={<Book size={20} />}
+                label="Profesores"
+                active={isActive("/admin/teachers")}
+                collapsed={collapsed}
+              />
               <NavItem href="/admin/students" icon={<GraduationCap size={20} />} label="Estudiantes" active={isActive("/admin/students")} collapsed={collapsed} />
+              <NavItem href="/admin/students/banned" icon={<UserX size={20} />} label="Baneados" active={isActive("/admin/students/banned")} collapsed={collapsed} />
               <NavItem href="/admin/users" icon={<Users size={20}/>} label="Edicion de Usuarios" active={isActive("/admin/users")} collapsed={collapsed} />
               <NavItem href="/admin/payments" icon={<CreditCard size={20} />} label="Pagos y Facturas" active={isActive("/admin/payments")} collapsed={collapsed} />
               <NavItem href="/admin/settings" icon={<Settings size={20} />} label="Configuración" active={isActive("/admin/settings")} collapsed={collapsed} />
@@ -162,24 +182,43 @@ export default function DashboardSidebar() {
   );
 }
 
-// Subcomponente para los botones del menú
-function NavItem({ href, icon, label, active, collapsed }: { href: string; icon: React.ReactNode; label: string; active: boolean; collapsed: boolean }) {
+function NavItem({
+  href, icon, label, active, collapsed, badge,
+}: {
+  href: string; icon: React.ReactNode; label: string; active: boolean; collapsed: boolean; badge?: number;
+}) {
   return (
     <Link 
       href={href} 
       title={collapsed ? label : undefined}
-      className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm transition-all duration-300 group ${
+      className={`relative flex items-center gap-3 px-4 py-3 rounded-2xl text-sm transition-all duration-300 group ${
         active 
           ? "bg-gradient-to-r from-pink-500 to-rose-400 text-white shadow-md shadow-pink-100" 
           : "text-slate-500 hover:text-pink-500 hover:bg-pink-50/50"
       }`}
     >
-      <span className={`flex-shrink-0 transition-transform duration-300 group-hover:scale-110 ${
+      <span className={`relative flex-shrink-0 transition-transform duration-300 group-hover:scale-110 ${
         active ? "text-white" : "text-slate-400 group-hover:text-pink-400"
       }`}>
         {icon}
+        {!!badge && collapsed && (
+          <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center">
+            {badge > 99 ? "99+" : badge}
+          </span>
+        )}
       </span>
-      {!collapsed && <span className="font-semibold tracking-tight whitespace-nowrap">{label}</span>}
+      {!collapsed && (
+        <span className="flex-1 flex items-center justify-between gap-2 min-w-0">
+          <span className="font-semibold tracking-tight whitespace-nowrap truncate">{label}</span>
+          {!!badge && (
+            <span className={`flex-shrink-0 min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-black flex items-center justify-center ${
+              active ? "bg-white/25 text-white" : "bg-rose-500 text-white"
+            }`}>
+              {badge > 99 ? "99+" : badge}
+            </span>
+          )}
+        </span>
+      )}
     </Link>
   );
 }

@@ -17,13 +17,228 @@ import {
   Loader2,
   Sparkles,
   SlidersHorizontal,
+  ShieldAlert,
+  ChevronDown,
+  Package as PackageIcon,
+  AtSign,
+  AlertTriangle,
 } from 'lucide-react'
+import Link from 'next/link'
 import { getFlagForNationality } from '@/lib/nationalities'
+
+function BanStudentModal({
+  student,
+  onClose,
+  onBanned,
+}: {
+  student: any
+  onClose: () => void
+  onBanned: () => void
+}) {
+  const [reason, setReason] = useState('')
+  const [banning, setBanning] = useState(false)
+  const [error, setError] = useState('')
+
+  const confirmBan = async () => {
+    if (!reason.trim()) {
+      setError('Debes indicar el motivo de la expulsión')
+      return
+    }
+    setBanning(true)
+    setError('')
+    try {
+      await api.post(`/admin/students/${student.id}/ban`, { reason: reason.trim() })
+      onBanned()
+      onClose()
+    } catch (e: any) {
+      setError(e.response?.data?.detail || 'Error expulsando al estudiante')
+    } finally {
+      setBanning(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-7">
+        <div className="flex flex-col items-center text-center mb-5">
+          <div className="w-14 h-14 bg-rose-100 rounded-full flex items-center justify-center mb-4">
+            <ShieldAlert className="w-7 h-7 text-rose-500" />
+          </div>
+          <h2 className="text-lg font-black text-slate-800 mb-1.5">
+            ¿Expulsar a {student.name} {student.surname}?
+          </h2>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Se cancelarán todos sus paquetes activos y clases pendientes/confirmadas.
+            No podrá volver a registrarse con el mismo correo. Podrás revertir esto desde la sección de Baneados.
+          </p>
+        </div>
+
+        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+          Motivo de la expulsión
+        </label>
+        <textarea
+          value={reason}
+          onChange={e => setReason(e.target.value)}
+          rows={3}
+          placeholder="Describe el motivo..."
+          className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-medium text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none focus:bg-white focus:border-rose-400 focus:ring-4 focus:ring-rose-50 transition-all resize-none mb-4"
+        />
+
+        {error && (
+          <div className="mb-4 bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" /> {error}
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={banning}
+            className="flex-1 py-3 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={confirmBan}
+            disabled={banning}
+            className="flex-1 py-3 text-sm font-bold text-white bg-rose-500 hover:bg-rose-600 rounded-xl shadow-md shadow-rose-100 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {banning ? <Loader2 className="w-4 h-4 animate-spin" /> : <><ShieldAlert className="w-4 h-4" /> Expulsar</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StudentRow({
+  student,
+  onBanTarget,
+}: {
+  student: any
+  onBanTarget: (s: any) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [detail, setDetail] = useState<any | null>(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
+
+  const toggleExpand = async () => {
+    const next = !expanded
+    setExpanded(next)
+    if (next && !detail) {
+      setLoadingDetail(true)
+      try {
+        const res = await api.get(`/teachers/me/students-full`).catch(() => null)
+        // Fallback: si no hay endpoint agregado específico, mostramos lo que ya tenemos
+      } finally {
+        setLoadingDetail(false)
+      }
+    }
+  }
+
+  const isActive = student.is_active !== false
+
+  return (
+    <div className="border-b border-slate-100 last:border-0">
+      <div className="grid grid-cols-1 md:grid-cols-[2.5fr_2fr_1.5fr_1.5fr] gap-4 px-6 md:px-8 py-4 items-center hover:bg-slate-50/60 transition-colors group">
+        {/* Card visible: nombre + apellido, teléfono, nacionalidad, estado */}
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-pink-100 to-rose-50 border border-pink-200/80 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform shadow-inner">
+            <span className="text-pink-600 text-xs font-black uppercase">
+              {student.name?.[0] || 'U'}
+              {student.surname?.[0] || ''}
+            </span>
+          </div>
+          <div className="min-w-0">
+            <p className="text-slate-800 text-xs md:text-sm font-extrabold truncate">
+              {student.name} {student.surname}
+            </p>
+            <p className="text-slate-400 text-[11px] font-semibold truncate">
+              @{student.username}
+            </p>
+          </div>
+        </div>
+
+        <div className="min-w-0 space-y-1">
+          {student.phone_number && (
+            <span className="text-slate-500 text-[10px] font-bold flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md w-fit">
+              <Phone className="w-2.5 h-2.5 text-slate-400" />
+              {student.phone_number}
+            </span>
+          )}
+          {student.nationality && (
+            <span className="text-slate-500 text-[10px] font-bold bg-slate-100 px-2 py-0.5 rounded-md w-fit block">
+              {getFlagForNationality(student.nationality)} {student.nationality}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center">
+          <span
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold border ${
+              isActive
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-slate-100 text-slate-500 border-slate-200'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+            {isActive ? 'Activo' : 'Inactivo'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onBanTarget(student)}
+            className="px-3.5 py-1.5 rounded-xl text-xs font-bold border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 transition-all active:scale-95 flex items-center gap-1.5"
+          >
+            <ShieldAlert className="w-3.5 h-3.5" /> Expulsar
+          </button>
+          <button
+            onClick={toggleExpand}
+            className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors flex-shrink-0"
+          >
+            <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Desplegable: fecha de registro, info de paquetes, etc. */}
+      {expanded && (
+        <div className="px-6 md:px-8 pb-5 -mt-1 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-100 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <AtSign className="w-3.5 h-3.5 text-slate-400" />
+                <span className="text-slate-500 font-bold">{student.email}</span>
+              </div>
+              {student.created_at && (
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-slate-500 font-bold">
+                    Registrado el {new Date(student.created_at).toLocaleDateString('es', {
+                      day: 'numeric', month: 'long', year: 'numeric',
+                    })}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-400 font-bold pt-2 border-t border-slate-200/60">
+              <PackageIcon className="w-3.5 h-3.5" />
+              Para ver el detalle de paquetes y clases de este estudiante, consulta su historial
+              desde la sección de Pagos o pídele al profesor asignado su vista de "Mis Estudiantes".
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function StudentsPage() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [actioning, setActioning] = useState<number | null>(null)
+  const [banTarget, setBanTarget] = useState<any | null>(null)
   const { students, loading, total, refetch } = useStudents(debouncedSearch)
   const router = useRouter()
 
@@ -33,20 +248,6 @@ export default function StudentsPage() {
     return () => clearTimeout(timer)
   }, [search])
 
-  const toggleStatus = async (userId: number, currentStatus: boolean) => {
-    setActioning(userId)
-    try {
-      await api.patch(`/admin/users/${userId}/status`, {
-        is_active: !currentStatus,
-        reason: !currentStatus ? 'Reactivado por admin' : 'Desactivado por admin',
-      })
-      refetch()
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error al cambiar estado')
-    } finally {
-      setActioning(null)
-    }
-  }
 
   // Métricas rápidas
   const activeCount = students.filter((s) => s.is_active !== false).length
@@ -56,7 +257,7 @@ export default function StudentsPage() {
     <>
       <div className="min-h-screen bg-slate-50/50 p-4 md:p-8 space-y-6 animate-fade-up">
         {/* ─── Header & Acciones Principal ─── */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
               <h1 className="font-display text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
@@ -68,9 +269,15 @@ export default function StudentsPage() {
             </div>
             <p className="text-slate-500 text-xs md:text-sm font-medium mt-1 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              {total} usuarios registrados en la plataforma
+              {total} estudiantes activos en la plataforma
             </p>
           </div>
+          <Link
+            href="/admin/students/banned"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:border-rose-300 hover:text-rose-600 transition-all shadow-sm w-fit"
+          >
+            <ShieldAlert className="w-4 h-4" /> Ver estudiantes baneados
+          </Link>
         </div>
 
         {/* ─── Tarjetas de Resumen (KPIs) ─── */}
@@ -138,7 +345,7 @@ export default function StudentsPage() {
         <Card className="overflow-hidden border-slate-200/80 shadow-sm rounded-3xl bg-white">
           {/* Header de la Tabla (Desktop) */}
           <div className="hidden md:grid grid-cols-[2.5fr_2fr_1.5fr_1.5fr] gap-4 px-8 py-4 border-b border-slate-100 bg-slate-50/60">
-            {['Estudiante', 'Contacto & Origen', 'Estado', 'Acción'].map((h) => (
+            {['Estudiante', 'Contacto & Origen', 'Estado', 'Acciones'].map((h) => (
               <span
                 key={h}
                 className="text-[10px] text-slate-400 uppercase tracking-widest font-black"
@@ -175,109 +382,22 @@ export default function StudentsPage() {
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
-              {students.map((student) => {
-                const isActive = student.is_active !== false
-                const isProcessing = actioning === student.id
-
-                return (
-                  <div
-                    key={student.id}
-                    className="grid grid-cols-1 md:grid-cols-[2.5fr_2fr_1.5fr_1.5fr] gap-4 px-6 md:px-8 py-4 items-center hover:bg-slate-50/60 transition-colors group"
-                  >
-                    {/* Estudiante (Avatar + Nombre + User) */}
-                    <div className="flex items-center gap-3.5 min-w-0">
-                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-pink-100 to-rose-50 border border-pink-200/80 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform shadow-inner">
-                        <span className="text-pink-600 text-xs font-black uppercase">
-                          {student.name?.[0] || 'U'}
-                          {student.surname?.[0] || ''}
-                        </span>
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-slate-800 text-xs md:text-sm font-extrabold truncate">
-                          {student.name} {student.surname}
-                        </p>
-                        <p className="text-slate-400 text-[11px] font-semibold truncate">
-                          @{student.username}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Contacto & Origen */}
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-slate-700 text-xs font-bold truncate">
-                        {student.email}
-                      </p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {student.phone_number && (
-                          <span className="text-slate-500 text-[10px] font-bold flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md">
-                            <Phone className="w-2.5 h-2.5 text-slate-400" />
-                            {student.phone_number}
-                          </span>
-                        )}
-                        {student.nationality && (
-                          <span className="text-slate-500 text-[10px] font-bold bg-slate-100 px-2 py-0.5 rounded-md">
-                            {getFlagForNationality(student.nationality)} {student.nationality}
-                          </span>
-                        )}
-                      </div>
-                      {student.created_at && (
-                        <p className="text-slate-400 text-[10px] font-bold flex items-center gap-1 uppercase tracking-wide">
-                          <Calendar className="w-2.5 h-2.5" />
-                          {new Date(student.created_at).toLocaleDateString('es', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                          })}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Estado */}
-                    <div className="flex items-center">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold border ${
-                          isActive
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-slate-100 text-slate-500 border-slate-200'
-                        }`}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
-                          }`}
-                        />
-                        {isActive ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </div>
-
-                    {/* Botón de Acción */}
-                    <div>
-                      <button
-                        onClick={() => toggleStatus(student.id, isActive)}
-                        disabled={isProcessing}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all active:scale-95 flex items-center gap-1.5 ${
-                          isActive
-                            ? 'border-slate-200 bg-white text-slate-600 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'
-                            : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                        } disabled:opacity-50`}
-                      >
-                        {isProcessing ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : isActive ? (
-                          'Desactivar'
-                        ) : (
-                          'Activar'
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
+            <div>
+              {students.map((student) => (
+                <StudentRow key={student.id} student={student} onBanTarget={setBanTarget} />
+              ))}
             </div>
           )}
         </Card>
       </div>
+
+      {banTarget && (
+        <BanStudentModal
+          student={banTarget}
+          onClose={() => setBanTarget(null)}
+          onBanned={refetch}
+        />
+      )}
 
       <ChipiWidget screenName="admin_students" />
     </>

@@ -42,6 +42,11 @@ class TeacherProfileResponse(TeacherPublicResponse):
     created_at: datetime
     video_public_id: Optional[str] = None
 
+    # ─── Retroalimentación de rechazo / apelaciones ───
+    rejection_reason: Optional[str] = None
+    rejection_feedback_seen: bool = True
+    appeal_count: int = 0
+    appeal_exhausted: bool = False
 
 class UpdateTeacherProfileRequest(BaseModel):
     """Todos opcionales porque es PATCH"""

@@ -16,6 +16,10 @@ from app.models.package import Enrollment
 from app.models.material import Material, MaterialAssignment
 from app.core.email import send_admin_new_teacher_pending_email
 from app.core.phone import normalize_phone
+from app.core.notifications import create_notification
+from app.models.teacher_appeal import TeacherAppeal
+from app.schemas.notifications import CreateAppealRequest, TeacherAppealResponse
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -295,6 +299,18 @@ async def upload_teacher_video(
 
     profile.video_url = result["url"]
     profile.video_public_id = result["public_id"]
+
+    # Si el profesor agotó sus apelaciones, subir un nuevo video reinicia
+    # por completo el ciclo de revisión: vuelve a "pending" y se limpian
+    # los rastros del rechazo anterior.
+    is_restart_after_exhausted_appeals = profile.appeal_exhausted
+    if is_restart_after_exhausted_appeals or profile.status == TeacherStatus.rejected:
+        profile.status = TeacherStatus.pending
+        profile.rejection_reason = None
+        profile.rejection_feedback_seen = True
+        profile.appeal_count = 0
+        profile.appeal_exhausted = False
+
     db.commit()
     db.refresh(profile)
 
@@ -305,6 +321,15 @@ async def upload_teacher_video(
             teacher_email=current_user.email,
             subjects_or_languages=(profile.subjects or []) + (profile.languages or []),
         )
+
+    create_notification(
+        db,
+        type="teacher_pending",
+        title="Nuevo video de presentación",
+        message=f"{current_user.name} {current_user.surname} subió su video y espera revisión.",
+        related_teacher_id=profile.id,
+    )
+    db.commit()
 
     return {
         "message": "Video subido correctamente. Tu perfil está en revisión por el equipo.",
@@ -334,3 +359,90 @@ def delete_teacher_video(
 
     return {"message": "Video eliminado"}
 
+class MarkFeedbackSeenResponse(BaseModel):
+    message: str
+
+
+@router.patch("/me/feedback-seen", response_model=MarkFeedbackSeenResponse)
+def mark_rejection_feedback_seen(
+    current_user: User = Depends(get_current_teacher),
+    db: Session = Depends(get_db),
+):
+    """El profesor marcó como visto el banner de retroalimentación de rechazo."""
+    profile = current_user.teacher_profile
+    if not profile:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Perfil no encontrado")
+    profile.rejection_feedback_seen = True
+    db.commit()
+    return MarkFeedbackSeenResponse(message="Retroalimentación marcada como vista")
+
+
+@router.post("/me/appeal", response_model=TeacherAppealResponse, status_code=status.HTTP_201_CREATED)
+def submit_appeal(
+    data: CreateAppealRequest,
+    current_user: User = Depends(get_current_teacher),
+    db: Session = Depends(get_db),
+):
+    """
+    El profesor apela un rechazo. Máximo 2 apelaciones por ciclo de rechazo.
+    Al agotar las 2, debe subir un nuevo video (POST /teachers/me/video)
+    para reiniciar el ciclo — no se pueden presentar más apelaciones.
+    """
+    profile = current_user.teacher_profile
+    if not profile:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Perfil no encontrado")
+
+    if profile.status != TeacherStatus.rejected:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Solo puedes apelar cuando tu perfil está rechazado"
+        )
+
+    if profile.appeal_exhausted or (profile.appeal_count or 0) >= 2:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Ya usaste tus 2 apelaciones. Sube un nuevo video para reiniciar la revisión."
+        )
+
+    existing_pending = db.query(TeacherAppeal).filter(
+        TeacherAppeal.teacher_id == profile.id,
+        TeacherAppeal.status == "pending",
+    ).first()
+    if existing_pending:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya tienes una apelación pendiente de revisión")
+
+    appeal_number = (profile.appeal_count or 0) + 1
+    appeal = TeacherAppeal(
+        teacher_id=profile.id,
+        appeal_number=appeal_number,
+        message=data.message,
+        status="pending",
+    )
+    db.add(appeal)
+    profile.appeal_count = appeal_number
+    db.commit()
+    db.refresh(appeal)
+
+    create_notification(
+        db,
+        type="teacher_appeal",
+        title="Nueva apelación de profesor",
+        message=f"{current_user.name} {current_user.surname} apeló su rechazo (apelación {appeal_number}/2).",
+        related_teacher_id=profile.id,
+    )
+    db.commit()
+
+    return appeal
+
+
+@router.get("/me/appeals", response_model=List[TeacherAppealResponse])
+def get_my_appeals(
+    current_user: User = Depends(get_current_teacher),
+    db: Session = Depends(get_db),
+):
+    profile = current_user.teacher_profile
+    if not profile:
+        return []
+    return db.query(TeacherAppeal).filter(
+        TeacherAppeal.teacher_id == profile.id
+    ).order_by(TeacherAppeal.created_at.asc()).all()

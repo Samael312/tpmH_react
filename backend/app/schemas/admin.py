@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -54,6 +54,10 @@ class TeacherAdminResponse(BaseModel):
     profile_photo_url: Optional[str] = None
     phone_number: Optional[str] = None
     nationality: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    appeal_count: int = 0
+    appeal_exhausted: bool = False
+    has_pending_appeal: bool = False  # calculado en el endpoint, no es columna directa
 
     class Config:
         from_attributes = True
@@ -88,8 +92,11 @@ class UserAdminResponse(BaseModel):
     role: str
     is_active: bool
     is_verified: bool
+    is_banned: bool = False
+    ban_reason: Optional[str] = None
+    banned_at: Optional[datetime] = None
     created_at: datetime
-
+ 
     class Config:
         from_attributes = True
 
@@ -104,3 +111,14 @@ class AdminUserUpdate(BaseModel):
     is_active: Optional[bool] = None
     phone_number: Optional[str] = None
     nationality: Optional[str] = None
+
+class BanStudentRequest(BaseModel):
+    reason: str
+ 
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Debes indicar el motivo del baneo")
+        return v

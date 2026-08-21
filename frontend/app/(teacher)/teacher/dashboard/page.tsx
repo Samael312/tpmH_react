@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { useTeacherClasses, useWallet, type TeacherClass } from '@/hooks/useTeacherData'
+import { useState, useMemo, useEffect } from 'react'
+import { useTeacherClasses, useWallet, useTeacherProfile, type TeacherClass } from '@/hooks/useTeacherData'
 import ClassCard from '@/components/classes/ClassCard'
 import StatCard from '@/components/ui/StatCard'
 import Card from '@/components/ui/Card'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, AlertTriangle, MessageSquare, Upload, Loader2, Check } from 'lucide-react'
+import api from '@/lib/api'
 
 const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
@@ -126,6 +127,153 @@ function DatePickerCalendar({
   )
 }
 
+function RejectionFeedbackBanner({ profile, onRefetch }: { profile: any; onRefetch: () => void }) {
+  const [dismissing, setDismissing] = useState(false)
+  const [showAppealForm, setShowAppealForm] = useState(false)
+  const [appealMessage, setAppealMessage] = useState('')
+  const [submittingAppeal, setSubmittingAppeal] = useState(false)
+  const [appealSent, setAppealSent] = useState(false)
+  const [appealError, setAppealError] = useState('')
+
+  const videoRef = useState<HTMLInputElement | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+
+  if (profile?.status !== 'rejected') return null
+
+  const dismiss = async () => {
+    setDismissing(true)
+    try {
+      await api.patch('/teachers/me/feedback-seen')
+      onRefetch()
+    } catch { } finally { setDismissing(false) }
+  }
+
+  const submitAppeal = async () => {
+    if (!appealMessage.trim()) return
+    setSubmittingAppeal(true)
+    setAppealError('')
+    try {
+      await api.post('/teachers/me/appeal', { message: appealMessage.trim() })
+      setAppealSent(true)
+      setAppealMessage('')
+      onRefetch()
+    } catch (e: any) {
+      setAppealError(e.response?.data?.detail || 'Error enviando la apelación')
+    } finally {
+      setSubmittingAppeal(false)
+    }
+  }
+
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadError('')
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      await api.post('/teachers/me/video', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      onRefetch()
+    } catch (e: any) {
+      setUploadError(e.response?.data?.detail || 'Error subiendo el video')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const canAppeal = !profile.appeal_exhausted && (profile.appeal_count ?? 0) < 2
+
+  return (
+    <div className="bg-rose-50 border border-rose-100 rounded-[2rem] shadow-md p-6 sm:p-8 relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-5">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <AlertTriangle className="w-5 h-5 text-rose-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-widest text-rose-500 mb-1">Perfil rechazado</p>
+          <h2 className="text-lg font-black text-rose-800">Tu perfil no fue aprobado</h2>
+          {profile.rejection_reason && (
+            <p className="text-rose-700 text-sm mt-1.5 bg-white/60 rounded-xl px-3 py-2 border border-rose-100">
+              {profile.rejection_reason}
+            </p>
+          )}
+        </div>
+        {!profile.rejection_feedback_seen && (
+          <button
+            onClick={dismiss}
+            disabled={dismissing}
+            className="text-rose-400 hover:text-rose-600 transition-colors flex-shrink-0"
+            title="Marcar como visto"
+          >
+            {dismissing ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+          </button>
+        )}
+      </div>
+
+      {profile.appeal_exhausted ? (
+        <div className="bg-white/70 rounded-2xl p-4 border border-rose-100 space-y-3">
+          <p className="text-xs font-bold text-rose-700">
+            Ya usaste tus 2 apelaciones. Sube un nuevo video de presentación para reiniciar la revisión de tu perfil.
+          </p>
+          {uploadError && (
+            <div className="bg-rose-100 text-rose-700 text-xs font-bold px-3 py-2 rounded-xl">{uploadError}</div>
+          )}
+          <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl cursor-pointer transition-colors">
+            {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+            Subir nuevo video
+            <input type="file" accept="video/mp4,video/quicktime" className="hidden" onChange={handleVideoUpload} disabled={uploading} />
+          </label>
+        </div>
+      ) : appealSent ? (
+        <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-center gap-2">
+          <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+          <p className="text-xs font-bold text-emerald-700">Tu apelación fue enviada. El equipo la revisará en breve.</p>
+        </div>
+      ) : canAppeal ? (
+        !showAppealForm ? (
+          <button
+            onClick={() => setShowAppealForm(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border-2 border-rose-200 text-rose-600 text-xs font-bold rounded-xl hover:bg-rose-100 transition-colors"
+          >
+            <MessageSquare className="w-3.5 h-3.5" /> Apelar esta decisión ({(profile.appeal_count ?? 0)}/2 usadas)
+          </button>
+        ) : (
+          <div className="bg-white/70 rounded-2xl p-4 border border-rose-100 space-y-3">
+            <textarea
+              value={appealMessage}
+              onChange={e => setAppealMessage(e.target.value)}
+              rows={3}
+              placeholder="Explica por qué consideras que la decisión debería revisarse..."
+              className="w-full bg-white border-2 border-rose-100 rounded-xl text-sm font-medium text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none focus:border-rose-400 transition-all resize-none"
+            />
+            {appealError && <p className="text-xs font-bold text-rose-600">{appealError}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowAppealForm(false)}
+                disabled={submittingAppeal}
+                className="px-4 py-2 text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={submitAppeal}
+                disabled={submittingAppeal || !appealMessage.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl transition-colors disabled:opacity-50"
+              >
+                {submittingAppeal ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
+                Enviar apelación
+              </button>
+            </div>
+          </div>
+        )
+      ) : null}
+    </div>
+  )
+}
+
 export default function TeacherDashboard() {
   const weekDates = getWeekDates()
   const todayStr = toUtcDateStr(new Date())
@@ -138,6 +286,7 @@ export default function TeacherDashboard() {
   // así los contadores de stats, "hoy" y el historial usan siempre la misma fuente de verdad.
   const { classes, loading, refetch } = useTeacherClasses({ includeHistory: true })
   const { wallet } = useWallet()
+  const { profile, refetch: refetchProfile } = useTeacherProfile()
 
   const safeClasses: TeacherClass[] = Array.isArray(classes) ? classes : []
   const now = new Date()
@@ -183,6 +332,10 @@ export default function TeacherDashboard() {
     <>
     <div className="space-y-8 animate-fade-up bg-white min-h-screen p-6 rounded-3xl">
 
+       {profile?.status === 'rejected' && (
+        <RejectionFeedbackBanner profile={profile} onRefetch={refetchProfile} />
+      )}
+      
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
