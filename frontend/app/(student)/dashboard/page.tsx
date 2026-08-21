@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import PackageCheckout from "@/components/payments/PackageCheckout";
+import BuyCreditsModal from "@/components/payments/BuyCreditsModal";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 function Skeleton({ className }: { className?: string }) {
@@ -51,17 +52,24 @@ function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: an
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
-        {/* Contenedor actualizado con altura máxima y scroll vertical */}
-        <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
-          <h2 className="text-lg font-black text-slate-800 mb-5">Completar pago</h2>
-          <PackageCheckout
-            pkg={checkoutTarget}
-            mode="change"
-            enrollmentId={enrollment.id}
-            installmentsPaid={0}
-            onClose={onClose}
-            onDone={onDone}
-          />
+          <div className="relative w-full max-w-3xl bg-white rounded-[2rem] shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-6 sm:px-8 py-5 border-b border-slate-100 flex-shrink-0">
+              <h2 className="text-lg font-black text-slate-800">Completar pago</h2>
+              <button onClick={onClose} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
+              <X className="w-4 h-4 text-slate-500" />
+            </button>
+          </div>
+          <div className="p-6 sm:p-8 overflow-y-auto">
+            <PackageCheckout
+              pkg={checkoutTarget}
+              mode="change"
+              enrollmentId={enrollment.id}
+              installmentsPaid={0}
+              currentCredits={enrollment.available_credits ?? enrollment.prepaid_unlimited_credits ?? 0}
+              onClose={onClose}
+              onDone={onDone}
+            />
+          </div>
         </div>
       </div>
     );
@@ -70,41 +78,45 @@ function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: an
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white rounded-[2rem] shadow-2xl p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-        <h2 className="text-lg font-black text-slate-800">Cambiar de paquete</h2>
-        <p className="text-xs text-slate-500">
-          Tu profesor(a) deberá aprobar el cambio. Solo se permite cambiar a paquetes con
-          cupo suficiente para tus clases ya usadas o agendadas.
-        </p>
-        {error && <div className="bg-rose-50 text-rose-600 text-xs font-bold px-4 py-3 rounded-xl">{error}</div>}
-        {loading ? (
-          <div className="h-24 bg-slate-50 rounded-xl animate-pulse" />
-        ) : packages.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-6">No hay otros paquetes disponibles de este profesor</p>
-        ) : (
-          <div className="space-y-2">
-            {packages.map(p => (
-              <div key={p.id} className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3">
-                <div>
-                  <p className="text-sm font-bold text-slate-800">{p.name}</p>
-                  <p className="text-xs text-slate-400">
-                    {p.classes_count == null ? "Ilimitadas" : `${p.classes_count} clases`} · ${p.price}
-                  </p>
+      <div className="relative w-full max-w-3xl bg-white rounded-[2rem] shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-6 sm:px-8 py-5 border-b border-slate-100 flex-shrink-0">
+          <h2 className="text-lg font-black text-slate-800">Cambiar de paquete</h2>
+          <button onClick={onClose} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
+            <X className="w-4 h-4 text-slate-500" />
+          </button>
+        </div>
+        <div className="p-6 sm:p-8 overflow-y-auto space-y-4">
+          <p className="text-xs text-slate-500">
+            Tu profesor(a) deberá aprobar el cambio. Solo se permite cambiar a paquetes con
+            cupo suficiente para tus clases ya usadas o agendadas.
+          </p>
+          {error && <div className="bg-rose-50 text-rose-600 text-xs font-bold px-4 py-3 rounded-xl">{error}</div>}
+          {loading ? (
+            <div className="h-24 bg-slate-50 rounded-xl animate-pulse" />
+          ) : packages.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-6">No hay otros paquetes disponibles de este profesor</p>
+          ) : (
+            <div className="space-y-2">
+              {packages.map(p => (
+                <div key={p.id} className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3">
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">{p.name}</p>
+                    <p className="text-xs text-slate-400">
+                      {p.classes_count == null ? "Ilimitadas" : `${p.classes_count} clases`} · ${p.price}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => request(p)}
+                    disabled={requesting !== null}
+                    className="px-4 py-2 bg-pink-500 text-white text-xs font-bold rounded-xl disabled:opacity-50"
+                  >
+                    {requesting === p.id ? "..." : "Solicitar"}
+                  </button>
                 </div>
-                <button
-                  onClick={() => request(p)}
-                  disabled={requesting !== null}
-                  className="px-4 py-2 bg-pink-500 text-white text-xs font-bold rounded-xl disabled:opacity-50"
-                >
-                  {requesting === p.id ? "..." : "Solicitar"}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <button onClick={onClose} className="w-full py-2.5 text-sm font-bold text-slate-500 bg-slate-100 rounded-xl">
-          Cerrar
-        </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -488,22 +500,24 @@ export default function StudentDashboard() {
         {installmentTarget && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setInstallmentTarget(null)} />
-            {/* Contenedor actualizado con altura máxima y scroll vertical */}
-            <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-5">
+            <div className="relative w-full max-w-3xl bg-white rounded-[2rem] shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-6 sm:px-8 py-5 border-b border-slate-100 flex-shrink-0">
                 <h2 className="text-lg font-black text-slate-800">Pagar siguiente cuota</h2>
-                <button onClick={() => setInstallmentTarget(null)} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
+                <button onClick={() => setInstallmentTarget(null)} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
                   <X className="w-4 h-4 text-slate-500" />
                 </button>
               </div>
-              <PackageCheckout
-                pkg={installmentTarget.package}
-                mode="change"
-                enrollmentId={installmentTarget.id}
-                installmentsPaid={installmentTarget.installments_paid ?? 0}
-                onClose={() => setInstallmentTarget(null)}
-                onDone={refetchEnrollments}
-              />
+              <div className="p-6 sm:p-8 overflow-y-auto">
+                <PackageCheckout
+                  pkg={installmentTarget.package}
+                  mode="change"
+                  enrollmentId={installmentTarget.id}
+                  installmentsPaid={installmentTarget.installments_paid ?? 0}
+                  currentCredits={installmentTarget.available_credits ?? installmentTarget.prepaid_unlimited_credits ?? 0}
+                  onClose={() => setInstallmentTarget(null)}
+                  onDone={refetchEnrollments}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -511,22 +525,22 @@ export default function StudentDashboard() {
         {rechargeTarget && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setRechargeTarget(null)} />
-            {/* Contenedor actualizado con altura máxima y scroll vertical */}
-            <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-5">
+            <div className="relative w-full max-w-3xl bg-white rounded-[2rem] shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-6 sm:px-8 py-5 border-b border-slate-100 flex-shrink-0">
                 <h2 className="text-lg font-black text-slate-800">Comprar créditos</h2>
-                <button onClick={() => setRechargeTarget(null)} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
+                <button onClick={() => setRechargeTarget(null)} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
                   <X className="w-4 h-4 text-slate-500" />
                 </button>
               </div>
-              <PackageCheckout
-                pkg={rechargeTarget.package}
-                mode="change"
-                enrollmentId={rechargeTarget.id}
-                installmentsPaid={0}
-                onClose={() => setRechargeTarget(null)}
-                onDone={refetchEnrollments}
-              />
+              <div className="p-6 sm:p-8 overflow-y-auto">
+                <BuyCreditsModal
+                    enrollmentId={rechargeTarget.id}
+                    pricePerClass={rechargeTarget.package.price}
+                    currentCredits={rechargeTarget.available_credits ?? rechargeTarget.prepaid_unlimited_credits ?? 0}
+                    onClose={() => setRechargeTarget(null)}
+                    onDone={refetchEnrollments}
+                  />
+              </div>
             </div>
           </div>
         )}

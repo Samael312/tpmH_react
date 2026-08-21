@@ -114,9 +114,6 @@ export default function PaymentMethodsInfo() {
 
   return (
     <div className="space-y-2">
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-        Métodos de pago disponibles
-      </p>
 
       {methods.map((m) => {
         const isPreferred = preferredKeys.has(m.key);

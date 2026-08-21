@@ -23,6 +23,7 @@ export interface PackageCheckoutProps {
   mode: "initial" | "renewal" | "change";
   enrollmentId: number | null;
   installmentsPaid: number;
+  currentCredits?: number;
   onClose: () => void;
   onDone: () => void;
 }
@@ -32,6 +33,7 @@ export default function PackageCheckout({
   mode,
   enrollmentId,
   installmentsPaid,
+  currentCredits,
   onClose,
   onDone,
 }: PackageCheckoutProps) {
@@ -100,6 +102,14 @@ export default function PackageCheckout({
       <div className="space-y-5 flex flex-col justify-between">
         <div className="space-y-4">
           <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex items-center justify-between">
+            
+            {mode !== "initial" && currentCredits !== undefined && (
+            <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5 text-xs font-bold text-indigo-700 flex items-center justify-between">
+              <span>Créditos actuales disponibles</span>
+              <span className="text-sm font-black">{currentCredits}</span>
+            </div>
+          )}
+            
             <div className="flex items-center gap-3">
               <span className="text-2xl">{pkg.icon || "📦"}</span>
               <div>

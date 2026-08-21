@@ -15,6 +15,8 @@ import PackageCheckout from "@/components/payments/PackageCheckout";
 import { formatTimeTz, formatDateHumanTz, getHourMinuteTz, getMyDisplayTimezone } from "@/lib/tzFormat";
 import { priceLabelSuffix } from "@/lib/packageThemes";
 import PaymentMethodsInfo from "@/components/payments/PaymentMethodsInfo";
+import BuyCreditsModal from "@/components/payments/BuyCreditsModal";
+
 
 type BookingStage =
   | "loading"
@@ -770,18 +772,20 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
       {checkoutTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setCheckoutTarget(null)} />
-          {/* Cambiado de max-w-md a max-w-4xl para aprovechar todo el ancho */}
-          <div className="relative w-full max-w-4xl bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8 max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between mb-5 flex-shrink-0">
+          <div className="relative w-full max-w-3xl bg-white rounded-[2rem] shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between p-6 sm:px-8 sm:py-5 border-b border-slate-100 flex-shrink-0">
               <h2 className="text-lg font-black text-slate-800">Completar pago</h2>
-              <button onClick={() => setCheckoutTarget(null)} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
+              <button
+                onClick={() => setCheckoutTarget(null)}
+                className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"
+              >
                 <X className="w-4 h-4 text-slate-500" />
               </button>
             </div>
-            <div className="overflow-y-auto pr-2">
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8">
               <PackageCheckout
                 pkg={checkoutTarget.pkg}
-                mode="initial" // (o 'renewal' según corresponda en cada pantalla)
+                mode="initial"
                 enrollmentId={checkoutTarget.enrollmentId}
                 installmentsPaid={0}
                 onClose={() => setCheckoutTarget(null)}
@@ -918,18 +922,20 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
       {checkoutTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setCheckoutTarget(null)} />
-          {/* Cambiado de max-w-md a max-w-4xl para aprovechar todo el ancho */}
-          <div className="relative w-full max-w-4xl bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8 max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between mb-5 flex-shrink-0">
+          <div className="relative w-full max-w-3xl bg-white rounded-[2rem] shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between p-6 sm:px-8 sm:py-5 border-b border-slate-100 flex-shrink-0">
               <h2 className="text-lg font-black text-slate-800">Completar pago</h2>
-              <button onClick={() => setCheckoutTarget(null)} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
+              <button
+                onClick={() => setCheckoutTarget(null)}
+                className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"
+              >
                 <X className="w-4 h-4 text-slate-500" />
               </button>
             </div>
-            <div className="overflow-y-auto pr-2">
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8">
               <PackageCheckout
                 pkg={checkoutTarget.pkg}
-                mode="initial" // (o 'renewal' según corresponda en cada pantalla)
+                mode="initial"
                 enrollmentId={checkoutTarget.enrollmentId}
                 installmentsPaid={0}
                 onClose={() => setCheckoutTarget(null)}
@@ -978,6 +984,8 @@ export default function SchedulePage() {
 
   const needsTeacherSelection = !isSingleTenant && myTeachers.length > 1 && !selectedTeacherUsername;
   const teacherBlocked = !teachersLoading && !isSingleTenant && myTeachers.length === 0;
+
+  const [buyCreditsOpen, setBuyCreditsOpen] = useState(false);
 
   useEffect(() => {
     if (teachersLoading) return;
@@ -1140,8 +1148,9 @@ export default function SchedulePage() {
           </div>
         )}
 
+        {/* Banner informativo del paquete / créditos */}
         {stage === "ready" && activeEnrollment && (
-          <div className="max-w-2xl mx-auto w-full space-y-4">
+          <div className="max-w-2xl mx-auto w-full">
             {activeEnrollment.package?.classes_count == null ? (
               <div className="bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-4 flex items-center justify-between gap-4">
                 <div className="flex items-start gap-3">
@@ -1155,12 +1164,12 @@ export default function SchedulePage() {
                     </p>
                   </div>
                 </div>
-                <Link
-                  href="/dashboard"
+                <button
+                  onClick={() => setBuyCreditsOpen(true)}
                   className="flex-shrink-0 px-4 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded-xl shadow-sm transition-colors whitespace-nowrap"
                 >
                   Comprar créditos
-                </Link>
+                </button>
               </div>
             ) : (
               <div className="bg-emerald-50 border border-emerald-100 rounded-2xl px-5 py-3 flex items-center gap-2">
@@ -1170,9 +1179,6 @@ export default function SchedulePage() {
                 </p>
               </div>
             )}
-            <EnrollmentClassesList
-              classes={allClasses.filter((c: any) => c.enrollment_id === activeEnrollment.id)}
-            />
           </div>
         )}
 
@@ -1271,6 +1277,39 @@ export default function SchedulePage() {
             )}
           </div>
         )}
+
+        {/* Lista de clases agendadas posicionada al final del todo */}
+        {stage === "ready" && activeEnrollment && (
+          <div className="max-w-2xl mx-auto w-full pt-2">
+            <EnrollmentClassesList
+              classes={allClasses.filter((c: any) => c.enrollment_id === activeEnrollment.id)}
+            />
+          </div>
+        )}
+
+        {buyCreditsOpen && activeEnrollment && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setBuyCreditsOpen(false)} />
+            <div className="relative w-full max-w-3xl bg-white rounded-[2rem] shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-6 sm:px-8 py-5 border-b border-slate-100 flex-shrink-0">
+                <h2 className="text-lg font-black text-slate-800">Comprar créditos</h2>
+                <button onClick={() => setBuyCreditsOpen(false)} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
+                  <X className="w-4 h-4 text-slate-500" />
+                </button>
+              </div>
+              <div className="p-6 sm:p-8 overflow-y-auto">
+                <BuyCreditsModal
+                  enrollmentId={activeEnrollment.id}
+                  pricePerClass={activeEnrollment.package.price}
+                  currentCredits={activeEnrollment.available_credits ?? activeEnrollment.prepaid_unlimited_credits ?? 0}
+                  onClose={() => setBuyCreditsOpen(false)}
+                  onDone={() => { refetchEnrollments(); }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
     <ChipiWidget screenName="schedule_student" />

@@ -19,29 +19,25 @@ export default function DashboardSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
-  
-  // 👇 1. ESTADO PARA EVITAR EL ERROR DE NEXT.JS
   const [isMounted, setIsMounted] = useState(false);
+  const { count: unreadCount } = useUnreadNotificationCount(); // ← moved up, called unconditionally
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // 👇 2. MIENTRAS CARGA, MOSTRAMOS UNA BARRA VACÍA (Evita el crasheo)
   if (!isMounted) {
     return <aside className="w-64 bg-white border-r border-pink-100 min-h-screen shadow-xl shadow-pink-500/5 flex-shrink-0 z-50 transition-all"></aside>;
   }
 
   const role = user?.role || "";
 
-  // 🧠 Lógica de permisos
   const showAdminMenu = ["superadmin", "teacher_admin"].includes(role);
   const showTeacherMenu = ["teacher", "teacher_admin"].includes(role);
-  
   const showStudentMenu = role === "student";
-  const { count: unreadCount } = useUnreadNotificationCount();
 
-  // Función auxiliar para saber si un link está activo
+  // remove the old "const { count: unreadCount } = useUnreadNotificationCount();" line that was here
+
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
 
   return (
@@ -136,7 +132,6 @@ export default function DashboardSidebar() {
                 collapsed={collapsed}
               />
               <NavItem href="/admin/students" icon={<GraduationCap size={20} />} label="Estudiantes" active={isActive("/admin/students")} collapsed={collapsed} />
-              <NavItem href="/admin/students/banned" icon={<UserX size={20} />} label="Baneados" active={isActive("/admin/students/banned")} collapsed={collapsed} />
               <NavItem href="/admin/users" icon={<Users size={20}/>} label="Edicion de Usuarios" active={isActive("/admin/users")} collapsed={collapsed} />
               <NavItem href="/admin/payments" icon={<CreditCard size={20} />} label="Pagos y Facturas" active={isActive("/admin/payments")} collapsed={collapsed} />
               <NavItem href="/admin/settings" icon={<Settings size={20} />} label="Configuración" active={isActive("/admin/settings")} collapsed={collapsed} />
