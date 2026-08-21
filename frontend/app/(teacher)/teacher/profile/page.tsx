@@ -326,11 +326,20 @@ function VideoUploadSection({
           </div>
         )}
 
-        {videoUrl && teacherStatus !== "approved" && (
+          {videoUrl && teacherStatus !== "approved" && (
           <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex gap-3 items-start">
             <AlertTriangle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
             <p className="text-xs font-bold text-blue-700 leading-relaxed">
               Tu video fue recibido y tu perfil está siendo revisado por el equipo.
+            </p>
+          </div>
+        )}
+
+        {videoUrl && teacherStatus === "approved" && (
+          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex gap-3 items-start">
+            <Check className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+            <p className="text-xs font-bold text-emerald-700 leading-relaxed">
+              Tu video fue aprobado — tu perfil ya es público y los estudiantes pueden encontrarte.
             </p>
           </div>
         )}

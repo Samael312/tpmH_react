@@ -52,10 +52,10 @@ function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: an
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
-          <div className="relative w-full max-w-3xl bg-white rounded-[2rem] shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-6 sm:px-8 py-5 border-b border-slate-100 flex-shrink-0">
-              <h2 className="text-lg font-black text-slate-800">Completar pago</h2>
-              <button onClick={onClose} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
+        <div className="relative w-full max-w-3xl bg-white rounded-[2rem] shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between px-6 sm:px-8 py-5 border-b border-slate-100 flex-shrink-0">
+            <h2 className="text-lg font-black text-slate-800">Completar pago</h2>
+            <button onClick={onClose} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
               <X className="w-4 h-4 text-slate-500" />
             </button>
           </div>

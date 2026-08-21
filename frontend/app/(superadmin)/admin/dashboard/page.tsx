@@ -1,12 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { useAdminStats, usePendingPayments } from '@/hooks/useAdminData'
+import { useAdminStats, usePendingPayments, useNotifications } from '@/hooks/useAdminData'
+import api from '@/lib/api'
+import Link from 'next/link'
 import StatCard from '@/components/ui/StatCard'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
-import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 
 export default function AdminDashboard() {
@@ -15,6 +16,7 @@ export default function AdminDashboard() {
   const [validating, setValidating] = useState<number | null>(null)
   const [meetLink, setMeetLink] = useState('')
   const [activePayment, setActivePayment] = useState<number | null>(null)
+  const { notifications, loading: notifLoading, refetch: refetchNotif } = useNotifications(true)
 
   const handleApprove = async (paymentId: number) => {
     if (!meetLink.trim()) return
@@ -32,6 +34,13 @@ export default function AdminDashboard() {
     } finally {
       setValidating(null)
     }
+  }
+
+  const markRead = async (id: number) => {
+    try {
+      await api.patch(`/admin/notifications/${id}/read`)
+      refetchNotif()
+    } catch {}
   }
 
   const handleReject = async (paymentId: number) => {
@@ -212,7 +221,32 @@ export default function AdminDashboard() {
       <Badge variant="warning" className="px-4 py-1.5 shadow-sm text-sm">{stats.total_teachers_pending} profesores</Badge>
     )}
   </div>
-</div>
+  {/* Notificaciones sin leer (videos nuevos, apelaciones) */}
+  <div className="space-y-3">
+    {notifLoading ? (
+      <div className="h-16 bg-slate-50 rounded-2xl animate-pulse" />
+    ) : notifications.length === 0 ? (
+      <p className="text-xs text-slate-400 font-bold px-1">Sin notificaciones nuevas</p>
+    ) : (
+      notifications.map(n => (
+        <div key={n.id} className="flex items-center justify-between gap-4 bg-amber-50 border border-amber-100 rounded-2xl px-5 py-3">
+          <div>
+            <p className="text-sm font-bold text-slate-800">{n.title}</p>
+            {n.message && <p className="text-xs text-slate-500 mt-0.5">{n.message}</p>}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Link href="/admin/teachers" className="text-xs font-bold text-pink-600 hover:text-pink-700">
+              Revisar
+            </Link>
+            <button onClick={() => markRead(n.id)} className="text-xs font-bold text-slate-400 hover:text-slate-600">
+              Marcar leída
+            </button>
+          </div>
+        </div>
+      ))
+    )}
+        </div>
+      </div>
     </div>
     <ChipiWidget screenName="admin_home" /> 
   </>
