@@ -13,10 +13,7 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
 
-const { catalogs } = useSystemCatalogs();
-const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
-const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
-const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
+
 
 // 1. Interfaz actualizada (incluye descripción)
 interface Material {
@@ -715,6 +712,10 @@ function DeleteMaterialModal({
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function MaterialsPage() {
+  const { catalogs } = useSystemCatalogs();
+  const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
+  const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
+  const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
   const [materials, setMaterials]   = useState<Material[]>([]);
   const [loading, setLoading]       = useState(true);
   const [search, setSearch]         = useState("");

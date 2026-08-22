@@ -18,10 +18,7 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
 
-const { catalogs } = useSystemCatalogs();
-const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
-const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
-const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
+
 
 
 const GOALS = [
@@ -199,6 +196,10 @@ function StepPreferences({
   onRemoveAvatar,
   onNext, onBack,
 }: StepPreferencesProps) {
+  const { catalogs } = useSystemCatalogs();
+  const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
+  const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
+  const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
   const [useCustomGoal, setUseCustomGoal] = useState(() => {
     return Boolean(goal && !GOALS.some((g) => g.text === goal));
   });

@@ -15,10 +15,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
 
-const { catalogs } = useSystemCatalogs();
-const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
-const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
-const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
+
 
 interface Package {
   id: number;
@@ -87,6 +84,10 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function TeacherPackagesPage() {
+  const { catalogs } = useSystemCatalogs();
+  const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
+  const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
+  const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
   const [kind, setKind] = useState<"subject" | "language">("subject");
   const [unlimited, setUnlimited] = useState(false);
   const [savedOk, setSavedOk] = useState(false);

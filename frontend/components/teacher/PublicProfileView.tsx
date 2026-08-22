@@ -51,11 +51,8 @@ function StarRating({ value, size = "w-4 h-4" }: { value: number; size?: string 
 interface PublicProfileViewProps {
   teacher: PublicProfileTeacher;
   reviews: PublicProfileReview[];
-  /** Botones de acción en el hero (elegir profesor, agendar, whatsapp, etc.) */
   heroActions?: React.ReactNode;
-  /** Banner opcional arriba de todo (ej. "Perfil en revisión") */
   notice?: React.ReactNode;
-  /** Formulario de reseña, si aplica (solo estudiantes) */
   reviewForm?: React.ReactNode;
 }
 
@@ -129,7 +126,6 @@ export default function PublicProfileView({
                   {isApproved ? "Perfil Verificado" : "Pendiente de Aprobación"}
                 </span>
 
-                {/* Nombre grande, título mediano, usuario pequeño */}
                 <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white leading-tight">
                   {name}
                 </h1>
@@ -168,23 +164,45 @@ export default function PublicProfileView({
 
         {/* ─── Video de presentación ─── */}
         {teacher.video_url && (
-          <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-xl shadow-slate-200/50 p-6 sm:p-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div
-                className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm"
-                style={{ backgroundColor: `${accent}1a`, color: accent }}
-              >
-                <PlayCircle className="w-5 h-5" />
+          <div className="relative rounded-[2.5rem] overflow-hidden bg-slate-900 border border-slate-800 shadow-2xl p-6 sm:p-10">
+            <div 
+              className="absolute top-0 right-0 w-96 h-96 rounded-full blur-[120px] pointer-events-none opacity-20"
+              style={{ backgroundColor: accent }}
+            />
+            
+            <div className="relative z-10 flex flex-col lg:flex-row items-center gap-8">
+              <div className="w-full lg:w-1/3 space-y-4 text-left">
+                <div 
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider text-white shadow-sm"
+                  style={{ backgroundColor: accent }}
+                >
+                  <PlayCircle className="w-4 h-4" />
+                  Conóceme
+                </div>
+                
+                <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
+                  Video de presentación
+                </h2>
+                
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  Descubre mi metodología de enseñanza, cómo estructuro mis clases y mi enfoque para ayudarte a alcanzar tus objetivos.
+                </p>
+
+                <div className="pt-2 flex items-center gap-2 text-xs font-semibold text-slate-500">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Disponible para reproducción inmediata
+                </div>
               </div>
-              <h2 className="text-lg font-black text-slate-800">Video de presentación</h2>
-            </div>
-            <div className="rounded-2xl overflow-hidden bg-slate-900 aspect-video max-w-2xl">
-              <video
-                src={teacher.video_url}
-                controls
-                className="w-full h-full object-contain"
-                poster={teacher.profile_photo_url || undefined}
-              />
+
+              <div className="w-full lg:w-2/3">
+                <div className="relative rounded-[2rem] overflow-hidden bg-black aspect-video shadow-2xl border border-slate-800/80 group">
+                  <video
+                    src={teacher.video_url}
+                    controls
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         )}

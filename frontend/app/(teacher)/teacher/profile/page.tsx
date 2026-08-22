@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-// arriba del archivo, en el import de lucide-react, agrega: AtSign, Mail
 import {
   User, Briefcase, Globe, MapPin, Link2, MessageCircle, Plus,
   X, Check, Save, Upload, Award, BookOpen, ChevronDown, ExternalLink,
@@ -18,11 +17,6 @@ import { COUNTRY_OPTIONS, DEFAULT_COUNTRY, parsePhoneNumber, CountryInfo, TIMEZO
 import { NATIONALITIES, getFlagForNationality } from "@/lib/nationalities";
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
-
-const { catalogs } = useSystemCatalogs();
-const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
-const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
-const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
 
 const MAX_VIDEO_SIZE_MB = 100;
 const ALLOWED_VIDEO_MIME_TYPES = ["video/mp4", "video/quicktime"];
@@ -331,7 +325,7 @@ function VideoUploadSection({
           </div>
         )}
 
-          {videoUrl && teacherStatus !== "approved" && (
+        {videoUrl && teacherStatus !== "approved" && (
           <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex gap-3 items-start">
             <AlertTriangle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
             <p className="text-xs font-bold text-blue-700 leading-relaxed">
@@ -453,6 +447,22 @@ function ThemeColorSection({ initialColor, onSaved }: { initialColor?: string | 
 
 // ─── Componente principal ──────────────────────────────────────────────────
 export default function TeacherProfilePage() {
+  // Hook llamado dentro del componente
+  const { catalogs } = useSystemCatalogs();
+
+  const SUBJECTS = useMemo(
+    () => (catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS),
+    [catalogs.subjects]
+  );
+  const LANGUAGES = useMemo(
+    () => (catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES),
+    [catalogs.languages]
+  );
+  const SKILL_SUGGESTIONS = useMemo(
+    () => (catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS),
+    [catalogs.skill_suggestions]
+  );
+
   const { profile: rawProfile, loading, refetch } = useTeacherProfile();
   const profile = rawProfile as TeacherProfileWithPhoto | null;
   const { logout } = useAuthStore();
@@ -580,7 +590,7 @@ export default function TeacherProfilePage() {
     try {
       const fullPhone = phoneRest.trim() ? `${phoneCountry.dialCode} ${phoneRest.trim()}` : "";
       await api.patch("/users/me", { username, email, phone_number: fullPhone });
-      const res = await api.patch("/teachers/me/profile", {
+      await api.patch("/teachers/me/profile", {
         bio, title: title_, timezone, languages, subjects, skills,
         certificates: certificates.filter(c => c.title.trim()),
         social_links: socialLinks,
@@ -642,288 +652,285 @@ export default function TeacherProfilePage() {
 
   return (
     <>
-    <div className="min-h-screen bg-slate-50 relative overflow-hidden py-8 px-4 sm:px-6 lg:px-8">
-      <div className="fixed top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/20 rounded-full blur-[120px] pointer-events-none" />
-      <div className="fixed bottom-[-80px] left-[-80px] w-[400px] h-[400px] bg-purple-300/15 rounded-full blur-[100px] pointer-events-none" />
+      <div className="min-h-screen bg-slate-50 relative overflow-hidden py-8 px-4 sm:px-6 lg:px-8">
+        <div className="fixed top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/20 rounded-full blur-[120px] pointer-events-none" />
+        <div className="fixed bottom-[-80px] left-[-80px] w-[400px] h-[400px] bg-purple-300/15 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="relative max-w-5xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="relative max-w-5xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
-        {/* ─── Cabecera ─── */}
-        <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg p-6 sm:p-7 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
-          <div className="flex items-center gap-5">
-            <div className="relative flex-shrink-0">
-              <div
-                onClick={() => photoRef.current?.click()}
-                className="w-20 h-20 rounded-2xl overflow-hidden cursor-pointer group border-2 border-slate-200 hover:border-pink-400 transition-all shadow-md relative bg-gradient-to-br from-pink-400 to-rose-400 flex items-center justify-center"
-              >
-                {displayPhoto ? (
-                  <img src={displayPhoto} alt="avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-white font-black text-2xl">
-                    {profile?.user_username?.[0]?.toUpperCase() ?? "T"}
-                  </span>
-                )}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  {uploadingPhoto ? (
-                    <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+          {/* ─── Cabecera ─── */}
+          <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg p-6 sm:p-7 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+            <div className="flex items-center gap-5">
+              <div className="relative flex-shrink-0">
+                <div
+                  onClick={() => photoRef.current?.click()}
+                  className="w-20 h-20 rounded-2xl overflow-hidden cursor-pointer group border-2 border-slate-200 hover:border-pink-400 transition-all shadow-md relative bg-gradient-to-br from-pink-400 to-rose-400 flex items-center justify-center"
+                >
+                  {displayPhoto ? (
+                    <img src={displayPhoto} alt="avatar" className="w-full h-full object-cover" />
                   ) : (
-                    <Upload className="w-5 h-5 text-white" />
+                    <span className="text-white font-black text-2xl">
+                      {profile?.user_username?.[0]?.toUpperCase() ?? "T"}
+                    </span>
                   )}
-                </div>
-              </div>
-              <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
-            </div>
-
-            <div className="min-w-0">
-              <h1 className="text-2xl font-black text-slate-800 tracking-tight truncate">
-                {`${user?.name ?? ""} ${user?.surname ?? ""}`.trim() || "Perfil de Profesor"}
-              </h1>
-              {title_ && <p className="text-slate-600 text-sm font-bold mt-0.5 truncate">{title_}</p>}
-              <p className="text-slate-400 text-xs mt-0.5 truncate">@{profile?.user_username}</p>
-              <span className="inline-block mt-2 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-pink-50 text-pink-600 border border-pink-100">
-                Profesor
-              </span>
-            </div>
-          </div>
-
-          {profile && (
-            <a
-              href="/teacher/profile/preview"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:border-pink-300 hover:text-pink-600 transition-all shadow-sm flex-shrink-0"
-            >
-              <ExternalLink className="w-4 h-4" />
-              Ver perfil público
-            </a>
-          )}
-        </div>
-
-        {infoFeedback && <Toast msg={infoFeedback.msg} type={infoFeedback.type} />}
-
-        {/* ─── Grid Principal ─── */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
-          {/* Columna izquierda: Perfil profesional + Video + Estilo */}
-          <div className="lg:col-span-7 space-y-6">
-            <Section
-              title="Perfil Profesional"
-              subtitle="Cómo te ven los estudiantes en la plataforma"
-              icon={<User className="w-5 h-5" />}
-              action={
-                !isEditing ? (
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-pink-50 hover:bg-pink-100 text-pink-600 rounded-xl font-bold text-xs border border-pink-100 transition-colors active:scale-95"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                    Editar perfil
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleCancelEdit}
-                    disabled={saving}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-slate-400 hover:text-slate-600 font-bold text-xs transition-colors disabled:opacity-50"
-                  >
-                    <X className="w-4 h-4" />
-                    Cancelar
-                  </button>
-                )
-              }
-            >
-              {!isEditing ? (
-                // Vista de solo lectura
-                <div className="space-y-5">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <ReadField icon={<AtSign className="w-3.5 h-3.5 text-slate-400" />} label="Usuario" value={username} />
-                    <ReadField icon={<Mail className="w-3.5 h-3.5 text-slate-400" />} label="Correo electrónico" value={email} />
-                    <ReadField icon={<Briefcase className="w-3.5 h-3.5 text-slate-400" />} label="Título profesional" value={title_} />
-                    <ReadField icon={<Phone className="w-3.5 h-3.5 text-slate-400" />} label="Teléfono" value={phoneRest ? `${phoneCountry.dialCode} ${phoneRest}` : ""} />
-                    <div className="sm:col-span-2">
-                    <ReadField label="Nacionalidad" value={nationality ? `${getFlagForNationality(nationality)} ${nationality}` : ""}/>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <ReadField icon={<Globe className="w-3.5 h-3.5 text-slate-400" />} label="Zona horaria" value={timezone} />
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Sobre mí</span>
-                    <p className="text-sm font-medium text-slate-700 leading-relaxed">{bio || "Sin biografía"}</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3.5">
-                    <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Idiomas</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {languages.length ? languages.map(l => (
-                          <span key={l} className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">{l}</span>
-                        )) : <span className="text-xs text-slate-400 font-bold">Ninguno seleccionado</span>}
-                      </div>
-                    </div>
-                    <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Materias</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {subjects.length ? subjects.map(s => (
-                          <span key={s} className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">{s}</span>
-                        )) : <span className="text-xs text-slate-400 font-bold">Ninguna seleccionada</span>}
-                      </div>
-                    </div>
-                    <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Habilidades</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {skills.length ? skills.map(s => (
-                          <span key={s} className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">{s}</span>
-                        )) : <span className="text-xs text-slate-400 font-bold">Ninguna añadida</span>}
-                      </div>
-                    </div>
-                  </div>
-
-                  {certificates.length > 0 && (
-                    <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Certificaciones</span>
-                      <div className="space-y-2">
-                        {certificates.map((c, i) => (
-                          <div key={i} className="flex items-center justify-between bg-white rounded-xl px-3 py-2 border border-slate-100">
-                            <span className="text-xs font-bold text-slate-700">{c.title}</span>
-                            <span className="text-[10px] font-black text-slate-400">{c.year}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Redes y contacto</span>
-                    {Object.values(socialLinks).some(v => v) ? (
-                      <div className="flex flex-wrap gap-2">
-                        {socialLinks.instagram && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">IG: {socialLinks.instagram}</span>}
-                        {socialLinks.whatsapp && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">WA: {socialLinks.whatsapp}</span>}
-                        {socialLinks.youtube && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">YouTube</span>}
-                        {socialLinks.website && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">Web</span>}
-                      </div>
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    {uploadingPhoto ? (
+                      <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                     ) : (
-                      <p className="text-xs text-slate-400 font-bold">Sin enlaces configurados</p>
+                      <Upload className="w-5 h-5 text-white" />
                     )}
                   </div>
                 </div>
-              ) : (
-                // Vista de edición
-                <div className="space-y-5 animate-in fade-in duration-300">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Nombre de usuario</label>
-                      <div className="relative group">
-                        <AtSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors pointer-events-none" />
-                        <input
-                          value={username}
-                          onChange={e => setUsername(e.target.value)}
-                          disabled={saving}
-                          placeholder="usuario123"
-                          className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Correo electrónico</label>
-                      <div className="relative group">
-                        <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors pointer-events-none" />
-                        <input
-                          type="email"
-                          value={email}
-                          onChange={e => setEmail(e.target.value)}
-                          disabled={saving}
-                          placeholder="correo@ejemplo.com"
-                          className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Título profesional</label>
-                    <div className="relative group">
-                      <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors pointer-events-none" />
-                      <input
-                        value={title_}
-                        onChange={e => setTitle_(e.target.value)}
-                        disabled={saving}
-                        placeholder="Ej: Profesora de Inglés Certificada"
-                        className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
-                      />
-                    </div>
-                  </div>
+                <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+              </div>
 
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Sobre mí</label>
-                    <textarea
-                      value={bio}
-                      onChange={e => setBio(e.target.value)}
+              <div className="min-w-0">
+                <h1 className="text-2xl font-black text-slate-800 tracking-tight truncate">
+                  {`${user?.name ?? ""} ${user?.surname ?? ""}`.trim() || "Perfil de Profesor"}
+                </h1>
+                {title_ && <p className="text-slate-600 text-sm font-bold mt-0.5 truncate">{title_}</p>}
+                <p className="text-slate-400 text-xs mt-0.5 truncate">@{profile?.user_username}</p>
+                <span className="inline-block mt-2 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-pink-50 text-pink-600 border border-pink-100">
+                  Profesor
+                </span>
+              </div>
+            </div>
+
+            {profile && (
+              <a
+                href="/teacher/profile/preview"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:border-pink-300 hover:text-pink-600 transition-all shadow-sm flex-shrink-0"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Ver perfil público
+              </a>
+            )}
+          </div>
+
+          {infoFeedback && <Toast msg={infoFeedback.msg} type={infoFeedback.type} />}
+
+          {/* ─── Grid Principal ─── */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+            {/* Columna izquierda: Perfil profesional + Video + Estilo */}
+            <div className="lg:col-span-7 space-y-6">
+              <Section
+                title="Perfil Profesional"
+                subtitle="Cómo te ven los estudiantes en la plataforma"
+                icon={<User className="w-5 h-5" />}
+                action={
+                  !isEditing ? (
+                    <button
+                      onClick={() => setIsEditing(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-pink-50 hover:bg-pink-100 text-pink-600 rounded-xl font-bold text-xs border border-pink-100 transition-colors active:scale-95"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      Editar perfil
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleCancelEdit}
                       disabled={saving}
-                      rows={4}
-                      placeholder="Cuéntales a los estudiantes quién eres y tu metodología..."
-                      className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-medium text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all resize-none disabled:opacity-60"
-                    />
-                    <p className="text-[11px] text-slate-400 text-right mt-1 font-bold">{bio.length} caracteres</p>
-                  </div>
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-slate-400 hover:text-slate-600 font-bold text-xs transition-colors disabled:opacity-50"
+                    >
+                      <X className="w-4 h-4" />
+                      Cancelar
+                    </button>
+                  )
+                }
+              >
+                {!isEditing ? (
+                  // Vista de solo lectura
+                  <div className="space-y-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <ReadField icon={<AtSign className="w-3.5 h-3.5 text-slate-400" />} label="Usuario" value={username} />
+                      <ReadField icon={<Mail className="w-3.5 h-3.5 text-slate-400" />} label="Correo electrónico" value={email} />
+                      <ReadField icon={<Briefcase className="w-3.5 h-3.5 text-slate-400" />} label="Título profesional" value={title_} />
+                      <ReadField icon={<Phone className="w-3.5 h-3.5 text-slate-400" />} label="Teléfono" value={phoneRest ? `${phoneCountry.dialCode} ${phoneRest}` : ""} />
+                      <div className="sm:col-span-2">
+                        <ReadField label="Nacionalidad" value={nationality ? `${getFlagForNationality(nationality)} ${nationality}` : ""}/>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <ReadField icon={<Globe className="w-3.5 h-3.5 text-slate-400" />} label="Zona horaria" value={timezone} />
+                      </div>
+                    </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                        Teléfono
-                      </label>
-                      <div className="flex gap-2">
-                        <div className="relative w-28 flex-shrink-0">
-                          <div className="w-full h-full bg-slate-50 border-2 border-transparent rounded-xl px-3 py-3.5 flex items-center justify-between pointer-events-none font-bold text-slate-800">
-                            <span className="text-lg leading-none">{phoneCountry.flag}</span>
-                            <span className="text-sm font-black text-slate-600">{phoneCountry.dialCode}</span>
-                          </div>
-                          <select
-                            value={phoneCountry.dialCode}
-                            onChange={e => {
-                              const sel = COUNTRY_OPTIONS.find(c => c.dialCode === e.target.value);
-                              if (sel) setPhoneCountry(sel);
-                            }}
-                            disabled={saving}
-                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                          >
-                            {COUNTRY_OPTIONS.map((c, i) => (
-                              <option key={i} value={c.dialCode}>{c.flag} {c.dialCode}</option>
-                            ))}
-                          </select>
+                    <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Sobre mí</span>
+                      <p className="text-sm font-medium text-slate-700 leading-relaxed">{bio || "Sin biografía"}</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3.5">
+                      <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Idiomas</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {languages.length ? languages.map(l => (
+                            <span key={l} className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">{l}</span>
+                          )) : <span className="text-xs text-slate-400 font-bold">Ninguno seleccionado</span>}
                         </div>
+                      </div>
+                      <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Materias</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {subjects.length ? subjects.map(s => (
+                            <span key={s} className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">{s}</span>
+                          )) : <span className="text-xs text-slate-400 font-bold">Ninguna seleccionada</span>}
+                        </div>
+                      </div>
+                      <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Habilidades</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {skills.length ? skills.map(s => (
+                            <span key={s} className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">{s}</span>
+                          )) : <span className="text-xs text-slate-400 font-bold">Ninguna añadida</span>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {certificates.length > 0 && (
+                      <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Certificaciones</span>
+                        <div className="space-y-2">
+                          {certificates.map((c, i) => (
+                            <div key={i} className="flex items-center justify-between bg-white rounded-xl px-3 py-2 border border-slate-100">
+                              <span className="text-xs font-bold text-slate-700">{c.title}</span>
+                              <span className="text-[10px] font-black text-slate-400">{c.year}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Redes y contacto</span>
+                      {Object.values(socialLinks).some(v => v) ? (
+                        <div className="flex flex-wrap gap-2">
+                          {socialLinks.instagram && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">IG: {socialLinks.instagram}</span>}
+                          {socialLinks.whatsapp && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">WA: {socialLinks.whatsapp}</span>}
+                          {socialLinks.youtube && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">YouTube</span>}
+                          {socialLinks.website && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">Web</span>}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 font-bold">Sin enlaces configurados</p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  // Vista de edición
+                  <div className="space-y-5 animate-in fade-in duration-300">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Nombre de usuario</label>
+                        <div className="relative group">
+                          <AtSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors pointer-events-none" />
+                          <input
+                            value={username}
+                            onChange={e => setUsername(e.target.value)}
+                            disabled={saving}
+                            placeholder="usuario123"
+                            className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Correo electrónico</label>
+                        <div className="relative group">
+                          <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors pointer-events-none" />
+                          <input
+                            type="email"
+                            value={email}
+                            onChange={e => setEmail(e.target.value)}
+                            disabled={saving}
+                            placeholder="correo@ejemplo.com"
+                            className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Título profesional</label>
+                      <div className="relative group">
+                        <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-pink-500 transition-colors pointer-events-none" />
                         <input
-                          type="tel"
-                          value={phoneRest}
-                          onChange={e => setPhoneRest(e.target.value)}
+                          value={title_}
+                          onChange={e => setTitle_(e.target.value)}
                           disabled={saving}
-                          placeholder="412 000 0000"
-                          className={inputDif(false)}
-                          
+                          placeholder="Ej: Profesora de Inglés Certificada"
+                          className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                        Nacionalidad
-                      </label>
-                      <select
-                        value={nationality}
-                        onChange={e => setNationality(e.target.value)}
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Sobre mí</label>
+                      <textarea
+                        value={bio}
+                        onChange={e => setBio(e.target.value)}
                         disabled={saving}
-                        className={`${inputCls(false)} appearance-none cursor-pointer`}
-                      >
-                        <option value="">Seleccionar...</option>
-                        {NATIONALITIES.map(n => (
-                          <option key={n.code} value={n.name}>{n.flag} {n.name}</option>
-                        ))}
-                      </select>
+                        rows={4}
+                        placeholder="Cuéntales a los estudiantes quién eres y tu metodología..."
+                        className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-medium text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all resize-none disabled:opacity-60"
+                      />
+                      <p className="text-[11px] text-slate-400 text-right mt-1 font-bold">{bio.length} caracteres</p>
                     </div>
 
-                  
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-1 gap-3.5"></div>
-                  <div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                          Teléfono
+                        </label>
+                        <div className="flex gap-2">
+                          <div className="relative w-28 flex-shrink-0">
+                            <div className="w-full h-full bg-slate-50 border-2 border-transparent rounded-xl px-3 py-3.5 flex items-center justify-between pointer-events-none font-bold text-slate-800">
+                              <span className="text-lg leading-none">{phoneCountry.flag}</span>
+                              <span className="text-sm font-black text-slate-600">{phoneCountry.dialCode}</span>
+                            </div>
+                            <select
+                              value={phoneCountry.dialCode}
+                              onChange={e => {
+                                const sel = COUNTRY_OPTIONS.find(c => c.dialCode === e.target.value);
+                                if (sel) setPhoneCountry(sel);
+                              }}
+                              disabled={saving}
+                              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                            >
+                              {COUNTRY_OPTIONS.map((c, i) => (
+                                <option key={i} value={c.dialCode}>{c.flag} {c.dialCode}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <input
+                            type="tel"
+                            value={phoneRest}
+                            onChange={e => setPhoneRest(e.target.value)}
+                            disabled={saving}
+                            placeholder="412 000 0000"
+                            className={inputDif(false)}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                          Nacionalidad
+                        </label>
+                        <select
+                          value={nationality}
+                          onChange={e => setNationality(e.target.value)}
+                          disabled={saving}
+                          className={`${inputCls(false)} appearance-none cursor-pointer`}
+                        >
+                          <option value="">Seleccionar...</option>
+                          {NATIONALITIES.map(n => (
+                            <option key={n.code} value={n.name}>{n.flag} {n.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Zona horaria</label>
                       <div className="relative group">
                         <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -942,292 +949,292 @@ export default function TeacherProfilePage() {
                         </select>
                         <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                       </div>
-                    
-                  </div>
-                  <div className="pt-2 border-t border-slate-100 space-y-4">
-                    <div className="flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 text-purple-500" />
-                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Qué enseñas</p>
                     </div>
-                    <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Idiomas</label>
-                      <ChipSelector options={LANGUAGES} selected={languages} onChange={setLanguages} color="pink" disabled={saving} />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Materias / Áreas</label>
-                      <ChipSelector options={SUBJECTS} selected={subjects} onChange={setSubjects} color="purple" disabled={saving} />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Habilidades específicas</label>
-                      <FreeChipInput value={skills} onChange={setSkills} placeholder="Ej: Conversación fluida, TOEFL..." suggestions={SKILL_SUGGESTIONS} disabled={saving} />
-                    </div>
-                  </div>
 
-                  <div className="pt-2 border-t border-slate-100 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Award className="w-4 h-4 text-amber-500" />
-                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Certificaciones</p>
-                    </div>
-                    {certificates.map((cert, idx) => (
-                      <div key={idx} className="flex gap-2.5 items-center bg-slate-50/80 rounded-2xl p-3 border border-slate-100">
-                        <div className="flex-1 grid grid-cols-2 gap-2">
-                          <input
-                            value={cert.title}
-                            onChange={e => updateCert(idx, "title", e.target.value)}
-                            disabled={saving}
-                            placeholder="Nombre del certificado"
-                            className="bg-white border-2 border-transparent rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 px-3 py-2.5 focus:outline-none focus:border-pink-500 transition-all disabled:opacity-60"
-                          />
-                          <input
-                            value={cert.year}
-                            onChange={e => updateCert(idx, "year", e.target.value)}
-                            disabled={saving}
-                            placeholder="Año (ej: 2023)"
-                            className="bg-white border-2 border-transparent rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 px-3 py-2.5 focus:outline-none focus:border-pink-500 transition-all disabled:opacity-60"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeCert(idx)}
-                          disabled={saving}
-                          className="w-9 h-9 rounded-xl bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors flex-shrink-0 disabled:opacity-60"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                    <div className="pt-2 border-t border-slate-100 space-y-4">
+                      <div className="flex items-center gap-2">
+                        <BookOpen className="w-4 h-4 text-purple-500" />
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Qué enseñas</p>
                       </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={addCert}
-                      disabled={saving}
-                      className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-pink-50 text-slate-600 hover:text-pink-600 rounded-xl text-xs font-bold transition-colors disabled:opacity-60"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Añadir certificación
-                    </button>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-100 space-y-3.5">
-                    <div className="flex items-center gap-2">
-                      <Link2 className="w-4 h-4 text-blue-500" />
-                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Redes y contacto</p>
-                    </div>
-                    {[
-                      { key: "instagram" as const, label: "Instagram", placeholder: "@tuprofe", icon: <InstagramIcon /> },
-                      { key: "youtube" as const, label: "YouTube", placeholder: "https://youtube.com/@canal", icon: <YoutubeIcon /> },
-                      { key: "whatsapp" as const, label: "WhatsApp", placeholder: "+58 412 000 0000", icon: <MessageCircle className="w-4 h-4" /> },
-                      { key: "website" as const, label: "Sitio web", placeholder: "https://tuweb.com", icon: <Globe className="w-4 h-4" /> },
-                    ].map(field => (
-                      <div key={field.key} className="group">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{field.label}</label>
-                        <div className="relative">
-                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-pink-500 transition-colors">
-                            {field.icon}
-                          </span>
-                          <input
-                            value={socialLinks[field.key]}
-                            onChange={e => setSocialLinks(p => ({ ...p, [field.key]: e.target.value }))}
-                            disabled={saving}
-                            placeholder={field.placeholder}
-                            className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-2.5 focus:outline-none focus:bg-white focus:border-pink-500 transition-all disabled:opacity-60"
-                          />
-                        </div>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Idiomas</label>
+                        <ChipSelector options={LANGUAGES} selected={languages} onChange={setLanguages} color="pink" disabled={saving} />
                       </div>
-                    ))}
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Materias / Áreas</label>
+                        <ChipSelector options={SUBJECTS} selected={subjects} onChange={setSubjects} color="purple" disabled={saving} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Habilidades específicas</label>
+                        <FreeChipInput value={skills} onChange={setSkills} placeholder="Ej: Conversación fluida, TOEFL..." suggestions={SKILL_SUGGESTIONS} disabled={saving} />
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Award className="w-4 h-4 text-amber-500" />
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Certificaciones</p>
+                      </div>
+                      {certificates.map((cert, idx) => (
+                        <div key={idx} className="flex gap-2.5 items-center bg-slate-50/80 rounded-2xl p-3 border border-slate-100">
+                          <div className="flex-1 grid grid-cols-2 gap-2">
+                            <input
+                              value={cert.title}
+                              onChange={e => updateCert(idx, "title", e.target.value)}
+                              disabled={saving}
+                              placeholder="Nombre del certificado"
+                              className="bg-white border-2 border-transparent rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 px-3 py-2.5 focus:outline-none focus:border-pink-500 transition-all disabled:opacity-60"
+                            />
+                            <input
+                              value={cert.year}
+                              onChange={e => updateCert(idx, "year", e.target.value)}
+                              disabled={saving}
+                              placeholder="Año (ej: 2023)"
+                              className="bg-white border-2 border-transparent rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 px-3 py-2.5 focus:outline-none focus:border-pink-500 transition-all disabled:opacity-60"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeCert(idx)}
+                            disabled={saving}
+                            className="w-9 h-9 rounded-xl bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors flex-shrink-0 disabled:opacity-60"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={addCert}
+                        disabled={saving}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-pink-50 text-slate-600 hover:text-pink-600 rounded-xl text-xs font-bold transition-colors disabled:opacity-60"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Añadir certificación
+                      </button>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 space-y-3.5">
+                      <div className="flex items-center gap-2">
+                        <Link2 className="w-4 h-4 text-blue-500" />
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Redes y contacto</p>
+                      </div>
+                      {[
+                        { key: "instagram" as const, label: "Instagram", placeholder: "@tuprofe", icon: <InstagramIcon /> },
+                        { key: "youtube" as const, label: "YouTube", placeholder: "https://youtube.com/@canal", icon: <YoutubeIcon /> },
+                        { key: "whatsapp" as const, label: "WhatsApp", placeholder: "+58 412 000 0000", icon: <MessageCircle className="w-4 h-4" /> },
+                        { key: "website" as const, label: "Sitio web", placeholder: "https://tuweb.com", icon: <Globe className="w-4 h-4" /> },
+                      ].map(field => (
+                        <div key={field.key} className="group">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{field.label}</label>
+                          <div className="relative">
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-pink-500 transition-colors">
+                              {field.icon}
+                            </span>
+                            <input
+                              value={socialLinks[field.key]}
+                              onChange={e => setSocialLinks(p => ({ ...p, [field.key]: e.target.value }))}
+                              disabled={saving}
+                              placeholder={field.placeholder}
+                              className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-2.5 focus:outline-none focus:bg-white focus:border-pink-500 transition-all disabled:opacity-60"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={handleCancelEdit}
+                        disabled={saving}
+                        className="w-1/3 py-3 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveInfo}
+                        disabled={saving}
+                        className="w-2/3 py-3 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-lg shadow-pink-200 hover:shadow-pink-300 active:scale-[0.98] transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {saving ? (
+                          <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          <><Check className="w-4 h-4" /> Guardar cambios</>
+                        )}
+                      </button>
+                    </div>
                   </div>
-
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={handleCancelEdit}
-                      disabled={saving}
-                      className="w-1/3 py-3 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={saveInfo}
-                      disabled={saving}
-                      className="w-2/3 py-3 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-lg shadow-pink-200 hover:shadow-pink-300 active:scale-[0.98] transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                      {saving ? (
-                        <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                      ) : (
-                        <><Check className="w-4 h-4" /> Guardar cambios</>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </Section>
-
-            {/* Video de presentación */}
-            <VideoUploadSection
-              teacherStatus={profile?.status}
-              videoUrl={profile?.video_url}
-              onUploaded={refetch}
-            />
-
-            {/* Estilo del perfil público */}
-            <ThemeColorSection
-              initialColor={profile?.theme_color}
-              onSaved={refetch}
-            />
-          </div>
-
-          {/* Columna derecha: Seguridad + Sincronización + Zona de peligro */}
-          <div className="lg:col-span-5 space-y-6">
-
-            <Section title="Seguridad" subtitle="Actualiza tu contraseña de acceso" icon={<Lock className="w-5 h-5" />}>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Contraseña actual</label>
-                  <div className="relative group">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                      type={showOld ? "text" : "password"}
-                      value={oldPw}
-                      onChange={e => setOldPw(e.target.value)}
-                      disabled={savingPw}
-                      placeholder="••••••••"
-                      className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-10 pr-10 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
-                    />
-                    <button type="button" onClick={() => setShowOld(p => !p)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500 transition-colors">
-                      {showOld ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Nueva contraseña</label>
-                  <div className="relative group">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                      type={showNew ? "text" : "password"}
-                      value={newPw}
-                      onChange={e => setNewPw(e.target.value)}
-                      disabled={savingPw}
-                      placeholder="Mínimo 8 caracteres"
-                      className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-10 pr-10 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
-                    />
-                    <button type="button" onClick={() => setShowNew(p => !p)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500 transition-colors">
-                      {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Confirmar nueva contraseña</label>
-                  <input
-                    type="password"
-                    value={confirmPw}
-                    onChange={e => setConfirmPw(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && savePw()}
-                    disabled={savingPw}
-                    placeholder="Repite la nueva contraseña"
-                    className={`w-full bg-slate-50 border-2 rounded-xl text-sm font-bold text-slate-800 px-4 py-3 focus:outline-none transition-all disabled:opacity-60 ${
-                      confirmPw && confirmPw !== newPw ? "border-rose-300 focus:border-rose-500 focus:ring-rose-50" : "border-transparent focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50"
-                    }`}
-                  />
-                </div>
-
-                {confirmPw.length > 0 && (
-                  <p className={`text-xs font-bold flex items-center gap-1.5 ${confirmPw === newPw ? "text-emerald-600" : "text-rose-500"}`}>
-                    {confirmPw === newPw ? (<><Check className="w-3.5 h-3.5" /> Las contraseñas coinciden</>) : (<><AlertTriangle className="w-3.5 h-3.5" /> No coinciden</>)}
-                  </p>
                 )}
+              </Section>
 
-                {pwFeedback && <Toast msg={pwFeedback.msg} type={pwFeedback.type} />}
+              {/* Video de presentación */}
+              <VideoUploadSection
+                teacherStatus={profile?.status}
+                videoUrl={profile?.video_url}
+                onUploaded={refetch}
+              />
 
-                <button
-                  onClick={savePw}
-                  disabled={savingPw || !oldPw || !newPw || newPw !== confirmPw || newPw.length < 8}
-                  className="w-full py-3 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-slate-700 to-slate-800 shadow-lg active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {savingPw ? (
-                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <><Lock className="w-4 h-4" /> Actualizar contraseña</>
-                  )}
-                </button>
-              </div>
-            </Section>
+              {/* Estilo del perfil público */}
+              <ThemeColorSection
+                initialColor={profile?.theme_color}
+                onSaved={refetch}
+              />
+            </div>
 
-            {/* Sincronización de calendario */}
-            <Section title="Calendario" subtitle="Sincroniza tus clases y eventos" icon={<Calendar className="w-5 h-5" />}>
-              <CalendarSync />
-            </Section>
+            {/* Columna derecha: Seguridad + Sincronización + Zona de peligro */}
+            <div className="lg:col-span-5 space-y-6">
 
-            {/* Zona de peligro */}
-            <Section title="Zona de peligro" subtitle="Acciones irreversibles sobre tu cuenta" icon={<AlertTriangle className="w-5 h-5" />}>
-              {!confirmDelete ? (
-                <div className="bg-rose-50/80 border-2 border-rose-100 rounded-2xl p-4 flex flex-col gap-3">
+              <Section title="Seguridad" subtitle="Actualiza tu contraseña de acceso" icon={<Lock className="w-5 h-5" />}>
+                <div className="space-y-4">
                   <div>
-                    <p className="text-sm font-black text-rose-700">Eliminar mi cuenta</p>
-                    <p className="text-xs text-rose-500 mt-0.5">
-                      Se desactivará tu cuenta y perfil público de forma permanente.
-                    </p>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Contraseña actual</label>
+                    <div className="relative group">
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type={showOld ? "text" : "password"}
+                        value={oldPw}
+                        onChange={e => setOldPw(e.target.value)}
+                        disabled={savingPw}
+                        placeholder="••••••••"
+                        className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-10 pr-10 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
+                      />
+                      <button type="button" onClick={() => setShowOld(p => !p)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500 transition-colors">
+                        {showOld ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Nueva contraseña</label>
+                    <div className="relative group">
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type={showNew ? "text" : "password"}
+                        value={newPw}
+                        onChange={e => setNewPw(e.target.value)}
+                        disabled={savingPw}
+                        placeholder="Mínimo 8 caracteres"
+                        className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-10 pr-10 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
+                      />
+                      <button type="button" onClick={() => setShowNew(p => !p)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500 transition-colors">
+                        {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Confirmar nueva contraseña</label>
+                    <input
+                      type="password"
+                      value={confirmPw}
+                      onChange={e => setConfirmPw(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && savePw()}
+                      disabled={savingPw}
+                      placeholder="Repite la nueva contraseña"
+                      className={`w-full bg-slate-50 border-2 rounded-xl text-sm font-bold text-slate-800 px-4 py-3 focus:outline-none transition-all disabled:opacity-60 ${
+                        confirmPw && confirmPw !== newPw ? "border-rose-300 focus:border-rose-500 focus:ring-rose-50" : "border-transparent focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50"
+                      }`}
+                    />
+                  </div>
+
+                  {confirmPw.length > 0 && (
+                    <p className={`text-xs font-bold flex items-center gap-1.5 ${confirmPw === newPw ? "text-emerald-600" : "text-rose-500"}`}>
+                      {confirmPw === newPw ? (<><Check className="w-3.5 h-3.5" /> Las contraseñas coinciden</>) : (<><AlertTriangle className="w-3.5 h-3.5" /> No coinciden</>)}
+                    </p>
+                  )}
+
+                  {pwFeedback && <Toast msg={pwFeedback.msg} type={pwFeedback.type} />}
+
                   <button
-                    onClick={() => setConfirmDelete(true)}
-                    className="w-full py-2.5 bg-rose-500 text-white text-xs font-bold rounded-xl shadow-md shadow-rose-200 hover:bg-rose-600 active:scale-[0.97] transition-all duration-200 flex items-center justify-center gap-2"
+                    onClick={savePw}
+                    disabled={savingPw || !oldPw || !newPw || newPw !== confirmPw || newPw.length < 8}
+                    className="w-full py-3 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-slate-700 to-slate-800 shadow-lg active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    <Trash2 className="w-4 h-4" />
-                    Eliminar cuenta
+                    {savingPw ? (
+                      <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <><Lock className="w-4 h-4" /> Actualizar contraseña</>
+                    )}
                   </button>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4">
-                    <div className="flex items-start gap-2.5 mb-3">
-                      <AlertTriangle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-black text-rose-700">¿Estás absolutamente seguro?</p>
-                        <p className="text-[11px] text-rose-500 mt-0.5 leading-relaxed">
-                          Esta acción no se puede deshacer fácilmente. Tu perfil dejará de ser visible para estudiantes.
-                        </p>
-                      </div>
+              </Section>
+
+              {/* Sincronización de calendario */}
+              <Section title="Calendario" subtitle="Sincroniza tus clases y eventos" icon={<Calendar className="w-5 h-5" />}>
+                <CalendarSync />
+              </Section>
+
+              {/* Zona de peligro */}
+              <Section title="Zona de peligro" subtitle="Acciones irreversibles sobre tu cuenta" icon={<AlertTriangle className="w-5 h-5" />}>
+                {!confirmDelete ? (
+                  <div className="bg-rose-50/80 border-2 border-rose-100 rounded-2xl p-4 flex flex-col gap-3">
+                    <div>
+                      <p className="text-sm font-black text-rose-700">Eliminar mi cuenta</p>
+                      <p className="text-xs text-rose-500 mt-0.5">
+                        Se desactivará tu cuenta y perfil público de forma permanente.
+                      </p>
                     </div>
-                    <p className="text-xs font-bold text-slate-600 mb-1.5">
-                      Escribe <span className="font-black text-rose-600">{profile?.user_username}</span> para confirmar:
-                    </p>
-                    <input
-                      value={deleteInput}
-                      onChange={e => setDeleteInput(e.target.value)}
-                      placeholder={profile?.user_username}
-                      className="w-full bg-white border-2 border-rose-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-300 px-3.5 py-2.5 focus:outline-none focus:border-rose-400 transition-all duration-200"
-                    />
-                  </div>
-                  <div className="flex gap-2">
                     <button
-                      onClick={() => { setConfirmDelete(false); setDeleteInput(""); }}
-                      className="flex-1 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                      onClick={() => setConfirmDelete(true)}
+                      className="w-full py-2.5 bg-rose-500 text-white text-xs font-bold rounded-xl shadow-md shadow-rose-200 hover:bg-rose-600 active:scale-[0.97] transition-all duration-200 flex items-center justify-center gap-2"
                     >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={deleteAccount}
-                      disabled={deleteInput !== profile?.user_username || deleting}
-                      className="flex-1 py-2.5 text-xs font-bold text-white bg-rose-500 hover:bg-rose-600 rounded-xl shadow-md shadow-rose-200 active:scale-[0.97] transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                      {deleting ? (
-                        <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                      ) : (
-                        <><Trash2 className="w-3.5 h-3.5" /> Confirmar</>
-                      )}
+                      <Trash2 className="w-4 h-4" />
+                      Eliminar cuenta
                     </button>
                   </div>
-                </div>
-              )}
-            </Section>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4">
+                      <div className="flex items-start gap-2.5 mb-3">
+                        <AlertTriangle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-black text-rose-700">¿Estás absolutamente seguro?</p>
+                          <p className="text-[11px] text-rose-500 mt-0.5 leading-relaxed">
+                            Esta acción no se puede deshacer fácilmente. Tu perfil dejará de ser visible para estudiantes.
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-xs font-bold text-slate-600 mb-1.5">
+                        Escribe <span className="font-black text-rose-600">{profile?.user_username}</span> para confirmar:
+                      </p>
+                      <input
+                        value={deleteInput}
+                        onChange={e => setDeleteInput(e.target.value)}
+                        placeholder={profile?.user_username}
+                        className="w-full bg-white border-2 border-rose-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-300 px-3.5 py-2.5 focus:outline-none focus:border-rose-400 transition-all duration-200"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setConfirmDelete(false); setDeleteInput(""); }}
+                        className="flex-1 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={deleteAccount}
+                        disabled={deleteInput !== profile?.user_username || deleting}
+                        className="flex-1 py-2.5 text-xs font-bold text-white bg-rose-500 hover:bg-rose-600 rounded-xl shadow-md shadow-rose-200 active:scale-[0.97] transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {deleting ? (
+                          <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          <><Trash2 className="w-3.5 h-3.5" /> Confirmar</>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </Section>
 
+            </div>
           </div>
-        </div>
 
+        </div>
       </div>
-    </div>
-    <ChipiWidget screenName="teacher_profile" />
+      <ChipiWidget screenName="teacher_profile" />
     </>
   );
 }

@@ -10,10 +10,7 @@ import { Wallet as WalletIcon, TrendingUp, CheckCircle2, X, Loader2, ArrowDownLe
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
 
-const { catalogs } = useSystemCatalogs();
-const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
-const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
-const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
+
 
 const STATUS_BADGE: Record<string, 'warning' | 'success' | 'danger' | 'info'> = {
   pending: 'warning',
@@ -185,6 +182,10 @@ function RequestWithdrawalModal({
 }
 
 export default function WalletPage() {
+  const { catalogs } = useSystemCatalogs();
+  const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
+  const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
+  const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
   const { wallet, loading: wBalanceLoading, isFetching: wFetching, refetch: refetchWallet } = useWallet()
   const { withdrawals, loading: wLoading, refetch: refetchW } = useMyWithdrawals()
   const { income, loading: iLoading, refetch: refetchI } = useMyIncome()
