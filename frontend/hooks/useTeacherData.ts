@@ -153,21 +153,23 @@ export function useMyIncome() {
   return { income, loading, refetch: fetch }
 }
 
+// ─── Estudiantes del profesor (detalle completo) ─────────────────────────────
 export function useTeacherStudentsFull() {
-  const [students, setStudents] = useState<TeacherStudentFull[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
+  const query = useQuery({
+    queryKey: ["teacher", "students"],
+    queryFn: async () => {
       const res = await api.get('/teachers/me/students-full')
-      setStudents(res.data)
-    } catch { }
-    finally { setLoading(false) }
-  }, [])
+      return res.data as TeacherStudentFull[]
+    },
+  })
 
-  useEffect(() => { fetch() }, [fetch])
-  return { students, loading, refetch: fetch }
+  return {
+    students: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }
 
 // ─── Clases del profesor ─────────────────────────────────────────────────────
@@ -308,3 +310,4 @@ export function useCalendarStatus() {
   useEffect(() => { fetch() }, [fetch])
   return { status, loading, refetch: fetch }
 }
+

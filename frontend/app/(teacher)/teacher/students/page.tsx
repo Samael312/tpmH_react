@@ -4,11 +4,16 @@ import { useState, useMemo } from "react";
 import {
   Search, Users, Mail, Phone, ChevronDown, BookOpen,
   GraduationCap, Package as PackageIcon, Filter, X, Sliders,
+  AlertTriangle, RefreshCw,
 } from "lucide-react";
 import { useTeacherStudentsFull, TeacherStudentFull } from "@/hooks/useTeacherData";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { SUBJECTS, LANGUAGES } from "@/lib/teacherOptions";
 import { getFlagForNationality } from "@/lib/nationalities";
+import Skeleton from "@/components/ui/Skeleton";
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
+import { usePageTopBar } from "@/lib/mobileTopBar";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "Todos los estados" },
@@ -211,7 +216,13 @@ function StudentCard({ student }: { student: TeacherStudentFull }) {
 }
 
 export default function TeacherStudentsPage() {
-  const { students, loading } = useTeacherStudentsFull();
+  const { students, loading, isFetching, isError, refetch } = useTeacherStudentsFull();
+
+  usePageTopBar({
+    title: "Mis Estudiantes",
+    onRefresh: refetch,
+    isFetching,
+  });
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -266,6 +277,29 @@ export default function TeacherStudentsPage() {
     (subjectFilter !== "all" ? 1 : 0) +
     (progressMin > 0 || progressMax < 100 ? 1 : 0);
 
+  if (isError && !loading) {
+    return (
+      <>
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4 text-center px-4">
+          <div className="w-14 h-14 bg-rose-100 rounded-full flex items-center justify-center">
+            <AlertTriangle className="w-7 h-7 text-rose-500" />
+          </div>
+          <div>
+            <p className="text-lg font-black text-slate-800">No se pudieron cargar tus estudiantes</p>
+            <p className="text-sm text-slate-500 mt-1">Revisa tu conexión e inténtalo de nuevo.</p>
+          </div>
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-2 px-5 py-2.5 bg-pink-500 hover:bg-pink-600 text-white text-sm font-bold rounded-xl shadow-sm transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" /> Reintentar
+          </button>
+        </div>
+        <ChipiWidget screenName="teacher_students" />
+      </>
+    );
+  }
+
   return (
     <>
     <div className="min-h-screen bg-slate-50 relative overflow-hidden">
@@ -282,6 +316,9 @@ export default function TeacherStudentsPage() {
               {loading ? "Cargando..." : `${students.length} estudiante${students.length !== 1 ? "s" : ""} asignado${students.length !== 1 ? "s" : ""}`}
             </p>
           </div>
+          <DesktopOnly>
+            <RefreshButton onRefresh={refetch} isFetching={isFetching} />
+          </DesktopOnly>
         </div>
 
         {/* Buscador + toggle de filtros */}
@@ -401,7 +438,7 @@ export default function TeacherStudentsPage() {
         {loading ? (
           <div className="space-y-3">
             {[1, 2, 3].map(i => (
-              <div key={i} className="h-24 bg-white rounded-2xl animate-pulse" />
+              <Skeleton key={i} className="h-24 w-full rounded-2xl" />
             ))}
           </div>
         ) : filtered.length === 0 ? (

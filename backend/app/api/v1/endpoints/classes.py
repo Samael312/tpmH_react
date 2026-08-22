@@ -30,7 +30,9 @@ from app.core.class_logic import (
     can_reschedule_class,
     update_enrollment_counter,
     finalize_past_classes,
-    class_counts_towards_package
+    class_counts_towards_package,
+    cancel_class_and_refund,
+    validate_class_duration
 )
 from app.core.timezone import UTC, utc_now, format_local_datetime
 from app.db.base import get_db
@@ -231,46 +233,28 @@ def cancel_class_student(
 ):
     class_ = _get_class_or_404(db, class_id, student_id=current_user.student_profile.id)
 
-    can_cancel, error_msg = can_cancel_class(class_, current_user.id)
+    can_cancel, error_msg = can_cancel_class(class_, current_user.id, db)
     if not can_cancel:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error_msg
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
 
-    old_status = class_.status
-    old_counts = class_counts_towards_package(old_status, class_.start_time_utc)
-
-    class_.status = "cancelled"
-
-    counts_as_used = class_counts_towards_package("cancelled", class_.start_time_utc)
-    credit_returned = not counts_as_used
-
-    if credit_returned:
-        if class_.used_prepaid_credit and class_.enrollment_id:
-            enrollment = db.query(Enrollment).filter(Enrollment.id == class_.enrollment_id).first()
-            if enrollment:
-                enrollment.prepaid_unlimited_credits += 1
-            class_.used_prepaid_credit = False
-        elif class_.class_type == ClassType.regular and class_.enrollment_id and old_counts:
-            update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
-
+    # El estudiante SÍ está sujeto a la penalización de 12h (aunque en la
+    # práctica can_cancel_class ya bloqueó la cancelación tardía antes).
+    cancel_class_and_refund(class_, db, apply_late_cancel_penalty=True)
     db.commit()
 
-    # Notificar al profesor
-    student_user = current_user
     teacher = db.query(TeacherProfile).filter(TeacherProfile.id == class_.teacher_id).first()
     if teacher and teacher.user:
         send_class_cancelled_teacher_email(
-                to_email=teacher.user.email,
-                teacher_name=teacher.user.name,
-                student_name=f"{student_user.name} {student_user.surname}",
-                class_start_local=format_local_datetime(class_.start_time_utc, teacher.timezone),  # ✅
-                cancelled_by="student",
-            )
+            to_email=teacher.user.email,
+            teacher_name=teacher.user.name,
+            student_name=f"{current_user.name} {current_user.surname}",
+            class_start_local=format_local_datetime(class_.start_time_utc, teacher.timezone),
+            cancelled_by="student",
+        )
 
     _sync_google_calendar_cancelled(class_.teacher_id, class_.google_event_id, db)
     return {"message": "Clase cancelada exitosamente"}
+
 
 
 @router.patch("/{class_id}/reschedule", response_model=ClassResponse)
@@ -283,7 +267,7 @@ def reschedule_class_student(
     student_id = current_user.student_profile.id
     class_ = _get_class_or_404(db, class_id, student_id=student_id)
 
-    can_reschedule, error_msg = can_reschedule_class(class_, role="student")
+    can_reschedule, error_msg = can_reschedule_class(class_, role="student", db=db)
     if not can_reschedule:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -350,6 +334,11 @@ def book_trial_class(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Estudiante no encontrado"
         )
+
+    can_duration, duration_msg = validate_class_duration(data.duration_minutes, db)
+
+    if not can_duration:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=duration_msg)
 
     can_book, error_msg = can_book_slot(
         start_time_utc=data.start_time_utc,
@@ -496,6 +485,7 @@ def update_class_status(
     return _build_class_response(class_, db)
 
 
+# ─── Profesor ────────────────────────────────────────────────────────
 @router.delete("/teacher/{class_id}")
 def cancel_class_teacher(
     class_id: int,
@@ -503,7 +493,9 @@ def cancel_class_teacher(
     db: Session = Depends(get_db)
 ):
     """
-    El profesor cancela una clase. El crédito siempre se le reembolsa al estudiante.
+    El profesor cancela una clase. El crédito SIEMPRE se le reembolsa
+    al estudiante, sin importar la antelación — la penalización de 12h
+    es exclusivamente para cancelaciones hechas por el propio estudiante.
     """
     class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
 
@@ -513,26 +505,10 @@ def cancel_class_teacher(
             detail="La clase ya se encuentra cancelada"
         )
 
-    old_status = class_.status
-    old_counts = class_counts_towards_package(old_status, class_.start_time_utc)
-
-    class_.status = "cancelled"
-
-    counts_as_used = class_counts_towards_package("cancelled", class_.start_time_utc)
-    credit_returned = not counts_as_used
-
-    if credit_returned:
-        if class_.used_prepaid_credit and class_.enrollment_id:
-            enrollment = db.query(Enrollment).filter(Enrollment.id == class_.enrollment_id).first()
-            if enrollment:
-                enrollment.prepaid_unlimited_credits += 1
-            class_.used_prepaid_credit = False
-        elif class_.class_type == ClassType.regular and class_.enrollment_id and old_counts:
-            update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
-
+    cancel_class_and_refund(class_, db, apply_late_cancel_penalty=False)
     db.commit()
 
-    # Notificar al estudiante
+    # Notificar al estudiante (antes faltaba este email por completo)
     student = db.query(StudentProfile).filter(StudentProfile.id == class_.student_id).first()
     if student and student.user:
         send_class_cancelled_email(
@@ -541,7 +517,7 @@ def cancel_class_teacher(
             teacher_name=f"{current_user.name} {current_user.surname}",
             class_start_local=format_local_datetime(class_.start_time_utc, student.timezone),
             cancelled_by="teacher",
-            credit_returned=credit_returned,
+            credit_returned=True,
         )
 
     _sync_google_calendar_cancelled(class_.teacher_id, class_.google_event_id, db)
@@ -557,7 +533,7 @@ def reschedule_class_teacher(
 ):
     class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
 
-    can_reschedule, error_msg = can_reschedule_class(class_, role="teacher")
+    can_reschedule, error_msg = can_reschedule_class(class_, role="teacher", db=db)
     if not can_reschedule:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -680,6 +656,54 @@ def cancel_class_admin(
             class_start_local=format_local_datetime(class_.start_time_utc, student.timezone),
             cancelled_by="staff",
             credit_returned=credit_returned,
+        )
+
+    if teacher and teacher.user:
+        student_name = f"{student.user.name} {student.user.surname}" if student and student.user else "Estudiante"
+        send_class_cancelled_teacher_email(
+            to_email=teacher.user.email,
+            teacher_name=teacher.user.name,
+            student_name=student_name,
+            class_start_local=format_local_datetime(class_.start_time_utc, teacher.timezone),
+            cancelled_by="staff",
+        )
+
+    _sync_google_calendar_cancelled(class_.teacher_id, class_.google_event_id, db)
+    return {"message": "Clase cancelada por administración. Crédito reembolsado."}# ─── Admin/Staff ─────────────────────────────────────────────────────
+
+@router.delete("/admin/{class_id}")
+def cancel_class_admin(
+    class_id: int,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db)
+):
+    """
+    El staff/admin cancela una clase. El crédito SIEMPRE se reembolsa,
+    igual que en la cancelación del profesor.
+    """
+    class_ = _get_class_or_404(db, class_id)
+
+    if class_.status == "cancelled":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La clase ya se encuentra cancelada"
+        )
+
+    cancel_class_and_refund(class_, db, apply_late_cancel_penalty=False)
+    db.commit()
+
+    student = db.query(StudentProfile).filter(StudentProfile.id == class_.student_id).first()
+    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == class_.teacher_id).first()
+
+    if student and student.user:
+        teacher_name = f"{teacher.user.name} {teacher.user.surname}" if teacher and teacher.user else "Profesor"
+        send_class_cancelled_email(
+            to_email=student.user.email,
+            student_name=student.user.name,
+            teacher_name=teacher_name,
+            class_start_local=format_local_datetime(class_.start_time_utc, student.timezone),
+            cancelled_by="staff",
+            credit_returned=True,
         )
 
     if teacher and teacher.user:

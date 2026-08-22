@@ -20,8 +20,8 @@ class BookClassRequest(BaseModel):
     @field_validator("duration_minutes")
     @classmethod
     def validate_duration(cls, v):
-        if v not in ALLOWED_DURATIONS:
-            raise ValueError(f"Duración inválida. Opciones: {ALLOWED_DURATIONS}")
+        if v < 15 or v > 240:
+            raise ValueError("Duración fuera de rango razonable (15-240 min)")
         return v
 
 
@@ -41,7 +41,7 @@ class BookTrialRequest(BaseModel):
     @field_validator("duration_minutes")
     @classmethod
     def validate_duration(cls, v):
-        if v not in ALLOWED_DURATIONS:
+        if v < 15 or v > 240:
             raise ValueError(f"Duración inválida. Opciones: {ALLOWED_DURATIONS}")
         return v
 

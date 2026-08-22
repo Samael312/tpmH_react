@@ -13,7 +13,11 @@ from app.auth.dependencies import (
     get_current_student,
     get_current_teacher_or_teacher_admin,
 )
-from app.core.class_logic import can_book_slot, get_student_booking_stage
+from app.core.class_logic import (
+    can_book_slot, 
+    get_student_booking_stage,
+    validate_class_duration,
+    )
 from app.core.email import (
     send_class_booking_confirmation,
     send_class_confirmed_email,
@@ -474,6 +478,10 @@ def book_class(
     if not enrollment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado o no activo")
 
+    can_duration, duration_msg = validate_class_duration(data.duration_minutes, db)
+    if not can_duration:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, duration_msg)
+    
     _sync_student_teacher_username(current_user, enrollment.teacher, db)
 
     day_of_week = DAYS_ES[data.start_time_utc.weekday()]
@@ -487,6 +495,7 @@ def book_class(
             Class.enrollment_id == enrollment.id,
             Class.status != "cancelled",
         ).count()
+
         if occupied_slots >= enrollment.unlocked_credits:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "No tienes créditos disponibles todavía")
 

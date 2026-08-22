@@ -13,7 +13,7 @@ from app.models.class_ import Class
 from app.models.student import StudentProfile
 from app.models.user import User
 from app.core.timezone import utc_now, format_local_datetime
-from app.core.class_logic import finalize_past_classes
+from app.core.class_logic import finalize_past_classes, get_business_rules
 from app.core.google_calendar import run_calendar_sync_for_all_teachers
 from app.core.email import send_class_reminder_email, send_class_reminder_teacher_email
 
@@ -161,6 +161,10 @@ async def notify_low_credit_packages():
     db: Session = SessionLocal()
     try:
         now = utc_now()
+        rules = get_business_rules(db)
+        low_credit_threshold = rules["low_credit_threshold"]
+        low_credit_renotify_days = rules["low_credit_renotify_days"]
+
         enrollments = db.query(Enrollment).filter(
             Enrollment.status == EnrollmentStatus.active,
             Enrollment.payment_status.in_(["paid", "partially_paid"]),
@@ -169,18 +173,14 @@ async def notify_low_credit_packages():
         sent = 0
         for e in enrollments:
             is_unlimited = e.package.classes_count is None if e.package else False
+            remaining = (e.prepaid_unlimited_credits or 0) if is_unlimited else max((e.unlocked_credits or 0) - (e.classes_used or 0), 0)
 
-            if is_unlimited:
-                remaining = e.prepaid_unlimited_credits or 0
-            else:
-                remaining = max((e.unlocked_credits or 0) - (e.classes_used or 0), 0)
-
-            if remaining > LOW_CREDIT_THRESHOLD:
+            if remaining > low_credit_threshold:
                 continue
 
             already_notified_recently = (
                 e.low_credit_notified_at is not None
-                and (now - e.low_credit_notified_at) < timedelta(days=LOW_CREDIT_RENOTIFY_DAYS)
+                and (now - e.low_credit_notified_at) < timedelta(days=low_credit_renotify_days)
             )
             if already_notified_recently:
                 continue

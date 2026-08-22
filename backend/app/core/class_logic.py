@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.models.class_ import Class, ClassType
 from app.models.package import Enrollment, EnrollmentStatus
 from app.models.payment import Payment
+from app.models.payment_config import PlatformConfig
 from app.models.student import StudentProfile
 from app.models.teacher import TeacherProfile
 from app.core.timezone import utc_now, UTC
@@ -12,19 +13,44 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# ─── Constantes de negocio ──────────────────────────────────────────────────
-
-# Mínimo de horas de antelación para agendar una clase
+# ─── Fallbacks (usados solo si platform_config aún no tiene fila) ───────────
 MIN_BOOKING_HOURS = 1
-
-# Mínimo de horas de antelación para cancelar sin penalización
 MIN_CANCEL_HOURS = 12
-
-# Mínimo de horas de antelación para reagendar (para estudiantes)
 MIN_RESCHEDULE_HOURS_STUDENT = 12
+MIN_RESCHEDULE_HOURS_STAFF = 0
 
-# Para staff (admin) no aplican restricciones de tiempo para reagendar
-MIN_RESCHEDULE_HOURS_STAFF = 0 
+def get_business_rules(db: Session) -> dict:
+    """
+    Lee las reglas de negocio configuradas por el superadmin desde
+    PlatformConfig. Si no hay fila aún, cae a los defaults de arriba.
+    """
+    config = db.query(PlatformConfig).first()
+    if not config:
+        return {
+            "min_booking_hours": MIN_BOOKING_HOURS,
+            "min_cancel_hours": MIN_CANCEL_HOURS,
+            "min_reschedule_hours_student": MIN_RESCHEDULE_HOURS_STUDENT,
+            "allowed_class_durations": [30, 60, 90],
+            "allowed_package_durations": [30, 60],
+            "low_credit_threshold": 1,
+            "low_credit_renotify_days": 6,
+        }
+    return {
+        "min_booking_hours": config.min_booking_hours or MIN_BOOKING_HOURS,
+        "min_cancel_hours": config.min_cancel_hours or MIN_CANCEL_HOURS,
+        "min_reschedule_hours_student": config.min_reschedule_hours_student or MIN_RESCHEDULE_HOURS_STUDENT,
+        "allowed_class_durations": config.allowed_class_durations or [30, 60, 90],
+        "allowed_package_durations": config.allowed_package_durations or [30, 60],
+        "low_credit_threshold": config.low_credit_threshold or 1,
+        "low_credit_renotify_days": config.low_credit_renotify_days or 6,
+    }
+
+def validate_class_duration(duration_minutes: int, db: Session) -> tuple[bool, str]:
+    rules = get_business_rules(db)
+    allowed = rules["allowed_class_durations"]
+    if duration_minutes not in allowed:
+        return False, f"Duración inválida. Opciones permitidas: {allowed}"
+    return True, ""
 
 
 # ─── Validaciones ───────────────────────────────────────────────────────────
@@ -34,21 +60,15 @@ def can_book_slot(
     teacher_id: int,
     student_id: int,
     db: Session,
-    exclude_class_id: int = None,  # Para reagendamiento
+    exclude_class_id: int = None,
 ) -> tuple[bool, str]:
-    """
-    Verifica si un slot puede ser agendado.
-    Retorna (puede_agendar, mensaje_de_error)
-    """
-
     now = utc_now()
+    rules = get_business_rules(db)
 
-    # 1. No se puede agendar en el pasado
-    if start_time_utc < now + timedelta(hours=MIN_BOOKING_HOURS):
-        return False, f"Debes agendar con al menos {MIN_BOOKING_HOURS} hora de antelación"
+    if start_time_utc < now + timedelta(hours=rules["min_booking_hours"]):
+        return False, f"Debes agendar con al menos {rules['min_booking_hours']} hora(s) de antelación"
 
-    # 2. Verificar que el profesor no tiene clase en ese horario
-    end_approx = start_time_utc + timedelta(hours=3)  # Margen amplio
+    end_approx = start_time_utc + timedelta(hours=3)
 
     query = db.query(Class).filter(
         Class.teacher_id == teacher_id,
@@ -58,12 +78,9 @@ def can_book_slot(
     )
     if exclude_class_id:
         query = query.filter(Class.id != exclude_class_id)
-
-    teacher_conflict = query.first()
-    if teacher_conflict:
+    if query.first():
         return False, "El profesor ya tiene una clase en ese horario"
 
-    # 3. Verificar que el estudiante no tiene clase en ese horario
     query_student = db.query(Class).filter(
         Class.student_id == student_id,
         Class.start_time_utc < end_approx,
@@ -72,9 +89,7 @@ def can_book_slot(
     )
     if exclude_class_id:
         query_student = query_student.filter(Class.id != exclude_class_id)
-
-    student_conflict = query_student.first()
-    if student_conflict:
+    if query_student.first():
         return False, "Ya tienes una clase en ese horario"
 
     return True, ""
@@ -83,23 +98,19 @@ def can_book_slot(
 def can_cancel_class(
     class_: Class,
     requesting_user_id: int,
+    db: Session,
 ) -> tuple[bool, str]:
-    """
-    Verifica si una clase puede ser cancelada.
-    Retorna (puede_cancelar, mensaje_de_error)
-    """
     now = utc_now()
+    rules = get_business_rules(db)
 
-    # Solo pending o confirmed se pueden cancelar
     if class_.status not in ["pending", "pending_trial", "confirmed"]:
         return False, f"No se puede cancelar una clase con estado '{class_.status}'"
 
-    # Verificar antelación mínima (solo para estudiantes)
     time_until_class = class_.start_time_utc - now
-    if time_until_class < timedelta(hours=MIN_CANCEL_HOURS):
+    if time_until_class < timedelta(hours=rules["min_cancel_hours"]):
         hours_left = int(time_until_class.total_seconds() / 3600)
         return False, (
-            f"Solo puedes cancelar con {MIN_CANCEL_HOURS}h de antelación. "
+            f"Solo puedes cancelar con {rules['min_cancel_hours']}h de antelación. "
             f"Quedan {hours_left}h para la clase. Contacta al profesor."
         )
 
@@ -108,28 +119,24 @@ def can_cancel_class(
 
 def can_reschedule_class(
     class_: Class,
-    role: str,  # "student", "teacher", "superadmin"
+    role: str,
+    db: Session,
 ) -> tuple[bool, str]:
-    """
-    Verifica si una clase puede ser reagendada según el rol.
-    - Estudiante: mínimo 12h de antelación
-    - Profesor / Superadmin: sin restricción de tiempo
-    """
     now = utc_now()
+    rules = get_business_rules(db)
 
     if class_.status not in ["pending", "pending_trial", "confirmed"]:
         return False, f"No se puede reagendar una clase con estado '{class_.status}'"
 
     if role == "student":
         time_until_class = class_.start_time_utc - now
-        if time_until_class < timedelta(hours=MIN_RESCHEDULE_HOURS_STUDENT):
+        if time_until_class < timedelta(hours=rules["min_reschedule_hours_student"]):
             hours_left = int(time_until_class.total_seconds() / 3600)
             return False, (
-                f"Solo puedes reagendar con {MIN_RESCHEDULE_HOURS_STUDENT}h "
+                f"Solo puedes reagendar con {rules['min_reschedule_hours_student']}h "
                 f"de antelación. Quedan {hours_left}h para la clase."
             )
 
-    # Profesores y superadmin pueden reagendar sin restricción de tiempo
     return True, ""
 
 
@@ -284,19 +291,75 @@ def class_counts_towards_package(
     class_status: str,
     start_time_utc: datetime,
     reference_time: datetime | None = None,
+    apply_late_cancel_penalty: bool = True,
 ) -> bool:
     """
     Determina si una clase en este estado debe contarse contra el
     paquete del estudiante (classes_used).
 
     - completed / no_show: siempre cuenta.
-    - cancelled: solo cuenta si fue una cancelación tardía
-      (menos de MIN_CANCEL_HOURS antes del inicio de la clase).
-    - cualquier otro estado (pending, confirmed, etc.): no cuenta.
+    - cancelled: cuenta solo si apply_late_cancel_penalty=True Y fue una
+      cancelación tardía (menos de MIN_CANCEL_HOURS antes del inicio).
+      Cuando el profesor o el staff cancelan, apply_late_cancel_penalty
+      debe ser False — la penalización por antelación solo es
+      responsabilidad del estudiante, nunca de la plataforma.
+    - cualquier otro estado (pending, confirmed, expired, etc.): no cuenta.
     """
     if class_status in TERMINAL_COUNTING_STATUSES:
         return True
     if class_status == "cancelled":
+        if not apply_late_cancel_penalty:
+            return False
         ref = reference_time or utc_now()
         return (start_time_utc - ref) < timedelta(hours=MIN_CANCEL_HOURS)
     return False
+
+def cancel_class_and_refund(
+    class_: "Class",
+    db: Session,
+    apply_late_cancel_penalty: bool,
+) -> bool:
+    """
+    Marca la clase como cancelada y devuelve el crédito al estudiante
+    si corresponde. Centraliza la lógica que antes estaba duplicada en
+    los 3 endpoints de cancelación (estudiante, profesor, admin).
+
+    apply_late_cancel_penalty:
+        - True  → se usa para cancelaciones del ESTUDIANTE: si cancela
+          con menos de 12h de antelación, no recupera el crédito.
+          (En la práctica esto casi nunca se dispara porque
+          can_cancel_class ya bloquea la cancelación tardía del
+          estudiante antes de llegar aquí.)
+        - False → se usa para profesor/admin: el crédito SIEMPRE se
+          devuelve, sin importar cuán cerca esté la clase. Ellos no
+          deben aplicar una penalización pensada para el estudiante.
+
+    No hace commit — el caller decide cuándo confirmar la transacción.
+    Retorna True si el crédito fue devuelto.
+    """
+    old_status = class_.status
+    old_counts = class_counts_towards_package(
+        old_status, class_.start_time_utc,
+        apply_late_cancel_penalty=apply_late_cancel_penalty,
+    )
+
+    class_.status = "cancelled"
+
+    counts_as_used = class_counts_towards_package(
+        "cancelled", class_.start_time_utc,
+        apply_late_cancel_penalty=apply_late_cancel_penalty,
+    )
+    credit_returned = not counts_as_used
+
+    if credit_returned:
+        if class_.used_prepaid_credit and class_.enrollment_id:
+            enrollment = db.query(Enrollment).filter(
+                Enrollment.id == class_.enrollment_id
+            ).first()
+            if enrollment:
+                enrollment.prepaid_unlimited_credits += 1
+            class_.used_prepaid_credit = False
+        elif class_.class_type == ClassType.regular and class_.enrollment_id and old_counts:
+            update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
+
+    return credit_returned

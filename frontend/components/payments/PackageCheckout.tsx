@@ -38,6 +38,7 @@ export default function PackageCheckout({
   onDone,
 }: PackageCheckoutProps) {
   const isUnlimited = pkg.classes_count == null;
+  const isChange = mode === "change";
   const [creditsRequested, setCreditsRequested] = useState(5);
   const [useInstallments, setUseInstallments] = useState(installmentsPaid > 0);
   const [reference, setReference] = useState("");
@@ -52,11 +53,32 @@ export default function PackageCheckout({
     pkg.installment_amount ??
     Math.round((pkg.price / (pkg.installment_count || 1)) * 100) / 100;
 
+  // ─── Cambio de paquete: solo se cobra la diferencia de clases ───
+  // Los créditos que el estudiante ya tiene disponibles cubren parte
+  // (o todo) del nuevo paquete. Nunca admite cuotas — coincide con la
+  // lógica de backend en /payments/notify-payment (type=package_change).
+  const pricePerClass =
+    !isUnlimited && pkg.classes_count ? pkg.price / pkg.classes_count : 0;
+
+  const changeDeficit =
+    isChange && !isUnlimited && pkg.classes_count != null
+      ? Math.max(pkg.classes_count - (currentCredits ?? 0), 0)
+      : null;
+
+  const changeAmount =
+    changeDeficit !== null
+      ? Math.round(changeDeficit * pricePerClass * 100) / 100
+      : null;
+
   const amount = isUnlimited
     ? Math.round(creditsRequested * pkg.price * 100) / 100
-    : (useInstallments || alreadyMidInstallments)
-      ? installmentAmountCalculated
-      : pkg.price;
+    : isChange && changeAmount !== null
+      ? changeAmount
+      : (useInstallments || alreadyMidInstallments)
+        ? installmentAmountCalculated
+        : pkg.price;
+
+  const noAdditionalCost = isChange && changeDeficit === 0;
 
   const notify = async () => {
     setSending(true);
@@ -67,7 +89,7 @@ export default function PackageCheckout({
         type: typeMap[mode],
         enrollment_id: enrollmentId ?? undefined,
         package_id: pkg.id,
-        installment_index: useInstallments || alreadyMidInstallments ? nextIndex : null,
+        installment_index: !isChange && (useInstallments || alreadyMidInstallments) ? nextIndex : null,
         transaction_reference: reference.trim() || undefined,
       });
       setDone(true);
@@ -125,6 +147,21 @@ export default function PackageCheckout({
             </div>
           </div>
 
+          {isChange && changeDeficit !== null && (
+            <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs font-bold text-blue-700 space-y-1">
+              {noAdditionalCost ? (
+                <p>Tus créditos actuales ya cubren este paquete — no hay costo adicional.</p>
+              ) : (
+                <p>
+                  Solo pagas la diferencia:{" "}
+                  <span className="font-black">{changeDeficit}</span> clase
+                  {changeDeficit !== 1 ? "s" : ""} faltante{changeDeficit !== 1 ? "s" : ""} para
+                  completar el paquete <span className="font-black">{pkg.name}</span>.
+                </p>
+              )}
+            </div>
+          )}
+
           {isUnlimited ? (
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
@@ -143,7 +180,7 @@ export default function PackageCheckout({
                 <span className="text-xs font-bold text-slate-400">clases</span>
               </div>
             </div>
-          ) : pkg.allow_installments && !alreadyMidInstallments && (
+          ) : pkg.allow_installments && !alreadyMidInstallments && !isChange && (
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
                 Modalidad de pago
@@ -165,7 +202,7 @@ export default function PackageCheckout({
             </div>
           )}
 
-          {!isUnlimited && alreadyMidInstallments && (
+          {!isUnlimited && !isChange && alreadyMidInstallments && (
             <div className="bg-amber-50 border border-amber-200/60 rounded-xl px-4 py-3 text-xs font-bold text-amber-800 flex items-center justify-between">
               <span>Pagando cuota en curso</span>
               <span className="bg-amber-200/60 px-2 py-0.5 rounded-md text-[11px]">
@@ -178,9 +215,11 @@ export default function PackageCheckout({
             <p className="text-[10px] font-black text-pink-500 uppercase tracking-widest mb-1">
               {isUnlimited
                 ? `Total por ${creditsRequested} clase${creditsRequested !== 1 ? "s" : ""}`
-                : useInstallments || alreadyMidInstallments
-                  ? `Monto de la cuota ${alreadyMidInstallments ? nextIndex : 1}`
-                  : "Monto total a transferir"}
+                : isChange
+                  ? "Monto a transferir (clases faltantes)"
+                  : useInstallments || alreadyMidInstallments
+                    ? `Monto de la cuota ${alreadyMidInstallments ? nextIndex : 1}`
+                    : "Monto total a transferir"}
             </p>
             <p className="text-3xl font-black text-pink-600">${amount.toFixed(2)} USD</p>
           </div>
