@@ -24,7 +24,44 @@ interface PlatformConfig {
   platform_tagline: string | null
   is_single_tenant: boolean
   featured_teacher: any
-  featured_teacher_username?: string // NUEVO: Estado para controlar el input
+  featured_teacher_username?: string
+}
+
+function CatalogEditor({ catalogKey, label, items, onSave }: {
+  catalogKey: string; label: string; items: string[]; onSave: (v: string[]) => Promise<void>;
+}) {
+  const [list, setList] = useState(items)
+  const [input, setInput] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => setList(items), [items])
+
+  const add = () => { const v = input.trim(); if (v && !list.includes(v)) { setList([...list, v]); setInput('') } }
+  const remove = (v: string) => setList(list.filter(x => x !== v))
+  const save = async () => { setSaving(true); try { await onSave(list) } finally { setSaving(false) } }
+
+  return (
+    <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-3">
+      <p className="text-xs font-black text-slate-700">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {list.map(v => (
+          <span key={v} className="inline-flex items-center gap-1.5 bg-white border border-slate-200 text-xs font-bold text-slate-700 px-3 py-1.5 rounded-xl">
+            {v}
+            <button onClick={() => remove(v)} className="text-slate-300 hover:text-rose-400">✕</button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), add())}
+          placeholder="Añadir..." className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm" />
+        <button onClick={add} className="px-3 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-bold">+</button>
+        <button onClick={save} disabled={saving} className="px-4 bg-pink-500 hover:bg-pink-600 text-white rounded-xl text-xs font-bold disabled:opacity-50">
+          {saving ? '...' : 'Guardar'}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export default function SettingsPage() {
@@ -33,19 +70,37 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  // NUEVO: Estados para catálogos y reglas de negocio
+  const [catalogs, setCatalogs] = useState<Record<string, any>>({})
+  const [businessRules, setBusinessRules] = useState<any>(null)
+
   useEffect(() => {
     api.get('/payments/config').then(r => setPaymentConfig(r.data))
     
-    // NUEVO: Inicializamos el username a partir de los datos del backend
     api.get('/admin/platform-config').then(r => {
       setPlatformConfig({
         ...r.data,
         featured_teacher_username: r.data.featured_teacher?.username || ''
       })
     })
+
+    // NUEVO: Carga de catálogos y reglas del sistema
+    api.get('/system-catalogs/').then(r => setCatalogs(r.data))
+    api.get('/system-catalogs/business-rules').then(r => setBusinessRules(r.data))
   }, [])
 
-  // ... (El savePaymentConfig se queda igual)
+  // NUEVO: Funciones de guardado para catálogos y reglas de negocio
+  const saveCatalog = async (key: string, value: any) => {
+    await api.patch(`/system-catalogs/${key}`, { value })
+    const r = await api.get('/system-catalogs/')
+    setCatalogs(r.data)
+  }
+
+  const saveBusinessRules = async (patch: any) => {
+    const r = await api.patch('/system-catalogs/business-rules', patch)
+    setBusinessRules(r.data)
+  }
+
   const savePaymentConfig = async () => {
     setSaving(true)
     try {
@@ -62,7 +117,6 @@ export default function SettingsPage() {
   const savePlatformConfig = async () => {
     setSaving(true)
     try {
-      // NUEVO: Enviamos el username del profesor destacado al backend
       await api.patch('/admin/platform-config', {
         platform_name: platformConfig?.platform_name,
         platform_tagline: platformConfig?.platform_tagline,
@@ -70,7 +124,6 @@ export default function SettingsPage() {
         featured_teacher_username: platformConfig?.featured_teacher_username || null,
       })
       
-      // NUEVO: Recargamos los datos para que el frontend traiga el objeto "featured_teacher" completo (con su nombre y avatar)
       const r = await api.get('/admin/platform-config')
       setPlatformConfig({
         ...r.data,
@@ -455,7 +508,6 @@ export default function SettingsPage() {
                 </button>
               </div>
 
-              {/* NUEVO: Campo para asignar el profesor destacado */}
               {platformConfig.is_single_tenant && (
                 <div className="space-y-2 pt-2 animate-in fade-in slide-in-from-top-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
@@ -492,6 +544,62 @@ export default function SettingsPage() {
             <div className="h-32 bg-slate-50 rounded-2xl animate-pulse border border-slate-100" />
           )}
         </Card>
+
+        {/* ─── NUEVO: Catálogos del Sistema ─────────────────────────────────── */}
+        <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-6">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-1.5 h-6 bg-purple-400 rounded-full" />
+            <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+              Catálogos del Sistema
+            </h2>
+          </div>
+
+          <CatalogEditor catalogKey="subjects" label="Materias" items={catalogs.subjects ?? []}
+            onSave={v => saveCatalog('subjects', v)} />
+          <CatalogEditor catalogKey="languages" label="Idiomas" items={catalogs.languages ?? []}
+            onSave={v => saveCatalog('languages', v)} />
+          <CatalogEditor catalogKey="skill_suggestions" label="Habilidades sugeridas" items={catalogs.skill_suggestions ?? []}
+            onSave={v => saveCatalog('skill_suggestions', v)} />
+          <CatalogEditor catalogKey="material_categories" label="Categorías de materiales" items={catalogs.material_categories ?? []}
+            onSave={v => saveCatalog('material_categories', v)} />
+          <CatalogEditor catalogKey="material_levels" label="Niveles de materiales" items={catalogs.material_levels ?? []}
+            onSave={v => saveCatalog('material_levels', v)} />
+          <CatalogEditor catalogKey="package_icon_options" label="Iconos de paquetes" items={catalogs.package_icon_options ?? []}
+            onSave={v => saveCatalog('package_icon_options', v)} />
+        </Card>
+
+        {/* ─── NUEVO: Reglas de negocio ─────────────────────────────────────── */}
+        {businessRules && (
+          <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-5">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-1.5 h-6 bg-amber-400 rounded-full" />
+              <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                Reglas de negocio
+              </h2>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                { key: 'min_booking_hours', label: 'Horas mínimas para agendar' },
+                { key: 'min_cancel_hours', label: 'Horas mínimas para cancelar sin penalización' },
+                { key: 'min_reschedule_hours_student', label: 'Horas mínimas para reagendar (estudiante)' },
+                { key: 'low_credit_threshold', label: 'Umbral de crédito bajo' },
+                { key: 'low_credit_renotify_days', label: 'Días entre avisos de crédito bajo' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{f.label}</label>
+                  <input type="number" value={businessRules[f.key]}
+                    onChange={e => setBusinessRules({ ...businessRules, [f.key]: parseInt(e.target.value) || 0 })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold" />
+                </div>
+              ))}
+            </div>
+            <button onClick={() => saveBusinessRules(businessRules)}
+              className="px-6 py-2.5 bg-pink-500 hover:bg-pink-600 text-white rounded-xl text-sm font-bold">
+              Guardar reglas
+            </button>
+          </Card>
+        )}
+
       </div>
       
     </div>

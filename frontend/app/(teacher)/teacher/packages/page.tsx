@@ -8,10 +8,17 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
-import { SUBJECTS, LANGUAGES } from "@/lib/teacherOptions";
 import { getSuggestedTheme, ICON_PICKER_OPTIONS, DEFAULT_PACKAGE_THEME, priceLabelSuffix } from "@/lib/packageThemes";
 import { THEME_PRESETS } from "@/lib/color";
 import { useAuthStore } from "@/store/authStore";
+// in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
+import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
+import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
+
+const { catalogs } = useSystemCatalogs();
+const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
+const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
+const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
 
 interface Package {
   id: number;

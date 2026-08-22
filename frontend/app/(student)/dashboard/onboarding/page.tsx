@@ -14,6 +14,15 @@ import { useAuthStore } from "@/store/authStore";
 import { TIMEZONE_OPTIONS as TIMEZONES, TIMEZONE_TO_COUNTRY, DEFAULT_COUNTRY } from "@/lib/timezones";
 import { NATIONALITIES } from "@/lib/nationalities";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+// in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
+import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
+import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
+
+const { catalogs } = useSystemCatalogs();
+const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
+const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
+const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
+
 
 const GOALS = [
   { text: "Conversaciones cotidianas", desc: "Hablar de temas del día a día", icon: "🗣️" },

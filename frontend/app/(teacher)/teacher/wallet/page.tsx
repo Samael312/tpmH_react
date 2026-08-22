@@ -6,6 +6,14 @@ import { Card, Badge, RefreshButton, Skeleton } from '@/components/ui'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 import { Wallet as WalletIcon, TrendingUp, CheckCircle2, X, Loader2, ArrowDownLeft, ArrowUpRight } from 'lucide-react'
+// in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
+import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
+import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
+
+const { catalogs } = useSystemCatalogs();
+const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
+const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
+const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
 
 const STATUS_BADGE: Record<string, 'warning' | 'success' | 'danger' | 'info'> = {
   pending: 'warning',

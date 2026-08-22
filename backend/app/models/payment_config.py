@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from app.db.base import Base
+from sqlalchemy.dialects.postgresql import JSONB
 
 class PlatformConfig(Base):
     """
@@ -14,22 +15,23 @@ class PlatformConfig(Base):
     # Single-tenant: ID del profesor featured
     # None = modo multi-tenant (selección de profesor)
     # int  = modo single-tenant (profesor fijo)
-    featured_teacher_id = Column(
-        Integer,
-        ForeignKey("teacher_profiles.id"),
-        nullable=True
-    )
-
+    featured_teacher_id = Column(Integer,ForeignKey("teacher_profiles.id"),nullable=True)
     # Nombre de la plataforma (personalizable)
     platform_name = Column(String, default="TPMH")
     platform_tagline = Column(String, nullable=True)
-
     # Modo de la plataforma
     is_single_tenant = Column(Boolean, default=True)
     # True  → un solo profesor featured, flujo directo
     # False → múltiples profesores, flujo con selección
-
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    # ─── Reglas de negocio configurables ───
+    min_booking_hours = Column(Integer, default=1)
+    min_cancel_hours = Column(Integer, default=12)
+    min_reschedule_hours_student = Column(Integer, default=12)
+    allowed_class_durations = Column(JSONB, default=lambda: [30, 60, 90])
+    allowed_package_durations = Column(JSONB, default=lambda: [30, 60])
+    low_credit_threshold = Column(Integer, default=1)
+    low_credit_renotify_days = Column(Integer, default=6)
 
 # backend/app/models/payment_config.py
 class PaymentConfig(Base):

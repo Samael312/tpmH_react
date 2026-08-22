@@ -10,6 +10,14 @@ import { useAuthStore } from "@/store/authStore";
 import { COUNTRY_OPTIONS, DEFAULT_COUNTRY, parsePhoneNumber, CountryInfo } from "@/lib/timezones";
 import { NATIONALITIES, getFlagForNationality } from "@/lib/nationalities";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+// in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
+import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
+import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
+
+const { catalogs } = useSystemCatalogs();
+const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
+const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
+const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
 
 // ─── Helpers & Formateadores de Errores ──────────────────────────────────────
 function formatErrorMessage(error: any, fallbackMessage: string): string {

@@ -22,7 +22,13 @@ import {
   DEFAULT_COUNTRY,
 } from "@/lib/timezones";
 
-import { SUBJECTS, LANGUAGES, SKILL_SUGGESTIONS } from "@/lib/teacherOptions";
+import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
+import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
+
+const { catalogs } = useSystemCatalogs();
+const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
+const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
+const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
 
 const DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const AVAILABLE_HOURS = Array.from({ length: 16 }, (_, i) =>

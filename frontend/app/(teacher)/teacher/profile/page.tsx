@@ -14,10 +14,15 @@ import { useTeacherProfile, TeacherProfile } from "@/hooks/useTeacherData";
 import { useAuthStore } from "@/store/authStore";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import CalendarSync from "./CalendarSync";
-import { SUBJECTS, LANGUAGES, SKILL_SUGGESTIONS } from "@/lib/teacherOptions";
 import { COUNTRY_OPTIONS, DEFAULT_COUNTRY, parsePhoneNumber, CountryInfo, TIMEZONE_OPTIONS } from "@/lib/timezones";
 import { NATIONALITIES, getFlagForNationality } from "@/lib/nationalities";
+import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
+import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
 
+const { catalogs } = useSystemCatalogs();
+const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
+const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
+const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
 
 const MAX_VIDEO_SIZE_MB = 100;
 const ALLOWED_VIDEO_MIME_TYPES = ["video/mp4", "video/quicktime"];
