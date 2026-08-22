@@ -45,6 +45,7 @@ interface Teacher {
   commission_rate: number
   balance: number
   has_pending_appeal: boolean
+  video_url: string | null
   total_classes: number
   total_students: number
   created_at: string

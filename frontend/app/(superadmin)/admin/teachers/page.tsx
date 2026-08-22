@@ -380,6 +380,18 @@ export default function TeachersPage() {
                           <Badge variant={statusBadge[teacher.status] || 'neutral'} className="shadow-sm">
                             {statusLabel[teacher.status] || teacher.status}
                           </Badge>
+
+                          {teacher.status === 'pending' && (
+                            teacher.video_url ? (
+                              <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200 animate-pulse">
+                                <VideoIcon className="w-3 h-3" /> Video pendiente de revisión
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                                <VideoIcon className="w-3 h-3" /> Sin video subido
+                              </span>
+                            )
+                          )}
                           {teacher.status === 'rejected' && teacher.has_pending_appeal && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 animate-pulse">
                               Apelación pendiente
