@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarOff, CalendarPlus, Trash2, Plus,
   AlertTriangle, Check, Loader2
@@ -8,6 +9,7 @@ import {
 import api from "@/lib/api";
 import CalendarPicker from "@/components/layout/CalendarPicker";
 import { getMyDisplayTimezone } from "@/lib/tzFormat";
+import Skeleton from "@/components/ui/Skeleton";
 
 interface Exception {
   id: number;
@@ -19,8 +21,20 @@ interface Exception {
 }
 
 export default function ExceptionsSection() {
-  const [exceptions, setExceptions] = useState<Exception[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  const {
+    data: rawExceptions,
+    isLoading: loading,
+    isError,
+  } = useQuery({
+    queryKey: ["teacher", "availability", "exceptions"],
+    queryFn: async () => {
+      const res = await api.get("/availability/me/exceptions");
+      return res.data as Exception[];
+    },
+  });
+
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -37,35 +51,24 @@ export default function ExceptionsSection() {
   const [mode, setMode] = useState<"block" | "extra">("block");
   const [reason, setReason] = useState("");
 
-  const fetchExceptions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await api.get("/availability/me/exceptions");
-      
-      const now = new Date();
-      
-      // Filtramos las excepciones: validas (futuras/actuales) y pasadas
-      const validExceptions = res.data.filter((exc: Exception) => new Date(exc.end_time_utc) >= now);
-      const pastExceptions = res.data.filter((exc: Exception) => new Date(exc.end_time_utc) < now);
-      
-      // Solo guardamos en el estado las que son válidas para mostrarlas al usuario
-      setExceptions(validExceptions);
+  const invalidateExceptions = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["teacher", "availability", "exceptions"] });
+  }, [queryClient]);
 
-      // Limpieza automática: eliminamos las pasadas de la base de datos en segundo plano
-      pastExceptions.forEach((exc: Exception) => {
-        api.delete(`/availability/me/exceptions/${exc.id}`).catch(() => {
-          console.error(`Error limpiando excepción pasada ID: ${exc.id}`);
-        });
+  // Filtramos las válidas para mostrar, y limpiamos en segundo plano las
+  // que ya pasaron (mismo comportamiento que antes, ahora reaccionando a
+  // los datos del query en vez de hacerlo dentro del propio fetch).
+  const now = new Date();
+  const exceptions = (rawExceptions ?? []).filter((exc) => new Date(exc.end_time_utc) >= now);
+  const pastExceptions = (rawExceptions ?? []).filter((exc) => new Date(exc.end_time_utc) < now);
+
+  if (pastExceptions.length > 0) {
+    pastExceptions.forEach((exc) => {
+      api.delete(`/availability/me/exceptions/${exc.id}`).catch(() => {
+        console.error(`Error limpiando excepción pasada ID: ${exc.id}`);
       });
-
-    } catch {
-      // silencioso
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchExceptions(); }, [fetchExceptions]);
+    });
+  }
 
   const resetForm = () => {
     setDate("");
@@ -109,7 +112,7 @@ export default function ExceptionsSection() {
       const count = Array.isArray(res.data) ? res.data.length : 1;
       setSuccess(`${count} excepción${count !== 1 ? "es" : ""} guardada${count !== 1 ? "s" : ""} correctamente`);
       resetForm();
-      fetchExceptions();
+      invalidateExceptions();
     } catch (e: any) {
       setError(e.response?.data?.detail || "Error guardando la excepción");
     } finally {
@@ -119,24 +122,18 @@ export default function ExceptionsSection() {
   };
 
   const remove = async (id: number) => {
-    // 1. Limpiamos alertas previas
     setError("");
     setSuccess("");
     setDeletingId(id);
-    
+
     try {
-      // 2. Ejecutamos el borrado en la API
       await api.delete(`/availability/me/exceptions/${id}`);
-      
-      // 3. Actualizamos la lista local
-      setExceptions(prev => prev.filter(e => e.id !== id));
-      
-      // 4. Mostramos mensaje de éxito
+      invalidateExceptions();
       setSuccess("Excepción eliminada correctamente");
     } catch {
       setError("Error eliminando la excepción");
     } finally {
-      // 5. Ocultamos el mensaje de éxito después de 3 segundos
+      setDeletingId(null);
       setTimeout(() => setSuccess(""), 3000);
     }
   };
@@ -151,7 +148,6 @@ export default function ExceptionsSection() {
 
   const fmtTime = (iso: string) =>
     new Date(iso).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", timeZone: myTz });
-  
 
   const sorted = [...exceptions].sort(
     (a, b) => new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime()
@@ -185,7 +181,7 @@ export default function ExceptionsSection() {
 
       {/* Formulario Mejorado */}
       <div className="bg-slate-50/80 rounded-2xl p-6 border border-slate-100 space-y-6">
-        
+
         {/* Controles de Switches */}
         <div className="flex flex-col sm:flex-row gap-6 pb-4 border-b border-slate-200/60">
           <label className="flex items-center gap-3 cursor-pointer group w-fit">
@@ -350,12 +346,17 @@ export default function ExceptionsSection() {
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
           Excepciones configuradas ({exceptions.length})
         </p>
-        
-        {loading ? (
-          /* Aquí está el nuevo spinner de carga */
-          <div className="flex flex-col items-center justify-center py-10 space-y-3 bg-slate-50/50 rounded-2xl border border-slate-100">
-            <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
-            <p className="text-xs font-bold text-slate-400">Cargando excepciones...</p>
+
+        {isError ? (
+          <div className="bg-rose-50/60 border border-rose-100 rounded-2xl py-8 text-center">
+            <AlertTriangle className="w-8 h-8 text-rose-400 mx-auto mb-2" />
+            <p className="text-sm text-rose-500 font-bold">No se pudieron cargar las excepciones</p>
+          </div>
+        ) : loading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => (
+              <Skeleton key={i} className="h-16 w-full rounded-xl" />
+            ))}
           </div>
         ) : sorted.length === 0 ? (
           <div className="bg-slate-50/50 rounded-2xl border border-slate-100 py-8 text-center">

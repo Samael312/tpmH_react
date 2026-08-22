@@ -237,20 +237,21 @@ export function useTeacherProfile() {
 
 // ─── Disponibilidad semanal ──────────────────────────────────────────────────
 export function useWeeklyAvailability() {
-  const [slots, setSlots] = useState<WeeklySlot[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
+  const query = useQuery({
+    queryKey: ["teacher", "availability", "weekly"],
+    queryFn: async () => {
       const res = await api.get('/availability/me/weekly')
-      setSlots(res.data)
-    } catch { }
-    finally { setLoading(false) }
-  }, [])
+      return res.data as WeeklySlot[]
+    },
+  })
 
-  useEffect(() => { fetch() }, [fetch])
-  return { slots, loading, refetch: fetch }
+  return {
+    slots: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }
 
 // ─── Wallet ──────────────────────────────────────────────────────────────────

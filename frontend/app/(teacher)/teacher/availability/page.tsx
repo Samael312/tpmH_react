@@ -1,15 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { 
-  Calendar, Clock, Trash2, CalendarDays, 
-  Sparkles, Check, X 
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  Calendar, Clock, Trash2, CalendarDays,
+  Sparkles, Check, X, AlertTriangle, RefreshCw,
 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { utcTimeToLocal } from "@/lib/scheduleUtc";
 import ExceptionsSection from "./ExceptionsSection";
 import { getMyDisplayTimezone } from "@/lib/tzFormat";
+import { useWeeklyAvailability } from "@/hooks/useTeacherData";
+import Skeleton from "@/components/ui/Skeleton";
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
+import { usePageTopBar } from "@/lib/mobileTopBar";
 
 const DAYS = [
   { value: 0, label: "Lunes", short: "Lun" },
@@ -31,61 +37,51 @@ interface AvailabilityDraft {
 }
 
 export default function TeacherAvailabilityPage() {
-  const [availability, setAvailability] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { slots: availability, loading, isFetching, isError, refetch } = useWeeklyAvailability();
+  const queryClient = useQueryClient();
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
   const [selectedDay, setSelectedDay] = useState(0);
-  const [blocks, setBlocks] = useState<AvailabilityDraft[]>([]);
   const [selectedSlots, setSelectedSlots] = useState<Record<number, string[]>>({
     0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [],
   });
 
-  const fetchAvailability = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get("/availability/me/weekly");
-      setAvailability(res.data);
-      
-      const userTimezone = getMyDisplayTimezone();
-      const initialSlots: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-      
-      res.data.forEach((slot: any) => {
-        if (!slot.is_available) return;
-        const day = slot.day_of_week;
-        const localStart = utcTimeToLocal(slot.start_time_utc, day, userTimezone);
-        const localEnd = utcTimeToLocal(slot.end_time_utc, day, userTimezone);
-
-        const startHour = parseInt(localStart.split(":")[0]);
-        let endHour = parseInt(localEnd.split(":")[0]);
-        
-        if (localEnd.startsWith("00:0") && startHour > 0) {
-          endHour = 24;
-        }
-
-        for (let h = startHour; h < endHour; h++) {
-          const hourStr = `${h.toString().padStart(2, "0")}:00`;
-          if (!initialSlots[day].includes(hourStr)) {
-            initialSlots[day].push(hourStr);
-          }
-        }
-      });
-      setSelectedSlots(initialSlots);
-    } catch (e) {
-      console.error("Error fetching availability", e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Sincroniza selectedSlots cuando llega nueva disponibilidad del servidor.
+  // Usamos JSON.stringify o dependencias estables para evitar ejecuciones repetidas innecesarias.
   useEffect(() => {
-    fetchAvailability();
-  }, []);
+    if (!availability) return;
+    const userTimezone = getMyDisplayTimezone();
+    const initialSlots: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
 
-  // Convert individual hours into contiguous blocks automatically
-  useEffect(() => {
+    availability.forEach((slot: any) => {
+      if (!slot.is_available) return;
+      const day = slot.day_of_week;
+      const localStart = utcTimeToLocal(slot.start_time_utc, day, userTimezone);
+      const localEnd = utcTimeToLocal(slot.end_time_utc, day, userTimezone);
+
+      const startHour = parseInt(localStart.split(":")[0]);
+      let endHour = parseInt(localEnd.split(":")[0]);
+
+      if (localEnd.startsWith("00:0") && startHour > 0) {
+        endHour = 24;
+      }
+
+      for (let h = startHour; h < endHour; h++) {
+        const hourStr = `${h.toString().padStart(2, "0")}:00`;
+        if (!initialSlots[day].includes(hourStr)) {
+          initialSlots[day].push(hourStr);
+        }
+      }
+    });
+    setSelectedSlots(initialSlots);
+  }, [JSON.stringify(availability)]); // Usar JSON.stringify previene bucles si la referencia del array padre cambia en cada render de React Query
+
+  // Derivamos los bloques de manera limpia (sin necesidad de un useEffect extra que guarde en state, 
+  // o calculándolos de forma directa/memoizada para evitar ciclos de render).
+  const blocks: AvailabilityDraft[] = (() => {
     const newBlocks: AvailabilityDraft[] = [];
 
     Object.entries(selectedSlots).forEach(([dayStr, hours]) => {
@@ -122,8 +118,8 @@ export default function TeacherAvailabilityPage() {
       });
     });
 
-    setBlocks(newBlocks);
-  }, [selectedSlots]);
+    return newBlocks;
+  })();
 
   const toggleHour = (hour: string) => {
     setSelectedSlots((prev) => {
@@ -159,15 +155,14 @@ export default function TeacherAvailabilityPage() {
     setSuccessMsg("");
     try {
       const userTimezone = getMyDisplayTimezone();
-      
-      // Enviamos directamente los bloques locales y la zona horaria tal como el backend lo espera
+
       await api.put("/availability/me/weekly", {
         timezone: userTimezone,
         slots: blocks,
       });
 
       setSuccessMsg("¡Disponibilidad semanal actualizada con éxito!");
-      fetchAvailability();
+      await refetch();
     } catch (e: any) {
       const detail = e.response?.data?.detail;
       let errorMessage = "Error guardando la disponibilidad";
@@ -184,10 +179,56 @@ export default function TeacherAvailabilityPage() {
     }
   };
 
+  const handleRefresh = () => {
+    refetch();
+    queryClient.invalidateQueries({ queryKey: ["teacher", "availability", "exceptions"] });
+  };
+
+  usePageTopBar({
+    title: "Disponibilidad",
+    onRefresh: handleRefresh,
+    isFetching,
+  });
+
+  if (isError && !loading) {
+    return (
+      <>
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4 text-center px-4">
+          <div className="w-14 h-14 bg-rose-100 rounded-full flex items-center justify-center">
+            <AlertTriangle className="w-7 h-7 text-rose-500" />
+          </div>
+          <div>
+            <p className="text-lg font-black text-slate-800">No se pudo cargar tu disponibilidad</p>
+            <p className="text-sm text-slate-500 mt-1">Revisa tu conexión e inténtalo de nuevo.</p>
+          </div>
+          <button
+            onClick={handleRefresh}
+            className="flex items-center gap-2 px-5 py-2.5 bg-pink-500 hover:bg-pink-600 text-white text-sm font-bold rounded-xl shadow-sm transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" /> Reintentar
+          </button>
+        </div>
+        <ChipiWidget screenName="teacher-availability" />
+      </>
+    );
+  }
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 relative overflow-hidden pb-12 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-slate-50 relative overflow-hidden pb-12">
+        <div className="fixed top-[-80px] right-[-80px] w-[500px] h-[500px] bg-purple-300/20 rounded-full blur-[100px] pointer-events-none" />
+        <div className="fixed bottom-[-80px] left-[-80px] w-[400px] h-[400px] bg-pink-300/15 rounded-full blur-[100px] pointer-events-none" />
+        <div className="max-w-5xl mx-auto space-y-8 relative px-4 pt-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-2">
+              <Skeleton className="h-9 w-72" />
+              <Skeleton className="h-4 w-96" />
+            </div>
+            <Skeleton className="h-16 w-40 rounded-2xl" />
+          </div>
+          <Skeleton className="h-[480px] w-full rounded-[2.5rem]" />
+          <Skeleton className="h-64 w-full rounded-[2.5rem]" />
+        </div>
       </div>
     );
   }
@@ -199,7 +240,7 @@ export default function TeacherAvailabilityPage() {
       <div className="fixed bottom-[-80px] left-[-80px] w-[400px] h-[400px] bg-pink-300/15 rounded-full blur-[100px] pointer-events-none" />
 
       <div className="max-w-5xl mx-auto space-y-8 relative px-4 pt-6">
-        
+
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black text-slate-800 tracking-tight">
@@ -209,14 +250,19 @@ export default function TeacherAvailabilityPage() {
               Configura tus franjas horarias disponibles para que los estudiantes puedan agendar clases contigo.
             </p>
           </div>
-          <div className="bg-white/85 backdrop-blur-xl border border-white shadow-xl shadow-slate-200/50 px-5 py-3 rounded-2xl flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-purple-500" />
+          <div className="flex items-center gap-3">
+            <div className="bg-white/85 backdrop-blur-xl border border-white shadow-xl shadow-slate-200/50 px-5 py-3 rounded-2xl flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-purple-500" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Activos</p>
+                <p className="text-lg font-black text-slate-800">{blocks.length} bloques</p>
+              </div>
             </div>
-            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Activos</p>
-              <p className="text-lg font-black text-slate-800">{blocks.length} bloques</p>
-            </div>
+            <DesktopOnly>
+              <RefreshButton onRefresh={handleRefresh} isFetching={isFetching} />
+            </DesktopOnly>
           </div>
         </div>
 
@@ -269,7 +315,7 @@ export default function TeacherAvailabilityPage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-2">
-            
+
             <div className="lg:col-span-2 space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-black text-slate-700">

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { 
   LayoutDashboard, Users, GraduationCap, Calendar, Settings, LogOut, 
@@ -144,6 +144,7 @@ function BottomTabBar({
 // ─── Componente principal ─────────────────────────────────────────────────
 export default function DashboardSidebar() {
   const pathname = usePathname();
+  const router   = useRouter()
   const { user, logout } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -155,6 +156,7 @@ export default function DashboardSidebar() {
 
   const handleLogout = () => {
     logout();
+    router.push('/login');
   };
 
   if (!isMounted) {
