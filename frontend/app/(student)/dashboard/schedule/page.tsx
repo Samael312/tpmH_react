@@ -16,7 +16,7 @@ import { formatTimeTz, formatDateHumanTz, getHourMinuteTz, getMyDisplayTimezone 
 import { priceLabelSuffix } from "@/lib/packageThemes";
 import PaymentMethodsInfo from "@/components/payments/PaymentMethodsInfo";
 import BuyCreditsModal from "@/components/payments/BuyCreditsModal";
-
+import { useBusinessRules } from "@/hooks/useBusinessRules";
 
 type BookingStage =
   | "loading"
@@ -30,10 +30,6 @@ type BookingStage =
   | "renewal_pending"
   | "ready";
 
-const DURATIONS = [
-  { value: 30, label: "30 min" },
-  { value: 60, label: "1 hora" },
-];
 
 function extractErrorMessage(e: any, fallback: string): string {
   const detail = e?.response?.data?.detail;
@@ -146,6 +142,8 @@ function StepSelectSlot({
   teacherUsername: string | null;
   isTrial?: boolean;
 }) {
+  const { rules } = useBusinessRules();
+  const DURATIONS = rules.allowed_class_durations; // ej: ALLOWED_DURATIONS
   const [date, setDate] = useState("");
   const [duration, setDuration] = useState(isTrial ? 30 : 60);
   const [subjectOptions, setSubjectOptions] = useState<string[]>([]);
@@ -206,18 +204,11 @@ function StepSelectSlot({
             </p>
             <div className="flex gap-2">
               {DURATIONS.map(d => (
-                <button
-                  key={d.value}
-                  onClick={() => setDuration(d.value)}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold border-2 transition-all duration-200 ${
-                    duration === d.value
-                      ? "border-pink-400 bg-pink-50 text-pink-600"
-                      : "border-transparent bg-slate-100 text-slate-500 hover:border-slate-200"
-                  }`}
-                >
-                  {d.label}
-                </button>
-              ))}
+                  <button key={d} onClick={() => setDuration(d)}
+                    className={duration === d ? "flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-pink-200 hover:shadow-pink-300 hover:-translate-y-0.5 active:scale-95 transition-all duration-300": "flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-pink-200 hover:shadow-pink-300 hover:-translate-y-0.5 active:scale-95 transition-all duration-300"}>
+                    {d} min
+                  </button>
+                ))}
             </div>
           </div>
         )}

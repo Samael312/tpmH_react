@@ -10,6 +10,7 @@ from app.models.student import StudentProfile
 from app.models.teacher import TeacherProfile
 from app.core.timezone import utc_now, UTC
 import logging
+from app.schemas.classes import ALLOWED_DURATIONS
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ def get_business_rules(db: Session) -> dict:
             "min_booking_hours": MIN_BOOKING_HOURS,
             "min_cancel_hours": MIN_CANCEL_HOURS,
             "min_reschedule_hours_student": MIN_RESCHEDULE_HOURS_STUDENT,
-            "allowed_class_durations": [30, 60, 90],
+            "allowed_class_durations": ALLOWED_DURATIONS,
             "allowed_package_durations": [30, 60],
             "low_credit_threshold": 1,
             "low_credit_renotify_days": 6,
@@ -39,7 +40,7 @@ def get_business_rules(db: Session) -> dict:
         "min_booking_hours": config.min_booking_hours or MIN_BOOKING_HOURS,
         "min_cancel_hours": config.min_cancel_hours or MIN_CANCEL_HOURS,
         "min_reschedule_hours_student": config.min_reschedule_hours_student or MIN_RESCHEDULE_HOURS_STUDENT,
-        "allowed_class_durations": config.allowed_class_durations or [30, 60, 90],
+        "allowed_class_durations": config.allowed_class_durations or ALLOWED_DURATIONS,
         "allowed_package_durations": config.allowed_package_durations or [30, 60],
         "low_credit_threshold": config.low_credit_threshold or 1,
         "low_credit_renotify_days": config.low_credit_renotify_days or 6,

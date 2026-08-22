@@ -130,7 +130,7 @@ def upgrade() -> None:
         conn.execute(catalogs_table.insert().values(key=c["key"], label=c["label"], value=c["value"]))
 
     conn.execute(sa.text(
-        "UPDATE platform_config SET allowed_class_durations = '[30,60,90]'::jsonb, "
+        "UPDATE platform_config SET allowed_class_durations = '[30,60]'::jsonb, "
         "allowed_package_durations = '[30,60]'::jsonb WHERE allowed_class_durations IS NULL"
     ))
 

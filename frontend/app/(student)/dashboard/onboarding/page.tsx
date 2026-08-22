@@ -16,27 +16,14 @@ import { NATIONALITIES } from "@/lib/nationalities";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 // in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
-import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
+import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS, GOALS as FALLBACK_GOALS, PAYMENT_METHODS as FALLBACK_METHODS} from "@/lib/teacherOptions";
 
 
 
 
-const GOALS = [
-  { text: "Conversaciones cotidianas", desc: "Hablar de temas del día a día", icon: "🗣️" },
-  { text: "Mejorar pronunciación", desc: "Fluidez y acento natural", icon: "🎙️" },
-  { text: "Ampliar vocabulario", desc: "Palabras para situaciones reales", icon: "📚" },
-  { text: "Comprender audios/videos", desc: "Entender a hablantes nativos", icon: "🎧" },
-  { text: "Preparar exámenes", desc: "TOEFL, IELTS, Cambridge, etc.", icon: "📝" },
-  { text: "Viajar al extranjero", desc: "Sobrevivir en otro país en inglés", icon: "✈️" },
-];
 
-const PAYMENT_METHODS = [
-  { value: "Paypal",       label: "PayPal",             icon: "💳", color: "text-blue-600" },
-  { value: "Binance",      label: "Binance (USDT)",     icon: "🔶", color: "text-yellow-500" },
-  { value: "Zelle",        label: "Zelle",              icon: "💜", color: "text-purple-600" },
-  { value: "BankTransfer", label: "Transferencia bancaria", icon: "🏦", color: "text-emerald-600" },
-  { value: "MobilePayment", label: "Pago móvil/Bizum",  icon: "📱", color: "text-pink-600" },
-];
+
+
 
 const DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
@@ -200,6 +187,9 @@ function StepPreferences({
   const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
   const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
   const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
+  const GOALS = catalogs.student_goals.length ? catalogs.student_goals : FALLBACK_GOALS;
+
+  
   const [useCustomGoal, setUseCustomGoal] = useState(() => {
     return Boolean(goal && !GOALS.some((g) => g.text === goal));
   });
@@ -640,7 +630,8 @@ interface StepPaymentMethodsProps {
 
 function StepPaymentMethods({ selected, setSelected, onNext, onBack, saving }: StepPaymentMethodsProps) {
   const toggle = (v: string) => setSelected(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]);
-
+  const { catalogs } = useSystemCatalogs();
+  const PAYMENT_METHODS = catalogs.student_payment_methods.length ? catalogs.student_payment_methods : FALLBACK_METHODS;
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-300 w-full max-w-3xl mx-auto space-y-8">
       <div>

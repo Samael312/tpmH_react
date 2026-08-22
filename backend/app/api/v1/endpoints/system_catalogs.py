@@ -13,6 +13,7 @@ from app.schemas.system_catalog import (
     BusinessRulesResponse,
     UpdateBusinessRulesRequest,
 )
+from app.schemas.classes import ALLOWED_DURATIONS
 
 router = APIRouter()
 
@@ -80,7 +81,7 @@ def get_business_rules(db: Session = Depends(get_db)):
         min_booking_hours=config.min_booking_hours or 1,
         min_cancel_hours=config.min_cancel_hours or 12,
         min_reschedule_hours_student=config.min_reschedule_hours_student or 12,
-        allowed_class_durations=config.allowed_class_durations or [30, 60, 90],
+        allowed_class_durations=config.allowed_class_durations or ALLOWED_DURATIONS,
         allowed_package_durations=config.allowed_package_durations or [30, 60],
         low_credit_threshold=config.low_credit_threshold or 1,
         low_credit_renotify_days=config.low_credit_renotify_days or 6,

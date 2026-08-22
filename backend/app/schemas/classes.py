@@ -3,7 +3,7 @@ from typing import Optional, List
 from datetime import datetime
 
 
-ALLOWED_DURATIONS = [30, 60, 90]
+ALLOWED_DURATIONS = [30, 60]
 
 
 class BookClassRequest(BaseModel):

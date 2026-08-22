@@ -8,7 +8,7 @@ import ChipiWidget from '@/components/chipi/ChipiWidget'
 import { Wallet as WalletIcon, TrendingUp, CheckCircle2, X, Loader2, ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 // in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
-import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
+import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS, PAYMENT_METHODS as FALLBACK_WITHDRAWAL } from "@/lib/teacherOptions";
 
 
 
@@ -186,6 +186,7 @@ export default function WalletPage() {
   const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
   const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
   const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
+  const WITHDRAWAL_METHODS = catalogs.withdrawal_methods.length ? catalogs.withdrawal_methods : FALLBACK_WITHDRAWAL;
   const { wallet, loading: wBalanceLoading, isFetching: wFetching, refetch: refetchWallet } = useWallet()
   const { withdrawals, loading: wLoading, refetch: refetchW } = useMyWithdrawals()
   const { income, loading: iLoading, refetch: refetchI } = useMyIncome()

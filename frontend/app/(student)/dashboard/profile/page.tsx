@@ -10,11 +10,11 @@ import { useAuthStore } from "@/store/authStore";
 import { COUNTRY_OPTIONS, DEFAULT_COUNTRY, parsePhoneNumber, CountryInfo } from "@/lib/timezones";
 import { NATIONALITIES, getFlagForNationality } from "@/lib/nationalities";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
-// in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
-import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
-
-
+import { 
+  GOALS as FALLBACK_GOALS, 
+  PAYMENT_METHODS as FALLBACK_METHODS
+} from "@/lib/teacherOptions";
 
 // ─── Helpers & Formateadores de Errores ──────────────────────────────────────
 function formatErrorMessage(error: any, fallbackMessage: string): string {
@@ -41,24 +41,6 @@ const DEFAULT_TIMEZONES = [
   "America/Sao_Paulo", "America/Chicago",
   "Europe/Madrid", "Europe/London", "Europe/Paris",
   "Asia/Tokyo", "Asia/Dubai", "UTC",
-];
-
-const GOALS = [
-  "Mantener conversaciones básicas sobre temas cotidianos",
-  "Mejorar la pronunciación y la fluidez al hablar",
-  "Ampliar el vocabulario para situaciones reales",
-  "Comprender mejor audios y vídeos en inglés",
-  "Prepararse para exámenes oficiales (A1, A2, B1…)",
-  "Ganar confianza al participar en conversaciones",
-  "Poder viajar al extranjero usando solo inglés",
-];
-
-const PAYMENT_METHODS = [
-  { value: "Paypal",       label: "PayPal",             icon: "💳", color: "text-blue-600" },
-  { value: "Binance",      label: "Binance (USDT)",     icon: "🔶", color: "text-yellow-500" },
-  { value: "Zelle",        label: "Zelle",              icon: "💜", color: "text-purple-600" },
-  { value: "BankTransfer", label: "Transferencia bancaria", icon: "🏦", color: "text-emerald-600" },
-  { value: "MobilePayment", label: "Pago móvil/Bizum",  icon: "📱", color: "text-pink-600" },
 ];
 
 const inputCls = (withIcon = true) =>
@@ -157,9 +139,6 @@ function ProfileSkeleton() {
 // ─── Componente Principal ─────────────────────────────────────────────────────
 export default function StudentProfilePage() {
   const { catalogs } = useSystemCatalogs();
-  const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
-  const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
-  const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
   const { user, setUser, logout } = useAuthStore();
   const [nationality, setNationality] = useState("");
   const [profile, setProfile] = useState<any>(null);
@@ -206,6 +185,17 @@ export default function StudentProfilePage() {
   const [uploading, setUploading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
+  // ─── Normalización de opciones ────────────────────────────────────────────────
+  const normalizedGoals = useMemo(() => {
+    const goals = catalogs.student_goals?.length ? catalogs.student_goals : FALLBACK_GOALS;
+    return goals.map(g => typeof g === "string" ? { text: g, desc: "", icon: "🎯" } : g);
+  }, [catalogs.student_goals]);
+
+  const normalizedPaymentMethods = useMemo(() => {
+    const methods = catalogs.student_payment_methods?.length ? catalogs.student_payment_methods : FALLBACK_METHODS;
+    return methods.map(pm => typeof pm === "string" ? { value: pm, label: pm, icon: "💳" } : pm);
+  }, [catalogs.student_payment_methods]);
+
   // Normalizador de datos (Maneja fallbacks de API)
   const populateFields = useCallback((userData: any, studentData: any) => {
     setProfile({ ...userData, studentProfile: studentData });
@@ -230,12 +220,17 @@ export default function StudentProfilePage() {
 
     const loadedGoal = studentData.goal ?? "";
     setGoal(loadedGoal);
-    setUseCustomGoal(Boolean(loadedGoal) && !GOALS.includes(loadedGoal));
+    
+    // Verificamos si el goal cargado existe en nuestra lista normalizada para saber si es personalizado
+    const isCustom = Boolean(loadedGoal) && !(catalogs.student_goals?.length ? catalogs.student_goals : FALLBACK_GOALS)
+      .some(g => (typeof g === "string" ? g : g.text) === loadedGoal);
+      
+    setUseCustomGoal(isCustom);
     setPay(studentData.preferred_payment_methods ?? []);
 
     const photo = userData.avatar_url ?? userData.avatar ?? studentData.profile_photo_url ?? null;
     setAvatarUrl(photo);
-  }, [user?.username]);
+  }, [user?.username, catalogs.student_goals]);
 
   // ─── GET: Obtener información del usuario y estudiante ──────────────────────
   const fetchProfileData = useCallback(async () => {
@@ -274,7 +269,6 @@ export default function StudentProfilePage() {
   // ─── PATCH: Actualizar Perfil y Student Profile ──────────────────────────────
   const saveInfo = useCallback(async () => {
     const fullPhone = phoneRest.trim() ? `${phoneCountry.dialCode} ${phoneRest.trim()}` : "";
-    const timezoneChanging = !!savedTimezone && timezone !== savedTimezone;
     setSavingInfo(true);
     setInfoFeedback(null);
     try {
@@ -323,7 +317,7 @@ export default function StudentProfilePage() {
       setSavingInfo(false);
       setTimeout(() => setInfoFeedback(null), 4000);
     }
-  }, [savedTimezone, timezone, username, name, surname, email, phoneCountry.dialCode, phoneRest, nationality, goal, payMethods, populateFields, user, setUser, avatarUrl]);
+  }, [timezone, username, name, surname, email, phoneCountry.dialCode, phoneRest, nationality, goal, payMethods, populateFields, user, setUser, avatarUrl]);
 
   // ─── POST: Cambiar Contraseña ────────────────────────────────────────────────
   const savePw = useCallback(async () => {
@@ -536,7 +530,7 @@ export default function StudentProfilePage() {
                     {payMethods.length > 0 ? (
                       <div className="flex gap-2 flex-wrap">
                         {payMethods.map(pm => {
-                          const item = PAYMENT_METHODS.find(p => p.value === pm);
+                          const item = normalizedPaymentMethods.find(p => p.value === pm);
                           return (
                             <span key={pm} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-700 shadow-sm">
                               <span>{item?.icon || "💳"}</span>
@@ -640,29 +634,35 @@ export default function StudentProfilePage() {
                       Objetivo de aprendizaje
                     </label>
                     <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                      {GOALS.map(g => (
+                      {normalizedGoals.map(g => (
                         <button
                           type="button"
-                          key={g}
-                          onClick={() => { setUseCustomGoal(false); setGoal(g); }}
+                          key={g.text}
+                          onClick={() => { setUseCustomGoal(false); setGoal(g.text); }}
                           disabled={savingInfo}
                           className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl border-2 text-left transition-all duration-200 disabled:opacity-60 ${
-                            !useCustomGoal && goal === g ? "border-pink-400 bg-pink-50" : "border-slate-100 bg-white hover:border-slate-200"
+                            !useCustomGoal && goal === g.text ? "border-pink-400 bg-pink-50" : "border-slate-100 bg-white hover:border-slate-200"
                           }`}
                         >
                           <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
-                            !useCustomGoal && goal === g ? "border-pink-500 bg-pink-500" : "border-slate-300"
+                            !useCustomGoal && goal === g.text ? "border-pink-500 bg-pink-500" : "border-slate-300"
                           }`}>
-                            {!useCustomGoal && goal === g && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                            {!useCustomGoal && goal === g.text && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                           </div>
-                          <span className="text-xs font-bold text-slate-700 leading-snug">{g}</span>
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold text-slate-700 leading-snug">
+                              {g.icon && <span className="mr-1.5">{g.icon}</span>}
+                              {g.text}
+                            </span>
+                            {g.desc && <span className="text-[10px] text-slate-500 mt-0.5">{g.desc}</span>}
+                          </div>
                         </button>
                       ))}
 
                       {/* Opción de objetivo personalizado */}
                       <button
                         type="button"
-                        onClick={() => { setUseCustomGoal(true); if (GOALS.includes(goal)) setGoal(""); }}
+                        onClick={() => { setUseCustomGoal(true); if (normalizedGoals.some(g => g.text === goal)) setGoal(""); }}
                         disabled={savingInfo}
                         className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl border-2 text-left transition-all duration-200 disabled:opacity-60 ${
                           useCustomGoal ? "border-pink-400 bg-pink-50" : "border-slate-100 bg-white hover:border-slate-200"
@@ -699,7 +699,7 @@ export default function StudentProfilePage() {
                       Métodos de pago preferidos
                     </label>
                     <div className="flex gap-2.5 flex-wrap">
-                      {PAYMENT_METHODS.map(pm => (
+                      {normalizedPaymentMethods.map(pm => (
                         <button
                           type="button"
                           key={pm.value}

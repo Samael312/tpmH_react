@@ -64,6 +64,150 @@ function CatalogEditor({ catalogKey, label, items, onSave }: {
   )
 }
 
+function GoalsEditor({ items, onSave }: { items: any[]; onSave: (v: any[]) => Promise<void> }) {
+  const [list, setList] = useState(items)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => setList(items), [items])
+
+  const update = (i: number, field: string, value: string) => {
+    const next = [...list]; next[i] = { ...next[i], [field]: value }; setList(next)
+  }
+  const remove = (i: number) => setList(list.filter((_, idx) => idx !== i))
+  const add = () => setList([...list, { text: '', desc: '', icon: '🎯' }])
+  const save = async () => { setSaving(true); try { await onSave(list) } finally { setSaving(false) } }
+
+  return (
+    <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-3">
+      <p className="text-xs font-black text-slate-700">Objetivos de aprendizaje</p>
+      <div className="space-y-2">
+        {list.map((g, i) => (
+          <div key={i} className="flex gap-2 items-center bg-white border border-slate-200 rounded-xl p-2">
+            <input value={g.icon} onChange={e => update(i, 'icon', e.target.value)}
+              className="w-12 text-center border border-slate-200 rounded-lg py-1.5" />
+            <input value={g.text} onChange={e => update(i, 'text', e.target.value)}
+              placeholder="Título" className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm" />
+            <input value={g.desc} onChange={e => update(i, 'desc', e.target.value)}
+              placeholder="Descripción" className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm" />
+            <button onClick={() => remove(i)} className="text-slate-300 hover:text-rose-400 px-2">✕</button>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <button onClick={add} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold">+ Añadir objetivo</button>
+        <button onClick={save} disabled={saving} className="px-4 bg-pink-500 hover:bg-pink-600 text-white rounded-xl text-xs font-bold disabled:opacity-50">
+          {saving ? '...' : 'Guardar'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ThemePresetsEditor({ items, onSave }: { items: any[]; onSave: (v: any[]) => Promise<void> }) {
+  const [list, setList] = useState(items)
+  const [saving, setSaving] = useState(false)
+  useEffect(() => setList(items), [items])
+
+  const update = (i: number, field: string, value: string) => {
+    const next = [...list]; next[i] = { ...next[i], [field]: value }; setList(next)
+  }
+  const remove = (i: number) => setList(list.filter((_, idx) => idx !== i))
+  const add = () => setList([...list, { label: '', value: '#000000' }])
+  const save = async () => { setSaving(true); try { await onSave(list) } finally { setSaving(false) } }
+
+  return (
+    <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-3">
+      <p className="text-xs font-black text-slate-700">Colores de tema</p>
+      <div className="flex flex-wrap gap-2">
+        {list.map((t, i) => (
+          <div key={i} className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl p-1.5 pr-2">
+            <input type="color" value={t.value} onChange={e => update(i, 'value', e.target.value)}
+              className="w-7 h-7 rounded-lg border-0 cursor-pointer" />
+            <input value={t.label} onChange={e => update(i, 'label', e.target.value)}
+              className="w-20 border-0 text-xs font-bold outline-none" />
+            <button onClick={() => remove(i)} className="text-slate-300 hover:text-rose-400">✕</button>
+          </div>
+        ))}
+        <button onClick={add} className="px-3 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold">+</button>
+      </div>
+      <button onClick={save} disabled={saving} className="px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white rounded-xl text-xs font-bold disabled:opacity-50">
+        {saving ? '...' : 'Guardar'}
+      </button>
+    </div>
+  )
+}
+
+function SubjectThemeMapEditor({ subjects, languages, map, onSave }: {
+  subjects: string[]; languages: string[]; map: Record<string, any>; onSave: (v: any) => Promise<void>
+}) {
+  const [local, setLocal] = useState(map)
+  const [saving, setSaving] = useState(false)
+  useEffect(() => setLocal(map), [map])
+
+  const allKeys = [...subjects, ...languages]
+  const update = (key: string, field: string, value: string) => {
+    setLocal({ ...local, [key]: { ...(local[key] || { icon: '📚', color: '#3b82f6' }), [field]: value } })
+  }
+  const save = async () => { setSaving(true); try { await onSave(local) } finally { setSaving(false) } }
+
+  return (
+    <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-3">
+      <p className="text-xs font-black text-slate-700">Tema sugerido por materia/idioma</p>
+      <p className="text-[10px] text-slate-400">Se usa como icono/color por defecto al crear paquetes. Se autogenera para materias/idiomas nuevos que aún no tengan tema.</p>
+      <div className="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto">
+        {allKeys.map(key => {
+          const t = local[key] || { icon: '📚', color: '#3b82f6' }
+          return (
+            <div key={key} className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-2">
+              <input value={t.icon} onChange={e => update(key, 'icon', e.target.value)} className="w-10 text-center border border-slate-200 rounded-lg" />
+              <input type="color" value={t.color} onChange={e => update(key, 'color', e.target.value)} className="w-7 h-7 rounded-lg border-0 cursor-pointer" />
+              <span className="text-xs font-bold text-slate-600 truncate flex-1">{key}</span>
+            </div>
+          )
+        })}
+      </div>
+      <button onClick={save} disabled={saving} className="px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white rounded-xl text-xs font-bold disabled:opacity-50">
+        {saving ? '...' : 'Guardar'}
+      </button>
+    </div>
+  )
+}
+
+function PaymentMethodsEditor({ title, items, onSave }: { title: string; items: any[]; onSave: (v: any[]) => Promise<void> }) {
+  const [list, setList] = useState(items)
+  const [saving, setSaving] = useState(false)
+  useEffect(() => setList(items), [items])
+
+  const update = (i: number, field: string, value: string) => {
+    const next = [...list]; next[i] = { ...next[i], [field]: value }; setList(next)
+  }
+  const remove = (i: number) => setList(list.filter((_, idx) => idx !== i))
+  const add = () => setList([...list, { value: '', label: '', icon: '💳' }])
+  const save = async () => { setSaving(true); try { await onSave(list) } finally { setSaving(false) } }
+
+  return (
+    <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-3">
+      <p className="text-xs font-black text-slate-700">{title}</p>
+      <div className="space-y-2">
+        {list.map((m, i) => (
+          <div key={i} className="flex gap-2 items-center bg-white border border-slate-200 rounded-xl p-2">
+            <input value={m.icon} onChange={e => update(i, 'icon', e.target.value)} className="w-12 text-center border border-slate-200 rounded-lg py-1.5" />
+            <input value={m.value} onChange={e => update(i, 'value', e.target.value)} placeholder="valor interno (ej: Paypal)" className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm" />
+            <input value={m.label} onChange={e => update(i, 'label', e.target.value)} placeholder="etiqueta visible" className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm" />
+            <button onClick={() => remove(i)} className="text-slate-300 hover:text-rose-400 px-2">✕</button>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <button onClick={add} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold">+ Añadir método</button>
+        <button onClick={save} disabled={saving} className="px-4 bg-pink-500 hover:bg-pink-600 text-white rounded-xl text-xs font-bold disabled:opacity-50">
+          {saving ? '...' : 'Guardar'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null)
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig | null>(null)
@@ -566,6 +710,12 @@ export default function SettingsPage() {
             onSave={v => saveCatalog('material_levels', v)} />
           <CatalogEditor catalogKey="package_icon_options" label="Iconos de paquetes" items={catalogs.package_icon_options ?? []}
             onSave={v => saveCatalog('package_icon_options', v)} />
+
+          <GoalsEditor items={catalogs.student_goals ?? []} onSave={v => saveCatalog('student_goals', v)} />
+          <PaymentMethodsEditor title="Métodos de pago (estudiante)" items={catalogs.student_payment_methods ?? []} onSave={v => saveCatalog('student_payment_methods', v)} />
+          <PaymentMethodsEditor title="Métodos de retiro (profesor)" items={catalogs.withdrawal_methods ?? []} onSave={v => saveCatalog('withdrawal_methods', v)} />
+          <ThemePresetsEditor items={catalogs.theme_presets ?? []} onSave={v => saveCatalog('theme_presets', v)} />
+          <SubjectThemeMapEditor subjects={catalogs.subjects ?? []} languages={catalogs.languages ?? []} map={catalogs.subject_theme_map ?? {}} onSave={v => saveCatalog('subject_theme_map', v)} />
         </Card>
 
         {/* ─── NUEVO: Reglas de negocio ─────────────────────────────────────── */}

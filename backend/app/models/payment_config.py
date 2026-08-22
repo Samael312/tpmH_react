@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, Foreig
 from sqlalchemy.sql import func
 from app.db.base import Base
 from sqlalchemy.dialects.postgresql import JSONB
+from app.schemas.classes import ALLOWED_DURATIONS
 
 class PlatformConfig(Base):
     """
@@ -28,8 +29,8 @@ class PlatformConfig(Base):
     min_booking_hours = Column(Integer, default=1)
     min_cancel_hours = Column(Integer, default=12)
     min_reschedule_hours_student = Column(Integer, default=12)
-    allowed_class_durations = Column(JSONB, default=lambda: [30, 60, 90])
-    allowed_package_durations = Column(JSONB, default=lambda: [30, 60])
+    allowed_class_durations = Column(JSONB, default=lambda: ALLOWED_DURATIONS)
+    allowed_package_durations = Column(JSONB, default=lambda: ALLOWED_DURATIONS)
     low_credit_threshold = Column(Integer, default=1)
     low_credit_renotify_days = Column(Integer, default=6)
 
