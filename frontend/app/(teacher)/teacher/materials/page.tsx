@@ -1,32 +1,23 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Upload, FileText, Image, Trash2,
   Users, Plus, BookOpen, Search, X, Check,
   Volume2, ChevronDown, FolderOpen, Sparkles,
-  Edit2, AlertTriangle, Loader2
+  Edit2, AlertTriangle, Loader2, RefreshCw
 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 // in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS, TOPICS as FALLBACK_TOPICS, LEVELS as FALLBACK_LEVELS } from "@/lib/teacherOptions";
-
-
-
-// 1. Interfaz actualizada (incluye descripción)
-interface Material {
-  id: number;
-  title: string;
-  description?: string | null;
-  category: string;
-  level: string;
-  file_url: string | null;
-  file_type: string | null;
-  created_at: string;
-  vocabulary_words: string[] | null;
-}
+import { useTeacherMaterials, type TeacherMaterial as Material } from "@/hooks/useTeacherData";
+import Skeleton from "@/components/ui/Skeleton";
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
+import { usePageTopBar } from "@/lib/mobileTopBar";
 
 interface ExpandableDescriptionProps {
   text: string;
@@ -41,9 +32,6 @@ interface Student {
   surname: string;
   avatar?: string | null;
 }
-
-const CATEGORIES = ["Grammar", "Reading", "Exercises", "Vocabulary"];
-const LEVELS     = ["A1", "A2", "B1", "B2", "C1", "C2"];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -130,7 +118,7 @@ function AssignModal({
   const [success, setSuccess]   = useState(false);
   const [search, setSearch]     = useState("");
 
-  const fetchStudents = useCallback(async () => {
+  const fetchStudents = async () => {
     if (fetched) return;
     setLoading(true);
     try {
@@ -139,7 +127,7 @@ function AssignModal({
       setFetched(true);
     } catch { }
     finally { setLoading(false); }
-  }, [fetched]);
+  };
 
   useState(() => { fetchStudents(); });
 
@@ -428,6 +416,9 @@ function EditMaterialModal({
   onClose: () => void;
   onSaved: (updated: Material) => void;
 }) {
+  const { catalogs } = useSystemCatalogs();
+  const CATEGORIES = catalogs.material_categories.length ? catalogs.material_categories : FALLBACK_TOPICS;
+  const LEVELS = catalogs.material_levels.length ? catalogs.material_levels : FALLBACK_LEVELS;
   const [title, setTitle]             = useState(material.title);
   const [description, setDescription] = useState(material.description ?? "");
   const [category, setCategory]       = useState(material.category);
@@ -718,8 +709,10 @@ export default function MaterialsPage() {
   const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
   const CATEGORIES = catalogs.material_categories.length ? catalogs.material_categories : FALLBACK_TOPICS;
   const LEVELS = catalogs.material_levels.length ? catalogs.material_levels : FALLBACK_LEVELS;
-  const [materials, setMaterials]   = useState<Material[]>([]);
-  const [loading, setLoading]       = useState(true);
+  
+  const { materials, loading, isFetching, isError, refetch } = useTeacherMaterials();
+  const queryClient = useQueryClient();
+  
   const [search, setSearch]         = useState("");
   const [tab, setTab]               = useState<"files" | "vocab">("files");
   const [uploading, setUploading]   = useState(false);
@@ -744,16 +737,11 @@ export default function MaterialsPage() {
   const [vocabWords, setVocabWords]             = useState<string[]>([]);
   const [vocabWordInput, setVocabWordInput]     = useState("");
 
-  const fetchMaterials = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await api.get("/materials/my-materials");
-      setMaterials(res.data);
-    } catch { }
-    finally { setLoading(false); }
-  }, []);
-
-  useState(() => { fetchMaterials(); });
+  usePageTopBar({
+    title: "Materiales",
+    onRefresh: refetch,
+    isFetching,
+  });
 
   const uploadFile = async () => {
     if (!title || !file) return;
@@ -771,7 +759,7 @@ export default function MaterialsPage() {
       });
       setTitle(""); setDescription(""); setFile(null); setCategory(CATEGORIES[0]);
       if (fileRef.current) fileRef.current.value = "";
-      fetchMaterials();
+      refetch();
     } catch (e: any) {
       const errorMsg = e.response?.data?.detail || "Error subiendo el archivo";
       setFileError(errorMsg);
@@ -797,51 +785,78 @@ export default function MaterialsPage() {
     setVocabWords(prev => prev.filter(x => x !== w));
 
   const createVocab = async () => {
-  if (!vocabTitle || vocabWords.length === 0) return;
-  setUploading(true);
-  try {
-    const form = new FormData();
-    form.append("title", vocabTitle);
-    form.append("category", "Vocabulary");
-    form.append("level", vocabLevel);
-    if (vocabDescription.trim()) form.append("description", vocabDescription.trim());
+    if (!vocabTitle || vocabWords.length === 0) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("title", vocabTitle);
+      form.append("category", "Vocabulary");
+      form.append("level", vocabLevel);
+      if (vocabDescription.trim()) form.append("description", vocabDescription.trim());
 
-    const res = await api.post("/materials/", form, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+      const res = await api.post("/materials/", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
 
-    await api.post(`/materials/${res.data.id}/vocabulary`, { words: vocabWords });
+      await api.post(`/materials/${res.data.id}/vocabulary`, { words: vocabWords });
 
-    setVocabTitle("");
-    setVocabDescription("");
-    setVocabWords([]);
-    setVocabWordInput("");
-    fetchMaterials();
-  } catch (e: any) {
-    alert(e.response?.data?.detail || "Error creando vocabulario");
-  } finally {
-    setUploading(false);
-  }
-};
+      setVocabTitle("");
+      setVocabDescription("");
+      setVocabWords([]);
+      setVocabWordInput("");
+      refetch();
+    } catch (e: any) {
+      alert(e.response?.data?.detail || "Error creando vocabulario");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleMaterialSaved = (updated: Material) => {
-    setMaterials(prev => prev.map(m => (m.id === updated.id ? { ...m, ...updated } : m)));
+    queryClient.setQueryData<Material[]>(["teacher", "materials"], (prev) =>
+      (prev ?? []).map(m => (m.id === updated.id ? { ...m, ...updated } : m))
+    );
   };
 
   const handleMaterialDeleted = (deletedId: number) => {
-    setMaterials(prev => prev.filter(m => m.id !== deletedId));
+    queryClient.setQueryData<Material[]>(["teacher", "materials"], (prev) =>
+      (prev ?? []).filter(m => m.id !== deletedId)
+    );
     setJustDeleted(true);
     setTimeout(() => setJustDeleted(false), 3000);
   };
 
-  const filtered = materials.filter(m => {
+  const filtered = (materials ?? []).filter(m => {
     const inSearch = m.title.toLowerCase().includes(search.toLowerCase());
     const inTab = tab === "vocab" ? isVocab(m) : !isVocab(m);
     return inSearch && inTab;
   });
 
-  const docsCount  = materials.filter(m => !isVocab(m)).length;
-  const vocabCount = materials.filter(m => isVocab(m)).length;
+  const docsCount  = (materials ?? []).filter(m => !isVocab(m)).length;
+  const vocabCount = (materials ?? []).filter(m => isVocab(m)).length;
+
+  if (isError && !loading) {
+    return (
+      <>
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4 text-center px-4">
+          <div className="w-14 h-14 bg-rose-100 rounded-full flex items-center justify-center">
+            <AlertTriangle className="w-7 h-7 text-rose-500" />
+          </div>
+          <div>
+            <p className="text-lg font-black text-slate-800">No se pudieron cargar tus materiales</p>
+            <p className="text-sm text-slate-500 mt-1">Revisa tu conexión e inténtalo de nuevo.</p>
+          </div>
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-2 px-5 py-2.5 bg-pink-500 hover:bg-pink-600 text-white text-sm font-bold rounded-xl shadow-sm transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" /> Reintentar
+          </button>
+        </div>
+        <ChipiWidget screenName="materials_teacher" />
+      </>
+    );
+  }
 
   return (
     <>
@@ -864,16 +879,21 @@ export default function MaterialsPage() {
               Organiza tus recursos y sets de vocabulario, y asígnalos a tus estudiantes
             </p>
           </div>
-          <button
-            onClick={() => setShowUploadForm(p => !p)}
-            className="inline-flex items-center gap-2 px-5 py-3 text-sm font-bold
-                       text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400
-                       shadow-lg shadow-pink-200 hover:shadow-pink-300
-                       active:scale-[0.98] transition-all duration-300 self-start sm:self-auto"
-          >
-            {showUploadForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-            {showUploadForm ? "Cerrar" : "Nuevo material"}
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <DesktopOnly>
+              <RefreshButton onRefresh={refetch} isFetching={isFetching} />
+            </DesktopOnly>
+            <button
+              onClick={() => setShowUploadForm(p => !p)}
+              className="inline-flex items-center gap-2 px-5 py-3 text-sm font-bold
+                         text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400
+                         shadow-lg shadow-pink-200 hover:shadow-pink-300
+                         active:scale-[0.98] transition-all duration-300"
+            >
+              {showUploadForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {showUploadForm ? "Cerrar" : "Nuevo material"}
+            </button>
+          </div>
         </div>
 
         {justDeleted && (
@@ -888,7 +908,7 @@ export default function MaterialsPage() {
         <div className="grid grid-cols-3 gap-4 animate-in fade-in slide-in-from-bottom-4
                         duration-500 delay-75">
           {[
-            { label: "Total", value: materials.length, icon: <FolderOpen className="w-5 h-5" />, bg: "bg-pink-50 text-pink-500" },
+            { label: "Total", value: (materials ?? []).length, icon: <FolderOpen className="w-5 h-5" />, bg: "bg-pink-50 text-pink-500" },
             { label: "Documentos", value: docsCount, icon: <FileText className="w-5 h-5" />, bg: "bg-blue-50 text-blue-500" },
             { label: "Vocabulario", value: vocabCount, icon: <Sparkles className="w-5 h-5" />, bg: "bg-purple-50 text-purple-500" },
           ].map(s => (
@@ -1048,8 +1068,6 @@ export default function MaterialsPage() {
                     onChange={e => {
                       const selectedFile = e.target.files?.[0] ?? null;
                       if (selectedFile) {
-                        // Límite específico de documentos/materiales — independiente
-                        // del límite de video de perfil de profesor (100 MB).
                         const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024; // 10MB
                         if (selectedFile.size > MAX_DOCUMENT_SIZE) {
                           setFileError("El archivo supera el límite permitido de 10 MB.");
@@ -1323,7 +1341,7 @@ export default function MaterialsPage() {
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {[1,2,3,4].map(i => (
-                <div key={i} className="h-32 bg-white rounded-2xl animate-pulse" />
+                <Skeleton key={i} className="h-32 w-full rounded-2xl" />
               ))}
             </div>
           ) : filtered.length === 0 ? (
@@ -1449,7 +1467,7 @@ export default function MaterialsPage() {
         <VocabModal
           material={vocabTarget}
           onClose={() => setVocabTarget(null)}
-          onSaved={fetchMaterials}
+          onSaved={refetch}
         />
       )}
       {editTarget && (

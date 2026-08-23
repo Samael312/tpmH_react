@@ -125,6 +125,37 @@ export interface IncomeHistoryItem {
   validated_at: string | null
 }
 
+// ─── Materiales del profesor ─────────────────────────────────────────────────
+export interface TeacherMaterial {
+  id: number
+  title: string
+  description?: string | null
+  category: string
+  level: string
+  file_url: string | null
+  file_type: string | null
+  created_at: string
+  vocabulary_words: string[] | null
+}
+
+export function useTeacherMaterials() {
+  const query = useQuery({
+    queryKey: ["teacher", "materials"],
+    queryFn: async () => {
+      const res = await api.get('/materials/my-materials')
+      return res.data as TeacherMaterial[]
+    },
+  })
+
+  return {
+    materials: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
+
 export function useMyWithdrawals() {
   const [withdrawals, setWithdrawals] = useState<WithdrawalHistoryItem[]>([])
   const [loading, setLoading] = useState(true)
