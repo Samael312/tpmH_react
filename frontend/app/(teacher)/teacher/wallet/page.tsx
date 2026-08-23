@@ -2,15 +2,14 @@
 
 import { useState } from 'react'
 import { useWallet, useMyWithdrawals, useMyIncome } from '@/hooks/useTeacherData'
-import { Card, Badge, RefreshButton, Skeleton } from '@/components/ui'
+import { Card, Badge, RefreshButton, Skeleton, DesktopOnly } from '@/components/ui'
+import { usePageTopBar } from '@/lib/mobileTopBar'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
-import { Wallet as WalletIcon, TrendingUp, CheckCircle2, X, Loader2, ArrowDownLeft, ArrowUpRight } from 'lucide-react'
+import { Wallet as WalletIcon, TrendingUp, CheckCircle2, X, Loader2, ArrowDownLeft, ArrowUpRight, AlertTriangle, RefreshCw } from 'lucide-react'
 // in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS, PAYMENT_METHODS as FALLBACK_WITHDRAWAL } from "@/lib/teacherOptions";
-
-
 
 const STATUS_BADGE: Record<string, 'warning' | 'success' | 'danger' | 'info'> = {
   pending: 'warning',
@@ -187,14 +186,15 @@ export default function WalletPage() {
   const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
   const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
   const WITHDRAWAL_METHODS = catalogs.withdrawal_methods.length ? catalogs.withdrawal_methods : FALLBACK_WITHDRAWAL;
-  const { wallet, loading: wBalanceLoading, isFetching: wFetching, refetch: refetchWallet } = useWallet()
-  const { withdrawals, loading: wLoading, refetch: refetchW } = useMyWithdrawals()
-  const { income, loading: iLoading, refetch: refetchI } = useMyIncome()
-  const iFetchLoading = iLoading
+  
+  const { wallet, loading: wBalanceLoading, isFetching: wFetching, isError: wError, refetch: refetchWallet } = useWallet()
+  const { withdrawals, loading: wLoading, isFetching: wListFetching, isError: wListError, refetch: refetchW } = useMyWithdrawals()
+  const { income, loading: iLoading, isFetching: iFetching, isError: iError, refetch: refetchI } = useMyIncome()
   
   const [showModal, setShowModal] = useState(false)
-
-  const isGlobalFetching = Boolean(wFetching || wLoading || iFetchLoading)
+  
+  const isGlobalFetching = Boolean(wFetching || wListFetching || iFetching)
+  const isError = wError || wListError || iError
 
   const handleRefreshAll = () => {
     refetchWallet?.()
@@ -202,9 +202,15 @@ export default function WalletPage() {
     refetchI?.()
   }
 
+  usePageTopBar({
+    title: 'Mis Ganancias',
+    onRefresh: handleRefreshAll,
+    isFetching: isGlobalFetching,
+  })
+
   return (
     <div className="space-y-8 animate-fade-up max-w-5xl mx-auto pb-12 px-4 sm:px-6 lg:px-8">
-      {/* Header con Refresco */}
+      {/* Header con Refresco (Solo Desktop) */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="font-display text-3xl sm:text-4xl font-black text-slate-800 mb-2 tracking-tight">
@@ -214,8 +220,25 @@ export default function WalletPage() {
             Gestiona tu saldo acumulado y revisa el historial financiero de ingresos y retiros.
           </p>
         </div>
-        <RefreshButton onRefresh={handleRefreshAll} isFetching={isGlobalFetching} className="mt-1 flex-shrink-0" />
+        <DesktopOnly>
+          <RefreshButton onRefresh={handleRefreshAll} isFetching={isGlobalFetching} className="mt-1 flex-shrink-0" />
+        </DesktopOnly>
       </div>
+
+      {isError && (
+        <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span className="text-xs font-bold flex-1">
+            Hubo un problema cargando tu información financiera. Algunos datos podrían no estar actualizados.
+          </span>
+          <button
+            onClick={handleRefreshAll}
+            className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+          </button>
+        </div>
+      )}
 
       {/* Bloque 1 — Resumen financiero (Skeletons e Iconos) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">

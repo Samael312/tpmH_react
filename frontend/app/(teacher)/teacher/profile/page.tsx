@@ -7,9 +7,13 @@ import {
   AlertTriangle, Phone, Lock, Eye, EyeOff, Trash2, Edit2, RefreshCw,
   Calendar, Video, Palette, AtSign, Mail
 } from "lucide-react";
+import Skeleton from "@/components/ui/Skeleton";
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
+import { usePageTopBar } from "@/lib/mobileTopBar";
 import { THEME_PRESETS, DEFAULT_THEME_COLOR } from "@/lib/color";
 import api from "@/lib/api";
-import { useTeacherProfile, TeacherProfile } from "@/hooks/useTeacherData";
+import { useTeacherProfile, useCurrentUser, TeacherProfile } from "@/hooks/useTeacherData";
 import { useAuthStore } from "@/store/authStore";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import CalendarSync from "./CalendarSync";
@@ -87,17 +91,19 @@ function ProfileSkeleton() {
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6">
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="bg-white/80 rounded-[2rem] border border-white shadow-lg p-7 flex items-center gap-5">
-          <div className="w-20 h-20 rounded-2xl bg-slate-200 animate-pulse" />
+          <Skeleton className="w-20 h-20 rounded-2xl" />
           <div className="space-y-2 flex-1">
-            <div className="h-5 w-48 bg-slate-200 rounded-lg animate-pulse" />
-            <div className="h-3 w-32 bg-slate-100 rounded-lg animate-pulse" />
+            <Skeleton className="h-5 w-48 rounded-lg" />
+            <Skeleton className="h-3 w-32 rounded-lg" />
           </div>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-7 bg-white/80 rounded-[2rem] border border-white shadow-lg p-7 h-[500px] animate-pulse" />
+          <div className="lg:col-span-7">
+            <Skeleton className="h-[500px] w-full rounded-[2rem]" />
+          </div>
           <div className="lg:col-span-5 space-y-6">
-            <div className="bg-white/80 rounded-[2rem] border border-white shadow-lg p-7 h-[250px] animate-pulse" />
-            <div className="bg-white/80 rounded-[2rem] border border-white shadow-lg p-7 h-[180px] animate-pulse" />
+            <Skeleton className="h-[250px] w-full rounded-[2rem]" />
+            <Skeleton className="h-[180px] w-full rounded-[2rem]" />
           </div>
         </div>
       </div>
@@ -463,10 +469,12 @@ export default function TeacherProfilePage() {
     [catalogs.skill_suggestions]
   );
 
-  const { profile: rawProfile, loading, refetch } = useTeacherProfile();
+  const { profile: rawProfile, loading, isFetching, isError, refetch } = useTeacherProfile();
   const profile = rawProfile as TeacherProfileWithPhoto | null;
+  const { user: currentUser, refetch: refetchCurrentUser } = useCurrentUser();
   const { logout } = useAuthStore();
   const user = useAuthStore(state => state.user);
+
   const [nationality, setNationality] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -492,7 +500,8 @@ export default function TeacherProfilePage() {
   const [skills, setSkills] = useState<string[]>([]);
   const [certificates, setCertificates] = useState<{ title: string; year: string }[]>([]);
   const [socialLinks, setSocialLinks] = useState({ instagram: "", youtube: "", whatsapp: "", website: "" });
-  const [initialized, setInitialized] = useState(false);
+
+  const initializedRef = useRef(false);
 
   // Seguridad
   const [oldPw, setOldPw] = useState("");
@@ -507,6 +516,12 @@ export default function TeacherProfilePage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
   const [deleting, setDeleting] = useState(false);
+
+  usePageTopBar({
+    title: "Mi Perfil",
+    onRefresh: refetch,
+    isFetching,
+  });
 
   const populateFields = useCallback((prof: TeacherProfileWithPhoto, phoneNum: string) => {
     const { country, rest } = parsePhoneNumber(phoneNum);
@@ -529,27 +544,28 @@ export default function TeacherProfilePage() {
     });
   }, []);
 
-  const fetchAll = useCallback(async () => {
-    try {
-      const res = await api.get("/users/me");
-      if (profile) populateFields(profile, res.data.phone_number ?? "");
-      if (res.data.avatar) setPhotoUrl(res.data.avatar);
-      if (res.data.nationality) setNationality(res.data.nationality);
-      setUsername(res.data.username ?? "");  
-      setEmail(res.data.email ?? "");           
-    } catch {
-      if (profile) populateFields(profile, "");
-    } finally {
-      setInitialized(true);
-    }
-  }, [profile, populateFields]);
-
+  // Popula el formulario en cuanto AMBAS queries (perfil + usuario) ya resolvieron,
+  // corriendo en paralelo en vez de en cascada. Solo una vez por montaje, para no
+  // pisar una edición en curso si React Query refetchea en segundo plano.
   useEffect(() => {
-    if (profile && !initialized) fetchAll();
-  }, [profile, initialized, fetchAll]);
+    if (profile && currentUser && !initializedRef.current) {
+      populateFields(profile, currentUser.phone_number ?? "");
+      if (currentUser.avatar) setPhotoUrl(currentUser.avatar);
+      if (currentUser.nationality) setNationality(currentUser.nationality);
+      setUsername(currentUser.username ?? "");
+      setEmail(currentUser.email ?? "");
+      initializedRef.current = true;
+    }
+  }, [profile, currentUser, populateFields]);
 
   const handleCancelEdit = () => {
-    if (profile) fetchAll();
+    if (profile) {
+      populateFields(profile, currentUser?.phone_number ?? "");
+      if (currentUser) {
+        setUsername(currentUser.username ?? "");
+        setEmail(currentUser.email ?? "");
+      }
+    }
     setIsEditing(false);
   };
 
@@ -570,6 +586,7 @@ export default function TeacherProfilePage() {
       }
 
       refetch();
+      refetchCurrentUser();
       setInfoFeedback({ msg: "Foto de perfil actualizada", type: "success" });
     } catch (e: any) {
       setInfoFeedback({ msg: formatErrorMessage(e, "Error subiendo la foto"), type: "error" });
@@ -596,7 +613,7 @@ export default function TeacherProfilePage() {
         social_links: socialLinks,
         nationality: nationality || null,
       });
-      await refetch();
+      await Promise.all([refetch(), refetchCurrentUser()]);
       setSavedTimezone(timezone);
       setInfoFeedback({ msg: "Perfil actualizado correctamente", type: "success" });
       setIsEditing(false);
@@ -648,6 +665,29 @@ export default function TeacherProfilePage() {
 
   const displayPhoto = photoPreview ?? photoUrl ?? profile?.photo_url ?? null;
 
+  if (isError && !loading) {
+    return (
+      <>
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4 text-center px-4">
+          <div className="w-14 h-14 bg-rose-100 rounded-full flex items-center justify-center">
+            <AlertTriangle className="w-7 h-7 text-rose-500" />
+          </div>
+          <div>
+            <p className="text-lg font-black text-slate-800">No se pudo cargar tu perfil</p>
+            <p className="text-sm text-slate-500 mt-1">Revisa tu conexión e inténtalo de nuevo.</p>
+          </div>
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-2 px-5 py-2.5 bg-pink-500 hover:bg-pink-600 text-white text-sm font-bold rounded-xl shadow-sm transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" /> Reintentar
+          </button>
+        </div>
+        <ChipiWidget screenName="teacher_profile" />
+      </>
+    );
+  }
+
   if (loading) return <ProfileSkeleton />;
 
   return (
@@ -697,15 +737,20 @@ export default function TeacherProfilePage() {
             </div>
 
             {profile && (
-              <a
-                href="/teacher/profile/preview"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:border-pink-300 hover:text-pink-600 transition-all shadow-sm flex-shrink-0"
-              >
-                <ExternalLink className="w-4 h-4" />
-                Ver perfil público
-              </a>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <DesktopOnly>
+                  <RefreshButton onRefresh={refetch} isFetching={isFetching} />
+                </DesktopOnly>
+                <a
+                  href="/teacher/profile/preview"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:border-pink-300 hover:text-pink-600 transition-all shadow-sm"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Ver perfil público
+                </a>
+              </div>
             )}
           </div>
 

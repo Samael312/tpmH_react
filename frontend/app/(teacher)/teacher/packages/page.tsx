@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import {
   Package as PackageIcon, Plus, X, Check, Edit2,
@@ -11,45 +11,18 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { getSuggestedTheme, ICON_PICKER_OPTIONS as DEFAULT_ICON_OPTIONS, DEFAULT_PACKAGE_THEME, priceLabelSuffix } from "@/lib/packageThemes";
 import { THEME_PRESETS as DEFAULT_THEME_PRESETS } from "@/lib/color";
 import { useAuthStore } from "@/store/authStore";
-// in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
-
-interface Package {
-  id: number;
-  name: string;
-  subject: string;
-  description: string | null;
-  description_type: "paragraph" | "list";
-  description_items: string[] | null;
-  icon: string;
-  color: string;
-  classes_count: number | null;
-  price: number;
-  duration_minutes: number;
-  is_active: boolean;
-  allow_installments?: boolean;
-  installment_count?: number | null;
-}
-
-interface EnrollmentCompliance {
-  id: number;
-  student_id: number;
-  student_username: string;
-  student_name: string;
-  package_id: number;
-  package_name: string;
-  classes_used: number;
-  classes_total: number | null;
-  available_credits: number | null;
-  status: string;
-  completed_count: number;
-  no_show_count: number;
-  cancelled_late_count: number;
-  renewal_requested_package_name: string | null;
-  change_requested_package_name: string | null;
-  created_at: string;
-}
+import {
+  useTeacherPackages,
+  useTeacherEnrollments,
+  type TeacherPackage as Package,
+  type TeacherEnrollmentCompliance as EnrollmentCompliance,
+} from "@/hooks/useTeacherData";
+import Skeleton from "@/components/ui/Skeleton";
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
+import { usePageTopBar } from "@/lib/mobileTopBar";
 
 const emptyForm = {
   name: "", subject: "", description: "",
@@ -91,12 +64,28 @@ export default function TeacherPackagesPage() {
   const ICON_OPTIONS = catalogs?.package_icon_options?.length ? catalogs.package_icon_options : DEFAULT_ICON_OPTIONS;
   const THEME_PRESETS = catalogs?.theme_presets?.length ? catalogs.theme_presets : DEFAULT_THEME_PRESETS;
   
+  const {
+    packages,
+    loading: pkgLoading,
+    isFetching: pkgFetching,
+    isError: pkgError,
+    refetch: refetchPackages,
+  } = useTeacherPackages();
+  const {
+    enrollments,
+    loading: enrLoading,
+    isFetching: enrFetching,
+    isError: enrError,
+    refetch: refetchEnrollments,
+  } = useTeacherEnrollments();
+  
+  const loading = pkgLoading || enrLoading;
+  const isFetching = pkgFetching || enrFetching;
+  const isError = pkgError || enrError;
+
   const [kind, setKind] = useState<"subject" | "language">("subject");
   const [unlimited, setUnlimited] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
-  const [packages, setPackages] = useState<Package[]>([]);
-  const [enrollments, setEnrollments] = useState<EnrollmentCompliance[]>([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -109,29 +98,22 @@ export default function TeacherPackagesPage() {
   const role = useAuthStore(s => s.user?.role);
   const canManagePayments = role === "teacher_admin" || role === "superadmin";
 
+  const handleRefresh = () => {
+    refetchPackages();
+    refetchEnrollments();
+  };
+
+  usePageTopBar({
+    title: "Mis Paquetes",
+    onRefresh: handleRefresh,
+    isFetching,
+  });
+
   const scrollToForm = () => {
     setTimeout(() => {
       formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
   };
-
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [pkgRes, enrRes] = await Promise.all([
-        api.get("/packages/my-packages"),
-        api.get("/packages/teacher/enrollments"),
-      ]);
-      setPackages(pkgRes.data);
-      setEnrollments(enrRes.data);
-    } catch {
-      /* silencioso */
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -195,6 +177,7 @@ export default function TeacherPackagesPage() {
         allow_installments: form.allow_installments,
         installment_count: unlimited ? null : (form.allow_installments ? parseInt(form.installment_count, 10) : null),
       };
+      
       if (editingId) {
         await api.patch(`/packages/${editingId}`, payload);
       } else {
@@ -204,7 +187,7 @@ export default function TeacherPackagesPage() {
       setEditingId(null);
       setForm(emptyForm);
       setUnlimited(false);
-      await fetchAll();
+      await Promise.all([refetchPackages(), refetchEnrollments()]);
       setSavedOk(true);
       setTimeout(() => setSavedOk(false), 3000);
     } catch (e: any) {
@@ -218,7 +201,7 @@ export default function TeacherPackagesPage() {
     if (!confirm("¿Desactivar este paquete? Los estudiantes con enrollments activos no se ven afectados.")) return;
     try {
       await api.delete(`/packages/${id}`);
-      fetchAll();
+      handleRefresh();
     } catch (e: any) {
       alert(e.response?.data?.detail || "Error desactivando el paquete");
     }
@@ -229,7 +212,7 @@ export default function TeacherPackagesPage() {
     setApprovingId(enrollmentId);
     try {
       await api.post("/payments/manual-grant", { type: "package", enrollment_id: enrollmentId });
-      fetchAll();
+      handleRefresh();
     } catch (e: any) {
       alert(e.response?.data?.detail || "Error otorgando acceso");
     } finally {
@@ -261,6 +244,9 @@ export default function TeacherPackagesPage() {
                   Ver pagos pendientes <ChevronRight className="w-4 h-4" />
                 </Link>
               )}
+              <DesktopOnly>
+                <RefreshButton onRefresh={handleRefresh} isFetching={isFetching} />
+              </DesktopOnly>
               <button 
                 onClick={openCreate} 
                 className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-pink-200 hover:shadow-pink-300 hover:-translate-y-0.5 active:scale-95 transition-all duration-300"
@@ -270,6 +256,22 @@ export default function TeacherPackagesPage() {
               </button>
             </div>
           </div>
+
+          {/* Error banner — no bloquea el formulario ni la navegación */}
+          {isError && (
+            <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <span className="text-xs font-bold flex-1">
+                No se pudieron cargar tus {pkgError ? "paquetes" : "estudiantes con paquetes"} correctamente.
+              </span>
+              <button
+                onClick={handleRefresh}
+                className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+              </button>
+            </div>
+          )}
 
           {/* Alerta de renovaciones pendientes */}
           {pendingRenewals.length > 0 && (
@@ -641,7 +643,7 @@ export default function TeacherPackagesPage() {
             <h2 className="text-lg font-black text-slate-800">Paquetes ({packages.length})</h2>
             {loading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[1, 2, 3].map(i => <div key={i} className="h-40 bg-white rounded-2xl animate-pulse" />)}
+                {[1, 2, 3].map(i => <Skeleton key={i} className="h-40 w-full rounded-2xl" />)}
               </div>
             ) : packages.length === 0 ? (
               <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg py-16 text-center">
@@ -734,14 +736,14 @@ export default function TeacherPackagesPage() {
               <h2 className="text-lg font-black text-slate-800">
                 Seguimiento de estudiantes ({enrollments.length})
               </h2>
-              <button onClick={fetchAll} className="ml-auto text-slate-400 hover:text-pink-500 transition-colors">
+              <button onClick={handleRefresh} className="ml-auto text-slate-400 hover:text-pink-500 transition-colors">
                 <RefreshCw className="w-4 h-4" />
               </button>
             </div>
 
             {loading ? (
               <div className="space-y-3">
-                {[1, 2].map(i => <div key={i} className="h-20 bg-white rounded-2xl animate-pulse" />)}
+                {[1, 2].map(i => <Skeleton key={i} className="h-20 w-full rounded-2xl" />)}
               </div>
             ) : enrollments.length === 0 ? (
               <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg py-12 text-center">

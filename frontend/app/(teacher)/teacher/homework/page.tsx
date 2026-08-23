@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   ClipboardList, Plus, Send, Star, Clock,
   CheckCircle, AlertCircle, ChevronDown,
@@ -13,41 +13,14 @@ import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
-
-interface Homework {
-  id: number;
-  teacher_id: number;
-  title: string;
-  description: string;
-  due_date_utc: string;
-  is_active: boolean;
-  created_at: string;
-}
-
-interface Submission {
-  id: number;
-  homework_id: number;
-  student_id: number;
-  status: string; // "pending" | "submitted" | "graded"
-  submission: string | null;
-  submitted_at: string | null;
-  score: number | null;
-  feedback: string | null;
-  graded_at: string | null;
-  assigned_at: string;
-  student_name?: string;
-  student_username?: string;
-  student_avatar?: string | null;
-}
-
-interface Student {
-  id: number;
-  user_id: number;
-  username: string;
-  name: string;
-  surname: string;
-  avatar?: string | null;
-}
+import {
+  useTeacherHomework,
+  useHomeworkSubmissions,
+  useTeacherStudentsBasic,
+  type TeacherHomeworkItem as Homework,
+  type HomeworkSubmission as Submission,
+  type TeacherStudentBasic as Student,
+} from "@/hooks/useTeacherData";
 
 function StudentAvatar({ s, className }: { s: Student; className?: string }) {
   if (s.avatar) {
@@ -538,17 +511,13 @@ function DeleteHomeworkModal({
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function HomeworkPage() {
-  const [homeworks, setHomeworks]     = useState<Homework[]>([]);
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [students, setStudents]       = useState<Student[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [isFetching, setIsFetching]   = useState(false);
+  const { homeworks, loading, isFetching: hwFetching, isError: hwError, refetch: refetchHomework } = useTeacherHomework();
+  const { students, isFetching: stuFetching, isError: stuError, refetch: refetchStudents } = useTeacherStudentsBasic();
   const [tab, setTab]                 = useState<"create" | "review">("review");
   const [activeHw, setActiveHw]       = useState<number | null>(null);
   const [gradeTarget, setGradeTarget] = useState<Submission | null>(null);
   const [search, setSearch]           = useState("");
   const [studentSearch, setStudentSearch] = useState("");
-
   const [editTarget, setEditTarget]     = useState<Homework | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Homework | null>(null);
   const [justDeleted, setJustDeleted]   = useState(false);
@@ -561,48 +530,30 @@ export default function HomeworkPage() {
   const [creating, setCreating]     = useState(false);
   const [createError, setCreateError] = useState("");
 
-  const fetchAll = useCallback(async (isSilent = false) => {
-    if (!isSilent) setLoading(true);
-    setIsFetching(true);
-    try {
-      const [hwRes, stuRes] = await Promise.all([
-        api.get("/homework/my-homework"),
-        api.get("/teachers/me/students"),
-      ]);
-      setHomeworks(hwRes.data);
-      setStudents(stuRes.data);
-    } catch { }
-    finally {
-      setLoading(false);
-      setIsFetching(false);
-    }
-  }, []);
+  const {
+    submissions,
+    loading: loadingSubs,
+    isError: subsError,
+    refetch: refetchSubmissions,
+  } = useHomeworkSubmissions(activeHw);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  const isFetching = hwFetching || stuFetching;
+  const isError = hwError || stuError;
 
   const handleRefresh = () => {
-    fetchAll(true);
-    if (activeHw) fetchSubmissions(activeHw);
+    refetchHomework();
+    refetchStudents();
+    if (activeHw) refetchSubmissions();
   };
 
   usePageTopBar({
     title: 'Tareas',
     onRefresh: handleRefresh,
-    isFetching: isFetching,
+    isFetching,
   });
 
-  const [loadingSubs, setLoadingSubs] = useState(false);
-
-  const fetchSubmissions = async (hwId: number) => {
-    if (activeHw === hwId) { setActiveHw(null); return; }
-    setActiveHw(hwId);
-    setSubmissions([]);
-    setLoadingSubs(true);
-    try {
-      const res = await api.get(`/homework/${hwId}/submissions`);
-      setSubmissions(res.data);
-    } catch { }
-    finally { setLoadingSubs(false); }
+  const toggleHomework = (hwId: number) => {
+    setActiveHw(prev => (prev === hwId ? null : hwId));
   };
 
   const createHomework = async () => {
@@ -620,7 +571,7 @@ export default function HomeworkPage() {
       setHwTitle(""); setHwContent(""); setHwDue("");
       setHwStudents([]);
       setStudentSearch("");
-      fetchAll(true);
+      refetchHomework();
       setTab("review");
     } catch (e: any) {
       const detail = e.response?.data?.detail;
@@ -661,7 +612,7 @@ export default function HomeworkPage() {
 
   const handleDeleted = () => {
     setActiveHw(null);
-    fetchAll(true);
+    refetchHomework();
     setJustDeleted(true);
     setTimeout(() => setJustDeleted(false), 3000);
   };
@@ -699,6 +650,25 @@ export default function HomeworkPage() {
             <RefreshButton onRefresh={handleRefresh} isFetching={isFetching} />
           </DesktopOnly>
         </div>
+
+        {/* Error banner — nuevo, visible en cualquier tab sin bloquear la navegación */}
+        {isError && (
+          <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl
+                          px-4 py-3.5 flex items-center gap-3 flex-wrap
+                          animate-in fade-in slide-in-from-top-2 duration-300">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span className="text-xs font-bold flex-1">
+              No se pudieron cargar tus {hwError ? "tareas" : "estudiantes"} correctamente.
+            </span>
+            <button
+              onClick={handleRefresh}
+              className="flex items-center gap-1.5 text-xs font-bold text-rose-700
+                         bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+            </button>
+          </div>
+        )}
 
         {/* Confirmación de eliminado */}
         {justDeleted && (
@@ -810,7 +780,7 @@ export default function HomeworkPage() {
                                overflow-hidden transition-all duration-200">
 
                     <div
-                      onClick={() => fetchSubmissions(hw.id)}
+                      onClick={() => toggleHomework(hw.id)}
                       className="w-full flex items-center gap-3 sm:gap-4 p-4 sm:p-5 text-left
                                  hover:bg-slate-50/50 transition-colors cursor-pointer"
                     >
@@ -1117,18 +1087,19 @@ export default function HomeworkPage() {
           </div>
         )}
       </div>
+
       {gradeTarget && (
         <GradeModal
           submission={gradeTarget}
           onClose={() => setGradeTarget(null)}
-          onSaved={() => activeHw && fetchSubmissions(activeHw)}
+          onSaved={refetchSubmissions}
         />
       )}
       {editTarget && (
         <EditHomeworkModal
           hw={editTarget}
           onClose={() => setEditTarget(null)}
-          onSaved={fetchAll}
+          onSaved={refetchHomework}
         />
       )}
       {deleteTarget && (

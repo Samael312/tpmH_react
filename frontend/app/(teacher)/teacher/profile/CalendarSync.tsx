@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Calendar, Link as LinkIcon, Unlink,
   RefreshCw, Check, AlertTriangle,
@@ -8,13 +9,8 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import { getMyDisplayTimezone } from "@/lib/tzFormat";
-
-interface CalendarStatus {
-  connected: boolean;
-  calendar_id: string | null;
-  last_sync_at: string | null;
-  sync_enabled: boolean;
-}
+import { useCalendarStatus, type CalendarStatus } from "@/hooks/useTeacherData";
+import Skeleton from "@/components/ui/Skeleton";
 
 interface SyncResult {
   new_count:     number;
@@ -24,8 +20,8 @@ interface SyncResult {
 }
 
 export default function CalendarSync() {
-  const [status, setStatus]   = useState<CalendarStatus | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { status, loading, isError, refetch } = useCalendarStatus();
+  const queryClient = useQueryClient();
 
   // Sincronización
   const [syncing, setSyncing]       = useState(false);
@@ -41,19 +37,6 @@ export default function CalendarSync() {
 
   // Toggle sync habilitado
   const [togglingSync, setTogglingSync] = useState(false);
-
-  const fetchStatus = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get("/calendar/status");
-      setStatus(res.data);
-    } catch {
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { fetchStatus(); }, []);
 
   // ── Iniciar OAuth ──
   const connectCalendar = async () => {
@@ -72,7 +55,7 @@ export default function CalendarSync() {
     setDisconnecting(true);
     try {
       await api.post("/calendar/disconnect");
-      await fetchStatus();
+      await refetch();
       setConfirm(false);
     } catch {
     } finally {
@@ -88,7 +71,10 @@ export default function CalendarSync() {
       await api.post("/calendar/toggle", {
         enabled: !status.sync_enabled,
       });
-      setStatus((p) => p ? { ...p, sync_enabled: !p.sync_enabled } : p);
+      queryClient.setQueryData<CalendarStatus>(
+        ["teacher", "calendar", "status"],
+        (prev) => (prev ? { ...prev, sync_enabled: !prev.sync_enabled } : prev)
+      );
     } catch {
     } finally {
       setTogglingSync(false);
@@ -103,9 +89,9 @@ export default function CalendarSync() {
     try {
       const res = await api.post("/calendar/sync");
       setSyncResult(res.data);
-      // Actualizar last_sync_at
-      setStatus((p) =>
-        p ? { ...p, last_sync_at: new Date().toISOString() } : p
+      queryClient.setQueryData<CalendarStatus>(
+        ["teacher", "calendar", "status"],
+        (prev) => (prev ? { ...prev, last_sync_at: new Date().toISOString() } : prev)
       );
     } catch (e: any) {
       setSyncError(e.response?.data?.detail || "Error al sincronizar");
@@ -129,22 +115,39 @@ export default function CalendarSync() {
 
   if (loading) {
     return (
-      <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border
-                        border-white shadow-lg p-7">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center
-                            justify-center">
+      <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg p-7 space-y-4">
+        <div className="flex items-center gap-3">
+          <Skeleton className="w-9 h-9 rounded-xl" />
+          <Skeleton className="h-5 w-40 rounded-lg" />
+        </div>
+        <Skeleton className="h-24 w-full rounded-2xl" />
+        <Skeleton className="h-12 w-full rounded-xl" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg p-7 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
             <Calendar className="w-5 h-5 text-blue-500" />
           </div>
           <h2 className="text-lg font-black text-slate-800 tracking-tight">
             Google Calendar
           </h2>
         </div>
-        <div className="flex items-center gap-3 py-4">
-          <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
-          <span className="text-sm text-slate-400 font-bold">
-            Verificando estado...
+        <div className="bg-rose-50 border border-rose-100 rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
+          <AlertTriangle className="w-4 h-4 text-rose-500 flex-shrink-0" />
+          <span className="text-xs font-bold text-rose-600 flex-1">
+            No se pudo cargar el estado de tu calendario.
           </span>
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+          </button>
         </div>
       </div>
     );

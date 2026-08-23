@@ -13,7 +13,7 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 // in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS, TOPICS as FALLBACK_TOPICS, LEVELS as FALLBACK_LEVELS } from "@/lib/teacherOptions";
-import { useTeacherMaterials, type TeacherMaterial as Material } from "@/hooks/useTeacherData";
+import { useTeacherMaterials, useTeacherStudentsBasic, type TeacherMaterial as Material } from "@/hooks/useTeacherData";
 import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
@@ -110,26 +110,11 @@ function AssignModal({
   material: Material;
   onClose: () => void;
 }) {
-  const [students, setStudents] = useState<Student[]>([]);
+  const { students, loading, isError, refetch } = useTeacherStudentsBasic();
   const [selected, setSelected] = useState<number[]>([]);
-  const [loading, setLoading]   = useState(false);
-  const [fetched, setFetched]   = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [success, setSuccess]   = useState(false);
   const [search, setSearch]     = useState("");
-
-  const fetchStudents = async () => {
-    if (fetched) return;
-    setLoading(true);
-    try {
-      const res = await api.get("/teachers/me/students");
-      setStudents(res.data);
-      setFetched(true);
-    } catch { }
-    finally { setLoading(false); }
-  };
-
-  useState(() => { fetchStudents(); });
 
   const toggle = (id: number) =>
     setSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
@@ -196,6 +181,19 @@ function AssignModal({
             <p className="text-slate-700 font-bold">
               ¡Asignado correctamente!
             </p>
+          </div>
+        ) : isError ? (
+          <div className="flex flex-col items-center py-8 gap-3 text-center">
+            <div className="w-14 h-14 rounded-full bg-rose-100 flex items-center justify-center">
+              <AlertTriangle className="w-7 h-7 text-rose-500" />
+            </div>
+            <p className="text-sm font-bold text-slate-700">No se pudo cargar tu lista de estudiantes</p>
+            <button
+              onClick={() => refetch()}
+              className="flex items-center gap-2 px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold rounded-xl transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+            </button>
           </div>
         ) : loading ? (
           <div className="flex justify-center py-8">

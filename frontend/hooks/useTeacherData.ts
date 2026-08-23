@@ -1,4 +1,3 @@
-import { useState, useEffect, useCallback } from 'react'
 import api from '@/lib/api'
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 
@@ -138,6 +137,45 @@ export interface TeacherMaterial {
   vocabulary_words: string[] | null
 }
 
+// ─── Pagos del profesor (validación) ─────────────────────────────────────────
+export function useTeacherPendingPayments(enabled: boolean = true) {
+  const query = useQuery({
+    queryKey: ["teacher", "payments", "pending"],
+    queryFn: async () => {
+      const res = await api.get('/payments/pending-review')
+      return res.data as any[]
+    },
+    enabled,
+  })
+
+  return {
+    payments: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
+
+export function useTeacherPaymentsHistory(enabled: boolean = true) {
+  const query = useQuery({
+    queryKey: ["teacher", "payments", "history"],
+    queryFn: async () => {
+      const res = await api.get('/payments/history')
+      return res.data as any[]
+    },
+    enabled,
+  })
+
+  return {
+    history: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
+
 export function useTeacherMaterials() {
   const query = useQuery({
     queryKey: ["teacher", "materials"],
@@ -157,31 +195,39 @@ export function useTeacherMaterials() {
 }
 
 export function useMyWithdrawals() {
-  const [withdrawals, setWithdrawals] = useState<WithdrawalHistoryItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
+  const query = useQuery({
+    queryKey: ["teacher", "wallet", "withdrawals"],
+    queryFn: async () => {
       const res = await api.get('/payments/my-withdrawals')
-      setWithdrawals(res.data)
-    } catch { } finally { setLoading(false) }
-  }, [])
-  useEffect(() => { fetch() }, [fetch])
-  return { withdrawals, loading, refetch: fetch }
+      return res.data as WithdrawalHistoryItem[]
+    },
+  })
+
+  return {
+    withdrawals: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }
 
 export function useMyIncome() {
-  const [income, setIncome] = useState<IncomeHistoryItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
+  const query = useQuery({
+    queryKey: ["teacher", "wallet", "income"],
+    queryFn: async () => {
       const res = await api.get('/payments/my-income')
-      setIncome(res.data)
-    } catch { } finally { setLoading(false) }
-  }, [])
-  useEffect(() => { fetch() }, [fetch])
-  return { income, loading, refetch: fetch }
+      return res.data as IncomeHistoryItem[]
+    },
+  })
+
+  return {
+    income: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }
 
 // ─── Estudiantes del profesor (detalle completo) ─────────────────────────────
@@ -252,20 +298,48 @@ export function useTeacherClasses(filters?: TeacherClassesFilters) {
 
 // ─── Perfil del profesor ─────────────────────────────────────────────────────
 export function useTeacherProfile() {
-  const [profile, setProfile] = useState<TeacherProfile | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
+  const query = useQuery({
+    queryKey: ["teacher", "profile"],
+    queryFn: async () => {
       const res = await api.get('/teachers/me/profile')
-      setProfile(res.data)
-    } catch { }
-    finally { setLoading(false) }
-  }, [])
+      return res.data as TeacherProfile
+    },
+  })
 
-  useEffect(() => { fetch() }, [fetch])
-  return { profile, loading, refetch: fetch }
+  return {
+    profile: query.data ?? null,
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
+
+// ─── Usuario actual (datos base: username, email, teléfono, avatar, nacionalidad) ──
+export interface CurrentUser {
+  username: string
+  email: string
+  phone_number: string | null
+  avatar: string | null
+  nationality: string | null
+}
+
+export function useCurrentUser() {
+  const query = useQuery({
+    queryKey: ["user", "me"],
+    queryFn: async () => {
+      const res = await api.get('/users/me')
+      return res.data as CurrentUser
+    },
+  })
+
+  return {
+    user: query.data ?? null,
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }
 
 // ─── Disponibilidad semanal ──────────────────────────────────────────────────
@@ -325,20 +399,191 @@ export function useRequestWithdrawal() {
 }
 
 // ─── Google Calendar status ──────────────────────────────────────────────────
-export function useCalendarStatus() {
-  const [status, setStatus] = useState<CalendarStatus | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
-      const res = await api.get('/calendar/status')
-      setStatus(res.data)
-    } catch { }
-    finally { setLoading(false) }
-  }, [])
-
-  useEffect(() => { fetch() }, [fetch])
-  return { status, loading, refetch: fetch }
+export interface CalendarStatus {
+  connected: boolean
+  calendar_id: string | null
+  last_sync_at: string | null
+  sync_enabled: boolean
 }
 
+export function useCalendarStatus() {
+  const query = useQuery({
+    queryKey: ["teacher", "calendar", "status"],
+    queryFn: async () => {
+      const res = await api.get('/calendar/status')
+      return res.data as CalendarStatus
+    },
+  })
+
+  return {
+    status: query.data ?? null,
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
+
+// ─── Tareas del profesor ──────────────────────────────────────────────────────
+export interface TeacherHomeworkItem {
+  id: number
+  teacher_id: number
+  title: string
+  description: string
+  due_date_utc: string
+  is_active: boolean
+  created_at: string
+}
+
+export function useTeacherHomework() {
+  const query = useQuery({
+    queryKey: ["teacher", "homework"],
+    queryFn: async () => {
+      const res = await api.get('/homework/my-homework')
+      return res.data as TeacherHomeworkItem[]
+    },
+  })
+
+  return {
+    homeworks: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
+
+export interface HomeworkSubmission {
+  id: number
+  homework_id: number
+  student_id: number
+  status: string // "pending" | "submitted" | "graded"
+  submission: string | null
+  submitted_at: string | null
+  score: number | null
+  feedback: string | null
+  graded_at: string | null
+  assigned_at: string
+  student_name?: string
+  student_username?: string
+  student_avatar?: string | null
+}
+
+export function useHomeworkSubmissions(homeworkId: number | null) {
+  const query = useQuery({
+    queryKey: ["teacher", "homework", "submissions", homeworkId],
+    queryFn: async () => {
+      const res = await api.get(`/homework/${homeworkId}/submissions`)
+      return res.data as HomeworkSubmission[]
+    },
+    enabled: homeworkId !== null,
+  })
+
+  return {
+    submissions: query.data ?? [],
+    loading: query.isLoading,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
+
+// ─── Estudiantes del profesor (lista básica, reutilizable en modales) ────────
+export interface TeacherStudentBasic {
+  id: number
+  user_id?: number
+  username: string
+  name: string
+  surname: string
+  avatar?: string | null
+}
+
+export function useTeacherStudentsBasic() {
+  const query = useQuery({
+    queryKey: ["teacher", "students", "basic"],
+    queryFn: async () => {
+      const res = await api.get('/teachers/me/students')
+      return res.data as TeacherStudentBasic[]
+    },
+  })
+
+  return {
+    students: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
+
+// ─── Paquetes del profesor ────────────────────────────────────────────────────
+export interface TeacherPackage {
+  id: number
+  name: string
+  subject: string
+  description: string | null
+  description_type: "paragraph" | "list"
+  description_items: string[] | null
+  icon: string
+  color: string
+  classes_count: number | null
+  price: number
+  duration_minutes: number
+  is_active: boolean
+  allow_installments?: boolean
+  installment_count?: number | null
+}
+
+export function useTeacherPackages() {
+  const query = useQuery({
+    queryKey: ["teacher", "packages"],
+    queryFn: async () => {
+      const res = await api.get('/packages/my-packages')
+      return res.data as TeacherPackage[]
+    },
+  })
+
+  return {
+    packages: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
+
+export interface TeacherEnrollmentCompliance {
+  id: number
+  student_id: number
+  student_username: string
+  student_name: string
+  package_id: number
+  package_name: string
+  classes_used: number
+  classes_total: number | null
+  available_credits: number | null
+  status: string
+  completed_count: number
+  no_show_count: number
+  cancelled_late_count: number
+  renewal_requested_package_name: string | null
+  change_requested_package_name: string | null
+  created_at: string
+}
+
+export function useTeacherEnrollments() {
+  const query = useQuery({
+    queryKey: ["teacher", "packages", "enrollments"],
+    queryFn: async () => {
+      const res = await api.get('/packages/teacher/enrollments')
+      return res.data as TeacherEnrollmentCompliance[]
+    },
+  })
+
+  return {
+    enrollments: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
