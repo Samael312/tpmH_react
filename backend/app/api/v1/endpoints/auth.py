@@ -10,7 +10,17 @@ from app.models.student import StudentProfile
 from app.auth.passwords import hash_password, verify_password
 from app.auth.jwt import create_access_token
 from app.auth.google import verify_google_token
-from app.schemas.auth import (RegisterRequest, LoginRequest, TokenResponse, GoogleAuthRequest, GoogleAuthResponse, GoogleRegisterRequest)
+from app.schemas.auth import (
+    RegisterRequest, 
+    LoginRequest, 
+    TokenResponse, 
+    GoogleAuthRequest, 
+    GoogleAuthResponse, 
+    GoogleRegisterRequest,
+    ForgotPasswordRequest,
+    ForgotUsernameRequest,
+    ResetPasswordRequest,
+    )
 from datetime import timedelta
 from app.models.password_reset import PasswordResetToken
 from app.core.email import send_password_reset_email, send_username_recovery_email  
@@ -23,15 +33,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-class ForgotPasswordRequest(BaseModel):
-    email: EmailStr
-
-class ForgotUsernameRequest(BaseModel):
-    email: EmailStr
-
-class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str
 
 @router.post("/register", response_model=TokenResponse)
 def register(data: RegisterRequest, db: Session = Depends(get_db)):

@@ -22,7 +22,7 @@ export default function ForgotPasswordPage() {
     setError("");
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+const handleSubmit = async (e: React.SubmitEvent) => {
     e.preventDefault();
     if (!email) return;
     setLoading(true);
@@ -31,9 +31,15 @@ export default function ForgotPasswordPage() {
       const endpoint = mode === "password" ? "/auth/forgot-password" : "/auth/forgot-username";
       await api.post(endpoint, { email });
       setSent(true);
-    } catch {
-      // Anti-enumeración: siempre mostrar éxito
-      setSent(true);
+    } catch (e: any) {
+      const status = e.response?.status;
+      // Anti-enumeración solo aplica a 4xx (el backend ya responde igual
+      // exista o no el email). Los fallos de red/servidor deben avisarse.
+      if (status && status < 500) {
+        setSent(true);
+      } else {
+        setError("No pudimos procesar tu solicitud. Revisa tu conexión e inténtalo de nuevo.");
+      }
     } finally {
       setLoading(false);
     }

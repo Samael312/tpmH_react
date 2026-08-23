@@ -27,7 +27,10 @@ from app.schemas.packages import (
     PackageChangeApprovalResponse,
 )
 
-PACKAGE_CHANGE_BLOCKING_STATUSES = ["completed", "no_show", "confirmed", "pending"]
+PACKAGE_CHANGE_BLOCKING_STATUSES = [
+    "completed", "no_show", "confirmed", "pending",
+    "pending_trial", "pending_payment", "rescheduled", "finalized",
+]
 
 router = APIRouter()
 

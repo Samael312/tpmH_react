@@ -36,13 +36,20 @@ class GoogleRegisterRequest(BaseModel):
         return v
 
 class RegisterRequest(BaseModel):
-    """Datos necesarios para registrarse"""
-    email: EmailStr        # Valida que sea un email real
-    username: str         # Nuevo campo para el nombre de usuario
+    email: EmailStr
+    username: str
     password: str
     name: str
     surname: str
-    role: str = "student"  # Por defecto es estudiante
+    role: str = "student"
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v):
+        v = v.strip().lower()
+        if not v:
+            raise ValueError("El usuario no puede estar vacío")
+        return v
 
 class LoginRequest(BaseModel):
     """Datos para hacer login"""
@@ -60,3 +67,20 @@ class TokenResponse(BaseModel):
 class GoogleAuthRequest(BaseModel):
     """Token que manda Google después del login"""
     id_token: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ForgotUsernameRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError("La contraseña debe tener al menos 8 caracteres")
+        return v

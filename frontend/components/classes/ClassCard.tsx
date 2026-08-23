@@ -28,7 +28,7 @@ export interface ClassCardData {
   student_phone?: string | null;
 }
 
-type Role = "student" | "teacher";
+type Role = "student" | "teacher" | "teacher_admin";
 
 interface ClassCardProps {
   class_: ClassCardData;
@@ -73,6 +73,30 @@ function PersonAvatar({ name, url, className }: { name?: string | null; url?: st
       {name ? name.charAt(0).toUpperCase() : <User className="w-3 h-3" />}
     </div>
   );
+}
+
+// ─── Conversión local a ISO UTC según zona horaria IANA ──────────────────
+function localDateTimeToUtcIso(dateStr: string, timeStr: string, timeZone: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const [hour, minute] = timeStr.split(":").map(Number);
+  
+  const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone, hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+  const parts = dtf.formatToParts(utcGuess).reduce((acc, p) => {
+    acc[p.type] = p.value;
+    return acc;
+  }, {} as Record<string, string>);
+  
+  const asUTC = Date.UTC(
+    Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+    Number(parts.hour) % 24, Number(parts.minute), Number(parts.second)
+  );
+  const offsetMinutes = (asUTC - utcGuess.getTime()) / 60000;
+  return new Date(utcGuess.getTime() - offsetMinutes * 60000).toISOString();
 }
 
 // ─── Diferencia de zona horaria entre dos IANA timezones ────────────────────
@@ -135,11 +159,7 @@ export default function ClassCard({
   const personNationality = role === "student" ? class_.teacher_nationality : class_.student_nationality;
   const personLabel = role === "student" ? "Prof." : "Est.";
 
-  // Teléfono y diferencia horaria de la otra persona — solo visibles
-  // para quien tiene la clase asignada (profesor ve datos del estudiante y viceversa)
   const personPhone = role === "student" ? class_.teacher_phone : class_.student_phone;
-  // Zona horaria guardada en la clase al momento de agendar. Si por algún
-  // motivo no vino (clases antiguas), caemos a la del perfil de la cuenta.
   const myTimezone = (role === "teacher" ? class_.teacher_timezone : class_.student_timezone) || getMyDisplayTimezone();
   const otherTimezone = role === "teacher" ? class_.student_timezone : class_.teacher_timezone;
   const tzDiffLabel = getTimezoneDiffLabel(otherTimezone, myTimezone);
@@ -160,7 +180,8 @@ export default function ClassCard({
     if (!newDate || !newTime) return;
     setUpdating(true); setError("");
     try {
-      const startUtc = new Date(`${newDate}T${newTime}:00Z`).toISOString();
+      const myTz = (role === "teacher" ? class_.teacher_timezone : class_.student_timezone) || getMyDisplayTimezone();
+      const startUtc = localDateTimeToUtcIso(newDate, newTime, myTz);
       const endUtc = new Date(new Date(startUtc).getTime() + duration * 60000).toISOString();
       const endpoint = role === "teacher" 
         ? `/classes/teacher/${class_.id}/reschedule`
@@ -182,14 +203,24 @@ export default function ClassCard({
     finally { setUpdating(false); }
   };
 
+  const teacherCancelInline = async () => {
+    setUpdating(true); setError("");
+    try {
+      await api.delete(`/classes/teacher/${class_.id}`);
+      onUpdate?.();
+    } catch (e: any) { setError(e.response?.data?.detail || "Error al cancelar"); } 
+    finally { setUpdating(false); }
+  };
+
   // --- HANDLERS ---
   const handleRescheduleClick = () => {
     if (onReschedule) { onReschedule(); return; }
     setShowInlineReschedule(true);
   };
+
   const handleCancelClick = () => {
     if (onCancel) { onCancel(); return; }
-    role === "teacher" ? teacherUpdateStatus("cancelled") : studentCancelInline();
+    role === "teacher" ? teacherCancelInline() : studentCancelInline();
   };
 
   // --- PERMISOS ---
@@ -250,12 +281,12 @@ export default function ClassCard({
             {/* Tiempo y Persona */}
             <div className="flex items-center gap-3 text-xs font-semibold text-slate-500 flex-wrap mb-2">
               <span className="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-lg text-slate-600">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
-              {formatTimeTz(class_.start_time_utc, myTimezone)}
-              {" – "}
-              {class_.end_time_utc ? formatTimeTz(class_.end_time_utc, myTimezone) : formatTimeTz(endDate.toISOString(), myTimezone)}
-              {" "}({duration} min)
-            </span>
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                {formatTimeTz(class_.start_time_utc, myTimezone)}
+                {" – "}
+                {class_.end_time_utc ? formatTimeTz(class_.end_time_utc, myTimezone) : formatTimeTz(endDate.toISOString(), myTimezone)}
+                {" "}({duration} min)
+              </span>
               
               {personName && (
                 <span className="flex items-center gap-1.5 text-slate-500">
