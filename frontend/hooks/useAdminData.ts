@@ -227,21 +227,26 @@ export interface AdminNotification {
   created_at: string
 }
 
-export function useUnreadNotificationCount() {
+export function useUnreadNotificationCount(enabled: boolean = true) {
   const [count, setCount] = useState(0)
 
   const fetch = useCallback(async () => {
+    if (!enabled) return
     try {
       const res = await api.get('/admin/notifications/unread-count')
       setCount(res.data.unread_count)
     } catch { }
-  }, [])
+  }, [enabled])
 
   useEffect(() => {
+    if (!enabled) {
+      setCount(0)
+      return
+    }
     fetch()
     const interval = setInterval(fetch, 30000) // refresco cada 30s
     return () => clearInterval(interval)
-  }, [fetch])
+  }, [enabled, fetch])
 
   return { count, refetch: fetch }
 }

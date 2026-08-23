@@ -148,7 +148,10 @@ export default function DashboardSidebar() {
   const { user, logout } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-  const { count: unreadCount } = useUnreadNotificationCount();
+
+  const role = user?.role || "";
+  const showAdminMenu = ["superadmin", "teacher_admin"].includes(role);
+  const { count: unreadCount } = useUnreadNotificationCount(showAdminMenu);
 
   useEffect(() => {
     setIsMounted(true);
@@ -163,9 +166,6 @@ export default function DashboardSidebar() {
     return <aside className="hidden md:flex w-64 bg-white border-r border-pink-100 min-h-screen shadow-xl shadow-pink-500/5 flex-shrink-0 z-50" />;
   }
 
-  const role = user?.role || "";
-
-  const showAdminMenu = ["superadmin", "teacher_admin"].includes(role);
   const showTeacherMenu = ["teacher", "teacher_admin"].includes(role);
   const showStudentMenu = role === "student";
 
@@ -184,10 +184,18 @@ export default function DashboardSidebar() {
         ${collapsed ? "w-20" : "w-64"}
       `}>
         {/* Cabecera Sidebar */}
-        <div className="flex items-center justify-between px-5 py-6">
+        <div
+          className={`flex items-center py-6 ${
+            collapsed ? "flex-col gap-3 px-2" : "justify-between px-5"
+          }`}
+        >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-400 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-lg shadow-pink-200 transform hover:rotate-12 transition-transform">
-              <span className="text-white text-xl font-black">T</span>
+            <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-400 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-lg shadow-pink-200 transform hover:rotate-12 transition-transform overflow-hidden">
+              <img
+                src="/assets/logo.png"
+                alt="TPMH"
+                className="w-full h-full object-contain p-1.5"
+              />
             </div>
             {!collapsed && (
               <div className="animate-in fade-in duration-300">
@@ -198,7 +206,7 @@ export default function DashboardSidebar() {
           </div>
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-pink-600 hover:bg-pink-50 transition-colors"
+            className="p-1.5 rounded-xl text-slate-400 hover:text-pink-600 hover:bg-pink-50 transition-colors flex-shrink-0"
             title={collapsed ? "Expandir" : "Colapsar"}
           >
             <ChevronLeft className={`w-5 h-5 transition-transform duration-300 ${collapsed ? "rotate-180" : ""}`} />
