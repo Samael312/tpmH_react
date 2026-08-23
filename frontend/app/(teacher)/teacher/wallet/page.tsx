@@ -7,7 +7,6 @@ import { usePageTopBar } from '@/lib/mobileTopBar'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 import { Wallet as WalletIcon, TrendingUp, CheckCircle2, X, Loader2, ArrowDownLeft, ArrowUpRight, AlertTriangle, RefreshCw } from 'lucide-react'
-// in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS, PAYMENT_METHODS as FALLBACK_WITHDRAWAL } from "@/lib/teacherOptions";
 
@@ -71,7 +70,8 @@ function RequestWithdrawalModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+    // Se ajustó el z-index a z-[9999] para que cubra toda la pantalla, incluyendo sidebars
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
       <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose} />
       
       <div className="relative w-full max-w-lg bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8 space-y-6 animate-in zoom-in-95 duration-200 z-10 my-auto">
@@ -209,173 +209,183 @@ export default function WalletPage() {
   })
 
   return (
-    <div className="space-y-8 animate-fade-up max-w-5xl mx-auto pb-12 px-4 sm:px-6 lg:px-8">
-      {/* Header con Refresco (Solo Desktop) */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="font-display text-3xl sm:text-4xl font-black text-slate-800 mb-2 tracking-tight">
-            Mis Ganancias
-          </h1>
-          <p className="text-slate-500 font-medium text-sm sm:text-base">
-            Gestiona tu saldo acumulado y revisa el historial financiero de ingresos y retiros.
-          </p>
+    <>
+      {/* Contenedor principal del contenido. Mantiene la animación y el centrado. */}
+      <div className="space-y-8 animate-fade-up max-w-5xl mx-auto pb-12 px-4 sm:px-6 lg:px-8">
+        
+        {/* Header con Refresco (Solo Desktop) */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="font-display text-3xl sm:text-4xl font-black text-slate-800 mb-2 tracking-tight">
+              Mis Ganancias
+            </h1>
+            <p className="text-slate-500 font-medium text-sm sm:text-base">
+              Gestiona tu saldo acumulado y revisa el historial financiero de ingresos y retiros.
+            </p>
+          </div>
+          <DesktopOnly>
+            <RefreshButton onRefresh={handleRefreshAll} isFetching={isGlobalFetching} className="mt-1 flex-shrink-0" />
+          </DesktopOnly>
         </div>
-        <DesktopOnly>
-          <RefreshButton onRefresh={handleRefreshAll} isFetching={isGlobalFetching} className="mt-1 flex-shrink-0" />
-        </DesktopOnly>
-      </div>
 
-      {isError && (
-        <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          <span className="text-xs font-bold flex-1">
-            Hubo un problema cargando tu información financiera. Algunos datos podrían no estar actualizados.
-          </span>
-          <button
-            onClick={handleRefreshAll}
-            className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            <RefreshCw className="w-3.5 h-3.5" /> Reintentar
-          </button>
-        </div>
-      )}
-
-      {/* Bloque 1 — Resumen financiero (Skeletons e Iconos) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-        {wBalanceLoading ? (
-          [1, 2, 3].map(i => (
-            <div key={i} className="bg-white rounded-[2rem] border border-slate-100 p-6 space-y-3 shadow-sm">
-              <Skeleton className="w-10 h-10 rounded-2xl" />
-              <Skeleton className="h-3 w-20" />
-              <Skeleton className="h-8 w-28" />
-            </div>
-          ))
-        ) : (
-          <>
-            <Card className="p-6 flex flex-col justify-between relative overflow-hidden">
-              <div>
-                <div className="flex items-center gap-2 text-slate-400 mb-3">
-                  <WalletIcon className="w-4 h-4 text-emerald-500" />
-                  <span className="text-xs font-black uppercase tracking-widest">Disponible</span>
-                </div>
-                <p className="text-3xl font-black text-slate-800 mb-4">${(wallet?.available_balance ?? 0).toFixed(2)}</p>
-              </div>
-              <button
-                onClick={() => setShowModal(true)}
-                disabled={!wallet || wallet.available_balance <= 0}
-                className="w-full py-2.5 text-xs font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-md shadow-pink-100 hover:shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:pointer-events-none"
-              >
-                Solicitar Retiro
-              </button>
-            </Card>
-
-            <Card className="p-6 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-slate-400 mb-3">
-                  <TrendingUp className="w-4 h-4 text-pink-500" />
-                  <span className="text-xs font-black uppercase tracking-widest">Ganancias Totales</span>
-                </div>
-                <p className="text-3xl font-black text-slate-800">${(wallet?.total_earned ?? 0).toFixed(2)}</p>
-              </div>
-              <p className="text-[11px] font-bold text-slate-400 mt-2">Histórico acumulado</p>
-            </Card>
-
-            <Card className="p-6 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-slate-400 mb-3">
-                  <CheckCircle2 className="w-4 h-4 text-slate-400" />
-                  <span className="text-xs font-black uppercase tracking-widest">Total Retirado</span>
-                </div>
-                <p className="text-3xl font-black text-slate-800">${(wallet?.total_withdrawn ?? 0).toFixed(2)}</p>
-              </div>
-              <p className="text-[11px] font-bold text-slate-400 mt-2">Transferencias enviadas</p>
-            </Card>
-          </>
+        {isError && (
+          <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span className="text-xs font-bold flex-1">
+              Hubo un problema cargando tu información financiera. Algunos datos podrían no estar actualizados.
+            </span>
+            <button
+              onClick={handleRefreshAll}
+              className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+            </button>
+          </div>
         )}
-      </div>
 
-      {/* Grid de Historiales Móvil / Desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Bloque 2 — Historial de retiros */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-              <ArrowUpRight className="w-4 h-4 text-rose-500" /> Historial de retiros
-            </h2>
-          </div>
-          <Card className="overflow-hidden">
-            {wLoading ? (
-              <div className="p-4 space-y-3">
-                {[1, 2, 3].map(i => (
-                  <Skeleton key={i} className="h-16 w-full rounded-2xl" />
-                ))}
+        {/* Bloque 1 — Resumen financiero (Skeletons e Iconos) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+          {wBalanceLoading ? (
+            [1, 2, 3].map(i => (
+              <div key={i} className="bg-white rounded-[2rem] border border-slate-100 p-6 space-y-3 shadow-sm">
+                <Skeleton className="w-10 h-10 rounded-2xl" />
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-8 w-28" />
               </div>
-            ) : !withdrawals || withdrawals.length === 0 ? (
-              <p className="p-8 text-center text-xs text-slate-400 font-bold">Aún no has solicitado retiros</p>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {withdrawals.map(w => (
-                  <div key={w.id} className="p-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
-                    <div className="min-w-0 space-y-0.5">
-                      <p className="text-sm font-black text-slate-800">${w.amount.toFixed(2)}</p>
-                      <p className="text-xs text-slate-500 truncate max-w-[160px] sm:max-w-xs">{w.destination_details}</p>
-                      <p className="text-[10px] text-slate-400 font-medium">
-                        {new Date(w.created_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </p>
-                      {w.rejection_reason && <p className="text-[10px] text-rose-500 font-bold">{w.rejection_reason}</p>}
-                    </div>
-                    <Badge variant={STATUS_BADGE[w.status]}>{STATUS_LABEL[w.status] ?? w.status}</Badge>
+            ))
+          ) : (
+            <>
+              <Card className="p-6 flex flex-col justify-between relative overflow-hidden">
+                <div>
+                  <div className="flex items-center gap-2 text-slate-400 mb-3">
+                    <WalletIcon className="w-4 h-4 text-emerald-500" />
+                    <span className="text-xs font-black uppercase tracking-widest">Disponible</span>
                   </div>
-                ))}
-              </div>
-            )}
-          </Card>
+                  <p className="text-3xl font-black text-slate-800 mb-4">${(wallet?.available_balance ?? 0).toFixed(2)}</p>
+                </div>
+                <button
+                  onClick={() => setShowModal(true)}
+                  disabled={!wallet || wallet.available_balance <= 0}
+                  className="w-full py-2.5 text-xs font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-md shadow-pink-100 hover:shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  Solicitar Retiro
+                </button>
+              </Card>
+
+              <Card className="p-6 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-slate-400 mb-3">
+                    <TrendingUp className="w-4 h-4 text-pink-500" />
+                    <span className="text-xs font-black uppercase tracking-widest">Ganancias Totales</span>
+                  </div>
+                  <p className="text-3xl font-black text-slate-800">${(wallet?.total_earned ?? 0).toFixed(2)}</p>
+                </div>
+                <p className="text-[11px] font-bold text-slate-400 mt-2">Histórico acumulado</p>
+              </Card>
+
+              <Card className="p-6 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-slate-400 mb-3">
+                    <CheckCircle2 className="w-4 h-4 text-slate-400" />
+                    <span className="text-xs font-black uppercase tracking-widest">Total Retirado</span>
+                  </div>
+                  <p className="text-3xl font-black text-slate-800">${(wallet?.total_withdrawn ?? 0).toFixed(2)}</p>
+                </div>
+                <p className="text-[11px] font-bold text-slate-400 mt-2">Transferencias enviadas</p>
+              </Card>
+            </>
+          )}
         </div>
 
-        {/* Bloque 2b — Historial de ingresos */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-              <ArrowDownLeft className="w-4 h-4 text-emerald-500" /> Historial de ingresos
-            </h2>
+        {/* Grid de Historiales Móvil / Desktop */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Bloque 2 — Historial de retiros */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                <ArrowUpRight className="w-4 h-4 text-rose-500" /> Historial de retiros
+              </h2>
+            </div>
+            <Card className="overflow-hidden">
+              {wLoading ? (
+                <div className="p-4 space-y-3">
+                  {[1, 2, 3].map(i => (
+                    <Skeleton key={i} className="h-16 w-full rounded-2xl" />
+                  ))}
+                </div>
+              ) : !withdrawals || withdrawals.length === 0 ? (
+                <p className="p-8 text-center text-xs text-slate-400 font-bold">Aún no has solicitado retiros</p>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {withdrawals.map(w => (
+                    <div key={w.id} className="p-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="text-sm font-black text-slate-800">${w.amount.toFixed(2)}</p>
+                        <p className="text-xs text-slate-500 truncate max-w-[160px] sm:max-w-xs">{w.destination_details}</p>
+                        <p className="text-[10px] text-slate-400 font-medium">
+                          {new Date(w.created_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                        {w.rejection_reason && <p className="text-[10px] text-rose-500 font-bold">{w.rejection_reason}</p>}
+                      </div>
+                      <Badge variant={STATUS_BADGE[w.status]}>{STATUS_LABEL[w.status] ?? w.status}</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
           </div>
-          <Card className="overflow-hidden">
-            {iLoading ? (
-              <div className="p-4 space-y-3">
-                {[1, 2, 3].map(i => (
-                  <Skeleton key={i} className="h-16 w-full rounded-2xl" />
-                ))}
-              </div>
-            ) : !income || income.length === 0 ? (
-              <p className="p-8 text-center text-xs text-slate-400 font-bold">Sin ingresos registrados todavía</p>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {income.map(p => (
-                  <div key={p.id} className="p-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
-                    <div className="space-y-0.5">
-                      <p className="text-sm font-bold text-slate-800">
-                        {p.payment_type === 'package'
-                          ? `Paquete${p.installment_number ? ` — cuota ${p.installment_number}` : ''}`
-                          : 'Clase suelta'}
-                      </p>
-                      <p className="text-[10px] text-slate-400 font-medium">
-                        {new Date(p.created_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </p>
+
+          {/* Bloque 2b — Historial de ingresos */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                <ArrowDownLeft className="w-4 h-4 text-emerald-500" /> Historial de ingresos
+              </h2>
+            </div>
+            <Card className="overflow-hidden">
+              {iLoading ? (
+                <div className="p-4 space-y-3">
+                  {[1, 2, 3].map(i => (
+                    <Skeleton key={i} className="h-16 w-full rounded-2xl" />
+                  ))}
+                </div>
+              ) : !income || income.length === 0 ? (
+                <p className="p-8 text-center text-xs text-slate-400 font-bold">Sin ingresos registrados todavía</p>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {income.map(p => (
+                    <div key={p.id} className="p-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-bold text-slate-800">
+                          {p.payment_type === 'package'
+                            ? `Paquete${p.installment_number ? ` — cuota ${p.installment_number}` : ''}`
+                            : 'Clase suelta'}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-medium">
+                          {new Date(p.created_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <div className="text-right flex flex-col items-end gap-1">
+                        <p className="text-sm font-black text-emerald-600">
+                          {p.status === 'approved' ? `+$${p.amount_teacher.toFixed(2)}` : '—'}
+                        </p>
+                        <Badge variant={STATUS_BADGE[p.status]}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
+                      </div>
                     </div>
-                    <div className="text-right flex flex-col items-end gap-1">
-                      <p className="text-sm font-black text-emerald-600">
-                        {p.status === 'approved' ? `+$${p.amount_teacher.toFixed(2)}` : '—'}
-                      </p>
-                      <Badge variant={STATUS_BADGE[p.status]}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </div>
         </div>
       </div>
 
+      {/* 
+        ¡AQUÍ ESTÁ LA MAGIA! 
+        Al mover el Modal y el Widget FUERA del div con `animate-fade-up`,
+        se liberan de las restricciones del "transform" de Tailwind y 
+        pueden flotar libremente sobre todo el viewport.
+      */}
       {showModal && wallet && (
         <RequestWithdrawalModal
           available={wallet.available_balance}
@@ -385,6 +395,6 @@ export default function WalletPage() {
       )}
 
       <ChipiWidget screenName="wallet_teacher" />
-    </div>
+    </>
   )
 }
