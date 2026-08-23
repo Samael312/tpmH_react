@@ -1,0 +1,646 @@
+From 9f4fd7c587a57a0f89bff557d16a7dcb50dbe1e9 Mon Sep 17 00:00:00 2001
+From: Claude <claude@anthropic.com>
+Date: Sun, 23 Aug 2026 18:09:26 +0000
+Subject: [PATCH] =?UTF-8?q?fix:=20corrige=20hallazgos=20cr=C3=ADticos/alto?=
+ =?UTF-8?q?s/medios=20del=20informe=20de=20bugs=20QA?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Resuelve 12 de los 13 hallazgos de informe_bugs_tpmH_react.md
+(el #4 ya no era reproducible en el código actual, sin cambios).
+
+Críticos:
+- #1 auth: whitelist de role en RegisterRequest (bloquea registro
+  público como superadmin/teacher_admin)
+- #2 admin: 7 endpoints sensibles pasan de get_current_user a
+  get_current_staff/require_superadmin
+- #3 payments: fix de bypass de ownership en validate_payment
+  (teacher_admin -> teacher)
+- #5 classes: elimina la definición duplicada y muerta de
+  DELETE /admin/{class_id} que anulaba el reembolso correcto
+
+Altos:
+- #6 materials: IDOR en /materials/{id}/stream, ahora exige
+  ownership del profesor o asignación del estudiante
+- #7 scheduler: columna reminder_sent_at + migración Alembic para
+  evitar el envío duplicado del recordatorio de 24h
+- #8 frontend: estado "expired" añadido a STATUS_CONFIG/HISTORY_STATUSES
+  en ClassCard.tsx
+
+Medios:
+- #9 class_logic/packages: min_cancel_hours configurable en vez de
+  hardcodeado a 12h en class_counts_towards_package y en
+  get_teacher_enrollments_overview
+- #10 payments: sync instantáneo de Google Calendar al reservar
+  (trial, paquete finito y paquete ilimitado)
+- #11 packages: elimina el endpoint muerto POST /select-initial
+- #12 payments: installments_paid usa installment_count del paquete
+  en vez de hardcodear 1 en pago único
+- #13 frontend: "Hoy" en el CalendarPicker de schedule/page.tsx
+  compara con fecha local en vez de toISOString() (UTC)
+
+Verificado: import completo de la app FastAPI, ausencia de rutas
+duplicadas, tests de comportamiento para los fixes #1 y #9, y
+validación offline de la migración Alembic.
+---
+ .../a3f5c7d9e1b2_class_reminder_sent_at.py    | 24 ++++++
+ backend/app/api/v1/endpoints/admin.py         | 14 ++--
+ backend/app/api/v1/endpoints/classes.py       | 73 ++--------------
+ backend/app/api/v1/endpoints/materials.py     | 22 ++++-
+ backend/app/api/v1/endpoints/packages.py      | 83 +------------------
+ backend/app/api/v1/endpoints/payments.py      | 24 +++++-
+ backend/app/core/class_logic.py               | 17 +++-
+ backend/app/core/scheduler.py                 |  4 +
+ backend/app/models/class_.py                  |  1 +
+ backend/app/schemas/auth.py                   |  7 ++
+ .../app/(student)/dashboard/schedule/page.tsx |  3 +-
+ frontend/components/classes/ClassCard.tsx     |  3 +-
+ 12 files changed, 112 insertions(+), 163 deletions(-)
+ create mode 100644 backend/alembic/versions/a3f5c7d9e1b2_class_reminder_sent_at.py
+
+diff --git a/backend/alembic/versions/a3f5c7d9e1b2_class_reminder_sent_at.py b/backend/alembic/versions/a3f5c7d9e1b2_class_reminder_sent_at.py
+new file mode 100644
+index 0000000..d5b01f3
+--- /dev/null
++++ b/backend/alembic/versions/a3f5c7d9e1b2_class_reminder_sent_at.py
+@@ -0,0 +1,24 @@
++"""add reminder_sent_at to classes
++
++Revision ID: a3f5c7d9e1b2
++Revises: e1f2a3b4c5d6
++Create Date: 2026-08-23 00:00:00.000000
++"""
++from alembic import op
++import sqlalchemy as sa
++
++revision = 'a3f5c7d9e1b2'
++down_revision = 'e1f2a3b4c5d6'
++branch_labels = None
++depends_on = None
++
++
++def upgrade() -> None:
++    op.add_column(
++        'classes',
++        sa.Column('reminder_sent_at', sa.DateTime(timezone=True), nullable=True)
++    )
++
++
++def downgrade() -> None:
++    op.drop_column('classes', 'reminder_sent_at')
+diff --git a/backend/app/api/v1/endpoints/admin.py b/backend/app/api/v1/endpoints/admin.py
+index c0445cd..9385141 100644
+--- a/backend/app/api/v1/endpoints/admin.py
++++ b/backend/app/api/v1/endpoints/admin.py
+@@ -67,7 +67,7 @@ def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
+ 
+ @router.get("/stats", response_model=PlatformStatsResponse)
+ def get_platform_stats(
+-    current_user: User = Depends(get_current_user),
++    current_user: User = Depends(get_current_staff),
+     db: Session = Depends(get_db)
+ ):
+     """
+@@ -173,7 +173,7 @@ def get_platform_stats(
+ )
+ def list_all_teachers(
+     status_filter: Optional[str] = Query(None),
+-    current_user: User = Depends(get_current_user),
++    current_user: User = Depends(get_current_staff),
+     db: Session = Depends(get_db)
+ ):
+     """
+@@ -311,7 +311,7 @@ def get_teacher_appeals(
+ def update_teacher_status(
+     teacher_id: int,
+     data: UpdateTeacherStatusRequest,
+-    current_user: User = Depends(get_current_user),
++    current_user: User = Depends(get_current_staff),
+     db: Session = Depends(get_db)
+ ):
+     """
+@@ -388,7 +388,7 @@ def update_teacher_status(
+ def update_teacher_commission(
+     teacher_id: int,
+     data: UpdateCommissionRequest,
+-    current_user: User = Depends(get_current_user),
++    current_user: User = Depends(get_current_staff),
+     db: Session = Depends(get_db)
+ ):
+     """
+@@ -589,7 +589,7 @@ def list_all_users(
+     search: Optional[str] = Query(None),
+     skip: int = Query(0, ge=0),
+     limit: int = Query(50, ge=1, le=200),
+-    current_user: User = Depends(get_current_user),
++    current_user: User = Depends(get_current_staff),
+     db: Session = Depends(get_db)
+ ):
+     """
+@@ -639,7 +639,7 @@ def list_all_users(
+ def update_user_status(
+     user_id: int,
+     data: UpdateUserStatusRequest,
+-    current_user: User = Depends(get_current_user),
++    current_user: User = Depends(get_current_staff),
+     db: Session = Depends(get_db)
+ ):
+     """
+@@ -866,7 +866,7 @@ def get_platform_config(db: Session = Depends(get_db)):
+ @router.patch("/platform-config")
+ def update_platform_config(
+     data: PlatformConfigUpdate,
+-    current_user: User = Depends(get_current_user),
++    current_user: User = Depends(require_superadmin),
+     db: Session = Depends(get_db)
+ ):
+     """El superadmin configura el modo de la plataforma"""
+diff --git a/backend/app/api/v1/endpoints/classes.py b/backend/app/api/v1/endpoints/classes.py
+index e321905..61468b1 100644
+--- a/backend/app/api/v1/endpoints/classes.py
++++ b/backend/app/api/v1/endpoints/classes.py
+@@ -32,7 +32,8 @@ from app.core.class_logic import (
+     finalize_past_classes,
+     class_counts_towards_package,
+     cancel_class_and_refund,
+-    validate_class_duration
++    validate_class_duration,
++    get_business_rules,
+ )
+ from app.core.timezone import UTC, utc_now, format_local_datetime
+ from app.db.base import get_db
+@@ -449,11 +450,13 @@ def update_class_status(
+ ):
+     class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
+ 
++    min_cancel_hours = get_business_rules(db)["min_cancel_hours"]
++
+     old_status = class_.status
+-    old_counts = class_counts_towards_package(old_status, class_.start_time_utc)
++    old_counts = class_counts_towards_package(old_status, class_.start_time_utc, min_cancel_hours=min_cancel_hours)
+ 
+     class_.status = data.status
+-    new_counts = class_counts_towards_package(data.status, class_.start_time_utc)
++    new_counts = class_counts_towards_package(data.status, class_.start_time_utc, min_cancel_hours=min_cancel_hours)
+ 
+     if data.notes:
+         class_.notes = data.notes
+@@ -607,69 +610,7 @@ def reschedule_class_admin(
+     return _build_class_response(class_, db)
+ 
+ 
+-@router.delete("/admin/{class_id}")
+-def cancel_class_admin(
+-    class_id: int,
+-    current_user: User = Depends(get_current_staff),
+-    db: Session = Depends(get_db)
+-):
+-    """
+-    El staff/admin cancela una clase y reembolsa el crédito al estudiante si corresponde.
+-    """
+-    class_ = _get_class_or_404(db, class_id)
+-
+-    if class_.status == "cancelled":
+-        raise HTTPException(
+-            status_code=status.HTTP_400_BAD_REQUEST,
+-            detail="La clase ya se encuentra cancelada"
+-        )
+-
+-    old_status = class_.status
+-    old_counts = class_counts_towards_package(old_status, class_.start_time_utc)
+-
+-    class_.status = "cancelled"
+-
+-    counts_as_used = class_counts_towards_package("cancelled", class_.start_time_utc)
+-    credit_returned = not counts_as_used
+-
+-    if credit_returned:
+-        if class_.used_prepaid_credit and class_.enrollment_id:
+-            enrollment = db.query(Enrollment).filter(Enrollment.id == class_.enrollment_id).first()
+-            if enrollment:
+-                enrollment.prepaid_unlimited_credits += 1
+-            class_.used_prepaid_credit = False
+-        elif class_.class_type == ClassType.regular and class_.enrollment_id and old_counts:
+-            update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
+-
+-    db.commit()
+-
+-    # Notificar a ambas partes
+-    student = db.query(StudentProfile).filter(StudentProfile.id == class_.student_id).first()
+-    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == class_.teacher_id).first()
+-
+-    if student and student.user:
+-        teacher_name = f"{teacher.user.name} {teacher.user.surname}" if teacher and teacher.user else "Profesor"
+-        send_class_cancelled_email(
+-            to_email=student.user.email,
+-            student_name=student.user.name,
+-            teacher_name=teacher_name,
+-            class_start_local=format_local_datetime(class_.start_time_utc, student.timezone),
+-            cancelled_by="staff",
+-            credit_returned=credit_returned,
+-        )
+-
+-    if teacher and teacher.user:
+-        student_name = f"{student.user.name} {student.user.surname}" if student and student.user else "Estudiante"
+-        send_class_cancelled_teacher_email(
+-            to_email=teacher.user.email,
+-            teacher_name=teacher.user.name,
+-            student_name=student_name,
+-            class_start_local=format_local_datetime(class_.start_time_utc, teacher.timezone),
+-            cancelled_by="staff",
+-        )
+-
+-    _sync_google_calendar_cancelled(class_.teacher_id, class_.google_event_id, db)
+-    return {"message": "Clase cancelada por administración. Crédito reembolsado."}# ─── Admin/Staff ─────────────────────────────────────────────────────
++# ─── Admin/Staff ─────────────────────────────────────────────────────
+ 
+ @router.delete("/admin/{class_id}")
+ def cancel_class_admin(
+diff --git a/backend/app/api/v1/endpoints/materials.py b/backend/app/api/v1/endpoints/materials.py
+index d0186ba..48bb326 100644
+--- a/backend/app/api/v1/endpoints/materials.py
++++ b/backend/app/api/v1/endpoints/materials.py
+@@ -6,7 +6,7 @@ import logging
+ from app.core.email import send_material_assigned_email
+ from app.db.base import get_db
+ from app.auth.dependencies import get_current_user, get_current_teacher, get_current_student, get_current_approved_teacher
+-from app.models.user import User
++from app.models.user import User, UserRole
+ from app.models.material import Material, MaterialAssignment
+ from app.models.student import StudentProfile
+ from app.schemas.materials import (
+@@ -333,5 +333,23 @@ def stream_material_file(
+             status_code=status.HTTP_404_NOT_FOUND,
+             detail="Archivo no encontrado"
+         )
+-    
++
++    is_staff = current_user.role in (UserRole.superadmin, UserRole.teacher_admin)
++    is_owner_teacher = (
++        current_user.teacher_profile is not None
++        and material.teacher_id == current_user.teacher_profile.id
++    )
++    is_assigned_student = False
++    if current_user.student_profile is not None:
++        is_assigned_student = db.query(MaterialAssignment).filter(
++            MaterialAssignment.material_id == material_id,
++            MaterialAssignment.student_id == current_user.student_profile.id,
++        ).first() is not None
++
++    if not (is_staff or is_owner_teacher or is_assigned_student):
++        raise HTTPException(
++            status_code=status.HTTP_403_FORBIDDEN,
++            detail="No tienes acceso a este material"
++        )
++
+     return RedirectResponse(url=material.file_url)
+\ No newline at end of file
+diff --git a/backend/app/api/v1/endpoints/packages.py b/backend/app/api/v1/endpoints/packages.py
+index 9336473..2f3ddbc 100644
+--- a/backend/app/api/v1/endpoints/packages.py
++++ b/backend/app/api/v1/endpoints/packages.py
+@@ -14,6 +14,7 @@ from app.auth.dependencies import (
+ )
+ from app.models.class_ import Class, ClassType 
+ from app.core.timezone import utc_now             
++from app.core.class_logic import get_business_rules
+ from app.models.user import User
+ from app.models.package import Package, Enrollment, EnrollmentStatus
+ from app.models.teacher import TeacherProfile
+@@ -146,6 +147,7 @@ def get_teacher_enrollments_overview(
+     cumplimiento: completadas, no-show y canceladas tarde.
+     """
+     teacher_id = current_user.teacher_profile.id
++    min_cancel_hours = get_business_rules(db)["min_cancel_hours"]
+ 
+     enrollments = db.query(Enrollment).filter(
+         Enrollment.teacher_id == teacher_id
+@@ -161,7 +163,7 @@ def get_teacher_enrollments_overview(
+             1 for c in classes
+             if c.status == "cancelled"
+             and c.updated_at is not None
+-            and (c.start_time_utc - c.updated_at) < timedelta(hours=12)
++            and (c.start_time_utc - c.updated_at) < timedelta(hours=min_cancel_hours)
+         )
+ 
+         if e.package and e.package.classes_count is not None:
+@@ -367,85 +369,6 @@ def request_renewal(
+     }
+ 
+ 
+-# ─── ESTUDIANTE — Selección de paquete inicial ────────────────────────────────
+-
+-@router.post("/select-initial")
+-def select_initial_package(
+-    package_id: int,
+-    current_user: User = Depends(get_current_student),
+-    db: Session = Depends(get_db)
+-):
+-    from app.core.class_logic import get_student_booking_stage
+-
+-    student_id = current_user.student_profile.id
+-
+-    package = db.query(Package).filter(
+-        Package.id == package_id,
+-        Package.is_active == True
+-    ).first()
+-    if not package:
+-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Paquete no encontrado")
+-
+-    stage = get_student_booking_stage(student_id, package.teacher_id, db)
+-
+-    if stage == "package_pending_payment":
+-        # Ya eligió un paquete con este profesor y quedó pendiente de pago
+-        # (p. ej. cerró el checkout sin decidir cuotas vs. pago único).
+-        # Si es el MISMO paquete, le devolvemos su enrollment existente
+-        # para que pueda reabrir el checkout, en vez de bloquearlo.
+-        existing = db.query(Enrollment).filter(
+-            Enrollment.student_id == student_id,
+-            Enrollment.teacher_id == package.teacher_id,
+-            Enrollment.status == EnrollmentStatus.active,
+-            Enrollment.payment_status == "unpaid",
+-        ).order_by(Enrollment.created_at.desc()).first()
+-
+-        if existing and existing.package_id == package.id:
+-            return {
+-                "message": "Ya habías elegido este paquete. Continúa para notificar tu pago.",
+-                "enrollment_id": existing.id,
+-                "package_id": package.id,
+-                "classes_total": existing.classes_total,
+-                "unlocked_credits": existing.unlocked_credits,
+-                "payment_status": existing.payment_status,
+-            }
+-
+-        raise HTTPException(
+-            status_code=status.HTTP_400_BAD_REQUEST,
+-            detail="Ya tienes un paquete seleccionado pendiente de pago con este profesor. "
+-                   "Complétalo o contacta al staff antes de elegir otro."
+-        )
+-
+-    if stage != "needs_package":
+-        raise HTTPException(
+-            status_code=status.HTTP_400_BAD_REQUEST,
+-            detail="Solo puedes elegir tu paquete inicial después de completar la clase de prueba con este profesor."
+-        )
+-
+-    enrollment = Enrollment(
+-        student_id=student_id,
+-        package_id=package.id,
+-        teacher_id=package.teacher_id,
+-        classes_used=0,
+-        classes_total=package.classes_count,
+-        unlocked_credits=0,
+-        payment_status="unpaid",
+-        status=EnrollmentStatus.active,
+-    )
+-    db.add(enrollment)
+-    db.commit()
+-    db.refresh(enrollment)
+-
+-    return {
+-        "message": "Paquete seleccionado. Procede a notificar el pago para desbloquear tus créditos.",
+-        "enrollment_id": enrollment.id,
+-        "package_id": package.id,
+-        "classes_total": enrollment.classes_total,
+-        "unlocked_credits": enrollment.unlocked_credits,
+-        "payment_status": enrollment.payment_status,
+-    }
+-
+-
+ # ─── ESTUDIANTE — Cambio de paquete ──────────────────────────────────────────
+ 
+ @router.post("/request-package-change")
+diff --git a/backend/app/api/v1/endpoints/payments.py b/backend/app/api/v1/endpoints/payments.py
+index 7a07f3b..72f39fd 100644
+--- a/backend/app/api/v1/endpoints/payments.py
++++ b/backend/app/api/v1/endpoints/payments.py
+@@ -32,6 +32,7 @@ from app.core.email import (
+ )
+ from app.core.teacher_students import link_student_to_teacher
+ from app.core.timezone import utc_now
++from app.core.calendar_sync import sync_class_created
+ from app.db.base import get_db
+ from app.models.class_ import Class, ClassType
+ from app.models.package import Enrollment, EnrollmentStatus, Package
+@@ -57,6 +58,19 @@ from app.schemas.payments import (
+ router = APIRouter()
+ logger = logging.getLogger(__name__)
+ 
++
++def _sync_google_calendar_created(new_class: Class, db: Session) -> None:
++    """Crea el evento en Google Calendar del profesor al instante, si tiene
++    Calendar conectado. Nunca lanza — la reserva debe seguir funcionando
++    aunque falle la sincronización (el job en background igual la cubre)."""
++    try:
++        event_id = sync_class_created(new_class, db)
++        if event_id:
++            new_class.google_event_id = event_id
++            db.commit()
++    except Exception as e:
++        logger.error(f"Error al sincronizar Google Calendar (creación) clase {new_class.id}: {e}")
++
+ DAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+ PACKAGE_CHANGE_BLOCKING_STATUSES = ["completed", "no_show", "confirmed", "pending"]
+ 
+@@ -435,6 +449,8 @@ def book_class(
+         db.commit()
+         db.refresh(trial_class)
+ 
++        _sync_google_calendar_created(trial_class, db)
++
+         if teacher.user:
+             send_new_booking_teacher_email(
+                 to_email=teacher.user.email,
+@@ -527,6 +543,8 @@ def book_class(
+         db.commit()
+         db.refresh(new_class)
+ 
++        _sync_google_calendar_created(new_class, db)
++
+         teacher_user = enrollment.teacher.user if enrollment.teacher and enrollment.teacher.user else None
+         send_class_confirmed_email(
+             to_email=current_user.email,
+@@ -588,6 +606,8 @@ def book_class(
+         db.commit()
+         db.refresh(new_class)
+ 
++        _sync_google_calendar_created(new_class, db)
++
+         teacher_user = enrollment.teacher.user if enrollment.teacher and enrollment.teacher.user else None
+ 
+         if has_prepaid:
+@@ -755,7 +775,7 @@ def validate_payment(
+     if not payment:
+         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pago no encontrado o ya procesado")
+ 
+-    if current_user.role == "teacher_admin":   # antes: current_user.role == "teacher"
++    if current_user.role == "teacher":
+         if not current_user.teacher_profile or payment.teacher_id != current_user.teacher_profile.id:
+             raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo puedes validar pagos de tus estudiantes")
+ 
+@@ -881,7 +901,7 @@ def validate_payment(
+                     enrollment.unlocked_credits = (enrollment.unlocked_credits or 0) + credit_this_installment
+                 enrollment.payment_status = "paid" if payment.installment_index >= n else "partially_paid"
+             else:
+-                enrollment.installments_paid = 1
++                enrollment.installments_paid = target_package.installment_count or 1
+                 enrollment.unlocked_credits = target_package.classes_count if target_package.classes_count is not None else 0
+                 enrollment.payment_status = "paid"
+ 
+diff --git a/backend/app/core/class_logic.py b/backend/app/core/class_logic.py
+index a695e83..d4e9724 100644
+--- a/backend/app/core/class_logic.py
++++ b/backend/app/core/class_logic.py
+@@ -293,6 +293,7 @@ def class_counts_towards_package(
+     start_time_utc: datetime,
+     reference_time: datetime | None = None,
+     apply_late_cancel_penalty: bool = True,
++    min_cancel_hours: int | None = None,
+ ) -> bool:
+     """
+     Determina si una clase en este estado debe contarse contra el
+@@ -300,11 +301,14 @@ def class_counts_towards_package(
+ 
+     - completed / no_show: siempre cuenta.
+     - cancelled: cuenta solo si apply_late_cancel_penalty=True Y fue una
+-      cancelación tardía (menos de MIN_CANCEL_HOURS antes del inicio).
++      cancelación tardía (menos de min_cancel_hours antes del inicio).
+       Cuando el profesor o el staff cancelan, apply_late_cancel_penalty
+       debe ser False — la penalización por antelación solo es
+       responsabilidad del estudiante, nunca de la plataforma.
+     - cualquier otro estado (pending, confirmed, expired, etc.): no cuenta.
++
++    min_cancel_hours: umbral configurable (PlatformConfig.min_cancel_hours,
++    vía get_business_rules). Si no se pasa, cae al default MIN_CANCEL_HOURS.
+     """
+     if class_status in TERMINAL_COUNTING_STATUSES:
+         return True
+@@ -312,7 +316,8 @@ def class_counts_towards_package(
+         if not apply_late_cancel_penalty:
+             return False
+         ref = reference_time or utc_now()
+-        return (start_time_utc - ref) < timedelta(hours=MIN_CANCEL_HOURS)
++        hours = min_cancel_hours if min_cancel_hours is not None else MIN_CANCEL_HOURS
++        return (start_time_utc - ref) < timedelta(hours=hours)
+     return False
+ 
+ def cancel_class_and_refund(
+@@ -327,8 +332,8 @@ def cancel_class_and_refund(
+ 
+     apply_late_cancel_penalty:
+         - True  → se usa para cancelaciones del ESTUDIANTE: si cancela
+-          con menos de 12h de antelación, no recupera el crédito.
+-          (En la práctica esto casi nunca se dispara porque
++          con menos de min_cancel_hours de antelación, no recupera el
++          crédito. (En la práctica esto casi nunca se dispara porque
+           can_cancel_class ya bloquea la cancelación tardía del
+           estudiante antes de llegar aquí.)
+         - False → se usa para profesor/admin: el crédito SIEMPRE se
+@@ -338,10 +343,13 @@ def cancel_class_and_refund(
+     No hace commit — el caller decide cuándo confirmar la transacción.
+     Retorna True si el crédito fue devuelto.
+     """
++    min_cancel_hours = get_business_rules(db)["min_cancel_hours"]
++
+     old_status = class_.status
+     old_counts = class_counts_towards_package(
+         old_status, class_.start_time_utc,
+         apply_late_cancel_penalty=apply_late_cancel_penalty,
++        min_cancel_hours=min_cancel_hours,
+     )
+ 
+     class_.status = "cancelled"
+@@ -349,6 +357,7 @@ def cancel_class_and_refund(
+     counts_as_used = class_counts_towards_package(
+         "cancelled", class_.start_time_utc,
+         apply_late_cancel_penalty=apply_late_cancel_penalty,
++        min_cancel_hours=min_cancel_hours,
+     )
+     credit_returned = not counts_as_used
+ 
+diff --git a/backend/app/core/scheduler.py b/backend/app/core/scheduler.py
+index 1edeac9..9259118 100644
+--- a/backend/app/core/scheduler.py
++++ b/backend/app/core/scheduler.py
+@@ -58,6 +58,7 @@ async def send_class_reminders():
+             Class.status == "confirmed",
+             Class.start_time_utc >= window_start,
+             Class.start_time_utc <= window_end,
++            Class.reminder_sent_at.is_(None),
+         ).all()
+ 
+         logger.info(f"Recordatorios: {len(upcoming)} clases en ventana 24h")
+@@ -99,6 +100,9 @@ async def send_class_reminders():
+                     hours_before=24,
+                 )
+ 
++                class_.reminder_sent_at = now
++                db.commit()
++
+             except Exception as e:
+                 logger.error(
+                     f"Error enviando recordatorio clase {class_.id}: {e}"
+diff --git a/backend/app/models/class_.py b/backend/app/models/class_.py
+index 75bb664..27abb7d 100644
+--- a/backend/app/models/class_.py
++++ b/backend/app/models/class_.py
+@@ -42,6 +42,7 @@ class Class(Base):
+     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+     payment_expires_at = Column(DateTime(timezone=True), nullable=True)
+     used_prepaid_credit = Column(Boolean, default=False)  # para saber si hay que devolver crédito al cancelar
++    reminder_sent_at = Column(DateTime(timezone=True), nullable=True)  # evita reenviar el recordatorio de 24h
+ 
+     enrollment = relationship("Enrollment", back_populates="classes")
+ 
+diff --git a/backend/app/schemas/auth.py b/backend/app/schemas/auth.py
+index 67fe9e6..5af0b58 100644
+--- a/backend/app/schemas/auth.py
++++ b/backend/app/schemas/auth.py
+@@ -51,6 +51,13 @@ class RegisterRequest(BaseModel):
+             raise ValueError("El usuario no puede estar vacío")
+         return v
+ 
++    @field_validator("role")
++    @classmethod
++    def validate_role(cls, v):
++        if v not in ("student", "teacher"):
++            raise ValueError("El rol debe ser 'student' o 'teacher'")
++        return v
++
+ class LoginRequest(BaseModel):
+     """Datos para hacer login"""
+     login: str
+diff --git a/frontend/app/(student)/dashboard/schedule/page.tsx b/frontend/app/(student)/dashboard/schedule/page.tsx
+index 293bcd8..cfef605 100644
+--- a/frontend/app/(student)/dashboard/schedule/page.tsx
++++ b/frontend/app/(student)/dashboard/schedule/page.tsx
+@@ -103,7 +103,8 @@ function MiniCalendar({
+           const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+           const isSelected = dateStr === value;
+           const isPast = new Date(dateStr) < new Date(today.toDateString());
+-          const isToday = dateStr === today.toISOString().split("T")[0];
++          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
++          const isToday = dateStr === todayStr;
+ 
+           return (
+             <button
+diff --git a/frontend/components/classes/ClassCard.tsx b/frontend/components/classes/ClassCard.tsx
+index 31209de..ea4d509 100644
+--- a/frontend/components/classes/ClassCard.tsx
++++ b/frontend/components/classes/ClassCard.tsx
+@@ -49,9 +49,10 @@ const STATUS_CONFIG: Record<string, { theme: string; label: string; border: stri
+   no_show:         { theme: "bg-red-100 text-red-700",       label: "No asistió",     border: "border-l-red-600" },
+   rescheduled:     { theme: "bg-orange-100 text-orange-700", label: "Reagendada",     border: "border-l-orange-400" },
+   finalized:       { theme: "bg-slate-100 text-slate-700",   label: "Finalizada",     border: "border-l-slate-300" },
++  expired:         { theme: "bg-slate-200 text-slate-600",   label: "Expirada",       border: "border-l-slate-400" },
+ };
+ 
+-const HISTORY_STATUSES = ["completed", "cancelled", "no_show", "finalized"];
++const HISTORY_STATUSES = ["completed", "cancelled", "no_show", "finalized", "expired"];
+ const TEACHER_NEXT_STATUSES: Record<string, string[]> = {
+   pending:         ["cancelled"],
+   pending_trial:   ["cancelled"],
+-- 
+2.43.0
+
