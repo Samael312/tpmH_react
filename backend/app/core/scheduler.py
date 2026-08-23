@@ -21,9 +21,6 @@ logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
 
-LOW_CREDIT_THRESHOLD = 1          # avisar cuando queda esta cantidad o menos
-LOW_CREDIT_RENOTIFY_DAYS = 6      # no reavisar antes de este margen (protege si el job corre tarde)
-
 
 async def finalize_expired_classes():
     """
@@ -156,7 +153,8 @@ async def notify_low_credit_packages():
     """
     Job semanal. Revisa enrollments activos con pocas clases restantes
     (finitos o ilimitados con crédito prepagado) y avisa al estudiante
-    si no se le avisó ya en los últimos LOW_CREDIT_RENOTIFY_DAYS días.
+    si no se le avisó ya dentro de la ventana configurada por el
+    superadmin (low_credit_renotify_days en PlatformConfig).
     """
     db: Session = SessionLocal()
     try:

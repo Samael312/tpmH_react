@@ -27,8 +27,12 @@ export const SUBJECT_THEME_MAP: Record<string, PackageTheme> = {
 
 export const DEFAULT_PACKAGE_THEME: PackageTheme = { icon: "📦", color: "#ec4899" };
 
-export function getSuggestedTheme(subject: string): PackageTheme {
-  return SUBJECT_THEME_MAP[subject] ?? DEFAULT_PACKAGE_THEME;
+export function getSuggestedTheme(
+  subject: string,
+  liveMap?: Record<string, PackageTheme>
+): PackageTheme {
+  const map = liveMap && Object.keys(liveMap).length ? liveMap : SUBJECT_THEME_MAP;
+  return map[subject] ?? DEFAULT_PACKAGE_THEME;
 }
 
 // Opciones para el selector manual de icono (independiente de la materia)
