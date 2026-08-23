@@ -67,7 +67,7 @@ def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
 
 @router.get("/stats", response_model=PlatformStatsResponse)
 def get_platform_stats(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db)
 ):
     """
@@ -173,7 +173,7 @@ def get_platform_stats(
 )
 def list_all_teachers(
     status_filter: Optional[str] = Query(None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db)
 ):
     """
@@ -311,7 +311,7 @@ def get_teacher_appeals(
 def update_teacher_status(
     teacher_id: int,
     data: UpdateTeacherStatusRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db)
 ):
     """
@@ -388,7 +388,7 @@ def update_teacher_status(
 def update_teacher_commission(
     teacher_id: int,
     data: UpdateCommissionRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db)
 ):
     """
@@ -589,7 +589,7 @@ def list_all_users(
     search: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db)
 ):
     """
@@ -639,7 +639,7 @@ def list_all_users(
 def update_user_status(
     user_id: int,
     data: UpdateUserStatusRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db)
 ):
     """
@@ -866,7 +866,7 @@ def get_platform_config(db: Session = Depends(get_db)):
 @router.patch("/platform-config")
 def update_platform_config(
     data: PlatformConfigUpdate,
-    current_user: User = Depends(get_current_staff),
+    current_user: User = Depends(require_superadmin),
     db: Session = Depends(get_db)
 ):
     """El superadmin (o teacher_admin, como staff) configura el modo de la plataforma"""

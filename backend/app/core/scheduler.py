@@ -55,6 +55,7 @@ async def send_class_reminders():
             Class.status == "confirmed",
             Class.start_time_utc >= window_start,
             Class.start_time_utc <= window_end,
+            Class.reminder_sent_at.is_(None),
         ).all()
 
         logger.info(f"Recordatorios: {len(upcoming)} clases en ventana 24h")
@@ -95,6 +96,9 @@ async def send_class_reminders():
                     class_start_local=format_local_datetime(class_.start_time_utc, teacher_profile.timezone),
                     hours_before=24,
                 )
+
+                class_.reminder_sent_at = now
+                db.commit()
 
             except Exception as e:
                 logger.error(

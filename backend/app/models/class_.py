@@ -42,6 +42,7 @@ class Class(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     payment_expires_at = Column(DateTime(timezone=True), nullable=True)
     used_prepaid_credit = Column(Boolean, default=False)  # para saber si hay que devolver crédito al cancelar
+    reminder_sent_at = Column(DateTime(timezone=True), nullable=True)  # evita reenviar el recordatorio de 24h
 
     enrollment = relationship("Enrollment", back_populates="classes")
 

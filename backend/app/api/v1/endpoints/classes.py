@@ -32,7 +32,8 @@ from app.core.class_logic import (
     finalize_past_classes,
     class_counts_towards_package,
     cancel_class_and_refund,
-    validate_class_duration
+    validate_class_duration,
+    get_business_rules,
 )
 from app.core.timezone import UTC, utc_now, format_local_datetime
 from app.db.base import get_db
@@ -449,11 +450,13 @@ def update_class_status(
 ):
     class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
 
+    min_cancel_hours = get_business_rules(db)["min_cancel_hours"]
+
     old_status = class_.status
-    old_counts = class_counts_towards_package(old_status, class_.start_time_utc)
+    old_counts = class_counts_towards_package(old_status, class_.start_time_utc, min_cancel_hours=min_cancel_hours)
 
     class_.status = data.status
-    new_counts = class_counts_towards_package(data.status, class_.start_time_utc)
+    new_counts = class_counts_towards_package(data.status, class_.start_time_utc, min_cancel_hours=min_cancel_hours)
 
     if data.notes:
         class_.notes = data.notes

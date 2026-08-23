@@ -293,6 +293,7 @@ def class_counts_towards_package(
     start_time_utc: datetime,
     reference_time: datetime | None = None,
     apply_late_cancel_penalty: bool = True,
+    min_cancel_hours: int | None = None,
 ) -> bool:
     """
     Determina si una clase en este estado debe contarse contra el
@@ -300,11 +301,14 @@ def class_counts_towards_package(
 
     - completed / no_show: siempre cuenta.
     - cancelled: cuenta solo si apply_late_cancel_penalty=True Y fue una
-      cancelación tardía (menos de MIN_CANCEL_HOURS antes del inicio).
+      cancelación tardía (menos de min_cancel_hours antes del inicio).
       Cuando el profesor o el staff cancelan, apply_late_cancel_penalty
       debe ser False — la penalización por antelación solo es
       responsabilidad del estudiante, nunca de la plataforma.
     - cualquier otro estado (pending, confirmed, expired, etc.): no cuenta.
+
+    min_cancel_hours: umbral configurable (PlatformConfig.min_cancel_hours,
+    vía get_business_rules). Si no se pasa, cae al default MIN_CANCEL_HOURS.
     """
     if class_status in TERMINAL_COUNTING_STATUSES:
         return True
@@ -312,7 +316,8 @@ def class_counts_towards_package(
         if not apply_late_cancel_penalty:
             return False
         ref = reference_time or utc_now()
-        return (start_time_utc - ref) < timedelta(hours=MIN_CANCEL_HOURS)
+        hours = min_cancel_hours if min_cancel_hours is not None else MIN_CANCEL_HOURS
+        return (start_time_utc - ref) < timedelta(hours=hours)
     return False
 
 def cancel_class_and_refund(
@@ -327,8 +332,8 @@ def cancel_class_and_refund(
 
     apply_late_cancel_penalty:
         - True  → se usa para cancelaciones del ESTUDIANTE: si cancela
-          con menos de 12h de antelación, no recupera el crédito.
-          (En la práctica esto casi nunca se dispara porque
+          con menos de min_cancel_hours de antelación, no recupera el
+          crédito. (En la práctica esto casi nunca se dispara porque
           can_cancel_class ya bloquea la cancelación tardía del
           estudiante antes de llegar aquí.)
         - False → se usa para profesor/admin: el crédito SIEMPRE se
@@ -338,10 +343,13 @@ def cancel_class_and_refund(
     No hace commit — el caller decide cuándo confirmar la transacción.
     Retorna True si el crédito fue devuelto.
     """
+    min_cancel_hours = get_business_rules(db)["min_cancel_hours"]
+
     old_status = class_.status
     old_counts = class_counts_towards_package(
         old_status, class_.start_time_utc,
         apply_late_cancel_penalty=apply_late_cancel_penalty,
+        min_cancel_hours=min_cancel_hours,
     )
 
     class_.status = "cancelled"
@@ -349,6 +357,7 @@ def cancel_class_and_refund(
     counts_as_used = class_counts_towards_package(
         "cancelled", class_.start_time_utc,
         apply_late_cancel_penalty=apply_late_cancel_penalty,
+        min_cancel_hours=min_cancel_hours,
     )
     credit_returned = not counts_as_used
 

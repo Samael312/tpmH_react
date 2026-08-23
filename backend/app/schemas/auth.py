@@ -51,6 +51,13 @@ class RegisterRequest(BaseModel):
             raise ValueError("El usuario no puede estar vacío")
         return v
 
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v):
+        if v not in ("student", "teacher"):
+            raise ValueError("El rol debe ser 'student' o 'teacher'")
+        return v
+
 class LoginRequest(BaseModel):
     """Datos para hacer login"""
     login: str

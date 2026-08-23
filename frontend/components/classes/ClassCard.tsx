@@ -49,9 +49,10 @@ const STATUS_CONFIG: Record<string, { theme: string; label: string; border: stri
   no_show:         { theme: "bg-red-100 text-red-700",       label: "No asistió",     border: "border-l-red-600" },
   rescheduled:     { theme: "bg-orange-100 text-orange-700", label: "Reagendada",     border: "border-l-orange-400" },
   finalized:       { theme: "bg-slate-100 text-slate-700",   label: "Finalizada",     border: "border-l-slate-300" },
+  expired:         { theme: "bg-slate-200 text-slate-600",   label: "Expirada",       border: "border-l-slate-400" },
 };
 
-const HISTORY_STATUSES = ["completed", "cancelled", "no_show", "finalized"];
+const HISTORY_STATUSES = ["completed", "cancelled", "no_show", "finalized", "expired"];
 const TEACHER_NEXT_STATUSES: Record<string, string[]> = {
   pending:         ["cancelled"],
   pending_trial:   ["cancelled"],

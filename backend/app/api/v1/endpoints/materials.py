@@ -6,7 +6,7 @@ import logging
 from app.core.email import send_material_assigned_email
 from app.db.base import get_db
 from app.auth.dependencies import get_current_user, get_current_teacher, get_current_student, get_current_approved_teacher
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.material import Material, MaterialAssignment
 from app.models.student import StudentProfile
 from app.schemas.materials import (
@@ -333,5 +333,23 @@ def stream_material_file(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Archivo no encontrado"
         )
-    
+
+    is_staff = current_user.role in (UserRole.superadmin, UserRole.teacher_admin)
+    is_owner_teacher = (
+        current_user.teacher_profile is not None
+        and material.teacher_id == current_user.teacher_profile.id
+    )
+    is_assigned_student = False
+    if current_user.student_profile is not None:
+        is_assigned_student = db.query(MaterialAssignment).filter(
+            MaterialAssignment.material_id == material_id,
+            MaterialAssignment.student_id == current_user.student_profile.id,
+        ).first() is not None
+
+    if not (is_staff or is_owner_teacher or is_assigned_student):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes acceso a este material"
+        )
+
     return RedirectResponse(url=material.file_url)

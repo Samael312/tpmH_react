@@ -14,6 +14,7 @@ from app.auth.dependencies import (
 )
 from app.models.class_ import Class, ClassType 
 from app.core.timezone import utc_now             
+from app.core.class_logic import get_business_rules
 from app.models.user import User
 from app.models.package import Package, Enrollment, EnrollmentStatus
 from app.models.teacher import TeacherProfile
@@ -146,6 +147,7 @@ def get_teacher_enrollments_overview(
     cumplimiento: completadas, no-show y canceladas tarde.
     """
     teacher_id = current_user.teacher_profile.id
+    min_cancel_hours = get_business_rules(db)["min_cancel_hours"]
 
     enrollments = db.query(Enrollment).filter(
         Enrollment.teacher_id == teacher_id
@@ -161,7 +163,7 @@ def get_teacher_enrollments_overview(
             1 for c in classes
             if c.status == "cancelled"
             and c.updated_at is not None
-            and (c.start_time_utc - c.updated_at) < timedelta(hours=12)
+            and (c.start_time_utc - c.updated_at) < timedelta(hours=min_cancel_hours)
         )
 
         if e.package and e.package.classes_count is not None:
@@ -364,85 +366,6 @@ def request_renewal(
         "enrollment_id": current_enrollment.id,
         "requested_package": new_package.name,
         "price": new_package.price,
-    }
-
-
-# ─── ESTUDIANTE — Selección de paquete inicial ────────────────────────────────
-
-@router.post("/select-initial")
-def select_initial_package(
-    package_id: int,
-    current_user: User = Depends(get_current_student),
-    db: Session = Depends(get_db)
-):
-    from app.core.class_logic import get_student_booking_stage
-
-    student_id = current_user.student_profile.id
-
-    package = db.query(Package).filter(
-        Package.id == package_id,
-        Package.is_active == True
-    ).first()
-    if not package:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Paquete no encontrado")
-
-    stage = get_student_booking_stage(student_id, package.teacher_id, db)
-
-    if stage == "package_pending_payment":
-        # Ya eligió un paquete con este profesor y quedó pendiente de pago
-        # (p. ej. cerró el checkout sin decidir cuotas vs. pago único).
-        # Si es el MISMO paquete, le devolvemos su enrollment existente
-        # para que pueda reabrir el checkout, en vez de bloquearlo.
-        existing = db.query(Enrollment).filter(
-            Enrollment.student_id == student_id,
-            Enrollment.teacher_id == package.teacher_id,
-            Enrollment.status == EnrollmentStatus.active,
-            Enrollment.payment_status == "unpaid",
-        ).order_by(Enrollment.created_at.desc()).first()
-
-        if existing and existing.package_id == package.id:
-            return {
-                "message": "Ya habías elegido este paquete. Continúa para notificar tu pago.",
-                "enrollment_id": existing.id,
-                "package_id": package.id,
-                "classes_total": existing.classes_total,
-                "unlocked_credits": existing.unlocked_credits,
-                "payment_status": existing.payment_status,
-            }
-
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ya tienes un paquete seleccionado pendiente de pago con este profesor. "
-                   "Complétalo o contacta al staff antes de elegir otro."
-        )
-
-    if stage != "needs_package":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Solo puedes elegir tu paquete inicial después de completar la clase de prueba con este profesor."
-        )
-
-    enrollment = Enrollment(
-        student_id=student_id,
-        package_id=package.id,
-        teacher_id=package.teacher_id,
-        classes_used=0,
-        classes_total=package.classes_count,
-        unlocked_credits=0,
-        payment_status="unpaid",
-        status=EnrollmentStatus.active,
-    )
-    db.add(enrollment)
-    db.commit()
-    db.refresh(enrollment)
-
-    return {
-        "message": "Paquete seleccionado. Procede a notificar el pago para desbloquear tus créditos.",
-        "enrollment_id": enrollment.id,
-        "package_id": package.id,
-        "classes_total": enrollment.classes_total,
-        "unlocked_credits": enrollment.unlocked_credits,
-        "payment_status": enrollment.payment_status,
     }
 
 

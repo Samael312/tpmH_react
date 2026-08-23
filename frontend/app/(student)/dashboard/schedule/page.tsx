@@ -103,7 +103,8 @@ function MiniCalendar({
           const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
           const isSelected = dateStr === value;
           const isPast = new Date(dateStr) < new Date(today.toDateString());
-          const isToday = dateStr === today.toISOString().split("T")[0];
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+          const isToday = dateStr === todayStr;
 
           return (
             <button

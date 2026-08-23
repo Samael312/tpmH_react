@@ -32,6 +32,7 @@ from app.core.email import (
 )
 from app.core.teacher_students import link_student_to_teacher
 from app.core.timezone import utc_now
+from app.core.calendar_sync import sync_class_created
 from app.db.base import get_db
 from app.models.class_ import Class, ClassType
 from app.models.package import Enrollment, EnrollmentStatus, Package
@@ -56,6 +57,19 @@ from app.schemas.payments import (
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _sync_google_calendar_created(new_class: Class, db: Session) -> None:
+    """Crea el evento en Google Calendar del profesor al instante, si tiene
+    Calendar conectado. Nunca lanza — la reserva debe seguir funcionando
+    aunque falle la sincronización (el job en background igual la cubre)."""
+    try:
+        event_id = sync_class_created(new_class, db)
+        if event_id:
+            new_class.google_event_id = event_id
+            db.commit()
+    except Exception as e:
+        logger.error(f"Error al sincronizar Google Calendar (creación) clase {new_class.id}: {e}")
 
 DAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 PACKAGE_CHANGE_BLOCKING_STATUSES = ["completed", "no_show", "confirmed", "pending"]
@@ -435,6 +449,8 @@ def book_class(
         db.commit()
         db.refresh(trial_class)
 
+        _sync_google_calendar_created(trial_class, db)
+
         if teacher.user:
             send_new_booking_teacher_email(
                 to_email=teacher.user.email,
@@ -527,6 +543,8 @@ def book_class(
         db.commit()
         db.refresh(new_class)
 
+        _sync_google_calendar_created(new_class, db)
+
         teacher_user = enrollment.teacher.user if enrollment.teacher and enrollment.teacher.user else None
         send_class_confirmed_email(
             to_email=current_user.email,
@@ -587,6 +605,8 @@ def book_class(
 
         db.commit()
         db.refresh(new_class)
+
+        _sync_google_calendar_created(new_class, db)
 
         teacher_user = enrollment.teacher.user if enrollment.teacher and enrollment.teacher.user else None
 
@@ -755,7 +775,7 @@ def validate_payment(
     if not payment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pago no encontrado o ya procesado")
 
-    if current_user.role == "teacher_admin":   # antes: current_user.role == "teacher"
+    if current_user.role == "teacher":
         if not current_user.teacher_profile or payment.teacher_id != current_user.teacher_profile.id:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo puedes validar pagos de tus estudiantes")
 
@@ -881,7 +901,7 @@ def validate_payment(
                     enrollment.unlocked_credits = (enrollment.unlocked_credits or 0) + credit_this_installment
                 enrollment.payment_status = "paid" if payment.installment_index >= n else "partially_paid"
             else:
-                enrollment.installments_paid = 1
+                enrollment.installments_paid = target_package.installment_count or 1
                 enrollment.unlocked_credits = target_package.classes_count if target_package.classes_count is not None else 0
                 enrollment.payment_status = "paid"
 
