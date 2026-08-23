@@ -9,10 +9,15 @@ import StatCard from '@/components/ui/StatCard'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
+import Skeleton from '@/components/ui/Skeleton'
+import RefreshButton from '@/components/ui/RefreshButton'
+import DesktopOnly from '@/components/ui/DesktopOnly'
+import { usePageTopBar } from '@/lib/mobileTopBar'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 import {
   Bell, CheckCheck, Video, MessageSquare, UserPlus,
   ChevronRight, Clock, CreditCard, Users, GraduationCap,
+  AlertTriangle, RefreshCw,
 } from 'lucide-react'
 
 const NOTIF_ICON: Record<string, React.ReactNode> = {
@@ -22,7 +27,7 @@ const NOTIF_ICON: Record<string, React.ReactNode> = {
 
 // ─── Sección de notificaciones (independiente, arriba de todo) ─────────────
 function NotificationsSection() {
-  const { notifications, loading, refetch } = useNotifications(true)
+  const { notifications, loading, isError, refetch } = useNotifications(true)
 
   const markRead = async (id: number) => {
     try {
@@ -70,9 +75,20 @@ function NotificationsSection() {
         )}
       </div>
 
-      {loading ? (
+      {isError ? (
+        <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span className="text-xs font-bold flex-1">No se pudieron cargar las notificaciones.</span>
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+          </button>
+        </div>
+      ) : loading ? (
         <div className="space-y-2">
-          {[1, 2].map(i => <div key={i} className="h-16 bg-slate-50 rounded-2xl animate-pulse" />)}
+          {[1, 2].map(i => <Skeleton key={i} className="h-16 w-full rounded-2xl" />)}
         </div>
       ) : notifications.length === 0 ? (
         <div className="bg-slate-50/60 border-2 border-dashed border-slate-100 rounded-2xl py-8 text-center">
@@ -116,7 +132,7 @@ function NotificationsSection() {
 
 // ─── Sección de pagos pendientes (acción rápida) ───────────────────────────
 function PendingPaymentsSection() {
-  const { payments, loading, refetch } = usePendingPayments()
+  const { payments, loading, isError, refetch } = usePendingPayments()
   const [validating, setValidating] = useState<number | null>(null)
   const [meetLink, setMeetLink] = useState('')
   const [activePayment, setActivePayment] = useState<number | null>(null)
@@ -165,9 +181,20 @@ function PendingPaymentsSection() {
         {payments.length > 0 && <Badge variant="warning">{payments.length}</Badge>}
       </div>
 
-      {loading ? (
+      {isError ? (
+        <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span className="text-xs font-bold flex-1">No se pudieron cargar los pagos pendientes.</span>
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+          </button>
+        </div>
+      ) : loading ? (
         <div className="space-y-2">
-          {[1, 2].map(i => <div key={i} className="h-24 bg-slate-50 rounded-2xl animate-pulse" />)}
+          {[1, 2].map(i => <Skeleton key={i} className="h-24 w-full rounded-2xl" />)}
         </div>
       ) : payments.length === 0 ? (
         <div className="bg-slate-50/60 border-2 border-dashed border-slate-100 rounded-2xl py-8 text-center">
@@ -229,7 +256,23 @@ function PendingPaymentsSection() {
 }
 
 export default function AdminDashboard() {
-  const { stats, loading: statsLoading } = useAdminStats()
+  const { stats, loading: statsLoading, isError: statsError, refetch: refetchStats } = useAdminStats()
+  const { refetch: refetchPayments, isFetching: paymentsFetching } = usePendingPayments()
+  const { refetch: refetchNotifications, isFetching: notifFetching } = useNotifications(true)
+  
+  const isFetching = paymentsFetching || notifFetching
+  
+  const handleRefresh = () => {
+    refetchStats()
+    refetchPayments()
+    refetchNotifications()
+  }
+  
+  usePageTopBar({
+    title: 'Dashboard General',
+    onRefresh: handleRefresh,
+    isFetching,
+  })
 
   return (
     <>
@@ -245,20 +288,36 @@ export default function AdminDashboard() {
               Visión general de la plataforma, métricas y pagos en tiempo real
             </p>
           </div>
-          <Badge variant="pink" className="py-2 px-4 shadow-sm hidden md:inline-flex">
-            <span className="flex h-2 w-2 rounded-full bg-pink-500 animate-pulse mr-2" />
-            Admin Live
-          </Badge>
+          <div className="flex items-center gap-3">
+            <DesktopOnly>
+              <RefreshButton onRefresh={handleRefresh} isFetching={isFetching} />
+            </DesktopOnly>
+            <Badge variant="pink" className="py-2 px-4 shadow-sm hidden md:inline-flex">
+              <span className="flex h-2 w-2 rounded-full bg-pink-500 animate-pulse mr-2" />
+              Admin Live
+            </Badge>
+          </div>
         </div>
 
         {/* ─── Notificaciones: apartado propio, siempre arriba ─── */}
         <NotificationsSection />
 
         {/* ─── KPIs ─── */}
-        {statsLoading ? (
+        {statsError ? (
+          <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span className="text-xs font-bold flex-1">No se pudieron cargar las métricas de la plataforma.</span>
+            <button
+              onClick={() => refetchStats()}
+              className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+            </button>
+          </div>
+        ) : statsLoading ? (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="bg-slate-50 border border-pink-50 rounded-3xl h-32 animate-pulse" />
+              <Skeleton key={i} className="h-32 w-full rounded-3xl" />
             ))}
           </div>
         ) : stats ? (
@@ -347,8 +406,12 @@ export default function AdminDashboard() {
                 )}
               </div>
 
-              {statsLoading ? (
-                <div className="h-24 bg-slate-50 rounded-2xl animate-pulse" />
+              {statsError ? (
+                <div className="bg-rose-50/60 border border-rose-100 rounded-2xl py-6 text-center">
+                  <p className="text-xs text-rose-500 font-bold">No se pudo verificar el estado de profesores pendientes</p>
+                </div>
+              ) : statsLoading ? (
+                <Skeleton className="h-24 w-full rounded-2xl" />
               ) : !stats || stats.total_teachers_pending === 0 ? (
                 <div className="bg-slate-50/60 border-2 border-dashed border-slate-100 rounded-2xl py-8 text-center">
                   <p className="text-sm text-slate-400 font-bold">Sin profesores pendientes ✅</p>

@@ -1,3 +1,4 @@
+// frontend/app/(superadmin)/admin/users/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -24,6 +25,12 @@ import {
 } from "lucide-react";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import api from "@/lib/api";
+
+import { useAdminUsersList } from "@/hooks/useAdminData";
+import Skeleton from "@/components/ui/Skeleton";
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
+import { usePageTopBar } from "@/lib/mobileTopBar";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface StudentRow {
@@ -185,10 +192,10 @@ function ActiveToggleCell({
 // ─── Página Principal ─────────────────────────────────────────────────────────
 export default function BulkEditStudentsPage() {
   const router = useRouter();
-
+  const { users, loading, isFetching, isError, refetch } = useAdminUsersList();
+  
   const [rows, setRows] = useState<StudentRow[]>([]);
   const [filtered, setFiltered] = useState<StudentRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -198,44 +205,43 @@ export default function BulkEditStudentsPage() {
   const [filterActive, setFilterActive] = useState("all");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
-  // ── Carga inicial ──
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await api.get("/admin/users?limit=500");
-      const rawData = res.data.users ?? res.data;
-      const data: StudentRow[] = rawData.map((u: any) => ({
-        id: u.id,
-        username: u.username,
-        name: u.name,
-        surname: u.surname,
-        email: u.email,
+  const dirtyRows = useMemo(() => rows.filter((r) => r._dirty), [rows]);
+
+  // Sincroniza la tabla editable con el servidor SOLO si no hay cambios sin
+  // guardar — así un refresh (manual o en segundo plano) nunca pisa una
+  // edición en curso. Si hay dirtyRows, el admin debe guardar o revertir
+  // antes de que la tabla vuelva a reflejar el servidor.
+  useEffect(() => {
+    if (dirtyRows.length > 0) return;
+    const data: StudentRow[] = users.map((u) => ({
+      id: u.id,
+      username: u.username,
+      name: u.name,
+      surname: u.surname,
+      email: u.email,
+      role: u.role,
+      is_active: u.is_active ?? true,
+      phone_number: u.phone_number ?? "",
+      nationality: u.nationality ?? "",
+      classes_used: u.classes_used ?? 0,
+      classes_total: u.classes_total ?? 0,
+      _dirty: false,
+      _original: {
         role: u.role,
         is_active: u.is_active ?? true,
         phone_number: u.phone_number ?? "",
         nationality: u.nationality ?? "",
-        classes_used: u.classes_used ?? 0,
-        classes_total: u.classes_total ?? 0,
-        _dirty: false,
-        _original: {
-          role: u.role,
-          is_active: u.is_active ?? true,
-          phone_number: u.phone_number ?? "",
-          nationality: u.nationality ?? "",
-        },
-      }));
-      setRows(data);
-    } catch {
-      setError("Error al cargar la lista de usuarios. Por favor, reintenta.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      },
+    }));
+    setRows(data);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [users]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  usePageTopBar({
+    title: "Edición Masiva de Usuarios",
+    onRefresh: refetch,
+    isFetching,
+  });
 
   // ── Filtrado ──
   useEffect(() => {
@@ -365,8 +371,6 @@ export default function BulkEditStudentsPage() {
   };
 
   // ── Guardar cambios ──
-  const dirtyRows = useMemo(() => rows.filter((r) => r._dirty), [rows]);
-
   const saveAll = async () => {
     if (dirtyRows.length === 0) return;
     setSaving(true);
@@ -400,6 +404,7 @@ export default function BulkEditStudentsPage() {
       );
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
+      refetch();
     } catch {
       setError("Ocurrió un error al guardar algunos registros.");
     } finally {
@@ -450,21 +455,9 @@ export default function BulkEditStudentsPage() {
             </div>
 
             <div className="flex items-center gap-2.5 self-end sm:self-auto">
-              <button
-                onClick={load}
-                disabled={loading}
-                title="Recargar datos"
-                className="w-10 h-10 rounded-2xl bg-white border border-slate-200/80
-                           flex items-center justify-center shadow-sm hover:bg-slate-50
-                           transition-all disabled:opacity-50 active:scale-95"
-              >
-                <RefreshCw
-                  className={`w-4 h-4 text-slate-600 ${
-                    loading ? "animate-spin" : ""
-                  }`}
-                />
-              </button>
-
+              <DesktopOnly>
+                <RefreshButton onRefresh={refetch} isFetching={isFetching} />
+              </DesktopOnly>
               <button
                 onClick={saveAll}
                 disabled={dirtyRows.length === 0 || saving}
@@ -539,16 +532,27 @@ export default function BulkEditStudentsPage() {
           </div>
 
           {/* ─── Error global ─── */}
-          {error && (
+          {(error || isError) && (
             <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2.5 animate-in fade-in duration-300 shadow-sm">
               <AlertTriangle className="w-4 h-4 text-rose-500 flex-shrink-0" />
-              <span className="flex-1">{error}</span>
-              <button
-                onClick={() => setError("")}
-                className="text-rose-400 hover:text-rose-600 transition-colors p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <span className="flex-1">
+                {error || "No se pudo cargar la lista de usuarios. Por favor, reintenta."}
+              </span>
+              {isError ? (
+                <button
+                  onClick={() => refetch()}
+                  className="flex items-center gap-1.5 text-rose-600 hover:text-rose-800 font-bold px-2 py-1 rounded-lg hover:bg-rose-100 transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+                </button>
+              ) : (
+                <button
+                  onClick={() => setError("")}
+                  className="text-rose-400 hover:text-rose-600 transition-colors p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
           )}
 
@@ -726,9 +730,10 @@ export default function BulkEditStudentsPage() {
           {/* ─── Tabla de Usuarios ─── */}
           <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-20 gap-3">
-                <div className="w-9 h-9 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
-                <p className="text-xs font-bold text-slate-400">Cargando usuarios...</p>
+              <div className="p-6 space-y-2">
+                {[1, 2, 3, 4, 5].map(i => (
+                  <Skeleton key={i} className="h-12 w-full rounded-xl" />
+                ))}
               </div>
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center py-20 px-4 text-center">

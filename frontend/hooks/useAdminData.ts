@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
 
 interface PlatformStats {
@@ -159,42 +160,39 @@ export function useWithdrawals() {
 }
 
 export function useAdminStats() {
-  const [stats, setStats] = useState<PlatformStats | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
+  const query = useQuery({
+    queryKey: ["admin", "stats"],
+    queryFn: async () => {
       const res = await api.get('/admin/stats')
-      setStats(res.data)
-    } catch (e: any) {
-      setError(e.response?.data?.detail || 'Error cargando métricas')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+      return res.data as PlatformStats
+    },
+  })
 
-  useEffect(() => { fetch() }, [fetch])
-  return { stats, loading, error, refetch: fetch }
+  return {
+    stats: query.data ?? null,
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }
 
 export function usePendingPayments() {
-  const [payments, setPayments] = useState<PendingPayment[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
+  const query = useQuery({
+    queryKey: ["admin", "payments", "pending"],
+    queryFn: async () => {
       const res = await api.get('/payments/pending-review')
-      setPayments(res.data)
-    } catch { } finally {
-      setLoading(false)
-    }
-  }, [])
+      return res.data as PendingPayment[]
+    },
+  })
 
-  useEffect(() => { fetch() }, [fetch])
-  return { payments, loading, refetch: fetch }
+  return {
+    payments: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }
 
 export function useTeachers(statusFilter?: string) {
@@ -252,19 +250,21 @@ export function useUnreadNotificationCount(enabled: boolean = true) {
 }
 
 export function useNotifications(unreadOnly = false) {
-  const [notifications, setNotifications] = useState<AdminNotification[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
+  const query = useQuery({
+    queryKey: ["admin", "notifications", unreadOnly],
+    queryFn: async () => {
       const res = await api.get(`/admin/notifications?unread_only=${unreadOnly}`)
-      setNotifications(res.data)
-    } catch { } finally { setLoading(false) }
-  }, [unreadOnly])
+      return res.data as AdminNotification[]
+    },
+  })
 
-  useEffect(() => { fetch() }, [fetch])
-  return { notifications, loading, refetch: fetch }
+  return {
+    notifications: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }
 
 // ─── Apelaciones de profesores ────────────────────────────────────────────────
@@ -347,4 +347,37 @@ export interface StudentDetail {
 
 export function fetchStudentDetail(userId: number) {
   return api.get<StudentDetail>(`/admin/students/${userId}/detail`)
+}
+
+// ─── Lista completa de usuarios (edición masiva) ─────────────────────────────
+export interface AdminUserRaw {
+  id: number
+  username: string
+  name: string
+  surname: string
+  email: string
+  role: string
+  is_active: boolean
+  phone_number: string | null
+  nationality: string | null
+  classes_used?: number
+  classes_total?: number
+}
+
+export function useAdminUsersList() {
+  const query = useQuery({
+    queryKey: ["admin", "users"],
+    queryFn: async () => {
+      const res = await api.get('/admin/users?limit=200')
+      return (res.data.users ?? res.data) as AdminUserRaw[]
+    },
+  })
+
+  return {
+    users: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }
