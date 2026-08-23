@@ -587,3 +587,21 @@ export function useTeacherEnrollments() {
     refetch: query.refetch,
   }
 }
+
+// ─── Reseñas del propio profesor (para la vista previa pública) ─────────────
+export function useTeacherOwnReviews(username: string | undefined) {
+  const query = useQuery({
+    queryKey: ["teacher", "reviews", username],
+    queryFn: async () => {
+      const res = await api.get(`/reviews/${username}`)
+      return Array.isArray(res.data) ? res.data : []
+    },
+    enabled: !!username,
+  })
+
+  return {
+    reviews: query.data ?? [],
+    loading: query.isLoading,
+    refetch: query.refetch,
+  }
+}
