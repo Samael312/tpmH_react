@@ -387,6 +387,10 @@ def get_teacher_available_slots(
     if not all_slots:
         return []
 
+    # 6b. Margen mínimo de reserva configurado por el superadmin (en minutos)
+    from app.core.class_logic import get_business_rules
+    min_booking_buffer_minutes = get_business_rules(db)["min_booking_hours"] * 60
+
     # 7. Obtener preferencias del estudiante si está autenticado
     student_preferences = []
     if current_user and current_user.student_profile:
@@ -419,7 +423,7 @@ def get_teacher_available_slots(
             start_time_utc=slot_start,
             end_time_utc=slot_end,
             duration_minutes=duration,
-            is_past=is_slot_in_past(slot_start),
+            is_past=is_slot_in_past(slot_start, buffer_minutes=min_booking_buffer_minutes),
             is_preferred=is_preferred_slot(slot_start, student_preferences),
             is_available=not is_busy
         ))

@@ -208,6 +208,41 @@ function PaymentMethodsEditor({ title, items, onSave }: { title: string; items: 
   )
 }
 
+function DurationListEditor({ label, values, onChange }: {
+  label: string; values: number[]; onChange: (v: number[]) => void
+}) {
+  const [input, setInput] = useState('')
+
+  const add = () => {
+    const n = parseInt(input, 10)
+    if (!isNaN(n) && n > 0 && !values.includes(n)) {
+      onChange([...values, n].sort((a, b) => a - b))
+    }
+    setInput('')
+  }
+  const remove = (n: number) => onChange(values.filter(v => v !== n))
+
+  return (
+    <div>
+      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{label}</label>
+      <div className="flex flex-wrap gap-2 mb-2">
+        {values.map(v => (
+          <span key={v} className="inline-flex items-center gap-1.5 bg-white border border-slate-200 text-xs font-bold text-slate-700 px-3 py-1.5 rounded-xl">
+            {v} min
+            <button onClick={() => remove(v)} className="text-slate-300 hover:text-rose-400">✕</button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input type="number" value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), add())}
+          placeholder="Ej: 45" className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm" />
+        <button onClick={add} className="px-3 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-bold">+</button>
+      </div>
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null)
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig | null>(null)
@@ -742,6 +777,16 @@ export default function SettingsPage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold" />
                 </div>
               ))}
+              <DurationListEditor
+                label="Duraciones permitidas para clases"
+                values={businessRules.allowed_class_durations ?? []}
+                onChange={v => setBusinessRules({ ...businessRules, allowed_class_durations: v })}
+              />
+              <DurationListEditor
+                label="Duraciones permitidas para paquetes"
+                values={businessRules.allowed_package_durations ?? []}
+                onChange={v => setBusinessRules({ ...businessRules, allowed_package_durations: v })}
+              />
             </div>
             <button onClick={() => saveBusinessRules(businessRules)}
               className="px-6 py-2.5 bg-pink-500 hover:bg-pink-600 text-white rounded-xl text-sm font-bold">

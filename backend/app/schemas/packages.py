@@ -21,6 +21,13 @@ class PackageCreate(BaseModel):
     installment_count: Optional[int] = None
     installment_amount: Optional[float] = None
 
+    @field_validator("duration_minutes")
+    @classmethod
+    def validate_duration_minutes(cls, v):
+        if v < 15 or v > 240:
+            raise ValueError("Duración fuera de rango razonable (15-240 min)")
+        return v
+
     @field_validator("installment_count")
     @classmethod
     def validate_installments(cls, v, info):

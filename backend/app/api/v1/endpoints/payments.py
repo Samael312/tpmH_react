@@ -229,7 +229,7 @@ def _ensure_teacher_linked(current_user: User, teacher: TeacherProfile, db: Sess
     from app.models.student_teacher_link import StudentTeacherLink
 
     config = db.query(PlatformConfig).first()
-    if not config or not config.is_single_tenant:
+    if not config or config.is_single_tenant:
         return
 
     profile = current_user.student_profile
@@ -775,7 +775,7 @@ def validate_payment(
     if not payment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pago no encontrado o ya procesado")
 
-    if current_user.role == "teacher":
+    if current_user.role == "teacher_admin":   # antes: current_user.role == "teacher"
         if not current_user.teacher_profile or payment.teacher_id != current_user.teacher_profile.id:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo puedes validar pagos de tus estudiantes")
 
@@ -901,7 +901,7 @@ def validate_payment(
                     enrollment.unlocked_credits = (enrollment.unlocked_credits or 0) + credit_this_installment
                 enrollment.payment_status = "paid" if payment.installment_index >= n else "partially_paid"
             else:
-                enrollment.installments_paid = target_package.installment_count or 1
+                enrollment.installments_paid = 1
                 enrollment.unlocked_credits = target_package.classes_count if target_package.classes_count is not None else 0
                 enrollment.payment_status = "paid"
 

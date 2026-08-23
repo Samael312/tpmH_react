@@ -866,7 +866,7 @@ def get_platform_config(db: Session = Depends(get_db)):
 @router.patch("/platform-config")
 def update_platform_config(
     data: PlatformConfigUpdate,
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db)
 ):
     """El superadmin (o teacher_admin, como staff) configura el modo de la plataforma"""
