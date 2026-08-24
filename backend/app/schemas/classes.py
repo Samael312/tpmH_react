@@ -73,6 +73,7 @@ class ClassResponse(BaseModel):
     id: int
     enrollment_id: Optional[int]
     teacher_id: int
+    teacher_username: Optional[str] = None
     student_id: int
     class_type: str
     subject: Optional[str]

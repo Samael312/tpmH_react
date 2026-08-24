@@ -106,6 +106,9 @@ def _build_class_responses(classes: list[Class], db: Session) -> list[ClassRespo
         student_user = student.user if student else None
 
         data = ClassResponse.model_validate(c).model_dump()
+        data["teacher_username"] = (
+            teacher.user_username if teacher else None
+        )
         data["teacher_name"] = (
             f"{teacher_user.name} {teacher_user.surname}" if teacher_user else None
         )
