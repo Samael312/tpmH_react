@@ -6,6 +6,7 @@ import Link from "next/link";
 import { User, ArrowRight, BookOpen, GraduationCap, Mail } from "lucide-react";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
+import { usePlatformTenantMode } from "@/lib/platformTenantMode";
 
 export default function GoogleCompleteSignupPage() {
   const router = useRouter();
@@ -23,16 +24,9 @@ export default function GoogleCompleteSignupPage() {
   // ─── Modo de plataforma ────────────────────────────────────────────────
   // En single-tenant solo existe una profesora: cualquiera que complete su
   // registro con Google es estudiante por definición, sin preguntar el rol.
-  const [isSingleTenant, setIsSingleTenant] = useState(true);
-  const [configLoaded, setConfigLoaded] = useState(false);
-
-  useEffect(() => {
-    api
-      .get("/admin/platform-config")
-      .then((res) => setIsSingleTenant(Boolean(res.data?.is_single_tenant)))
-      .catch(() => setIsSingleTenant(true)) // fallback seguro
-      .finally(() => setConfigLoaded(true));
-  }, []);
+  // El hook cachea la respuesta en sessionStorage para no repetir el
+  // round-trip de red en cada visita dentro de la misma pestaña.
+  const { isSingleTenant, configLoaded } = usePlatformTenantMode();
 
   useEffect(() => {
     if (isSingleTenant) setRole("student");
@@ -161,33 +155,45 @@ export default function GoogleCompleteSignupPage() {
 
               {/* Selector de rol — solo visible en modo multi-tenant.
                   En single-tenant solo hay una profesora, así que
-                  cualquiera que se registre es estudiante por defecto. */}
-              {configLoaded && !isSingleTenant && (
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                    Soy...
-                  </label>
+                  cualquiera que se registre es estudiante por defecto.
+                  Mientras se confirma el modo, mostramos un skeleton del
+                  mismo tamaño para que el selector no "salte" al aparecer. */}
+              {!configLoaded ? (
+                <div className="animate-pulse">
+                  <div className="h-2.5 w-10 bg-slate-100 rounded mb-1.5" />
                   <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { id: "student", label: "Estudiante", icon: BookOpen },
-                      { id: "teacher", label: "Profesor", icon: GraduationCap },
-                    ].map((r) => (
-                      <button
-                        key={r.id}
-                        type="button"
-                        onClick={() => setRole(r.id)}
-                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all duration-300 ${
-                          role === r.id
-                            ? "border-pink-500 bg-pink-50 text-pink-600 shadow-sm"
-                            : "border-slate-100 bg-slate-50 text-slate-400 hover:border-pink-200"
-                        }`}
-                      >
-                        <r.icon className="w-4 h-4" />
-                        <span className="text-[11px] font-bold">{r.label}</span>
-                      </button>
-                    ))}
+                    <div className="h-[52px] bg-slate-100 rounded-xl" />
+                    <div className="h-[52px] bg-slate-100 rounded-xl" />
                   </div>
                 </div>
+              ) : (
+                !isSingleTenant && (
+                  <div className="animate-in fade-in duration-200">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                      Soy...
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { id: "student", label: "Estudiante", icon: BookOpen },
+                        { id: "teacher", label: "Profesor", icon: GraduationCap },
+                      ].map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => setRole(r.id)}
+                          className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all duration-300 ${
+                            role === r.id
+                              ? "border-pink-500 bg-pink-50 text-pink-600 shadow-sm"
+                              : "border-slate-100 bg-slate-50 text-slate-400 hover:border-pink-200"
+                          }`}
+                        >
+                          <r.icon className="w-4 h-4" />
+                          <span className="text-[11px] font-bold">{r.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
               )}
 
               <div>

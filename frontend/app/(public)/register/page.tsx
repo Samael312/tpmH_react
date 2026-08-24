@@ -20,6 +20,7 @@ import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
+import { usePlatformTenantMode } from "@/lib/platformTenantMode";
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
   return (
@@ -62,16 +63,9 @@ export default function RegisterPage() {
   // ─── Modo de plataforma ────────────────────────────────────────────────
   // En single-tenant solo existe una profesora: cualquiera que se registre
   // es estudiante por definición, así que no tiene sentido preguntar el rol.
-  const [isSingleTenant, setIsSingleTenant] = useState(true);
-  const [configLoaded, setConfigLoaded] = useState(false);
-
-  useEffect(() => {
-    api
-      .get("/admin/platform-config")
-      .then((res) => setIsSingleTenant(Boolean(res.data?.is_single_tenant)))
-      .catch(() => setIsSingleTenant(true)) // fallback seguro: asumir single-tenant
-      .finally(() => setConfigLoaded(true));
-  }, []);
+  // El hook cachea la respuesta en sessionStorage para que no haya que
+  // esperar el round-trip de red en cada visita dentro de la misma pestaña.
+  const { isSingleTenant, configLoaded } = usePlatformTenantMode();
 
   // Step 1
   const [role, setRole] = useState("student");
@@ -327,39 +321,51 @@ export default function RegisterPage() {
                 >
                   {/* Selector de rol — solo visible en modo multi-tenant.
                       En single-tenant solo hay una profesora, así que
-                      cualquiera que se registre es estudiante por defecto. */}
-                  {configLoaded && !isSingleTenant && (
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 tracking-widest block px-0.5">
-                        Soy...
-                      </label>
+                      cualquiera que se registre es estudiante por defecto.
+                      Mientras se confirma el modo, mostramos un skeleton del
+                      mismo tamaño para que el selector no "salte" al aparecer. */}
+                  {!configLoaded ? (
+                    <div className="space-y-1 animate-pulse">
+                      <div className="h-2.5 w-10 bg-slate-100 rounded" />
                       <div className="grid grid-cols-2 gap-1.5">
-                        {[
-                          { id: "student", label: "Estudiante", icon: BookOpen },
-                          {
-                            id: "teacher",
-                            label: "Profesor",
-                            icon: GraduationCap,
-                          },
-                        ].map((r) => (
-                          <button
-                            key={r.id}
-                            type="button"
-                            onClick={() => setRole(r.id)}
-                            className={`flex items-center justify-center gap-1.5 p-1.5 rounded-xl border-2 transition-all duration-300 ${
-                              role === r.id
-                                ? "border-pink-500 bg-pink-50 text-pink-600 shadow-sm"
-                                : "border-slate-100 bg-slate-50 text-slate-400 hover:border-pink-200"
-                            }`}
-                          >
-                            <r.icon className="w-3.5 h-3.5" />
-                            <span className="text-[10px] font-bold">
-                              {r.label}
-                            </span>
-                          </button>
-                        ))}
+                        <div className="h-8 bg-slate-100 rounded-xl" />
+                        <div className="h-8 bg-slate-100 rounded-xl" />
                       </div>
                     </div>
+                  ) : (
+                    !isSingleTenant && (
+                      <div className="space-y-1 animate-in fade-in duration-200">
+                        <label className="text-[10px] font-black text-slate-400 tracking-widest block px-0.5">
+                          Soy...
+                        </label>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {[
+                            { id: "student", label: "Estudiante", icon: BookOpen },
+                            {
+                              id: "teacher",
+                              label: "Profesor",
+                              icon: GraduationCap,
+                            },
+                          ].map((r) => (
+                            <button
+                              key={r.id}
+                              type="button"
+                              onClick={() => setRole(r.id)}
+                              className={`flex items-center justify-center gap-1.5 p-1.5 rounded-xl border-2 transition-all duration-300 ${
+                                role === r.id
+                                  ? "border-pink-500 bg-pink-50 text-pink-600 shadow-sm"
+                                  : "border-slate-100 bg-slate-50 text-slate-400 hover:border-pink-200"
+                              }`}
+                            >
+                              <r.icon className="w-3.5 h-3.5" />
+                              <span className="text-[10px] font-bold">
+                                {r.label}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )
                   )}
 
                   <div className="grid grid-cols-2 gap-1.5">
