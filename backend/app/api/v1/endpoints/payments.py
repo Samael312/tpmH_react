@@ -775,7 +775,7 @@ def validate_payment(
     if not payment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pago no encontrado o ya procesado")
 
-    if current_user.role == "teacher_admin":   # antes: current_user.role == "teacher"
+    if current_user.role == "teacher":
         if not current_user.teacher_profile or payment.teacher_id != current_user.teacher_profile.id:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo puedes validar pagos de tus estudiantes")
 
