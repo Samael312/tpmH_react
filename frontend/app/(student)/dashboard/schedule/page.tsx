@@ -12,7 +12,7 @@ import api from "@/lib/api";
 import Link from "next/link";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import PackageCheckout from "@/components/payments/PackageCheckout";
-import { formatTimeTz, formatDateHumanTz, getHourMinuteTz, getMyDisplayTimezone } from "@/lib/tzFormat";
+import { formatTimeTz, formatDateHumanTz, getMyDisplayTimezone } from "@/lib/tzFormat";
 import { priceLabelSuffix } from "@/lib/packageThemes";
 import PaymentMethodsInfo from "@/components/payments/PaymentMethodsInfo";
 import BuyCreditsModal from "@/components/payments/BuyCreditsModal";
@@ -163,12 +163,7 @@ function StepSelectSlot({
 
   const formatTime = (utc: string) => formatTimeTz(utc, myTz);
 
-  const isPreferredSlot = (slot: any) => {
-    if (slot.is_preferred) return true;
-    const { hour, minute } = getHourMinuteTz(slot.start_time_utc, myTz);
-    const totalMinutes = hour * 60 + minute;
-    return totalMinutes >= 18 * 60 && totalMinutes < 22 * 60;
-  };
+  const isPreferredSlot = (slot: any) => !!slot.is_preferred;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
