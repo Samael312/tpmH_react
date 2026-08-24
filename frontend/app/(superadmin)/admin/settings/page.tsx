@@ -5,27 +5,16 @@ import { Card, Button } from '@/components/ui'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 
-interface PaymentConfig {
-  paypal_enabled: boolean
-  binance_enabled: boolean
-  bank_transfer_enabled: boolean
-  mobile_payment_enabled: boolean
-  paypal_email: string | null
-  binance_address: string | null
-  binance_network: string | null
-  bank_transfer_details: string | null
-  mobile_payment_details: string | null
-  whatsapp_number: string | null
-  default_commission_rate: number
-}
-
-interface PlatformConfig {
-  platform_name: string
-  platform_tagline: string | null
-  is_single_tenant: boolean
-  featured_teacher: any
-  featured_teacher_username?: string
-}
+import {
+  useAdminPaymentConfig, useAdminPlatformConfig, useAdminBusinessRules,
+  AdminPaymentConfig, AdminPlatformConfig,
+} from '@/hooks/useAdminData'
+import { useSystemCatalogs } from '@/hooks/useSystemCatalogs'
+import Skeleton from '@/components/ui/Skeleton'
+import RefreshButton from '@/components/ui/RefreshButton'
+import DesktopOnly from '@/components/ui/DesktopOnly'
+import { usePageTopBar } from '@/lib/mobileTopBar'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
 
 function CatalogEditor({ catalogKey, label, items, onSave }: {
   catalogKey: string; label: string; items: string[]; onSave: (v: string[]) => Promise<void>;
@@ -253,37 +242,73 @@ const TABS = [
 type TabKey = typeof TABS[number]['key']
 
 export default function SettingsPage() {
-  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null)
-  const [platformConfig, setPlatformConfig] = useState<PlatformConfig | null>(null)
+  const { paymentConfig: remotePaymentConfig, loading: pcLoading, isFetching: pcFetching, isError: pcError, refetch: refetchPaymentConfig } = useAdminPaymentConfig()
+  const { platformConfig: remotePlatformConfig, loading: plLoading, isFetching: plFetching, isError: plError, refetch: refetchPlatformConfig } = useAdminPlatformConfig()
+    const { catalogs, loading: catLoading, isFetching: catFetching, isError: catError, refetch: refetchCatalogs } = useSystemCatalogs()
+  const { businessRules: remoteBusinessRules, loading: brLoading, isFetching: brFetching, isError: brError, refetch: refetchBusinessRules } = useAdminBusinessRules()
+  
+  const [paymentConfig, setPaymentConfig] = useState<AdminPaymentConfig | null>(null)
+  const [platformConfig, setPlatformConfig] = useState<AdminPlatformConfig | null>(null)
+  const [businessRules, setBusinessRules] = useState<any>(null)
+  
+  const [paymentDirty, setPaymentDirty] = useState(false)
+  const [platformDirty, setPlatformDirty] = useState(false)
+  const [rulesDirty, setRulesDirty] = useState(false)
+  
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [rulesSaving, setRulesSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<TabKey>('platform')
 
-  // NUEVO: Estados para catálogos y reglas de negocio
-  const [catalogs, setCatalogs] = useState<Record<string, any>>({})
-  const [businessRules, setBusinessRules] = useState<any>(null)
-  const [rulesSaving, setRulesSaving] = useState(false)
+  // Sincroniza las copias editables con el servidor SOLO si no hay cambios
+  // sin guardar — misma salvaguarda que en /admin/users, para no pisar una
+  // edición en curso si el admin pide un refresh manual.
+  useEffect(() => {
+    if (!paymentDirty && remotePaymentConfig) setPaymentConfig(remotePaymentConfig)
+  }, [remotePaymentConfig, paymentDirty])
 
   useEffect(() => {
-    api.get('/payments/config').then(r => setPaymentConfig(r.data))
-    
-    api.get('/admin/platform-config').then(r => {
-      setPlatformConfig({
-        ...r.data,
-        featured_teacher_username: r.data.featured_teacher?.username || ''
-      })
-    })
+    if (!platformDirty && remotePlatformConfig) setPlatformConfig(remotePlatformConfig)
+  }, [remotePlatformConfig, platformDirty])
 
-    // NUEVO: Carga de catálogos y reglas del sistema
-    api.get('/system-catalogs/').then(r => setCatalogs(r.data))
-    api.get('/system-catalogs/business-rules').then(r => setBusinessRules(r.data))
-  }, [])
+  useEffect(() => {
+    if (!rulesDirty && remoteBusinessRules) setBusinessRules(remoteBusinessRules)
+  }, [remoteBusinessRules, rulesDirty])
 
-  // NUEVO: Funciones de guardado para catálogos y reglas de negocio
+  const isFetching = pcFetching || plFetching || catFetching || brFetching
+
+  const handleRefreshAll = () => {
+    refetchPaymentConfig()
+    refetchPlatformConfig()
+    refetchCatalogs()
+    refetchBusinessRules()
+  }
+
+  usePageTopBar({
+    title: 'Configuración Global',
+    onRefresh: handleRefreshAll,
+    isFetching,
+  })
+
+  // Wrappers para marcar "dirty" al primer cambio del admin
+  const updatePaymentConfig = (next: AdminPaymentConfig) => {
+    setPaymentConfig(next)
+    setPaymentDirty(true)
+  }
+
+  const updatePlatformConfig = (next: AdminPlatformConfig) => {
+    setPlatformConfig(next)
+    setPlatformDirty(true)
+  }
+
+  const updateBusinessRules = (next: any) => {
+    setBusinessRules(next)
+    setRulesDirty(true)
+  }
+
   const saveCatalog = async (key: string, value: any) => {
     await api.patch(`/system-catalogs/${key}`, { value })
-    const r = await api.get('/system-catalogs/')
-    setCatalogs(r.data)
+    await refetchCatalogs()
   }
 
   const saveBusinessRules = async (patch: any) => {
@@ -291,6 +316,7 @@ export default function SettingsPage() {
     try {
       const r = await api.patch('/system-catalogs/business-rules', patch)
       setBusinessRules(r.data)
+      setRulesDirty(false)
     } catch (e: any) {
       alert(e.response?.data?.detail || 'Error guardando')
     } finally {
@@ -299,9 +325,12 @@ export default function SettingsPage() {
   }
 
   const savePaymentConfig = async () => {
+    if (!paymentConfig) return
     setSaving(true)
     try {
       await api.patch('/payments/config', paymentConfig)
+      setPaymentDirty(false)
+      await refetchPaymentConfig()
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e: any) {
@@ -320,13 +349,8 @@ export default function SettingsPage() {
         is_single_tenant: platformConfig?.is_single_tenant,
         featured_teacher_username: platformConfig?.featured_teacher_username || null,
       })
-      
-      const r = await api.get('/admin/platform-config')
-      setPlatformConfig({
-        ...r.data,
-        featured_teacher_username: r.data.featured_teacher?.username || ''
-      })
-      
+      setPlatformDirty(false)
+      await refetchPlatformConfig()
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e: any) {
@@ -338,7 +362,7 @@ export default function SettingsPage() {
 
   const tabCount = (key: TabKey) => {
     if (key === 'catalogs') {
-      return Object.values(catalogs).filter((v: any) => Array.isArray(v) ? v.length : v && Object.keys(v).length).length
+      return Object.values(catalogs || {}).filter((v: any) => Array.isArray(v) ? v.length : v && Object.keys(v).length).length
     }
     return undefined
   }
@@ -348,17 +372,22 @@ export default function SettingsPage() {
     <div className="space-y-6 animate-fade-up bg-white min-h-screen p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 max-w-5xl mx-auto">
 
       {/* Header */}
-      <div>
-        <h1 className="font-display text-4xl font-bold text-slate-800 mb-2 tracking-tight">
-          Configuración Global
-        </h1>
-        <p className="text-sm text-slate-500 font-medium">
-          Ajustes generales de la plataforma, cobros y catálogos del sistema.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-4xl font-bold text-slate-800 mb-2 tracking-tight">
+            Configuración Global
+          </h1>
+          <p className="text-sm text-slate-500 font-medium">
+            Ajustes generales de la plataforma, cobros y catálogos del sistema.
+          </p>
+        </div>
+        <DesktopOnly>
+          <RefreshButton onRefresh={handleRefreshAll} isFetching={isFetching} />
+        </DesktopOnly>
       </div>
 
       {/* ─── Navegación por pestañas ─────────────────────────────────── */}
-      <div className="sticky top-0 z-10 -mx-6 md:-mx-8 px-6 md:px-8 py-2 bg-white/90 backdrop-blur border-b border-slate-100">
+      <div className="-mx-6 md:-mx-8 px-6 md:px-8 py-2 mb-6 bg-white border-b border-slate-100">
         <div className="flex gap-2 overflow-x-auto no-scrollbar">
           {TABS.map(tab => {
             const active = activeTab === tab.key
@@ -399,8 +428,18 @@ export default function SettingsPage() {
               Métodos de Pago (Alumnos)
             </h2>
           </div>
-
-          {paymentConfig ? (
+          {pcError ? (
+            <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <span className="text-xs font-bold flex-1">No se pudo cargar la configuración de pagos.</span>
+              <button
+                onClick={() => refetchPaymentConfig()}
+                className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+              </button>
+            </div>
+          ) : paymentConfig ? (
             <div className="space-y-6">
               {/* PayPal */}
               <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 space-y-4 transition-all hover:border-slate-200">
@@ -415,7 +454,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => setPaymentConfig({
+                    onClick={() => updatePaymentConfig({
                       ...paymentConfig,
                       paypal_enabled: !paymentConfig.paypal_enabled
                     })}
@@ -436,7 +475,7 @@ export default function SettingsPage() {
                     <input
                       type="email"
                       value={paymentConfig.paypal_email || ''}
-                      onChange={e => setPaymentConfig({
+                      onChange={e => updatePaymentConfig({
                         ...paymentConfig,
                         paypal_email: e.target.value
                       })}
@@ -460,7 +499,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => setPaymentConfig({
+                    onClick={() => updatePaymentConfig({
                       ...paymentConfig,
                       binance_enabled: !paymentConfig.binance_enabled
                     })}
@@ -481,7 +520,7 @@ export default function SettingsPage() {
                     <input
                       type="text"
                       value={paymentConfig.binance_address || ''}
-                      onChange={e => setPaymentConfig({
+                      onChange={e => updatePaymentConfig({
                         ...paymentConfig,
                         binance_address: e.target.value
                       })}
@@ -491,7 +530,7 @@ export default function SettingsPage() {
                     <input
                       type="text"
                       value={paymentConfig.binance_network || ''}
-                      onChange={e => setPaymentConfig({
+                      onChange={e => updatePaymentConfig({
                         ...paymentConfig,
                         binance_network: e.target.value
                       })}
@@ -515,7 +554,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => setPaymentConfig({
+                    onClick={() => updatePaymentConfig({
                       ...paymentConfig,
                       bank_transfer_enabled: !paymentConfig.bank_transfer_enabled
                     })}
@@ -535,7 +574,7 @@ export default function SettingsPage() {
                   <div className="pt-2 animate-in fade-in slide-in-from-top-2">
                     <textarea
                       value={paymentConfig.bank_transfer_details || ''}
-                      onChange={e => setPaymentConfig({
+                      onChange={e => updatePaymentConfig({
                         ...paymentConfig,
                         bank_transfer_details: e.target.value
                       })}
@@ -560,7 +599,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => setPaymentConfig({
+                    onClick={() => updatePaymentConfig({
                       ...paymentConfig,
                       mobile_payment_enabled: !paymentConfig.mobile_payment_enabled
                     })}
@@ -580,7 +619,7 @@ export default function SettingsPage() {
                   <div className="pt-2 animate-in fade-in slide-in-from-top-2">
                     <textarea
                       value={paymentConfig.mobile_payment_details || ''}
-                      onChange={e => setPaymentConfig({
+                      onChange={e => updatePaymentConfig({
                         ...paymentConfig,
                         mobile_payment_details: e.target.value
                       })}
@@ -606,7 +645,7 @@ export default function SettingsPage() {
                 <input
                   type="text"
                   value={paymentConfig.whatsapp_number || ''}
-                  onChange={e => setPaymentConfig({
+                  onChange={e => updatePaymentConfig({
                     ...paymentConfig,
                     whatsapp_number: e.target.value
                   })}
@@ -633,7 +672,7 @@ export default function SettingsPage() {
                     min="0"
                     max="1"
                     value={paymentConfig.default_commission_rate}
-                    onChange={e => setPaymentConfig({
+                    onChange={e => updatePaymentConfig({
                       ...paymentConfig,
                       default_commission_rate: parseFloat(e.target.value) || 0
                     })}
@@ -657,12 +696,12 @@ export default function SettingsPage() {
               </div>
             </div>
           ) : (
-            <div className="h-40 bg-slate-50 rounded-2xl animate-pulse border border-slate-100" />
+            <Skeleton className="h-32 w-full rounded-2xl" />
           )}
         </Card>
       )}
 
-        {/* ─── Configuración de plataforma ─────────────────────────────────── */}
+      {/* ─── Configuración de plataforma ─────────────────────────────────── */}
       {activeTab === 'platform' && (
         <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-6">
           <div className="flex items-center gap-3 mb-2">
@@ -672,8 +711,19 @@ export default function SettingsPage() {
             </h2>
           </div>
 
-          {platformConfig ? (
-            <div className="space-y-6">
+          {plError ? (
+            <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <span className="text-xs font-bold flex-1">No se pudo cargar la configuración de plataforma.</span>
+              <button
+                onClick={() => refetchPlatformConfig()}
+                className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+              </button>
+            </div>
+          ) : platformConfig ? (
+            <div className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
@@ -682,7 +732,7 @@ export default function SettingsPage() {
                   <input
                     type="text"
                     value={platformConfig.platform_name}
-                    onChange={e => setPlatformConfig({
+                    onChange={e => updatePlatformConfig({
                       ...platformConfig,
                       platform_name: e.target.value
                     })}
@@ -697,7 +747,7 @@ export default function SettingsPage() {
                   <input
                     type="text"
                     value={platformConfig.platform_tagline || ''}
-                    onChange={e => setPlatformConfig({
+                    onChange={e => updatePlatformConfig({
                       ...platformConfig,
                       platform_tagline: e.target.value
                     })}
@@ -730,7 +780,7 @@ export default function SettingsPage() {
                 </div>
                 
                 <button
-                  onClick={() => setPlatformConfig({
+                  onClick={() => updatePlatformConfig({
                     ...platformConfig,
                     is_single_tenant: !platformConfig.is_single_tenant
                   })}
@@ -754,7 +804,7 @@ export default function SettingsPage() {
                   <input
                     type="text"
                     value={platformConfig.featured_teacher_username || ''}
-                    onChange={e => setPlatformConfig({
+                    onChange={e => updatePlatformConfig({
                       ...platformConfig,
                       featured_teacher_username: e.target.value
                     })}
@@ -779,127 +829,156 @@ export default function SettingsPage() {
               </div>
             </div>
           ) : (
-            <div className="h-32 bg-slate-50 rounded-2xl animate-pulse border border-slate-100" />
+            <Skeleton className="h-32 w-full rounded-2xl" />
           )}
         </Card>
       )}
 
-        {/* ─── NUEVO: Catálogos del Sistema ─────────────────────────────────── */}
+      {/* ─── Catálogos del Sistema ─────────────────────────────────── */}
       {activeTab === 'catalogs' && (
-        <div className="space-y-8">
-
-          <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-6">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-1.5 h-6 bg-purple-400 rounded-full" />
-              <div>
-                <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
-                  Catálogos básicos
-                </h2>
-                <p className="text-[11px] text-slate-400 font-medium mt-0.5">Listas de opciones usadas en formularios de perfil, materiales y paquetes.</p>
+        catError ? (
+          <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span className="text-xs font-bold flex-1">No se pudieron cargar los catálogos del sistema.</span>
+            <button
+              onClick={() => refetchCatalogs()}
+              className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+            </button>
+          </div>
+        ) : catLoading ? (
+          <div className="space-y-8">
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-64 w-full rounded-3xl" />)}
+          </div>
+        ) : (
+          <div className="space-y-8">
+            <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-1.5 h-6 bg-purple-400 rounded-full" />
+                <div>
+                  <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                    Catálogos básicos
+                  </h2>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">Listas de opciones usadas en formularios de perfil, materiales y paquetes.</p>
+                </div>
               </div>
-            </div>
 
-            <CatalogEditor catalogKey="subjects" label="Materias" items={catalogs.subjects ?? []}
-              onSave={v => saveCatalog('subjects', v)} />
-            <CatalogEditor catalogKey="languages" label="Idiomas" items={catalogs.languages ?? []}
-              onSave={v => saveCatalog('languages', v)} />
-            <CatalogEditor catalogKey="skill_suggestions" label="Habilidades sugeridas" items={catalogs.skill_suggestions ?? []}
-              onSave={v => saveCatalog('skill_suggestions', v)} />
-            <CatalogEditor catalogKey="material_categories" label="Categorías de materiales" items={catalogs.material_categories ?? []}
-              onSave={v => saveCatalog('material_categories', v)} />
-            <CatalogEditor catalogKey="material_levels" label="Niveles de materiales" items={catalogs.material_levels ?? []}
-              onSave={v => saveCatalog('material_levels', v)} />
-            <CatalogEditor catalogKey="package_icon_options" label="Iconos de paquetes" items={catalogs.package_icon_options ?? []}
-              onSave={v => saveCatalog('package_icon_options', v)} />
-          </Card>
+              <CatalogEditor catalogKey="subjects" label="Materias" items={catalogs.subjects ?? []}
+                onSave={v => saveCatalog('subjects', v)} />
+              <CatalogEditor catalogKey="languages" label="Idiomas" items={catalogs.languages ?? []}
+                onSave={v => saveCatalog('languages', v)} />
+              <CatalogEditor catalogKey="skill_suggestions" label="Habilidades sugeridas" items={catalogs.skill_suggestions ?? []}
+                onSave={v => saveCatalog('skill_suggestions', v)} />
+              <CatalogEditor catalogKey="material_categories" label="Categorías de materiales" items={catalogs.material_categories ?? []}
+                onSave={v => saveCatalog('material_categories', v)} />
+              <CatalogEditor catalogKey="material_levels" label="Niveles de materiales" items={catalogs.material_levels ?? []}
+                onSave={v => saveCatalog('material_levels', v)} />
+              <CatalogEditor catalogKey="package_icon_options" label="Iconos de paquetes" items={catalogs.package_icon_options ?? []}
+                onSave={v => saveCatalog('package_icon_options', v)} />
+            </Card>
 
-          <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-6">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-1.5 h-6 bg-purple-400 rounded-full" />
-              <div>
-                <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
-                  Objetivos y métodos de cobro
-                </h2>
-                <p className="text-[11px] text-slate-400 font-medium mt-0.5">Objetivos que eligen los estudiantes y formas de pago/retiro disponibles.</p>
+            <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-1.5 h-6 bg-purple-400 rounded-full" />
+                <div>
+                  <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                    Objetivos y métodos de cobro
+                  </h2>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">Objetivos que eligen los estudiantes y formas de pago/retiro disponibles.</p>
+                </div>
               </div>
-            </div>
 
-            <GoalsEditor items={catalogs.student_goals ?? []} onSave={v => saveCatalog('student_goals', v)} />
-            <PaymentMethodsEditor title="Métodos de pago (estudiante)" items={catalogs.student_payment_methods ?? []} onSave={v => saveCatalog('student_payment_methods', v)} />
-            <PaymentMethodsEditor title="Métodos de retiro (profesor)" items={catalogs.withdrawal_methods ?? []} onSave={v => saveCatalog('withdrawal_methods', v)} />
-          </Card>
+              <GoalsEditor items={catalogs.student_goals ?? []} onSave={v => saveCatalog('student_goals', v)} />
+              <PaymentMethodsEditor title="Métodos de pago (estudiante)" items={catalogs.student_payment_methods ?? []} onSave={v => saveCatalog('student_payment_methods', v)} />
+              <PaymentMethodsEditor title="Métodos de retiro (profesor)" items={catalogs.withdrawal_methods ?? []} onSave={v => saveCatalog('withdrawal_methods', v)} />
+            </Card>
 
-          <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-6">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-1.5 h-6 bg-purple-400 rounded-full" />
-              <div>
-                <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
-                  Apariencia
-                </h2>
-                <p className="text-[11px] text-slate-400 font-medium mt-0.5">Colores y temas visuales usados en paquetes, materias e idiomas.</p>
+            <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-1.5 h-6 bg-purple-400 rounded-full" />
+                <div>
+                  <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                    Apariencia
+                  </h2>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">Colores y temas visuales usados en paquetes, materias e idiomas.</p>
+                </div>
               </div>
-            </div>
 
-            <ThemePresetsEditor items={catalogs.theme_presets ?? []} onSave={v => saveCatalog('theme_presets', v)} />
-            <SubjectThemeMapEditor subjects={catalogs.subjects ?? []} languages={catalogs.languages ?? []} map={catalogs.subject_theme_map ?? {}} onSave={v => saveCatalog('subject_theme_map', v)} />
-          </Card>
+              <ThemePresetsEditor items={catalogs.theme_presets ?? []} onSave={v => saveCatalog('theme_presets', v)} />
+              <SubjectThemeMapEditor subjects={catalogs.subjects ?? []} languages={catalogs.languages ?? []} map={catalogs.subject_theme_map ?? {}} onSave={v => saveCatalog('subject_theme_map', v)} />
+            </Card>
+          </div>
+        )
+      )}
 
+      {/* ─── Reglas de negocio ─────────────────────────────────────── */}
+      {activeTab === 'rules' && brError && (
+        <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span className="text-xs font-bold flex-1">No se pudieron cargar las reglas de negocio.</span>
+          <button
+            onClick={() => refetchBusinessRules()}
+            className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+          </button>
         </div>
       )}
 
-        {/* ─── NUEVO: Reglas de negocio ─────────────────────────────────────── */}
-      {activeTab === 'rules' && businessRules && (
-          <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-5">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-1.5 h-6 bg-amber-400 rounded-full" />
-              <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
-                Reglas de negocio
-              </h2>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { key: 'min_booking_hours', label: 'Horas mínimas para agendar' },
-                { key: 'min_cancel_hours', label: 'Horas mínimas para cancelar sin penalización' },
-                { key: 'min_reschedule_hours_student', label: 'Horas mínimas para reagendar (estudiante)' },
-                { key: 'low_credit_threshold', label: 'Umbral de crédito bajo' },
-                { key: 'low_credit_renotify_days', label: 'Días entre avisos de crédito bajo' },
-              ].map(f => (
-                <div key={f.key}>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{f.label}</label>
-                  <input type="number" value={businessRules[f.key]}
-                    onChange={e => setBusinessRules({ ...businessRules, [f.key]: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold" />
-                </div>
-              ))}
-              <DurationListEditor
-                label="Duraciones permitidas para clases"
-                values={businessRules.allowed_class_durations ?? []}
-                onChange={v => setBusinessRules({ ...businessRules, allowed_class_durations: v })}
-              />
-              <DurationListEditor
-                label="Duraciones permitidas para paquetes"
-                values={businessRules.allowed_package_durations ?? []}
-                onChange={v => setBusinessRules({ ...businessRules, allowed_package_durations: v })}
-              />
-            </div>
-            <Button
-              variant="primary"
-              loading={rulesSaving}
-              onClick={() => saveBusinessRules(businessRules)}
-              className="!w-auto px-6 py-2.5 !rounded-xl text-sm"
-            >
-              Guardar reglas
-            </Button>
-          </Card>
+      {activeTab === 'rules' && businessRules && !brError && (
+        <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-5">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-1.5 h-6 bg-amber-400 rounded-full" />
+            <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+              Reglas de negocio
+            </h2>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              { key: 'min_booking_hours', label: 'Horas mínimas para agendar' },
+              { key: 'min_cancel_hours', label: 'Horas mínimas para cancelar sin penalización' },
+              { key: 'min_reschedule_hours_student', label: 'Horas mínimas para reagendar (estudiante)' },
+              { key: 'low_credit_threshold', label: 'Umbral de crédito bajo' },
+              { key: 'low_credit_renotify_days', label: 'Días entre avisos de crédito bajo' },
+            ].map(f => (
+              <div key={f.key}>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{f.label}</label>
+                <input type="number" value={businessRules[f.key]}
+                  onChange={e => updateBusinessRules({ ...businessRules, [f.key]: parseInt(e.target.value) || 0 })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold" />
+              </div>
+            ))}
+            <DurationListEditor
+              label="Duraciones permitidas para clases"
+              values={businessRules.allowed_class_durations ?? []}
+              onChange={v => updateBusinessRules({ ...businessRules, allowed_class_durations: v })}
+            />
+            <DurationListEditor
+              label="Duraciones permitidas para paquetes"
+              values={businessRules.allowed_package_durations ?? []}
+              onChange={v => updateBusinessRules({ ...businessRules, allowed_package_durations: v })}
+            />
+          </div>
+          <Button
+            variant="primary"
+            loading={rulesSaving}
+            onClick={() => saveBusinessRules(businessRules)}
+            className="!w-auto px-6 py-2.5 !rounded-xl text-sm"
+          >
+            Guardar reglas
+          </Button>
+        </Card>
       )}
-      {activeTab === 'rules' && !businessRules && (
-        <div className="h-40 bg-slate-50 rounded-2xl animate-pulse border border-slate-100" />
+
+      {activeTab === 'rules' && !businessRules && !brError && (
+        <Skeleton className="h-40 w-full rounded-2xl" />
       )}
 
       </div>
 
     </div>
     <ChipiWidget screenName="admin_settings" /> 
-    </>
+  </>
   )
 }

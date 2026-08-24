@@ -6,12 +6,22 @@ import { Card } from '@/components/ui'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 import Link from 'next/link'
-import { ArrowLeft, ShieldAlert, RotateCcw, Loader2, Calendar, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, ShieldAlert, RotateCcw, Loader2, Calendar, AlertTriangle, RefreshCw } from 'lucide-react'
 import { getFlagForNationality } from '@/lib/nationalities'
+import Skeleton from '@/components/ui/Skeleton'
+import RefreshButton from '@/components/ui/RefreshButton'
+import DesktopOnly from '@/components/ui/DesktopOnly'
+import { usePageTopBar } from '@/lib/mobileTopBar'
 
 export default function BannedStudentsPage() {
-  const { students, loading, refetch } = useBannedStudents()
+  const { students, loading, isFetching, isError, refetch } = useBannedStudents()
   const [revertingId, setRevertingId] = useState<number | null>(null)
+
+  usePageTopBar({
+    title: 'Estudiantes Baneados',
+    onRefresh: refetch,
+    isFetching,
+  })
 
   const revert = async (id: number) => {
     if (!confirm('¿Reactivar a este estudiante? Podrá volver a iniciar sesión y agendar clases.')) return
@@ -29,34 +39,46 @@ export default function BannedStudentsPage() {
   return (
     <>
       <div className="min-h-screen bg-slate-50/50 p-4 md:p-8 space-y-6 animate-fade-up">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/admin/students"
-            className="w-10 h-10 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-center shadow-sm hover:bg-slate-50 transition-all"
-          >
-            <ArrowLeft className="w-5 h-5 text-slate-600" />
-          </Link>
-          <div>
-            <h1 className="font-display text-3xl font-extrabold text-slate-900 tracking-tight">
-              Estudiantes Baneados
-            </h1>
-            <p className="text-slate-500 text-xs font-semibold mt-0.5">
-              {students.length} estudiante{students.length !== 1 ? 's' : ''} expulsado{students.length !== 1 ? 's' : ''} de la plataforma
-            </p>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/admin/students"
+              className="w-10 h-10 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-center shadow-sm hover:bg-slate-50 transition-all"
+            >
+              <ArrowLeft className="w-5 h-5 text-slate-600" />
+            </Link>
+            <div>
+              <h1 className="font-display text-3xl font-extrabold text-slate-900 tracking-tight">
+                Estudiantes Baneados
+              </h1>
+              <p className="text-slate-500 text-xs font-semibold mt-0.5">
+                {students.length} estudiante{students.length !== 1 ? 's' : ''} expulsado{students.length !== 1 ? 's' : ''} de la plataforma
+              </p>
+            </div>
           </div>
+          <DesktopOnly>
+            <RefreshButton onRefresh={refetch} isFetching={isFetching} />
+          </DesktopOnly>
         </div>
+
+        {isError && (
+          <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span className="text-xs font-bold flex-1">No se pudo cargar la lista de estudiantes baneados.</span>
+            <button
+              onClick={() => refetch()}
+              className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+            </button>
+          </div>
+        )}
 
         <Card className="overflow-hidden border-slate-200/80 shadow-sm rounded-3xl bg-white">
           {loading ? (
-            <div className="divide-y divide-slate-100">
+            <div className="p-4 space-y-2">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="px-8 py-5 animate-pulse flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-2xl bg-slate-100 flex-shrink-0" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-slate-100 rounded-full w-48" />
-                    <div className="h-3 bg-slate-100 rounded-full w-32" />
-                  </div>
-                </div>
+                <Skeleton key={i} className="h-16 w-full rounded-2xl" />
               ))}
             </div>
           ) : students.length === 0 ? (

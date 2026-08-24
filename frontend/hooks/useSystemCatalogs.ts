@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import api from "@/lib/api";
+import { useQuery } from "@tanstack/react-query"
+import api from "@/lib/api"
 
 export interface StudentGoal { text: string; desc: string; icon: string }
 export interface PaymentMethodOption { value: string; label: string; icon: string }
@@ -26,34 +26,22 @@ const FALLBACK: SystemCatalogs = {
   material_levels: [], theme_presets: [], package_icon_options: [], subject_theme_map: {},
 };
 
-let cache: SystemCatalogs | null = null;
+export const SYSTEM_CATALOGS_QUERY_KEY = ["system", "catalogs"] as const
 
 export function useSystemCatalogs() {
-  // Tipamos explícitamente el useState para evitar conflictos de tipos con null
-  const [catalogs, setCatalogs] = useState<SystemCatalogs>(cache ?? FALLBACK);
-  const [loading, setLoading] = useState<boolean>(!cache);
+  const query = useQuery({
+    queryKey: SYSTEM_CATALOGS_QUERY_KEY,
+    queryFn: async () => {
+      const res = await api.get("/system-catalogs/")
+      return { ...FALLBACK, ...res.data } as SystemCatalogs
+    },
+  })
 
-  const fetchCatalogs = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await api.get("/system-catalogs/");
-      cache = { ...FALLBACK, ...res.data };
-      setCatalogs(cache as SystemCatalogs);
-    } catch {
-      setCatalogs(FALLBACK);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (cache) { 
-      setCatalogs(cache); 
-      setLoading(false); 
-      return; 
-    }
-    fetchCatalogs();
-  }, [fetchCatalogs]);
-
-  return { catalogs, loading, refetch: fetchCatalogs };
+  return {
+    catalogs: query.data ?? FALLBACK,
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }

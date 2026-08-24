@@ -105,58 +105,78 @@ interface PaymentHistoryItem extends PendingPayment {
 }
 
 export function usePaymentsHistory() {
-  const [history, setHistory] = useState<PaymentHistoryItem[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
+  const query = useQuery({
+    queryKey: ["admin", "payments", "history"],
+    queryFn: async () => {
       const res = await api.get('/payments/history')
-      setHistory(res.data)
-    } catch { } finally { setLoading(false) }
-  }, [])
+      return res.data as PaymentHistoryItem[]
+    },
+  })
 
-  useEffect(() => { fetch() }, [fetch])
-  return { history, loading, refetch: fetch }
+  return {
+    history: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }
 
 export function useStudents(search?: string) {
-  const [students, setStudents] = useState<Student[]>([])
-  const [loading, setLoading] = useState(true)
-  const [total, setTotal] = useState(0)
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
+  const query = useQuery({
+    queryKey: ["admin", "students", search ?? ""],
+    queryFn: async () => {
       const params = new URLSearchParams({ role: 'student', is_banned: 'false' })
       if (search) params.append('search', search)
       const res = await api.get(`/admin/users?${params}`)
-      setStudents(res.data)
-      setTotal(res.data.length)
-    } catch { }
-    finally { setLoading(false) }
-  }, [search])
+      return res.data as Student[]
+    },
+  })
 
-  useEffect(() => { fetch() }, [fetch])
-  return { students, loading, total, refetch: fetch }
+  return {
+    students: query.data ?? [],
+    total: query.data?.length ?? 0,
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }
 
+export function useStudentDetail(studentId: number, enabled: boolean) {
+  const query = useQuery({
+    queryKey: ["admin", "students", studentId, "detail"],
+    queryFn: async () => {
+      const res = await api.get<StudentDetail>(`/admin/students/${studentId}/detail`)
+      return res.data
+    },
+    enabled,
+  })
 
+  return {
+    detail: query.data ?? null,
+    loading: query.isLoading,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
 
 export function useWithdrawals() {
-  const [withdrawals, setWithdrawals] = useState<WithdrawalRecord[]>([])
-  const [loading, setLoading] = useState(true)
+  const query = useQuery({
+    queryKey: ["admin", "withdrawals", "pending"],
+    queryFn: async () => {
+      const res = await api.get('/payments/admin/withdrawals/pending')
+      return res.data as WithdrawalRecord[]
+    },
+  })
 
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
-      const res = await api.get('/payments/admin/withdrawals/pending')  // ← ver nota abajo
-      setWithdrawals(res.data)
-    } catch { } finally { setLoading(false) }
-  }, [])
-
-  useEffect(() => { fetch() }, [fetch])
-  return { withdrawals, loading, refetch: fetch }
+  return {
+    withdrawals: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }
 
 export function useAdminStats() {
@@ -196,22 +216,22 @@ export function usePendingPayments() {
 }
 
 export function useTeachers(statusFilter?: string) {
-  const [teachers, setTeachers] = useState<Teacher[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
+  const query = useQuery({
+    queryKey: ["admin", "teachers", statusFilter ?? null],
+    queryFn: async () => {
       const params = statusFilter ? `?status_filter=${statusFilter}` : ''
       const res = await api.get(`/admin/teachers${params}`)
-      setTeachers(res.data)
-    } catch { } finally {
-      setLoading(false)
-    }
-  }, [statusFilter])
+      return res.data as Teacher[]
+    },
+  })
 
-  useEffect(() => { fetch() }, [fetch])
-  return { teachers, loading, refetch: fetch }
+  return {
+    teachers: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }
 
 // ─── Notificaciones del panel de staff ───────────────────────────────────────
@@ -283,38 +303,42 @@ export interface TeacherAppeal {
   teacher_status: string
 }
 
-export function useAppeals(statusFilter?: string) {
-  const [appeals, setAppeals] = useState<TeacherAppeal[]>([])
-  const [loading, setLoading] = useState(true)
+// ─── Apelaciones de un profesor específico (modal de detalle) ────────────────
+export function useTeacherAppeals(teacherId: number | undefined) {
+  const query = useQuery({
+    queryKey: ["admin", "teachers", teacherId, "appeals"],
+    queryFn: async () => {
+      const res = await api.get(`/admin/teachers/${teacherId}/appeals`)
+      return res.data as TeacherAppeal[]
+    },
+    enabled: teacherId !== undefined,
+  })
 
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
-      const params = statusFilter ? `?status_filter=${statusFilter}` : ''
-      const res = await api.get(`/admin/appeals${params}`)
-      setAppeals(res.data)
-    } catch { } finally { setLoading(false) }
-  }, [statusFilter])
-
-  useEffect(() => { fetch() }, [fetch])
-  return { appeals, loading, refetch: fetch }
+  return {
+    appeals: query.data ?? [],
+    loading: query.isLoading,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }
 
 // ─── Estudiantes baneados ─────────────────────────────────────────────────────
 export function useBannedStudents() {
-  const [students, setStudents] = useState<Student[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
+  const query = useQuery({
+    queryKey: ["admin", "students", "banned"],
+    queryFn: async () => {
       const res = await api.get('/admin/users?role=student&is_banned=true&limit=200')
-      setStudents(res.data)
-    } catch { } finally { setLoading(false) }
-  }, [])
+      return res.data as Student[]
+    },
+  })
 
-  useEffect(() => { fetch() }, [fetch])
-  return { students, loading, refetch: fetch }
+  return {
+    students: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
 }
 
 // ─── Detalle de un estudiante (bajo demanda, para el desplegable) ────────────
@@ -375,6 +399,88 @@ export function useAdminUsersList() {
 
   return {
     users: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
+
+// ─── Configuración de pagos (edición, panel admin) ────────────────────────
+export interface AdminPaymentConfig {
+  paypal_enabled: boolean
+  binance_enabled: boolean
+  bank_transfer_enabled: boolean
+  mobile_payment_enabled: boolean
+  paypal_email: string | null
+  binance_address: string | null
+  binance_network: string | null
+  bank_transfer_details: string | null
+  mobile_payment_details: string | null
+  whatsapp_number: string | null
+  default_commission_rate: number
+}
+
+export function useAdminPaymentConfig() {
+  const query = useQuery({
+    queryKey: ["admin", "settings", "payment-config"],
+    queryFn: async () => {
+      const res = await api.get('/payments/config')
+      return res.data as AdminPaymentConfig
+    },
+  })
+
+  return {
+    paymentConfig: query.data ?? null,
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
+
+// ─── Configuración de plataforma (edición, panel admin) ───────────────────
+export interface AdminPlatformConfig {
+  platform_name: string
+  platform_tagline: string | null
+  is_single_tenant: boolean
+  featured_teacher: any
+  featured_teacher_username?: string
+}
+
+export function useAdminPlatformConfig() {
+  const query = useQuery({
+    queryKey: ["admin", "settings", "platform-config"],
+    queryFn: async () => {
+      const res = await api.get('/admin/platform-config')
+      return {
+        ...res.data,
+        featured_teacher_username: res.data.featured_teacher?.username || '',
+      } as AdminPlatformConfig
+    },
+  })
+
+  return {
+    platformConfig: query.data ?? null,
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
+
+// ─── Reglas de negocio (edición, panel admin) ─────────────────────────────
+export function useAdminBusinessRules() {
+  const query = useQuery({
+    queryKey: ["admin", "settings", "business-rules"],
+    queryFn: async () => {
+      const res = await api.get('/system-catalogs/business-rules')
+      return res.data
+    },
+  })
+
+  return {
+    businessRules: query.data ?? null,
     loading: query.isLoading,
     isFetching: query.isFetching,
     isError: query.isError,

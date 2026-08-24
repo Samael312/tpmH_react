@@ -1,30 +1,22 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useStudents, fetchStudentDetail, StudentDetail } from '@/hooks/useAdminData'
+import { useStudents, useStudentDetail} from '@/hooks/useAdminData'
 import { Card } from '@/components/ui'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 import { useRouter } from 'next/navigation'
 import {
-  Users,
-  Search,
-  X,
-  UserCheck,
-  UserX,
-  Phone,
-  Calendar,
-  Loader2,
-  Sparkles,
-  SlidersHorizontal,
-  ShieldAlert,
-  ChevronDown,
-  Package as PackageIcon,
-  AtSign,
-  AlertTriangle,
+  Users, Search, X, UserCheck, UserX, Phone, Calendar, Loader2,
+  Sparkles, SlidersHorizontal, ShieldAlert, ChevronDown,
+  Package as PackageIcon, AtSign, AlertTriangle, RefreshCw,
 } from 'lucide-react'
 import Link from 'next/link'
 import { getFlagForNationality } from '@/lib/nationalities'
+import Skeleton from '@/components/ui/Skeleton'
+import RefreshButton from '@/components/ui/RefreshButton'
+import DesktopOnly from '@/components/ui/DesktopOnly'
+import { usePageTopBar } from '@/lib/mobileTopBar'
 
 function BanStudentModal({
   student,
@@ -120,27 +112,9 @@ function StudentRow({
   onBanTarget: (s: any) => void
 }) {
   const [expanded, setExpanded] = useState(false)
-  const [detail, setDetail] = useState<StudentDetail | null>(null)
-  const [loadingDetail, setLoadingDetail] = useState(false)
-  const [detailError, setDetailError] = useState('')
-
-  const toggleExpand = async () => {
-    const next = !expanded
-    setExpanded(next)
-    if (next && !detail) {
-      setLoadingDetail(true)
-      setDetailError('')
-      try {
-        const res = await fetchStudentDetail(student.id)
-        setDetail(res.data)
-      } catch {
-        setDetailError('No se pudo cargar el detalle')
-      } finally {
-        setLoadingDetail(false)
-      }
-    }
-  }
-
+  const { detail, loading: loadingDetail, isError: detailError, refetch: refetchDetail } = useStudentDetail(student.id, expanded)
+  
+  const toggleExpand = () => setExpanded((prev) => !prev)
   const isActive = student.is_active !== false
 
   return (
@@ -207,7 +181,7 @@ function StudentRow({
         </div>
       </div>
 
-            {/* Desplegable: fecha de registro, info de paquetes, materiales */}
+      {/* Desplegable: fecha de registro, info de paquetes, materiales */}
       {expanded && (
         <div className="px-6 md:px-8 pb-5 -mt-1 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-100 space-y-4">
@@ -234,9 +208,17 @@ function StudentRow({
             </div>
 
             {loadingDetail ? (
-              <div className="h-16 bg-slate-100 rounded-xl animate-pulse" />
+              <Skeleton className="h-16 w-full rounded-xl" />
             ) : detailError ? (
-              <p className="text-xs text-rose-500 font-bold">{detailError}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-rose-500 font-bold flex-1">No se pudo cargar el detalle</p>
+                <button
+                  onClick={() => refetchDetail()}
+                  className="text-xs font-bold text-rose-600 hover:text-rose-700 underline"
+                >
+                  Reintentar
+                </button>
+              </div>
             ) : (
               <>
                 <div className="pt-2 border-t border-slate-200/60">
@@ -297,7 +279,7 @@ export default function StudentsPage() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [banTarget, setBanTarget] = useState<any | null>(null)
-  const { students, loading, total, refetch } = useStudents(debouncedSearch)
+  const { students, loading, isFetching, isError, total, refetch } = useStudents(debouncedSearch)
   const router = useRouter()
 
   // Debounce del buscador (400ms)
@@ -306,6 +288,11 @@ export default function StudentsPage() {
     return () => clearTimeout(timer)
   }, [search])
 
+  usePageTopBar({
+    title: 'Estudiantes',
+    onRefresh: refetch,
+    isFetching,
+  })
 
   // Métricas rápidas
   const activeCount = students.filter((s) => s.is_active !== false).length
@@ -315,7 +302,7 @@ export default function StudentsPage() {
     <>
       <div className="min-h-screen bg-slate-50/50 p-4 md:p-8 space-y-6 animate-fade-up">
         {/* ─── Header & Acciones Principal ─── */}
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
               <h1 className="font-display text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
@@ -330,12 +317,17 @@ export default function StudentsPage() {
               {total} estudiantes activos en la plataforma
             </p>
           </div>
-          <Link
-            href="/admin/students/banned"
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:border-rose-300 hover:text-rose-600 transition-all shadow-sm w-fit"
-          >
-            <ShieldAlert className="w-4 h-4" /> Ver estudiantes baneados
-          </Link>
+          <div className="flex items-center gap-2.5">
+            <DesktopOnly>
+              <RefreshButton onRefresh={refetch} isFetching={isFetching} />
+            </DesktopOnly>
+            <Link
+              href="/admin/students/banned"
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:border-rose-300 hover:text-rose-600 transition-all shadow-sm w-fit"
+            >
+              <ShieldAlert className="w-4 h-4" /> Ver estudiantes baneados
+            </Link>
+          </div>
         </div>
 
         {/* ─── Tarjetas de Resumen (KPIs) ─── */}
@@ -399,6 +391,19 @@ export default function StudentsPage() {
           </div>
         </div>
 
+        {isError && (
+          <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span className="text-xs font-bold flex-1">No se pudo cargar la lista de estudiantes.</span>
+            <button
+              onClick={() => refetch()}
+              className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+            </button>
+          </div>
+        )}
+
         {/* ─── Tabla / Lista ─── */}
         <Card className="overflow-hidden border-slate-200/80 shadow-sm rounded-3xl bg-white">
           {/* Header de la Tabla (Desktop) */}
@@ -414,15 +419,9 @@ export default function StudentsPage() {
           </div>
 
           {loading ? (
-            <div className="divide-y divide-slate-100">
+            <div className="p-4 space-y-2">
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="px-8 py-5 animate-pulse flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-2xl bg-slate-100 flex-shrink-0" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-slate-100 rounded-full w-48" />
-                    <div className="h-3 bg-slate-100 rounded-full w-32" />
-                  </div>
-                </div>
+                <Skeleton key={i} className="h-16 w-full rounded-2xl" />
               ))}
             </div>
           ) : students.length === 0 ? (

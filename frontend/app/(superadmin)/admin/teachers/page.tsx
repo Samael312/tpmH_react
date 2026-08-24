@@ -1,12 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useTeachers, TeacherAppeal } from '@/hooks/useAdminData'
+import { useState } from 'react'
+import { useTeachers, useTeacherAppeals, TeacherAppeal } from '@/hooks/useAdminData'
 import { Card, Badge, Button } from '@/components/ui'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 import { getFlagForNationality } from '@/lib/nationalities'
-import { X, Video as VideoIcon, MessageSquare, Check, AlertTriangle, Loader2 } from 'lucide-react'
+import { X, Video as VideoIcon, MessageSquare, Check, AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
+import Skeleton from '@/components/ui/Skeleton'
+import RefreshButton from '@/components/ui/RefreshButton'
+import DesktopOnly from '@/components/ui/DesktopOnly'
+import { usePageTopBar } from '@/lib/mobileTopBar'
 
 const STATUS_TABS = [
   { key: undefined,   label: 'Todos' },
@@ -40,26 +44,10 @@ function TeacherDetailModal({
   onClose: () => void
   onActioned: () => void
 }) {
-  const [appeals, setAppeals] = useState<TeacherAppeal[]>([])
-  const [loadingAppeals, setLoadingAppeals] = useState(true)
+  const { appeals, loading: loadingAppeals, isError: appealsError, refetch: refetchAppeals } = useTeacherAppeals(teacher.id)
   const [actioning, setActioning] = useState(false)
   const [resolvingAppealId, setResolvingAppealId] = useState<number | null>(null)
   const [adminResponse, setAdminResponse] = useState('')
-
-   const loadAppeals = async () => {
-    setLoadingAppeals(true)
-    try {
-      const res = await api.get(`/admin/teachers/${teacher.id}/appeals`)
-      setAppeals(res.data)
-      } catch { } finally { setLoadingAppeals(false) }
-    }
-
-    useEffect(() => {
-      loadAppeals()
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [teacher.id])
-
-  useState(() => { loadAppeals() })
 
   const updateStatus = async (newStatus: string) => {
     setActioning(true)
@@ -88,7 +76,7 @@ function TeacherDetailModal({
         admin_response: adminResponse.trim() || undefined,
       })
       setAdminResponse('')
-      await loadAppeals()
+      await refetchAppeals()
       onActioned()
     } catch (e: any) {
       alert(e.response?.data?.detail || 'Error resolviendo la apelación')
@@ -159,8 +147,19 @@ function TeacherDetailModal({
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
             <MessageSquare className="w-3.5 h-3.5" /> Apelaciones ({appeals.length}/2)
           </p>
-          {loadingAppeals ? (
-            <div className="h-16 bg-slate-50 rounded-xl animate-pulse" />
+          {appealsError ? (
+            <div className="bg-rose-50 border border-rose-100 rounded-xl px-4 py-3 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-500 flex-shrink-0" />
+              <p className="text-xs font-bold text-rose-600 flex-1">No se pudieron cargar las apelaciones.</p>
+              <button
+                onClick={() => refetchAppeals()}
+                className="text-xs font-bold text-rose-700 hover:text-rose-800 underline"
+              >
+                Reintentar
+              </button>
+            </div>
+          ) : loadingAppeals ? (
+            <Skeleton className="h-16 w-full rounded-xl" />
           ) : appeals.length === 0 ? (
             <p className="text-xs text-slate-400 font-bold">Sin apelaciones presentadas</p>
           ) : (
@@ -255,7 +254,13 @@ export default function TeachersPage() {
   const [commissionEdit, setCommissionEdit] = useState<number | null>(null)
   const [commissionValue, setCommissionValue] = useState('')
   const [detailTarget, setDetailTarget] = useState<any | null>(null)
-  const {teachers, loading, refetch } = useTeachers(activeTab)
+  const { teachers, loading, isFetching, isError, refetch } = useTeachers(activeTab)
+
+  usePageTopBar({
+    title: 'Directorio de Profesores',
+    onRefresh: refetch,
+    isFetching,
+  })
 
   const updateStatus = async (teacherId: number, newStatus: string) => {
     setActioning(teacherId)
@@ -306,6 +311,9 @@ export default function TeachersPage() {
               Gestiona accesos, estados y tasas de comisión de tus tutores
             </p>
           </div>
+          <DesktopOnly>
+            <RefreshButton onRefresh={refetch} isFetching={isFetching} />
+          </DesktopOnly>
         </div>
 
         {/* Tabs */}
@@ -327,12 +335,25 @@ export default function TeachersPage() {
           ))}
         </div>
 
+        {isError && (
+          <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span className="text-xs font-bold flex-1">No se pudo cargar el directorio de profesores.</span>
+            <button
+              onClick={() => refetch()}
+              className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+            </button>
+          </div>
+        )}
+
         {/* Lista */}
         <div className="pt-2">
           {loading ? (
             <div className="space-y-4">
               {[1, 2, 3, 4].map(i => (
-                <div key={i} className="bg-slate-50 border border-slate-100 rounded-3xl h-24 animate-pulse" />
+                <Skeleton key={i} className="h-24 w-full rounded-3xl" />
               ))}
             </div>
           ) : teachers.length === 0 ? (
@@ -345,7 +366,7 @@ export default function TeachersPage() {
           ) : (
             <div className="grid grid-cols-1 gap-4">
               {teachers.map((teacher) => (
-                              <Card
+                <Card
                   key={teacher.id}
                   hover
                   className="p-6 border-slate-100 shadow-sm rounded-3xl group cursor-pointer"
