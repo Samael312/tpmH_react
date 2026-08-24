@@ -901,7 +901,7 @@ def validate_payment(
                     enrollment.unlocked_credits = (enrollment.unlocked_credits or 0) + credit_this_installment
                 enrollment.payment_status = "paid" if payment.installment_index >= n else "partially_paid"
             else:
-                enrollment.installments_paid = 1
+                enrollment.installments_paid = target_package.installment_count or 1
                 enrollment.unlocked_credits = target_package.classes_count if target_package.classes_count is not None else 0
                 enrollment.payment_status = "paid"
 
