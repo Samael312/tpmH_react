@@ -927,7 +927,7 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
             <div className="flex-1 overflow-y-auto p-6 sm:p-8">
               <PackageCheckout
                 pkg={checkoutTarget.pkg}
-                mode="initial"
+                mode="renewal"
                 enrollmentId={checkoutTarget.enrollmentId}
                 installmentsPaid={0}
                 onClose={() => setCheckoutTarget(null)}
