@@ -47,26 +47,6 @@ def list_catalogs_admin(
     return db.query(SystemCatalog).order_by(SystemCatalog.label).all()
 
 
-@router.patch("/{key}", response_model=SystemCatalogResponse)
-def update_catalog(
-    key: str,
-    data: UpdateSystemCatalogRequest,
-    current_user: User = Depends(get_current_staff),
-    db: Session = Depends(get_db),
-):
-    if key not in EDITABLE_KEYS:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"'{key}' no es un catálogo editable")
-
-    catalog = db.query(SystemCatalog).filter(SystemCatalog.key == key).first()
-    if not catalog:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Catálogo no encontrado")
-
-    catalog.value = data.value
-    db.commit()
-    db.refresh(catalog)
-    return catalog
-
-
 @router.get("/business-rules", response_model=BusinessRulesResponse)
 def get_business_rules(db: Session = Depends(get_db)):
     """Público — el frontend lo necesita para validar duraciones/plazos sin sesión de admin."""
@@ -107,3 +87,28 @@ def update_business_rules(
     db.commit()
     db.refresh(config)
     return get_business_rules(db)
+
+
+# NOTA: las rutas con path fijo ("/business-rules") deben registrarse
+# ANTES que "/{key}", porque FastAPI resuelve rutas en el orden en que
+# se registran. Si "/{key}" va primero, intercepta "/business-rules"
+# tratándolo como key="business-rules" y espera el body { value } en
+# vez del payload de reglas de negocio, causando 422 en cada PATCH.
+@router.patch("/{key}", response_model=SystemCatalogResponse)
+def update_catalog(
+    key: str,
+    data: UpdateSystemCatalogRequest,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    if key not in EDITABLE_KEYS:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"'{key}' no es un catálogo editable")
+
+    catalog = db.query(SystemCatalog).filter(SystemCatalog.key == key).first()
+    if not catalog:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Catálogo no encontrado")
+
+    catalog.value = data.value
+    db.commit()
+    db.refresh(catalog)
+    return catalog

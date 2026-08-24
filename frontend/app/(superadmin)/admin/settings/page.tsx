@@ -243,15 +243,26 @@ function DurationListEditor({ label, values, onChange }: {
   )
 }
 
+const TABS = [
+  { key: 'platform', label: 'Plataforma', icon: '🏳️', dot: 'bg-pink-500' },
+  { key: 'payments', label: 'Pagos', icon: '💳', dot: 'bg-emerald-400' },
+  { key: 'catalogs', label: 'Catálogos', icon: '📚', dot: 'bg-purple-400' },
+  { key: 'rules', label: 'Reglas', icon: '⚙️', dot: 'bg-amber-400' },
+] as const
+
+type TabKey = typeof TABS[number]['key']
+
 export default function SettingsPage() {
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null)
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [activeTab, setActiveTab] = useState<TabKey>('platform')
 
   // NUEVO: Estados para catálogos y reglas de negocio
   const [catalogs, setCatalogs] = useState<Record<string, any>>({})
   const [businessRules, setBusinessRules] = useState<any>(null)
+  const [rulesSaving, setRulesSaving] = useState(false)
 
   useEffect(() => {
     api.get('/payments/config').then(r => setPaymentConfig(r.data))
@@ -276,8 +287,15 @@ export default function SettingsPage() {
   }
 
   const saveBusinessRules = async (patch: any) => {
-    const r = await api.patch('/system-catalogs/business-rules', patch)
-    setBusinessRules(r.data)
+    setRulesSaving(true)
+    try {
+      const r = await api.patch('/system-catalogs/business-rules', patch)
+      setBusinessRules(r.data)
+    } catch (e: any) {
+      alert(e.response?.data?.detail || 'Error guardando')
+    } finally {
+      setRulesSaving(false)
+    }
   }
 
   const savePaymentConfig = async () => {
@@ -318,9 +336,16 @@ export default function SettingsPage() {
     }
   }
 
+  const tabCount = (key: TabKey) => {
+    if (key === 'catalogs') {
+      return Object.values(catalogs).filter((v: any) => Array.isArray(v) ? v.length : v && Object.keys(v).length).length
+    }
+    return undefined
+  }
+
   return (
   <>
-    <div className="space-y-8 animate-fade-up bg-white min-h-screen p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 max-w-4xl mx-auto">
+    <div className="space-y-6 animate-fade-up bg-white min-h-screen p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 max-w-5xl mx-auto">
 
       {/* Header */}
       <div>
@@ -328,13 +353,45 @@ export default function SettingsPage() {
           Configuración Global
         </h1>
         <p className="text-sm text-slate-500 font-medium">
-          Ajustes generales de la plataforma y métodos de cobro a estudiantes.
+          Ajustes generales de la plataforma, cobros y catálogos del sistema.
         </p>
       </div>
 
+      {/* ─── Navegación por pestañas ─────────────────────────────────── */}
+      <div className="sticky top-0 z-10 -mx-6 md:-mx-8 px-6 md:px-8 py-2 bg-white/90 backdrop-blur border-b border-slate-100">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          {TABS.map(tab => {
+            const active = activeTab === tab.key
+            const count = tabCount(tab.key)
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`
+                  shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all
+                  ${active
+                    ? 'bg-slate-800 text-white shadow-md'
+                    : 'bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700'}
+                `}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-white' : tab.dot}`} />
+                <span>{tab.icon}</span>
+                {tab.label}
+                {count !== undefined && (
+                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md ${active ? 'bg-white/20' : 'bg-white text-slate-400'}`}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-8">
-        
+
       {/* ─── Métodos de pago ─────────────────────────────────── */}
+      {activeTab === 'payments' && (
         <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-1.5 h-6 bg-emerald-400 rounded-full" />
@@ -603,8 +660,10 @@ export default function SettingsPage() {
             <div className="h-40 bg-slate-50 rounded-2xl animate-pulse border border-slate-100" />
           )}
         </Card>
-        
+      )}
+
         {/* ─── Configuración de plataforma ─────────────────────────────────── */}
+      {activeTab === 'platform' && (
         <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-1.5 h-6 bg-pink-500 rounded-full" />
@@ -723,38 +782,73 @@ export default function SettingsPage() {
             <div className="h-32 bg-slate-50 rounded-2xl animate-pulse border border-slate-100" />
           )}
         </Card>
+      )}
 
         {/* ─── NUEVO: Catálogos del Sistema ─────────────────────────────────── */}
-        <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-6">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-1.5 h-6 bg-purple-400 rounded-full" />
-            <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
-              Catálogos del Sistema
-            </h2>
-          </div>
+      {activeTab === 'catalogs' && (
+        <div className="space-y-8">
 
-          <CatalogEditor catalogKey="subjects" label="Materias" items={catalogs.subjects ?? []}
-            onSave={v => saveCatalog('subjects', v)} />
-          <CatalogEditor catalogKey="languages" label="Idiomas" items={catalogs.languages ?? []}
-            onSave={v => saveCatalog('languages', v)} />
-          <CatalogEditor catalogKey="skill_suggestions" label="Habilidades sugeridas" items={catalogs.skill_suggestions ?? []}
-            onSave={v => saveCatalog('skill_suggestions', v)} />
-          <CatalogEditor catalogKey="material_categories" label="Categorías de materiales" items={catalogs.material_categories ?? []}
-            onSave={v => saveCatalog('material_categories', v)} />
-          <CatalogEditor catalogKey="material_levels" label="Niveles de materiales" items={catalogs.material_levels ?? []}
-            onSave={v => saveCatalog('material_levels', v)} />
-          <CatalogEditor catalogKey="package_icon_options" label="Iconos de paquetes" items={catalogs.package_icon_options ?? []}
-            onSave={v => saveCatalog('package_icon_options', v)} />
+          <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-6">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-1.5 h-6 bg-purple-400 rounded-full" />
+              <div>
+                <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                  Catálogos básicos
+                </h2>
+                <p className="text-[11px] text-slate-400 font-medium mt-0.5">Listas de opciones usadas en formularios de perfil, materiales y paquetes.</p>
+              </div>
+            </div>
 
-          <GoalsEditor items={catalogs.student_goals ?? []} onSave={v => saveCatalog('student_goals', v)} />
-          <PaymentMethodsEditor title="Métodos de pago (estudiante)" items={catalogs.student_payment_methods ?? []} onSave={v => saveCatalog('student_payment_methods', v)} />
-          <PaymentMethodsEditor title="Métodos de retiro (profesor)" items={catalogs.withdrawal_methods ?? []} onSave={v => saveCatalog('withdrawal_methods', v)} />
-          <ThemePresetsEditor items={catalogs.theme_presets ?? []} onSave={v => saveCatalog('theme_presets', v)} />
-          <SubjectThemeMapEditor subjects={catalogs.subjects ?? []} languages={catalogs.languages ?? []} map={catalogs.subject_theme_map ?? {}} onSave={v => saveCatalog('subject_theme_map', v)} />
-        </Card>
+            <CatalogEditor catalogKey="subjects" label="Materias" items={catalogs.subjects ?? []}
+              onSave={v => saveCatalog('subjects', v)} />
+            <CatalogEditor catalogKey="languages" label="Idiomas" items={catalogs.languages ?? []}
+              onSave={v => saveCatalog('languages', v)} />
+            <CatalogEditor catalogKey="skill_suggestions" label="Habilidades sugeridas" items={catalogs.skill_suggestions ?? []}
+              onSave={v => saveCatalog('skill_suggestions', v)} />
+            <CatalogEditor catalogKey="material_categories" label="Categorías de materiales" items={catalogs.material_categories ?? []}
+              onSave={v => saveCatalog('material_categories', v)} />
+            <CatalogEditor catalogKey="material_levels" label="Niveles de materiales" items={catalogs.material_levels ?? []}
+              onSave={v => saveCatalog('material_levels', v)} />
+            <CatalogEditor catalogKey="package_icon_options" label="Iconos de paquetes" items={catalogs.package_icon_options ?? []}
+              onSave={v => saveCatalog('package_icon_options', v)} />
+          </Card>
+
+          <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-6">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-1.5 h-6 bg-purple-400 rounded-full" />
+              <div>
+                <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                  Objetivos y métodos de cobro
+                </h2>
+                <p className="text-[11px] text-slate-400 font-medium mt-0.5">Objetivos que eligen los estudiantes y formas de pago/retiro disponibles.</p>
+              </div>
+            </div>
+
+            <GoalsEditor items={catalogs.student_goals ?? []} onSave={v => saveCatalog('student_goals', v)} />
+            <PaymentMethodsEditor title="Métodos de pago (estudiante)" items={catalogs.student_payment_methods ?? []} onSave={v => saveCatalog('student_payment_methods', v)} />
+            <PaymentMethodsEditor title="Métodos de retiro (profesor)" items={catalogs.withdrawal_methods ?? []} onSave={v => saveCatalog('withdrawal_methods', v)} />
+          </Card>
+
+          <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-6">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-1.5 h-6 bg-purple-400 rounded-full" />
+              <div>
+                <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                  Apariencia
+                </h2>
+                <p className="text-[11px] text-slate-400 font-medium mt-0.5">Colores y temas visuales usados en paquetes, materias e idiomas.</p>
+              </div>
+            </div>
+
+            <ThemePresetsEditor items={catalogs.theme_presets ?? []} onSave={v => saveCatalog('theme_presets', v)} />
+            <SubjectThemeMapEditor subjects={catalogs.subjects ?? []} languages={catalogs.languages ?? []} map={catalogs.subject_theme_map ?? {}} onSave={v => saveCatalog('subject_theme_map', v)} />
+          </Card>
+
+        </div>
+      )}
 
         {/* ─── NUEVO: Reglas de negocio ─────────────────────────────────────── */}
-        {businessRules && (
+      {activeTab === 'rules' && businessRules && (
           <Card className="p-8 border-slate-100 shadow-sm rounded-3xl space-y-5">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-1.5 h-6 bg-amber-400 rounded-full" />
@@ -788,15 +882,22 @@ export default function SettingsPage() {
                 onChange={v => setBusinessRules({ ...businessRules, allowed_package_durations: v })}
               />
             </div>
-            <button onClick={() => saveBusinessRules(businessRules)}
-              className="px-6 py-2.5 bg-pink-500 hover:bg-pink-600 text-white rounded-xl text-sm font-bold">
+            <Button
+              variant="primary"
+              loading={rulesSaving}
+              onClick={() => saveBusinessRules(businessRules)}
+              className="!w-auto px-6 py-2.5 !rounded-xl text-sm"
+            >
               Guardar reglas
-            </button>
+            </Button>
           </Card>
-        )}
+      )}
+      {activeTab === 'rules' && !businessRules && (
+        <div className="h-40 bg-slate-50 rounded-2xl animate-pulse border border-slate-100" />
+      )}
 
       </div>
-      
+
     </div>
     <ChipiWidget screenName="admin_settings" /> 
     </>
