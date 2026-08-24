@@ -265,7 +265,7 @@ export default function ChipiWidget({ screenName }: ChipiWidgetProps) {
       {/* ─── Burbuja de Inactividad (Tooltip Flotante) ─── */}
       <div
         onClick={handleToggle}
-        className={`fixed bottom-24 right-6 z-40 max-w-[240px] cursor-pointer
+        className={`fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] right-4 md:bottom-24 md:right-6 z-40 max-w-[240px] cursor-pointer
           bg-white/95 backdrop-blur-md border border-pink-100
           shadow-xl shadow-pink-500/10 rounded-2xl rounded-br-none
           p-3.5 transition-all duration-300 hover:scale-105 active:scale-95
@@ -297,7 +297,7 @@ export default function ChipiWidget({ screenName }: ChipiWidgetProps) {
 
       {/* ─── Ventana Principal de Chat ─── */}
       <div
-        className={`fixed bottom-24 right-4 sm:right-6 z-50 
+        className={`fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] right-4 sm:right-6 md:bottom-24 z-50 
           w-[calc(100vw-2rem)] sm:w-[370px]
           bg-white/95 backdrop-blur-2xl rounded-[2rem]
           border border-slate-100 shadow-2xl shadow-slate-900/15
@@ -308,7 +308,7 @@ export default function ChipiWidget({ screenName }: ChipiWidgetProps) {
             : "opacity-0 scale-90 pointer-events-none translate-y-4"
           }
         `}
-        style={{ height: "500px" }}
+        style={{ height: "min(500px, calc(100dvh - 10rem))" }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 bg-gradient-to-r from-pink-500 via-rose-500 to-pink-600 flex-shrink-0 shadow-sm">
@@ -414,7 +414,7 @@ export default function ChipiWidget({ screenName }: ChipiWidgetProps) {
       {/* ─── Botón Flotante Principal ─── */}
       <button
         onClick={handleToggle}
-        className={`fixed bottom-6 right-6 z-50
+        className={`fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 md:bottom-6 md:right-6 z-50
           w-14 h-14 rounded-2xl overflow-hidden
           shadow-xl shadow-pink-500/25 hover:shadow-pink-500/40
           border-2 border-white

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { 
   LayoutDashboard, Users, GraduationCap, Calendar, Settings, LogOut, 
@@ -144,7 +144,6 @@ function BottomTabBar({
 // ─── Componente principal ─────────────────────────────────────────────────
 export default function DashboardSidebar() {
   const pathname = usePathname();
-  const router   = useRouter()
   const { user, logout } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -159,7 +158,10 @@ export default function DashboardSidebar() {
 
   const handleLogout = () => {
     logout();
-    router.push('/login');
+    // Recarga completa (en vez de router.push) para evitar que el layout
+    // quede montado un instante con user=null y renderice en blanco/crashee,
+    // sobre todo en mobile donde la navegación client-side es más lenta.
+    window.location.href = '/login';
   };
 
   if (!isMounted) {

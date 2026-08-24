@@ -69,6 +69,16 @@ export default function TeacherLayout({
   });
 }, [pathname, hasHydrated]);
 
+  // Si el store ya no tiene user/token (p.ej. logout en curso), no renderizar
+  // el dashboard con datos nulos: mostrar spinner mientras se redirige.
+  if (hasHydrated && (!user || !token) && !isFullscreen) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   // Mientras se verifica la API, mostrar spinner en lugar del dashboard
   if (!ready) {
     return (
