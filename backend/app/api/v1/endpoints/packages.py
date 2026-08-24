@@ -359,6 +359,7 @@ def request_renewal(
 
     current_enrollment.status = EnrollmentStatus.pending_renewal
     current_enrollment.renewal_requested_package_id = new_package.id
+    current_enrollment.installments_paid = 0  # arranca limpio: cuotas del ciclo anterior no aplican al nuevo
     db.commit()
 
     return {
