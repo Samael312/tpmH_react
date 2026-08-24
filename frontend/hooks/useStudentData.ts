@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 
 export type BookingStage =
@@ -147,33 +148,22 @@ export interface Review {
 }
 
 export function useStudentClasses(includeHistory = false) {
-  const [classes, setClasses]   = useState<StudentClass[]>([]);
-  const [loading, setLoading]   = useState(true);
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await api.get(
-        `/classes/my-classes?include_history=${includeHistory}`
-      );
-      
+  const query = useQuery({
+    queryKey: ["student", "classes", includeHistory],
+    queryFn: async () => {
+      const res = await api.get(`/classes/my-classes?include_history=${includeHistory}`);
       const rawData = res.data;
-      const classList = Array.isArray(rawData) 
-        ? rawData 
-        : (rawData?.classes || rawData?.data || []);
+      return (Array.isArray(rawData) ? rawData : (rawData?.classes || rawData?.data || [])) as StudentClass[];
+    },
+  });
 
-      setClasses(classList);
-      
-    } catch (error) { 
-      console.error("Error fetching student classes:", error);
-      setClasses([]);
-    } finally { 
-      setLoading(false); 
-    }
-  }, [includeHistory]);
-
-  useEffect(() => { fetch(); }, [fetch]);
-  return { classes, loading, refetch: fetch };
+  return {
+    classes: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
 }
 
 export interface MyTeacherInfo {
@@ -254,24 +244,60 @@ export function useAvailableSlots(date: string, duration: number, teacherUsernam
 }
 
 export function useEnrollments() {
-  const [enrollments, setEnrollments] = useState<StudentEnrollment[]>([]);
-  const [loading, setLoading]         = useState(true);
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true);
+  const query = useQuery({
+    queryKey: ["student", "enrollments"],
+    queryFn: async () => {
       const res = await api.get("/packages/my-enrollments");
-      setEnrollments(res.data);
-    } catch (error) { 
-      console.error("Error fetching enrollments:", error);
-      setEnrollments([]);
-    } finally { 
-      setLoading(false); 
-    }
-  }, []);
+      return res.data as StudentEnrollment[];
+    },
+  });
 
-  useEffect(() => { fetch(); }, [fetch]);
-  return { enrollments, loading, refetch: fetch };
+  return {
+    enrollments: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
+}
+
+// ─── Estado del flujo de reserva (trial → paquete → pago → listo) ────────────
+export function useBookingStage() {
+  const query = useQuery({
+    queryKey: ["student", "booking-status"],
+    queryFn: async () => {
+      const res = await api.get("/payments/booking-status");
+      return res.data.stage as BookingStage;
+    },
+  });
+
+  return {
+    // Preserva el fallback original: si falla, se asume "ready" en vez de
+    // bloquear la pantalla indefinidamente.
+    stage: query.isError ? ("ready" as BookingStage) : (query.data ?? "loading"),
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
+}
+
+// ─── Paquetes disponibles de un profesor (modal de cambio de paquete) ────────
+export function useTeacherPackagesFor(teacherUsername: string | undefined, enabled: boolean) {
+  const query = useQuery({
+    queryKey: ["student", "teacher-packages", teacherUsername],
+    queryFn: async () => {
+      const res = await api.get(`/packages/teacher/${teacherUsername}`);
+      return (res.data || []) as any[];
+    },
+    enabled: enabled && !!teacherUsername,
+  });
+
+  return {
+    packages: query.data ?? [],
+    loading: query.isLoading,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
 }
 
 export function useStudentMaterials() {

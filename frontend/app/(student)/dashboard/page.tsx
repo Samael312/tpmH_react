@@ -1,9 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuthStore } from "@/store/authStore";
-import { useStudentClasses, useEnrollments, BookingStage } from "@/hooks/useStudentData";
+import { 
+  useStudentClasses, 
+  useEnrollments, 
+  useBookingStage, 
+  useTeacherPackagesFor,
+  BookingStage,
+} from "@/hooks/useStudentData";
 import api from "@/lib/api";
 import ClassCard from "@/components/classes/ClassCard";
 import {
@@ -20,28 +26,56 @@ import {
   CreditCard,
   RefreshCw,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import PackageCheckout from "@/components/payments/PackageCheckout";
 import BuyCreditsModal from "@/components/payments/BuyCreditsModal";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
+import { usePageTopBar } from "@/lib/mobileTopBar";
 
 function Skeleton({ className }: { className?: string }) {
   return <div className={`animate-pulse bg-slate-200/80 rounded-2xl ${className}`} />;
 }
 
+function DashboardSkeleton() {
+  return (
+    <div className="relative space-y-8 p-6 md:p-8">
+      <div className="space-y-2">
+        <Skeleton className="h-9 w-64 rounded-xl" />
+        <Skeleton className="h-5 w-48 rounded-lg" />
+      </div>
+      <Skeleton className="h-52 w-full rounded-[2rem]" />
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-7 w-40 rounded-lg" />
+          <Skeleton className="h-5 w-20 rounded-lg" />
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="h-28 w-full rounded-2xl" />
+          <Skeleton className="h-28 w-full rounded-2xl" />
+        </div>
+      </div>
+      <div className="space-y-4">
+        <Skeleton className="h-7 w-48 rounded-lg" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-44 w-full rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: any) {
-  const [packages, setPackages] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { packages: rawPackages, loading, isError } = useTeacherPackagesFor(teacherUsername, true);
+  const packages = rawPackages.filter((p: any) => p.id !== enrollment.package?.id);
+  
   const [checkoutTarget, setCheckoutTarget] = useState<any>(null);
   const [requesting, setRequesting] = useState<number | null>(null);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    api.get(`/packages/teacher/${teacherUsername}`)
-      .then(res => setPackages((res.data || []).filter((p: any) => p.id !== enrollment.package?.id)))
-      .catch(() => setPackages([]))
-      .finally(() => setLoading(false));
-  }, [teacherUsername]);
 
   const request = (pkg: any) => {
     setError("");
@@ -91,13 +125,18 @@ function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: an
             cupo suficiente para tus clases ya usadas o agendadas.
           </p>
           {error && <div className="bg-rose-50 text-rose-600 text-xs font-bold px-4 py-3 rounded-xl">{error}</div>}
-          {loading ? (
+          
+          {isError ? (
+            <p className="text-sm text-rose-500 font-bold text-center py-6">
+              No se pudieron cargar los paquetes de este profesor.
+            </p>
+          ) : loading ? (
             <div className="h-24 bg-slate-50 rounded-xl animate-pulse" />
           ) : packages.length === 0 ? (
             <p className="text-sm text-slate-400 text-center py-6">No hay otros paquetes disponibles de este profesor</p>
           ) : (
             <div className="space-y-2">
-              {packages.map(p => (
+              {packages.map((p: any) => (
                 <div key={p.id} className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3">
                   <div>
                     <p className="text-sm font-bold text-slate-800">{p.name}</p>
@@ -116,36 +155,6 @@ function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: an
               ))}
             </div>
           )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DashboardSkeleton() {
-  return (
-    <div className="relative space-y-8 p-6 md:p-8">
-      <div className="space-y-2">
-        <Skeleton className="h-9 w-64 rounded-xl" />
-        <Skeleton className="h-5 w-48 rounded-lg" />
-      </div>
-      <Skeleton className="h-52 w-full rounded-[2rem]" />
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-7 w-40 rounded-lg" />
-          <Skeleton className="h-5 w-20 rounded-lg" />
-        </div>
-        <div className="space-y-3">
-          <Skeleton className="h-28 w-full rounded-2xl" />
-          <Skeleton className="h-28 w-full rounded-2xl" />
-        </div>
-      </div>
-      <div className="space-y-4">
-        <Skeleton className="h-7 w-48 rounded-lg" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-44 w-full rounded-2xl" />
-          ))}
         </div>
       </div>
     </div>
@@ -201,8 +210,10 @@ function QuickAction({
 
 export default function StudentDashboard() {
   const { user } = useAuthStore();
-  const { classes: classesData, loading: classesLoading } = useStudentClasses();
-  const { enrollments, loading: enrollmentsLoading, refetch: refetchEnrollments } = useEnrollments();
+  const { classes: classesData, loading: classesLoading, isFetching: classesFetching, isError: classesError, refetch: refetchClasses } = useStudentClasses();
+  const { enrollments, loading: enrollmentsLoading, isFetching: enrollmentsFetching, isError: enrollmentsError, refetch: refetchEnrollments } = useEnrollments();
+  const { stage, isFetching: stageFetching, refetch: refetchStage } = useBookingStage();
+
   const [changePackageTarget, setChangePackageTarget] = useState<any | null>(null);
   const [installmentTarget, setInstallmentTarget] = useState<any | null>(null);
   const [rechargeTarget, setRechargeTarget] = useState<any | null>(null);
@@ -210,13 +221,6 @@ export default function StudentDashboard() {
   const activeOrChangingEnrollments = enrollments.filter(
     e => e.status === "active" || e.status === "pending_package_change"
   );
-  const [stage, setStage] = useState<BookingStage>("loading");
-
-  useEffect(() => {
-    api.get("/payments/booking-status")
-      .then(res => setStage(res.data.stage))
-      .catch(() => setStage("ready"));
-  }, []);
 
   const classList: any[] = Array.isArray(classesData) ? classesData : [];
   const hasTrial = classList.some(c => c.class_type === "trial");
@@ -226,12 +230,49 @@ export default function StudentDashboard() {
     .sort((a, b) => new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime());
 
   const isGlobalLoading = stage === "loading" || classesLoading || enrollmentsLoading;
+  const isFetching = classesFetching || enrollmentsFetching || stageFetching; 
+  const isError = classesError || enrollmentsError;
+
+  const handleRefresh = () => {
+    refetchClasses();
+    refetchEnrollments();
+    refetchStage();
+  };
+
+  usePageTopBar({
+    title: "Inicio",
+    onRefresh: handleRefresh,
+    isFetching,
+  });
 
   if (isGlobalLoading) {
     return (
       <div className="min-h-screen bg-slate-50 relative overflow-hidden">
         <DashboardSkeleton />
       </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <>
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4 text-center px-4">
+          <div className="w-14 h-14 bg-rose-100 rounded-full flex items-center justify-center">
+            <AlertTriangle className="w-7 h-7 text-rose-500" />
+          </div>
+          <div>
+            <p className="text-lg font-black text-slate-800">No se pudo cargar tu panel</p>
+            <p className="text-sm text-slate-500 mt-1">Revisa tu conexión e inténtalo de nuevo.</p>
+          </div>
+          <button
+            onClick={handleRefresh}
+            className="flex items-center gap-2 px-5 py-2.5 bg-pink-500 hover:bg-pink-600 text-white text-sm font-bold rounded-xl shadow-sm transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" /> Reintentar
+          </button>
+        </div>
+        <ChipiWidget screenName="student_home" />
+      </>
     );
   }
 
@@ -242,13 +283,18 @@ export default function StudentDashboard() {
       <div className="fixed bottom-[-80px] left-[-80px] w-[400px] h-[400px] bg-purple-300/15 rounded-full blur-[100px] pointer-events-none" />
 
       <div className="relative space-y-8 p-6 md:p-8">
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">
-            ¡Hola, {user?.name}! 👋
-          </h1>
-          <p className="text-slate-500 mt-1 font-medium">
-            Bienvenido a tu espacio de aprendizaje
-          </p>
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-black text-slate-800 tracking-tight">
+              ¡Hola, {user?.name}! 👋
+            </h1>
+            <p className="text-slate-500 mt-1 font-medium">
+              Bienvenido a tu espacio de aprendizaje
+            </p>
+          </div>
+          <DesktopOnly>
+            <RefreshButton onRefresh={handleRefresh} isFetching={isFetching} />
+          </DesktopOnly>
         </div>
 
         {stage === "needs_trial" && !hasTrial && (

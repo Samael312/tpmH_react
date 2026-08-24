@@ -205,8 +205,15 @@ function StepSelectSlot({
             </p>
             <div className="flex gap-2">
               {DURATIONS.map(d => (
-                  <button key={d} onClick={() => setDuration(d)}
-                    className={duration === d ? "flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-pink-200 hover:shadow-pink-300 hover:-translate-y-0.5 active:scale-95 transition-all duration-300": "flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-pink-200 hover:shadow-pink-300 hover:-translate-y-0.5 active:scale-95 transition-all duration-300"}>
+                  <button 
+                    key={d} 
+                    onClick={() => setDuration(d)}
+                    className={`flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 active:scale-95 ${
+                      duration === d 
+                        ? "bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 text-white shadow-lg shadow-pink-200 hover:shadow-pink-300 hover:-translate-y-0.5" 
+                        : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 shadow-sm hover:-translate-y-0.5"
+                    }`}
+                  >
                     {d} min
                   </button>
                 ))}
