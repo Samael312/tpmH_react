@@ -400,6 +400,16 @@ def request_package_change(
             detail="Solo puedes solicitar un cambio de paquete si tu paquete actual está activo. Si ya lo agotaste, usa la opción de renovar."
         )
 
+    # Regla de negocio 3.2: bloquear el cambio mientras haya cuotas (o
+    # cualquier saldo) pendiente de pago en el paquete actual. Ver el
+    # mismo chequeo en notify_payment() (payments.py), fuente de verdad
+    # del flujo que realmente usa el frontend.
+    if current_enrollment.payment_status != "paid":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debes completar el pago de tu paquete actual antes de poder cambiarlo."
+        )
+
     new_package = db.query(Package).filter(
         Package.id == data.new_package_id,
         Package.teacher_id == current_enrollment.teacher_id,

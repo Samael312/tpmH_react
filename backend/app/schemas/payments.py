@@ -134,6 +134,18 @@ class NotifyPaymentRequest(BaseModel):
     installment_index: Optional[int] = None
     credits_requested: Optional[int] = None
     transaction_reference: Optional[str] = None
+    # Regla de negocio 3.1 (downgrade sin créditos usados, Caso A): el
+    # estudiante elige entre reembolso completo o ajuste por diferencia.
+    # Se ignora fuera de ese caso puntual (package_change con 0 créditos
+    # usados y el paquete nuevo es un downgrade).
+    change_option: Optional[str] = None  # "full_refund" | "adjust_difference"
+
+    @field_validator("change_option")
+    @classmethod
+    def validate_change_option(cls, v):
+        if v is not None and v not in ("full_refund", "adjust_difference"):
+            raise ValueError("change_option debe ser 'full_refund' o 'adjust_difference'")
+        return v
 
     @field_validator("type")
     @classmethod

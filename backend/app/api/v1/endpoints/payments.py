@@ -126,15 +126,27 @@ def _installment_amount(package: Package, index: int) -> float:
 def _apply_instant_package_change(
     enrollment: Enrollment,
     new_package: Package,
-    available_credits: int,
+    occupied_slots: int,
     db: Session,) -> None:
-    """    Cambio de paquete sin cobro adicional: el nuevo paquete finito tiene    cupo suficiente para cubrir los créditos que el estudiante ya tenía    disponibles (deficit <= 0). classes_used NO se toca.    """
+    """    Cambio de paquete sin cobro adicional (diferencia == 0).
+
+    Regla de negocio 3.1 (downgrade): si los créditos ya usados/agendados
+    (occupied_slots) igualan o superan el cupo del paquete nuevo, el
+    enrollment se marca 'completed' en vez de dejarlo 'active' con
+    unlocked_credits por debajo de lo ya usado — eso dejaba al estudiante
+    bloqueado para siempre al intentar agendar (occupied_slots >= unlocked_credits
+    nunca deja de ser cierto). classes_used NO se toca.
+    """
     enrollment.package_id = new_package.id
     enrollment.classes_total = new_package.classes_count
-    enrollment.unlocked_credits = new_package.classes_count
     enrollment.prepaid_unlimited_credits = 0
     enrollment.change_requested_package_id = None
-    enrollment.status = EnrollmentStatus.active
+    if occupied_slots >= new_package.classes_count:
+        enrollment.unlocked_credits = occupied_slots
+        enrollment.status = EnrollmentStatus.completed
+    else:
+        enrollment.unlocked_credits = new_package.classes_count
+        enrollment.status = EnrollmentStatus.active
     db.commit()
 
 
@@ -153,14 +165,18 @@ def _apply_instant_switch_to_unlimited(
     db.commit()
 
 
+def _get_enrollment_occupied_slots(enrollment: Enrollment, db: Session) -> int:
+    """Créditos ya usados/agendados (no cancelados/expirados) del enrollment."""
+    return db.query(Class).filter(
+        Class.enrollment_id == enrollment.id,
+        Class.status.notin_(["cancelled", "expired"]),
+    ).count()
+
+
 def _get_enrollment_available_credits(enrollment: Enrollment, db: Session) -> int:
     """Créditos disponibles del enrollment ANTES del cambio de paquete."""
     if enrollment.package.classes_count is not None:
-        # BUG-04 fix: 'expired' se trata igual que 'cancelled' (no ocupa crédito).
-        occupied_slots = db.query(Class).filter(
-            Class.enrollment_id == enrollment.id,
-            Class.status.notin_(["cancelled", "expired"]),
-        ).count()
+        occupied_slots = _get_enrollment_occupied_slots(enrollment, db)
         return max((enrollment.unlocked_credits or 0) - occupied_slots, 0)
     return enrollment.prepaid_unlimited_credits or 0
 
@@ -703,6 +719,11 @@ def validate_payment(
 
     now = utc_now()
 
+    CONCEPT_MAP = {
+        "package": "Paquete", "renewal": "Renovación", "package_change": "Cambio de paquete",
+        "unlimited_recharge": "Recarga de créditos", "refund": "Reembolso",
+    }
+
     # ── RECHAZAR PAGO ──
     if data.action == "reject":
         if not data.rejection_reason:
@@ -712,13 +733,25 @@ def validate_payment(
         payment.validated_at = now
         payment.rejection_reason = data.rejection_reason
 
+        # Fix: un pago de renovación/cambio/reembolso rechazado ya no deja
+        # al estudiante atascado en pending_renewal/pending_package_change
+        # para siempre — se revierte al estado que tenía antes, para que
+        # pueda volver a intentarlo.
+        if payment.payment_type in ("renewal", "package_change", "refund"):
+            enrollment = db.query(Enrollment).filter(Enrollment.id == payment.enrollment_id).first()
+            if enrollment and enrollment.status in (
+                EnrollmentStatus.pending_renewal, EnrollmentStatus.pending_package_change
+            ):
+                enrollment.status = EnrollmentStatus.active
+                enrollment.renewal_requested_package_id = None
+                enrollment.change_requested_package_id = None
+
         student_user = payment.student.user if payment.student else None
         if student_user:
-            concept_map = {"package": "Paquete", "renewal": "Renovación", "package_change": "Cambio de paquete", "unlimited_recharge": "Recarga de créditos"}
             send_payment_failed_email(
                 to_email=student_user.email,
                 student_name=student_user.name,
-                concept=concept_map.get(payment.payment_type, "Pago"),
+                concept=CONCEPT_MAP.get(payment.payment_type, "Pago"),
                 amount=payment.amount_total,
                 rejection_reason=data.rejection_reason,
             )
@@ -729,7 +762,13 @@ def validate_payment(
     # ── APROBAR PAGO ──
     teacher = db.query(TeacherProfile).filter(TeacherProfile.id == payment.teacher_id).first()
 
-    if not payment.is_manual_grant:
+    if payment.payment_type == "refund":
+        # Es dinero que sale de la plataforma hacia el estudiante, no un
+        # cobro — no corresponde acreditar nada a la billetera del profesor.
+        payment.amount_teacher = 0
+        payment.amount_platform = 0
+        amount_teacher = 0
+    elif not payment.is_manual_grant:
         amount_teacher, amount_platform = _apply_commission(payment.amount_total, teacher)
         payment.amount_teacher = amount_teacher
         payment.amount_platform = amount_platform
@@ -758,43 +797,54 @@ def validate_payment(
                 enrollment.activated_at = now
                 enrollment.payment_status = "paid"
 
-    elif payment.payment_type in ("package", "renewal", "package_change"):
+    elif payment.payment_type in ("package", "renewal", "package_change", "refund"):
         enrollment = db.query(Enrollment).filter(Enrollment.id == payment.enrollment_id).first()
         if enrollment:
-            target_package_id = (
-                enrollment.renewal_requested_package_id
-                or enrollment.change_requested_package_id
-                or enrollment.package_id
+            # Regla de negocio 3.1, Caso A + "Reembolso completo": no se
+            # otorga ningún paquete nuevo, solo se cancela el actual. Se
+            # reconoce por ser un 'refund' sin ningún paquete solicitado.
+            is_full_refund_cancel = (
+                payment.payment_type == "refund"
+                and enrollment.change_requested_package_id is None
+                and enrollment.renewal_requested_package_id is None
             )
-            target_package = db.query(Package).filter(Package.id == target_package_id).first()
-            is_renewal = enrollment.status == EnrollmentStatus.pending_renewal or payment.payment_type == "renewal"
-            is_change = enrollment.status == EnrollmentStatus.pending_package_change or payment.payment_type == "package_change"
 
-            if is_renewal or is_change:
-                enrollment.package_id = target_package.id
-                enrollment.classes_total = target_package.classes_count
-                enrollment.unlocked_credits = 0  # arranca limpio con el paquete nuevo
-                if target_package.classes_count is not None:
-                    enrollment.prepaid_unlimited_credits = 0   # <-- NUEVO
-                if is_renewal:
-                    enrollment.classes_used = 0
-                enrollment.status = EnrollmentStatus.active
-                enrollment.renewal_requested_package_id = None
-                enrollment.change_requested_package_id = None
-
-            if target_package.classes_count is None:
-                # BUG-18 fix: paquete ILIMITADO. 'installment_index' aquí
-                # contiene la cantidad de créditos comprados (ver
-                # notify_payment), no un número de cuota — los paquetes
-                # ilimitados no usan pago en cuotas.
-                enrollment.paid_via_installments = False
-                credits = payment.installment_index or 0
-                enrollment.prepaid_unlimited_credits = (enrollment.prepaid_unlimited_credits or 0) + credits
-                enrollment.installments_paid = 1
-                enrollment.payment_status = "paid"
+            if is_full_refund_cancel:
+                enrollment.status = EnrollmentStatus.cancelled
             else:
-                enrollment.paid_via_installments = payment.installment_index is not None
-                if payment.installment_index is not None:
+                target_package_id = (
+                    enrollment.renewal_requested_package_id
+                    or enrollment.change_requested_package_id
+                    or enrollment.package_id
+                )
+                target_package = db.query(Package).filter(Package.id == target_package_id).first()
+                is_renewal = enrollment.status == EnrollmentStatus.pending_renewal or payment.payment_type == "renewal"
+                is_change = enrollment.status == EnrollmentStatus.pending_package_change or payment.payment_type in ("package_change", "refund")
+
+                if is_renewal or is_change:
+                    enrollment.package_id = target_package.id
+                    enrollment.classes_total = target_package.classes_count
+                    enrollment.unlocked_credits = 0  # arranca limpio con el paquete nuevo
+                    if target_package.classes_count is not None:
+                        enrollment.prepaid_unlimited_credits = 0
+                    if is_renewal:
+                        enrollment.classes_used = 0
+                    enrollment.status = EnrollmentStatus.active
+                    enrollment.renewal_requested_package_id = None
+                    enrollment.change_requested_package_id = None
+
+                if target_package.classes_count is None:
+                    # BUG-18 fix: paquete ILIMITADO. 'installment_index' aquí
+                    # contiene la cantidad de créditos comprados (ver
+                    # notify_payment), no un número de cuota — los paquetes
+                    # ilimitados no usan pago en cuotas.
+                    enrollment.paid_via_installments = False
+                    credits = payment.installment_index or 0
+                    enrollment.prepaid_unlimited_credits = (enrollment.prepaid_unlimited_credits or 0) + credits
+                    enrollment.installments_paid = 1
+                    enrollment.payment_status = "paid"
+                elif payment.installment_index is not None:
+                    enrollment.paid_via_installments = True
                     enrollment.installments_paid = payment.installment_index
                     n = target_package.installment_count or 1
                     credit_this_installment = _installment_credit_amount(
@@ -803,8 +853,20 @@ def validate_payment(
                     enrollment.unlocked_credits = (enrollment.unlocked_credits or 0) + credit_this_installment
                     enrollment.payment_status = "paid" if payment.installment_index >= n else "partially_paid"
                 else:
+                    # Regla de negocio 3.1 (downgrade): nunca dejar
+                    # unlocked_credits por debajo de lo ya usado/agendado —
+                    # eso bloqueaba al estudiante para siempre. Si ya usó
+                    # más créditos de los que el paquete nuevo ofrece, el
+                    # enrollment queda 'completed' (ya agotó su valor) en
+                    # vez de 'active' con un tope imposible de alcanzar.
+                    enrollment.paid_via_installments = False
+                    occupied_slots = _get_enrollment_occupied_slots(enrollment, db)
+                    if occupied_slots >= target_package.classes_count:
+                        enrollment.unlocked_credits = occupied_slots
+                        enrollment.status = EnrollmentStatus.completed
+                    else:
+                        enrollment.unlocked_credits = target_package.classes_count
                     enrollment.installments_paid = target_package.installment_count or 1
-                    enrollment.unlocked_credits = target_package.classes_count
                     enrollment.payment_status = "paid"
 
             if enrollment.activated_at is None and enrollment.payment_status in ("paid", "partially_paid"):
@@ -812,11 +874,10 @@ def validate_payment(
 
     student_user = payment.student.user if payment.student else None
     if student_user and not payment.is_manual_grant:
-        concept_map = {"package": "Paquete", "renewal": "Renovación", "package_change": "Cambio de paquete", "unlimited_recharge": "Recarga de créditos"}
         send_payment_receipt_email(
             to_email=student_user.email,
             student_name=student_user.name,
-            concept=concept_map.get(payment.payment_type, "Pago"),
+            concept=CONCEPT_MAP.get(payment.payment_type, "Pago"),
             amount=payment.amount_total,
             payment_method=payment.payment_method,
             transaction_reference=payment.transaction_id,
@@ -1235,6 +1296,22 @@ def notify_payment(
                 "Solo puedes solicitar un cambio de paquete si tu paquete actual está activo"
             )
 
+        # Regla de negocio 3.2: bloquear el cambio de paquete de forma
+        # estricta mientras el paquete actual tenga cuotas (o cualquier
+        # saldo) pendiente de pago.
+        if current_enrollment.payment_status != "paid":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Debes completar el pago de tu paquete actual antes de poder cambiarlo."
+            )
+
+        if db.query(Payment).filter(
+            Payment.enrollment_id == current_enrollment.id,
+            Payment.status == "pending_review",
+            Payment.payment_type.in_(["package", "renewal", "package_change", "refund"]),
+        ).first():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay un pago pendiente de revisión")
+
         new_package = db.query(Package).filter(
             Package.id == data.package_id,
             Package.teacher_id == current_enrollment.teacher_id,
@@ -1245,48 +1322,95 @@ def notify_payment(
         if new_package.id == current_enrollment.package_id:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya tienes este paquete activo")
 
-        available_credits = _get_enrollment_available_credits(current_enrollment, db)
-
         # ── Paquete nuevo ilimitado: cambio instantáneo, sin cobro ──
         if new_package.classes_count is None:
+            available_credits = _get_enrollment_available_credits(current_enrollment, db)
             _apply_instant_switch_to_unlimited(current_enrollment, new_package, available_credits, db)
             return {
                 "message": "Cambiaste a un paquete ilimitado. Tus créditos disponibles se transfirieron "
                            "sin costo adicional. Puedes comprar más créditos cuando quieras."
             }
 
-        # ── Paquete nuevo finito ──
-        deficit = new_package.classes_count - available_credits
-        if deficit < 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"No puedes cambiar a este paquete: ya tienes {available_credits} créditos disponibles "
-                f"y el nuevo paquete solo permite {new_package.classes_count}. Elige un paquete con más cupo."
-            )
+        old_total = current_enrollment.classes_total or 1
+        old_price = current_enrollment.package.price
+        price_per_class_old = old_price / old_total
+        occupied_slots = _get_enrollment_occupied_slots(current_enrollment, db)
+        is_downgrade = new_package.classes_count < old_total
 
-        if deficit == 0:
-            _apply_instant_package_change(current_enrollment, new_package, available_credits, db)
-            return {"message": "Cambio de paquete aplicado sin costo adicional (tus créditos ya cubren el nuevo paquete)."}
+        if not is_downgrade:
+            # ── Upgrade (o lateral): comportamiento existente, se cobra
+            # solo por los créditos adicionales sobre lo aún disponible ──
+            available_credits = _get_enrollment_available_credits(current_enrollment, db)
+            deficit = new_package.classes_count - available_credits
+            if deficit < 0:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"No puedes cambiar a este paquete: ya tienes {available_credits} créditos disponibles "
+                    f"y el nuevo paquete solo permite {new_package.classes_count}. Elige un paquete con más cupo."
+                )
+            if deficit == 0:
+                _apply_instant_package_change(current_enrollment, new_package, occupied_slots, db)
+                return {"message": "Cambio de paquete aplicado sin costo adicional (tus créditos ya cubren el nuevo paquete)."}
+            amount = round((new_package.price / new_package.classes_count) * deficit, 2)
+            payment_type = "package_change"
+            apply_new_package = True
+            notify_msg = f"Pago notificado por {deficit} créditos faltantes (${amount:.2f}). En espera de aprobación."
 
-        if db.query(Payment).filter(
-            Payment.enrollment_id == current_enrollment.id,
-            Payment.status == "pending_review",
-            Payment.payment_type.in_(["package", "renewal", "package_change"]),
-        ).first():
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay un pago pendiente de revisión")
-
-        price_per_class = new_package.price / new_package.classes_count
-        amount = round(price_per_class * deficit, 2)
+        else:
+            # ── Regla de negocio 3.1 — Downgrade: se usa el VALOR restante
+            # del paquete actual (no el conteo de créditos) para calcular
+            # el ajuste, según si el estudiante ya consumió créditos o no. ──
+            if occupied_slots == 0:
+                # Caso A: ningún crédito usado — el estudiante elige.
+                option = data.change_option or "adjust_difference"
+                if option == "full_refund":
+                    amount = round(old_price, 2)
+                    payment_type = "refund"
+                    apply_new_package = False
+                    notify_msg = (
+                        f"Se generó una solicitud de reembolso completo de ${amount:.2f}. "
+                        "Tu paquete actual quedará cancelado una vez que el staff procese la devolución; "
+                        "podrás elegir un paquete nuevo cuando quieras."
+                    )
+                else:
+                    diff = round(new_package.price - old_price, 2)
+                    apply_new_package = True
+                    if diff == 0:
+                        _apply_instant_package_change(current_enrollment, new_package, occupied_slots, db)
+                        return {"message": "Cambio de paquete aplicado sin costo adicional (mismo valor)."}
+                    amount = abs(diff)
+                    payment_type = "package_change" if diff > 0 else "refund"
+                    notify_msg = (
+                        f"Pago notificado por ${amount:.2f} (diferencia con tu paquete anterior). En espera de aprobación."
+                        if diff > 0 else
+                        f"Se generó una nota de reembolso de ${amount:.2f} (diferencia a tu favor). En espera de aprobación."
+                    )
+            else:
+                # Caso B: ya se consumieron créditos — nunca reembolso
+                # completo, solo ajuste diferencial sobre el valor restante.
+                remaining_value = round(price_per_class_old * (old_total - occupied_slots), 2)
+                diff = round(new_package.price - remaining_value, 2)
+                apply_new_package = True
+                if diff == 0:
+                    _apply_instant_package_change(current_enrollment, new_package, occupied_slots, db)
+                    return {"message": "Cambio de paquete aplicado sin costo adicional (mismo valor restante)."}
+                amount = abs(diff)
+                payment_type = "package_change" if diff > 0 else "refund"
+                notify_msg = (
+                    f"Pago notificado por ${amount:.2f} (diferencia sobre el valor restante de tu paquete actual). En espera de aprobación."
+                    if diff > 0 else
+                    f"Se generó una nota de reembolso de ${amount:.2f} (valor restante a tu favor). En espera de aprobación."
+                )
 
         current_enrollment.status = EnrollmentStatus.pending_package_change
-        current_enrollment.change_requested_package_id = new_package.id
+        current_enrollment.change_requested_package_id = new_package.id if apply_new_package else None
         db.commit()
 
         payment = Payment(
             enrollment_id=current_enrollment.id, student_id=student_id, teacher_id=current_enrollment.teacher_id,
             amount_total=amount, amount_teacher=0, amount_platform=0,
             payment_method="manual", transaction_id=data.transaction_reference,
-            status="pending_review", payment_type="package_change",
+            status="pending_review", payment_type=payment_type,
             installment_index=None,
         )
         db.add(payment)
@@ -1299,15 +1423,12 @@ def notify_payment(
                 to_email=admin_email,
                 student_name=current_user.name,
                 amount=amount,
-                concept="package_change",
+                concept=payment_type,
                 payment_method="manual",
                 transaction_reference=data.transaction_reference,
             )
 
-        return {
-            "payment_id": payment.id,
-            "message": f"Pago notificado por {deficit} créditos faltantes (${amount:.2f}). En espera de aprobación.",
-        }
+        return {"payment_id": payment.id, "message": notify_msg}
 
     else:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"type inválido: {data.type}")
@@ -1328,7 +1449,7 @@ def notify_payment(
         if db.query(Payment).filter(
             Payment.enrollment_id == enrollment.id,
             Payment.status == "pending_review",
-            Payment.payment_type.in_(["package", "renewal", "package_change"]),
+            Payment.payment_type.in_(["package", "renewal", "package_change", "refund"]),
         ).first():
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay un pago pendiente de revisión")
 
@@ -1369,7 +1490,7 @@ def notify_payment(
         if db.query(Payment).filter(
             Payment.enrollment_id == enrollment.id,
             Payment.status == "pending_review",
-            Payment.payment_type.in_(["package", "renewal", "package_change"]),
+            Payment.payment_type.in_(["package", "renewal", "package_change", "refund"]),
         ).first():
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay un pago o cuota pendiente de revisión")
         amount = _installment_amount(package, data.installment_index)
@@ -1379,7 +1500,7 @@ def notify_payment(
         if db.query(Payment).filter(
             Payment.enrollment_id == enrollment.id,
             Payment.status == "pending_review",
-            Payment.payment_type.in_(["package", "renewal", "package_change"]),
+            Payment.payment_type.in_(["package", "renewal", "package_change", "refund"]),
         ).first():
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay un pago pendiente de revisión")
         amount = package.price
