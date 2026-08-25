@@ -297,7 +297,15 @@ def reschedule_class_student(
     class_.start_time_utc = data.start_time_utc
     class_.end_time_utc = data.end_time_utc
     class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
-    class_.status = "pending_trial" if class_.class_type == ClassType.trial else "pending"
+    # BUG fix: reagendar ya NO resetea el estado a 'pending'/'pending_trial'.
+    # Esa reasignación venía del viejo flujo de "reservar y confirmar/pagar
+    # después" para clases regulares, eliminado en BUG-04/12/18/19: una
+    # clase regular 'confirmed' ya fue pagada y ya consumió un crédito del
+    # paquete, así que reagendarla no debe devolverla a un estado de
+    # "pendiente de pago" (confundía al estudiante y además el scheduler de
+    # recordatorios de 24h solo avisa clases con status 'confirmed', por lo
+    # que la clase dejaba de recibir el recordatorio). El estado se conserva
+    # tal cual estaba; can_reschedule_class ya validó que es reagendable.
     db.commit()
     db.refresh(class_)
     
@@ -584,7 +592,9 @@ def reschedule_class_teacher(
     class_.start_time_utc = data.start_time_utc
     class_.end_time_utc = data.end_time_utc
     class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
-    class_.status = "pending_trial" if class_.class_type == ClassType.trial else "pending"
+    # BUG fix: ver comentario equivalente en reschedule_class_student. El
+    # profesor tampoco debe poder "desconfirmar" una clase ya paga/confirmada
+    # por el simple hecho de reagendarla.
     db.commit()
     db.refresh(class_)
 
@@ -622,7 +632,7 @@ def reschedule_class_admin(
     class_.start_time_utc = data.start_time_utc
     class_.end_time_utc = data.end_time_utc
     class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
-    class_.status = "pending_trial" if class_.class_type == ClassType.trial else "pending"
+    # BUG fix: ver comentario equivalente en reschedule_class_student.
     db.commit()
     db.refresh(class_)
 
