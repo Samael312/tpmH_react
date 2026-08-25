@@ -17,6 +17,7 @@ const TYPE_BADGE: Record<string, { label: (p: any) => string; cls: string }> = {
   package_change:     { label: p => p.installment_total ? `Cambio (Cuota ${p.installment_index}/${p.installment_total})` : "Cambio de Paquete", cls: "bg-amber-100 text-amber-700" },
   installment:        { label: p => `Cuota ${p.installment_index || 1}/${p.installment_total || 1}`, cls: "bg-indigo-100 text-indigo-700" },
   unlimited_recharge: { label: p => `Recarga ${p.installment_index ? `${p.installment_index} clases` : "Ilimitada"}`, cls: "bg-purple-100 text-purple-700" },
+  refund:             { label: () => "Reembolso a favor del estudiante", cls: "bg-rose-100 text-rose-700" },
 };
 
 export default function TeacherPaymentsPage() {

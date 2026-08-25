@@ -37,6 +37,10 @@ const TYPE_BADGE: Record<string, { label: (p: any) => string; cls: string }> = {
     label: (p) => `Recarga ${p.installment_index ? `${p.installment_index} clases` : "Ilimitada"}`,
     cls: "bg-purple-100 text-purple-700 border-purple-200"
   },
+  refund: {
+    label: () => "Reembolso a favor del estudiante",
+    cls: "bg-rose-100 text-rose-700 border-rose-200"
+  },
 }
 
 export default function PaymentsPage() {

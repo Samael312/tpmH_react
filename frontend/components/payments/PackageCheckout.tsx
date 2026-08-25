@@ -24,6 +24,14 @@ export interface PackageCheckoutProps {
   enrollmentId: number | null;
   installmentsPaid: number;
   currentCredits?: number;
+  // Solo relevantes en mode="change": precio y tamaño total del paquete
+  // ACTUAL, necesarios para calcular el ajuste por valor en un downgrade
+  // (reglas de negocio 3.1) en vez de solo contar créditos.
+  currentPackagePrice?: number;
+  currentPackageClassesTotal?: number;
+  // Solo relevante en mode="change" cuando es un downgrade sin créditos
+  // usados (Caso A de 3.1): qué eligió el estudiante.
+  changeOption?: "full_refund" | "adjust_difference";
   onClose: () => void;
   onDone: () => void;
 }
@@ -34,6 +42,9 @@ export default function PackageCheckout({
   enrollmentId,
   installmentsPaid,
   currentCredits,
+  currentPackagePrice,
+  currentPackageClassesTotal,
+  changeOption,
   onClose,
   onDone,
 }: PackageCheckoutProps) {
@@ -58,22 +69,56 @@ export default function PackageCheckout({
     pkg.installment_amount ??
     Math.round((pkg.price / (pkg.installment_count || 1)) * 100) / 100;
 
-  // ─── Cambio de paquete: solo se cobra la diferencia de clases ───
-  // Los créditos que el estudiante ya tiene disponibles cubren parte
-  // (o todo) del nuevo paquete. Nunca admite cuotas — coincide con la
-  // lógica de backend en /payments/notify-payment (type=package_change).
+  // ─── Cambio de paquete ───
+  // Regla de negocio 3.1: si el paquete nuevo tiene MENOS clases que el
+  // actual (downgrade), el ajuste se calcula sobre el VALOR restante del
+  // paquete actual, no solo contando créditos — y si no se usó ningún
+  // crédito, el estudiante elige reembolso completo o ajuste por
+  // diferencia (changeOption). Para upgrades/laterales se mantiene el
+  // cálculo anterior (solo se cobran los créditos faltantes). Este es un
+  // cálculo aproximado para mostrar en pantalla — el backend siempre
+  // recalcula de forma autoritativa al procesar la solicitud.
+  const isDowngrade =
+    isChange && !isUnlimited && pkg.classes_count != null &&
+    currentPackageClassesTotal != null && pkg.classes_count < currentPackageClassesTotal;
+
+  const occupiedSlots =
+    currentPackageClassesTotal != null
+      ? Math.max(currentPackageClassesTotal - (currentCredits ?? currentPackageClassesTotal), 0)
+      : 0;
+
   const pricePerClass =
     !isUnlimited && pkg.classes_count ? pkg.price / pkg.classes_count : 0;
 
-  const changeDeficit =
-    isChange && !isUnlimited && pkg.classes_count != null
-      ? Math.max(pkg.classes_count - (currentCredits ?? 0), 0)
-      : null;
+  let changeDeficit: number | null = null;   // solo aplica al camino "por créditos" (upgrade)
+  let changeAmount: number | null = null;
+  let isRefund = false;
+  let refundIsFull = false;
 
-  const changeAmount =
-    changeDeficit !== null
-      ? Math.round(changeDeficit * pricePerClass * 100) / 100
-      : null;
+  if (isChange && !isUnlimited && pkg.classes_count != null) {
+    if (!isDowngrade) {
+      changeDeficit = Math.max(pkg.classes_count - (currentCredits ?? 0), 0);
+      changeAmount = Math.round(changeDeficit * pricePerClass * 100) / 100;
+    } else if (occupiedSlots === 0 && currentPackagePrice != null) {
+      // Caso A
+      if (changeOption === "full_refund") {
+        refundIsFull = true;
+        isRefund = true;
+        changeAmount = Math.round(currentPackagePrice * 100) / 100;
+      } else {
+        const diff = Math.round((pkg.price - currentPackagePrice) * 100) / 100;
+        isRefund = diff < 0;
+        changeAmount = Math.abs(diff);
+      }
+    } else if (currentPackagePrice != null && currentPackageClassesTotal) {
+      // Caso B
+      const pricePerClassOld = currentPackagePrice / currentPackageClassesTotal;
+      const remainingValue = Math.round(pricePerClassOld * (currentCredits ?? 0) * 100) / 100;
+      const diff = Math.round((pkg.price - remainingValue) * 100) / 100;
+      isRefund = diff < 0;
+      changeAmount = Math.abs(diff);
+    }
+  }
 
   const amount = isInstantSwitchToUnlimited
     ? 0
@@ -85,7 +130,7 @@ export default function PackageCheckout({
           ? installmentAmountCalculated
           : pkg.price;
 
-  const noAdditionalCost = (isChange && changeDeficit === 0) || isInstantSwitchToUnlimited;
+  const noAdditionalCost = (isChange && !isDowngrade && changeDeficit === 0) || isInstantSwitchToUnlimited;
 
   const notify = async () => {
     setSending(true);
@@ -103,6 +148,7 @@ export default function PackageCheckout({
         // comprando; antes este campo nunca se enviaba y el estudiante
         // terminaba con 0 créditos sin importar cuánto pagara.
         credits_requested: isUnlimited && !isChange ? creditsRequested : undefined,
+        change_option: isChange && isDowngrade && occupiedSlots === 0 ? (changeOption ?? "adjust_difference") : undefined,
         transaction_reference: reference.trim() || undefined,
       });
       setDone(true);
@@ -160,7 +206,7 @@ export default function PackageCheckout({
             </div>
           </div>
 
-          {isChange && changeDeficit !== null && (
+          {isChange && !isDowngrade && changeDeficit !== null && (
             <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs font-bold text-blue-700 space-y-1">
               {noAdditionalCost ? (
                 <p>Tus créditos actuales ya cubren este paquete — no hay costo adicional.</p>
@@ -170,6 +216,34 @@ export default function PackageCheckout({
                   <span className="font-black">{changeDeficit}</span> clase
                   {changeDeficit !== 1 ? "s" : ""} faltante{changeDeficit !== 1 ? "s" : ""} para
                   completar el paquete <span className="font-black">{pkg.name}</span>.
+                </p>
+              )}
+            </div>
+          )}
+
+          {isChange && isDowngrade && refundIsFull && (
+            <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 text-xs font-bold text-emerald-700">
+              <p>
+                Se te reembolsará el 100% de lo que pagaste por tu paquete actual. Tu paquete
+                quedará cancelado — podrás comprar <span className="font-black">{pkg.name}</span> por
+                separado cuando quieras.
+              </p>
+            </div>
+          )}
+
+          {isChange && isDowngrade && !refundIsFull && changeAmount !== null && (
+            <div className={`rounded-xl px-4 py-3 text-xs font-bold space-y-1 ${isRefund ? "bg-emerald-50 border border-emerald-100 text-emerald-700" : "bg-blue-50 border border-blue-100 text-blue-700"}`}>
+              {changeAmount === 0 ? (
+                <p>El valor de tu paquete actual coincide con el nuevo — no hay costo ni reembolso.</p>
+              ) : isRefund ? (
+                <p>
+                  Este paquete vale menos que el saldo restante de tu paquete actual — se te
+                  reembolsará la diferencia a tu favor.
+                </p>
+              ) : (
+                <p>
+                  Este paquete cuesta más que el saldo restante de tu paquete actual — pagas
+                  solo la diferencia.
                 </p>
               )}
             </div>
@@ -240,7 +314,7 @@ export default function PackageCheckout({
                 : isUnlimited
                   ? `Total por ${creditsRequested} clase${creditsRequested !== 1 ? "s" : ""}`
                   : isChange
-                    ? "Monto a transferir (clases faltantes)"
+                    ? (isRefund ? "Monto a reembolsarte" : "Monto a transferir")
                     : useInstallments || alreadyMidInstallments
                       ? `Monto de la cuota ${alreadyMidInstallments ? nextIndex : 1}`
                       : "Monto total a transferir"}
@@ -253,11 +327,11 @@ export default function PackageCheckout({
 
         <div>
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-            Mensaje de transacción (opcional)
+            {isRefund ? "Dónde enviarte el reembolso (opcional)" : "Mensaje de transacción (opcional)"}
           </label>
           <input
             type="text" value={reference} onChange={(e) => setReference(e.target.value)}
-            placeholder="Ej: últimos 4 dígitos..."
+            placeholder={isRefund ? "Ej: mismo método con el que pagaste, cuenta, email de PayPal..." : "Ej: últimos 4 dígitos..."}
             disabled={isInstantSwitchToUnlimited}
             className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-xs font-bold
                        text-slate-800 placeholder:text-slate-400 px-4 py-3.5 focus:outline-none
@@ -271,12 +345,17 @@ export default function PackageCheckout({
       <div className="flex flex-col justify-between space-y-4">
         <div className="space-y-3">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            Métodos de pago disponibles
+            {isRefund ? "Sobre tu reembolso" : "Métodos de pago disponibles"}
           </p>
           <div className="max-h-[300px] overflow-y-auto pr-1">
             {isInstantSwitchToUnlimited ? (
               <p className="text-xs text-slate-400 font-medium px-1">
                 No aplica — este cambio no requiere pago.
+              </p>
+            ) : isRefund ? (
+              <p className="text-xs text-slate-400 font-medium px-1">
+                No necesitas transferir nada. El staff procesará la devolución y te contactará
+                para coordinar el método de pago.
               </p>
             ) : (
               <PaymentMethodsInfo />
@@ -304,7 +383,9 @@ export default function PackageCheckout({
               ? <Loader2 className="w-4 h-4 animate-spin" />
               : isInstantSwitchToUnlimited
                 ? <><Check className="w-4 h-4" /> Confirmar cambio</>
-                : <><Check className="w-4 h-4" /> Ya realicé el pago</>}
+                : isRefund
+                  ? <><Check className="w-4 h-4" /> Solicitar reembolso</>
+                  : <><Check className="w-4 h-4" /> Ya realicé el pago</>}
           </button>
         </div>
       </div>
