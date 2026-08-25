@@ -53,16 +53,15 @@ const STATUS_CONFIG: Record<string, { theme: string; label: string; border: stri
 };
 
 const HISTORY_STATUSES = ["completed", "cancelled", "no_show", "finalized", "expired"];
-const TEACHER_NEXT_STATUSES: Record<string, string[]> = {
-  pending:         ["cancelled"],
-  pending_trial:   ["cancelled"],
-  pending_payment: ["cancelled"],
-  confirmed:       ["completed", "no_show", "cancelled"],
-  completed:       ["no_show"],
-  cancelled:       ["no_show", "completed"],
-  no_show:         ["completed", "cancelled"],
-  finalized:       ["completed", "no_show", "cancelled"],
-};
+
+// BUG-05/17 fix: el profesor puede cambiar libremente el estado de la clase
+// a completed/no_show/finalized, sin importar cuál era el estado de origen,
+// dentro de una ventana de 72h desde que la clase terminó (ver también
+// backend: classes.py update_class_status). La cancelación sigue siendo una
+// acción aparte (DELETE /classes/teacher/{id}, ver teacherCancelInline).
+const MANUAL_TARGET_STATUSES = ["completed", "no_show", "finalized"];
+const MANUAL_STATUS_WINDOW_HOURS = 72;
+const TEACHER_CANCELABLE_STATUSES = ["pending_trial", "confirmed", "finalized"];
 
 const STUDENT_CANCELABLE = ["pending", "pending_trial", "pending_payment", "confirmed"];
 const STUDENT_RESCHEDULABLE = ["pending", "pending_trial", "confirmed"];
@@ -225,15 +224,24 @@ export default function ClassCard({
   };
 
   // --- PERMISOS ---
-  const teacherNextActions = TEACHER_NEXT_STATUSES[class_.status] || [];
+  // BUG-05/17 fix: transiciones manuales libres (completed/no_show/finalized),
+  // acotadas por la ventana de 72h desde el fin de la clase.
+  const hoursSinceEnd = (Date.now() - endDate.getTime()) / (1000 * 60 * 60);
+  const withinManualStatusWindow = hoursSinceEnd <= MANUAL_STATUS_WINDOW_HOURS;
+  const teacherNextActions = role === "teacher" && withinManualStatusWindow
+    ? MANUAL_TARGET_STATUSES.filter((s) => s !== class_.status)
+    : [];
   const canReschedule = role === "teacher"
     ? !["completed", "cancelled", "no_show"].includes(class_.status)
     : STUDENT_RESCHEDULABLE.includes(class_.status);
   const canCancel = role === "teacher"
-    ? teacherNextActions.includes("cancelled")
+    ? TEACHER_CANCELABLE_STATUSES.includes(class_.status)
     : STUDENT_CANCELABLE.includes(class_.status);
 
-  const showTeacherActions = role === "teacher" && !isPast && !readOnly;
+  // BUG-05/17 fix: antes 'showTeacherActions' exigía !isPast, lo que ocultaba
+  // los botones de Completar/No asistió justo cuando más se necesitan (después
+  // de que la clase terminó). Ahora se basan en la ventana de 72h.
+  const showTeacherActions = role === "teacher" && withinManualStatusWindow && !readOnly;
   const hasAnyAction = !readOnly && ((canReschedule && (!isPast || role === "teacher")) || (canCancel && (!isPast || role === "teacher")) || showTeacherActions);
 
   return (
@@ -341,6 +349,11 @@ export default function ClassCard({
                 {showTeacherActions && teacherNextActions.includes("no_show") && (
                   <button onClick={() => teacherUpdateStatus("no_show")} disabled={updating} className="flex items-center justify-center gap-1.5 text-xs font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 px-3.5 py-2 rounded-xl transition-colors disabled:opacity-50">
                     <AlertCircle className="w-3.5 h-3.5" /> No asistió
+                  </button>
+                )}
+                {showTeacherActions && teacherNextActions.includes("finalized") && (
+                  <button onClick={() => teacherUpdateStatus("finalized")} disabled={updating} className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl transition-colors disabled:opacity-50">
+                    <Clock className="w-3.5 h-3.5" /> Sin resolver
                   </button>
                 )}
                 {canReschedule && (!isPast || role === "teacher") && (

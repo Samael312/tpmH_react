@@ -13,10 +13,6 @@ import DesktopOnly from '@/components/ui/DesktopOnly'
 import { usePageTopBar } from '@/lib/mobileTopBar'
 
 const TYPE_BADGE: Record<string, { label: (p: any) => string; cls: string }> = {
-  single_class: {
-    label: () => "Clase única",
-    cls: "bg-blue-100 text-blue-700 border-blue-200"
-  },
   package: {
     label: (p) => p.installment_total ? `Cuota ${p.installment_index}/${p.installment_total}` : "Paquete Inicial",
     cls: "bg-pink-100 text-pink-700 border-pink-200"
@@ -47,8 +43,6 @@ export default function PaymentsPage() {
   const [activeTab, setActiveTab] = useState<'payments' | 'withdrawals' | 'teachers' | 'history'>('payments')
   const [validating, setValidating] = useState<number | null>(null)
   const [processing, setProcessing] = useState<number | null>(null)
-  const [meetLink, setMeetLink] = useState('')
-  const [activePayment, setActivePayment] = useState<number | null>(null)
 
   const { payments, loading: paymentsLoading, isFetching: paymentsFetching, isError: paymentsError, refetch: refetchPayments } = usePendingPayments()
   const { withdrawals, loading: withdrawalsLoading, isFetching: withdrawalsFetching, isError: withdrawalsError, refetch: refetchWithdrawals } = useWithdrawals()
@@ -70,15 +64,15 @@ export default function PaymentsPage() {
     isFetching,
   })
 
+  // BUG-04/12 fix: se eliminó el tipo de pago "single_class" — el link de
+  // Meet ya no se pide al aprobar (las clases de paquete lo obtienen
+  // automáticamente vía sincronización con Google Calendar al reservar).
   const handleApprove = async (p: any) => {
     setValidating(p.payment_id)
     try {
       await api.patch(`/payments/${p.payment_id}/validate`, {
         action: 'approve',
-        ...(p.payment_type === 'single_class' ? { meet_link: meetLink } : {}),
       })
-      setMeetLink('')
-      setActivePayment(null)
       refetchPayments()
     } catch (e: any) {
       alert(e.response?.data?.detail || 'Error aprobando el pago')
@@ -244,46 +238,22 @@ export default function PaymentsPage() {
                     )}
 
                     {/* Acciones */}
-                    {activePayment === p.payment_id ? (
-                      <div className="flex flex-col sm:flex-row gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                        <input
-                          type="url"
-                          value={meetLink}
-                          onChange={e => setMeetLink(e.target.value)}
-                          placeholder="https://meet.google.com/xxx-xxxx-xxx"
-                          className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-pink-500"
-                        />
-                        <div className="flex gap-2">
-                          <Button
-                            variant="primary"
-                            loading={validating === p.payment_id}
-                            onClick={() => handleApprove(p)}
-                          >
-                            Confirmar
-                          </Button>
-                          <Button variant="secondary" onClick={() => setActivePayment(null)}>
-                            Cancelar
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex gap-3">
-                        <Button
-                          variant="primary"
-                          loading={validating === p.payment_id}
-                          onClick={() => p.payment_type === 'single_class' ? setActivePayment(p.payment_id) : handleApprove(p)}
-                        >
-                          Confirmar pago
-                        </Button>
-                        <Button
-                          variant="danger"
-                          loading={validating === p.payment_id}
-                          onClick={() => handleReject(p)}
-                        >
-                          Rechazar
-                        </Button>
-                      </div>
-                    )}
+                    <div className="flex gap-3">
+                      <Button
+                        variant="primary"
+                        loading={validating === p.payment_id}
+                        onClick={() => handleApprove(p)}
+                      >
+                        Confirmar pago
+                      </Button>
+                      <Button
+                        variant="danger"
+                        loading={validating === p.payment_id}
+                        onClick={() => handleReject(p)}
+                      >
+                        Rechazar
+                      </Button>
+                    </div>
                   </Card>
                 )
               })

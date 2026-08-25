@@ -27,6 +27,7 @@ from app.schemas.admin import (
     UpdateTeacherStatusRequest,
     UpdateCommissionRequest,
     UserAdminResponse,
+    PaginatedUsersResponse,
     UpdateUserStatusRequest,
 )
 from app.schemas.notifications import (
@@ -118,24 +119,27 @@ def get_platform_stats(
     ).count()
 
     # ─── Finanzas ────────────────────────────────────────────────────────────
+    # BUG-01 fix: el ciclo de vida real de Payment.status es
+    # pending_review -> approved | rejected. "completed" nunca existió,
+    # por lo que estas métricas siempre daban 0.
     revenue_result = db.query(
         func.sum(Payment.amount_total)
     ).filter(
-        Payment.status == "completed"
+        Payment.status == "approved"
     ).scalar()
     total_revenue = float(revenue_result or 0)
 
     teacher_payments_result = db.query(
         func.sum(Payment.amount_teacher)
     ).filter(
-        Payment.status == "completed"
+        Payment.status == "approved"
     ).scalar()
     total_paid_to_teachers = float(teacher_payments_result or 0)
 
     platform_result = db.query(
         func.sum(Payment.amount_platform)
     ).filter(
-        Payment.status == "completed"
+        Payment.status == "approved"
     ).scalar()
     total_platform_earnings = float(platform_result or 0)
 
@@ -580,7 +584,7 @@ def mark_all_notifications_read(
 
 @router.get(
     "/users",
-    response_model=List[UserAdminResponse]
+    response_model=PaginatedUsersResponse
 )
 def list_all_users(
     role: Optional[str] = Query(None),
@@ -630,7 +634,11 @@ def list_all_users(
         User.created_at.desc()
     ).offset(skip).limit(limit).all()
 
-    return users
+    # BUG-10 fix: antes 'total' se calculaba y se descartaba (el
+    # response_model era una lista plana). Ahora se envuelve la respuesta
+    # para que el frontend pueda paginar de verdad en vez de truncar
+    # silenciosamente en 'limit'.
+    return {"total": total, "users": users}
 
 
 @router.patch(
@@ -957,7 +965,26 @@ def admin_update_user(
     if not user:
         raise HTTPException(404, "Usuario no encontrado")
 
-    if data.role is not None:
+    # BUG-08 (parte 2) fix: el cambio de rol vía este endpoint está pensado
+    # únicamente para alternar entre 'teacher' y 'teacher_admin' (staff que
+    # opera como profesor). El cambio de rol entre 'student'/'teacher' queda
+    # prohibido: no existe migración de StudentProfile/TeacherProfile, y un
+    # usuario con el rol equivocado para su perfil rompe cualquier endpoint
+    # que dependa de current_user.teacher_profile/student_profile.
+    # (Nota: la parte 1 de BUG-08 —el orden de evaluación entre 'role' e
+    # 'is_active' al proteger a otro superadmin— se deja tal cual, sin
+    # control adicional, por decisión explícita de producto.)
+    VALID_ROLE_TRANSITIONS = {
+        UserRole.teacher: {UserRole.teacher_admin},
+        UserRole.teacher_admin: {UserRole.teacher},
+    }
+    if data.role is not None and data.role != user.role:
+        if data.role not in VALID_ROLE_TRANSITIONS.get(user.role, set()):
+            raise HTTPException(
+                400,
+                "Solo se permite alternar el rol entre 'teacher' y 'teacher_admin'. "
+                "El cambio de rol entre student/teacher no está soportado."
+            )
         user.role = data.role
 
     if data.is_active is not None:

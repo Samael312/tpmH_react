@@ -388,17 +388,30 @@ export interface AdminUserRaw {
   classes_total?: number
 }
 
-export function useAdminUsersList() {
+// BUG-10 fix: paginación real en vez de pedir un límite fijo de una sola
+// vez y descartar el total. El backend ahora devuelve {total, users}.
+export function useAdminUsersList(page: number = 1, pageSize: number = 50) {
+  const skip = (page - 1) * pageSize
   const query = useQuery({
-    queryKey: ["admin", "users"],
+    queryKey: ["admin", "users", page, pageSize],
     queryFn: async () => {
-      const res = await api.get('/admin/users?limit=200')
-      return (res.data.users ?? res.data) as AdminUserRaw[]
+      const res = await api.get(`/admin/users?limit=${pageSize}&skip=${skip}`)
+      const data = res.data
+      // Compat: si en algún punto el backend volviera a responder una
+      // lista plana, no se rompe (aunque 'total' quedaría indefinido).
+      if (Array.isArray(data)) {
+        return { total: data.length, users: data as AdminUserRaw[] }
+      }
+      return { total: data.total as number, users: data.users as AdminUserRaw[] }
     },
   })
 
   return {
-    users: query.data ?? [],
+    users: query.data?.users ?? [],
+    total: query.data?.total ?? 0,
+    page,
+    pageSize,
+    totalPages: query.data ? Math.max(1, Math.ceil(query.data.total / pageSize)) : 1,
     loading: query.isLoading,
     isFetching: query.isFetching,
     isError: query.isError,

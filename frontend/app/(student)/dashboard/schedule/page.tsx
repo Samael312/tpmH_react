@@ -14,7 +14,6 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 import PackageCheckout from "@/components/payments/PackageCheckout";
 import { formatTimeTz, formatDateHumanTz, getMyDisplayTimezone } from "@/lib/tzFormat";
 import { priceLabelSuffix } from "@/lib/packageThemes";
-import PaymentMethodsInfo from "@/components/payments/PaymentMethodsInfo";
 import BuyCreditsModal from "@/components/payments/BuyCreditsModal";
 import { useBusinessRules } from "@/hooks/useBusinessRules";
 
@@ -102,8 +101,16 @@ function MiniCalendar({
           if (!day) return <div key={i} />;
           const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
           const isSelected = dateStr === value;
-          const isPast = new Date(dateStr) < new Date(today.toDateString());
           const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+          // BUG-03 fix: comparar strings "YYYY-MM-DD" directamente en vez de
+          // parsear con `new Date(...)`. new Date("YYYY-MM-DD") se interpreta
+          // como medianoche UTC, mientras que new Date(today.toDateString())
+          // se interpreta como medianoche LOCAL — para husos horarios
+          // negativos respecto a UTC (toda Latinoamérica) esto hacía que el
+          // día de hoy apareciera como "pasado" durante varias horas de la
+          // madrugada. La comparación lexicográfica de strings con este
+          // formato es equivalente a comparar fechas, sin ese problema.
+          const isPast = dateStr < todayStr;
           const isToday = dateStr === todayStr;
 
           return (
@@ -419,7 +426,11 @@ function StepConfirmTrial({
   );
 }
 
-// ─── Paso: Confirmar y pagar (Clase Suelta / Créditos) ───────────────────────
+// ─── Paso: Confirmar y agendar (usa créditos ya pagados/aprobados) ───────────
+// BUG-04/12/18/19 fix: se eliminó el flujo de "reservar como pendiente y
+// notificar el pago después" — /payments/book ahora siempre devuelve la
+// clase "confirmed" (usando un crédito ya disponible) o rechaza la reserva
+// con un error claro si no hay créditos, sin crear ningún registro.
 function StepPayment({
   date, slot, duration, enrollmentId, teacherUsername, onBack, onSuccess,
 }: {
@@ -427,12 +438,10 @@ function StepPayment({
   enrollmentId?: number; teacherUsername: string | null;
   onBack: () => void; onSuccess: () => void;
 }) {
-  const [reference, setReference] = useState("");
   const [booking, setBooking] = useState(false);
-  const [classId, setClassId] = useState<number | null>(null);
-  const [notifying, setNotifying] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  const [noCredits, setNoCredits] = useState(false);
 
   const myTz = getMyDisplayTimezone();
   const fmtDate = formatDateHumanTz(date + "T00:00:00", myTz);
@@ -441,6 +450,7 @@ function StepPayment({
   const bookSlot = async () => {
     setBooking(true);
     setError("");
+    setNoCredits(false);
     try {
       const res = await api.post("/payments/book", {
         ...(enrollmentId ? { enrollment_id: enrollmentId } : { teacher_username: teacherUsername }),
@@ -453,30 +463,18 @@ function StepPayment({
         setTimeout(onSuccess, 1500);
         return;
       }
-      setClassId(res.data.class_id);
-    } catch (e: any) {
-      setError(extractErrorMessage(e, "Error reservando el horario"));
-    } finally {
-      setBooking(false);
-    }
-  };
-
-  const notify = async () => {
-    if (!classId) return;
-    setNotifying(true);
-    setError("");
-    try {
-      await api.post("/payments/notify-payment", {
-        type: "single_class",
-        class_id: classId,
-        transaction_reference: reference.trim() || undefined,
-      });
+      // No debería ocurrir (book_class ya no devuelve otro estado), pero por
+      // seguridad tratamos cualquier otro resultado como éxito silencioso.
       setDone(true);
       setTimeout(onSuccess, 1500);
     } catch (e: any) {
-      setError(extractErrorMessage(e, "Error notificando el pago"));
+      const detail = e?.response?.data?.detail;
+      if (typeof detail === "string" && detail.toLowerCase().includes("crédito")) {
+        setNoCredits(true);
+      }
+      setError(extractErrorMessage(e, "Error reservando el horario"));
     } finally {
-      setNotifying(false);
+      setBooking(false);
     }
   };
 
@@ -505,19 +503,23 @@ function StepPayment({
           <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Check className="w-8 h-8 text-emerald-600" />
           </div>
-          <h3 className="text-xl font-black text-slate-800 mb-2">
-            {classId ? "¡Pago notificado!" : "¡Clase confirmada!"}
-          </h3>
-          <p className="text-slate-500 text-sm">
-            {classId
-              ? "Tu profesor(a) validará el pago pronto. Tienes una ventana de tiempo limitada — revisa el estado en Mis Clases."
-              : "Tu clase quedó agendada usando tus créditos disponibles."}
-          </p>
+          <h3 className="text-xl font-black text-slate-800 mb-2">¡Clase confirmada!</h3>
+          <p className="text-slate-500 text-sm">Tu clase quedó agendada usando tus créditos disponibles.</p>
         </div>
-      ) : !classId ? (
+      ) : noCredits ? (
         <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6 space-y-4">
           <p className="text-sm text-slate-500 leading-relaxed">
-            Confirma este horario para reservarlo.
+            No tienes créditos disponibles para agendar esta clase. Compra más créditos y vuelve
+            a intentarlo — este horario seguirá disponible mientras nadie más lo reserve.
+          </p>
+          <button onClick={onBack} className="w-full py-3.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+            Volver a comprar créditos
+          </button>
+        </div>
+      ) : (
+        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6 space-y-4">
+          <p className="text-sm text-slate-500 leading-relaxed">
+            Confirma este horario para reservarlo usando tus créditos disponibles.
           </p>
           <div className="flex gap-3">
             <button onClick={onBack} className="flex-1 py-3.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
@@ -531,37 +533,6 @@ function StepPayment({
               {booking ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <><CreditCard className="w-4 h-4" /> Reservar</>}
             </button>
           </div>
-        </div>
-      ) : (
-        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6 space-y-5">
-          <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
-            <p className="text-xs font-bold text-amber-700 leading-relaxed">
-              Tu slot está reservado temporalmente. Realiza el pago por tu método habitual
-              y confirma abajo — tienes una ventana de tiempo limitada antes de que se libere.
-            </p>
-          </div>
-
-          <PaymentMethodsInfo />
-
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-              Referencia de transacción (opcional)
-            </label>
-            <input
-              value={reference}
-              onChange={e => setReference(e.target.value)}
-              placeholder="Ej: últimos 4 dígitos, ID de transferencia..."
-              className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 px-4 py-3.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
-            />
-          </div>
-
-          <button
-            onClick={notify}
-            disabled={notifying}
-            className="w-full py-3.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {notifying ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <><Check className="w-4 h-4" /> Ya realicé el pago</>}
-          </button>
         </div>
       )}
     </div>

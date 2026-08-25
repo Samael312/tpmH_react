@@ -157,7 +157,9 @@ def get_teacher_enrollments_overview(
     for e in enrollments:
         classes = db.query(Class).filter(Class.enrollment_id == e.id).all()
 
-        completed_count = sum(1 for c in classes if c.status in ("completed", "finalized"))
+        # BUG-02 fix: "finalized" es un estado transitorio (le da margen al
+        # profesor para resolver la clase) y no debe contar como completada.
+        completed_count = sum(1 for c in classes if c.status == "completed")
         no_show_count = sum(1 for c in classes if c.status == "no_show")
         cancelled_late_count = sum(
             1 for c in classes

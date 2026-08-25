@@ -39,6 +39,11 @@ export default function PackageCheckout({
 }: PackageCheckoutProps) {
   const isUnlimited = pkg.classes_count == null;
   const isChange = mode === "change";
+  // BUG-18 fix: cuando se cambia HACIA un paquete ilimitado, el backend
+  // aplica un cambio instantáneo y gratuito (_apply_instant_switch_to_unlimited,
+  // transfiere 1:1 los créditos finitos restantes) — no corresponde pedir
+  // "cuántos créditos comprar" ni mostrar un monto a pagar en ese caso.
+  const isInstantSwitchToUnlimited = isUnlimited && isChange;
   const [creditsRequested, setCreditsRequested] = useState(5);
   const [useInstallments, setUseInstallments] = useState(installmentsPaid > 0);
   const [reference, setReference] = useState("");
@@ -70,15 +75,17 @@ export default function PackageCheckout({
       ? Math.round(changeDeficit * pricePerClass * 100) / 100
       : null;
 
-  const amount = isUnlimited
-    ? Math.round(creditsRequested * pkg.price * 100) / 100
-    : isChange && changeAmount !== null
-      ? changeAmount
-      : (useInstallments || alreadyMidInstallments)
-        ? installmentAmountCalculated
-        : pkg.price;
+  const amount = isInstantSwitchToUnlimited
+    ? 0
+    : isUnlimited
+      ? Math.round(creditsRequested * pkg.price * 100) / 100
+      : isChange && changeAmount !== null
+        ? changeAmount
+        : (useInstallments || alreadyMidInstallments)
+          ? installmentAmountCalculated
+          : pkg.price;
 
-  const noAdditionalCost = isChange && changeDeficit === 0;
+  const noAdditionalCost = (isChange && changeDeficit === 0) || isInstantSwitchToUnlimited;
 
   const notify = async () => {
     setSending(true);
@@ -89,7 +96,13 @@ export default function PackageCheckout({
         type: typeMap[mode],
         enrollment_id: enrollmentId ?? undefined,
         package_id: pkg.id,
-        installment_index: !isChange && (useInstallments || alreadyMidInstallments) ? nextIndex : null,
+        installment_index: !isChange && !isUnlimited && (useInstallments || alreadyMidInstallments) ? nextIndex : null,
+        // BUG-18 fix: para paquetes ilimitados (compra inicial o renovación,
+        // nunca "change" — ese caso es el switch instantáneo y gratuito de
+        // arriba) hay que decirle al backend cuántos créditos se están
+        // comprando; antes este campo nunca se enviaba y el estudiante
+        // terminaba con 0 créditos sin importar cuánto pagara.
+        credits_requested: isUnlimited && !isChange ? creditsRequested : undefined,
         transaction_reference: reference.trim() || undefined,
       });
       setDone(true);
@@ -162,7 +175,16 @@ export default function PackageCheckout({
             </div>
           )}
 
-          {isUnlimited ? (
+          {isInstantSwitchToUnlimited && (
+            <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs font-bold text-blue-700">
+              <p>
+                Cambio instantáneo y sin costo: tus créditos actuales se transferirán a este
+                paquete ilimitado. Podrás comprar más créditos cuando quieras.
+              </p>
+            </div>
+          )}
+
+          {isUnlimited && !isChange ? (
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
                 ¿Cuántas clases quieres comprar?
@@ -180,7 +202,7 @@ export default function PackageCheckout({
                 <span className="text-xs font-bold text-slate-400">clases</span>
               </div>
             </div>
-          ) : pkg.allow_installments && !alreadyMidInstallments && !isChange && (
+          ) : !isUnlimited && pkg.allow_installments && !alreadyMidInstallments && !isChange && (
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
                 Modalidad de pago
@@ -213,15 +235,19 @@ export default function PackageCheckout({
 
           <div className="bg-gradient-to-br from-pink-50 to-rose-50 border border-pink-100 rounded-2xl p-4 text-center">
             <p className="text-[10px] font-black text-pink-500 uppercase tracking-widest mb-1">
-              {isUnlimited
-                ? `Total por ${creditsRequested} clase${creditsRequested !== 1 ? "s" : ""}`
-                : isChange
-                  ? "Monto a transferir (clases faltantes)"
-                  : useInstallments || alreadyMidInstallments
-                    ? `Monto de la cuota ${alreadyMidInstallments ? nextIndex : 1}`
-                    : "Monto total a transferir"}
+              {isInstantSwitchToUnlimited
+                ? "Costo del cambio"
+                : isUnlimited
+                  ? `Total por ${creditsRequested} clase${creditsRequested !== 1 ? "s" : ""}`
+                  : isChange
+                    ? "Monto a transferir (clases faltantes)"
+                    : useInstallments || alreadyMidInstallments
+                      ? `Monto de la cuota ${alreadyMidInstallments ? nextIndex : 1}`
+                      : "Monto total a transferir"}
             </p>
-            <p className="text-3xl font-black text-pink-600">${amount.toFixed(2)} USD</p>
+            <p className="text-3xl font-black text-pink-600">
+              {isInstantSwitchToUnlimited ? "Gratis" : `$${amount.toFixed(2)} USD`}
+            </p>
           </div>
         </div>
 
@@ -232,9 +258,11 @@ export default function PackageCheckout({
           <input
             type="text" value={reference} onChange={(e) => setReference(e.target.value)}
             placeholder="Ej: últimos 4 dígitos..."
+            disabled={isInstantSwitchToUnlimited}
             className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-xs font-bold
                        text-slate-800 placeholder:text-slate-400 px-4 py-3.5 focus:outline-none
-                       focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
+                       focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all
+                       disabled:opacity-50"
           />
         </div>
       </div>
@@ -246,7 +274,13 @@ export default function PackageCheckout({
             Métodos de pago disponibles
           </p>
           <div className="max-h-[300px] overflow-y-auto pr-1">
-            <PaymentMethodsInfo />
+            {isInstantSwitchToUnlimited ? (
+              <p className="text-xs text-slate-400 font-medium px-1">
+                No aplica — este cambio no requiere pago.
+              </p>
+            ) : (
+              <PaymentMethodsInfo />
+            )}
           </div>
         </div>
 
@@ -266,7 +300,11 @@ export default function PackageCheckout({
                        from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 shadow-lg
                        shadow-pink-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-50
                        flex items-center justify-center gap-2">
-            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check className="w-4 h-4" /> Ya realicé el pago</>}
+            {sending
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : isInstantSwitchToUnlimited
+                ? <><Check className="w-4 h-4" /> Confirmar cambio</>
+                : <><Check className="w-4 h-4" /> Ya realicé el pago</>}
           </button>
         </div>
       </div>

@@ -101,6 +101,13 @@ class UserAdminResponse(BaseModel):
         from_attributes = True
 
 
+class PaginatedUsersResponse(BaseModel):
+    """BUG-10 fix: envuelve la lista de usuarios con el total real, para
+    poder paginar de verdad en la UI de edición masiva del admin."""
+    total: int
+    users: List[UserAdminResponse]
+
+
 class UpdateUserStatusRequest(BaseModel):
     is_active: bool
     reason: Optional[str] = None

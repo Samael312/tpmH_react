@@ -11,7 +11,6 @@ import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 
 const TYPE_BADGE: Record<string, { label: (p: any) => string; cls: string }> = {
-  single_class:       { label: () => "Clase única", cls: "bg-blue-100 text-blue-700" },
   package:            { label: p => p.installment_total ? `Cuota ${p.installment_index}/${p.installment_total}` : "Paquete", cls: "bg-pink-100 text-pink-700" },
   renewal:            { label: p => p.installment_total ? `Renovación (Cuota ${p.installment_index}/${p.installment_total})` : "Renovación", cls: "bg-emerald-100 text-emerald-700" },
   package_renewal:    { label: p => p.installment_total ? `Renovación (Cuota ${p.installment_index}/${p.installment_total})` : "Renovación", cls: "bg-emerald-100 text-emerald-700" },
@@ -43,8 +42,6 @@ export default function TeacherPaymentsPage() {
     refetch: refetchHistory,
   } = useTeacherPaymentsHistory(!isPendingTab);
 
-  const [meetLink, setMeetLink] = useState("");
-  const [active, setActive] = useState<number | null>(null);
   const [processing, setProcessing] = useState<number | null>(null);
 
   // Datos/estado de la tab activa
@@ -60,14 +57,14 @@ export default function TeacherPaymentsPage() {
     isFetching,
   });
 
+  // BUG-04/12 fix: se eliminó "single_class" — ya no hace falta pedir el
+  // link de Meet al aprobar (se genera solo vía Google Calendar al reservar).
   const approve = async (p: any) => {
     setProcessing(p.payment_id);
     try {
       await api.patch(`/payments/${p.payment_id}/validate`, {
         action: "approve",
-        ...(p.payment_type === "single_class" ? { meet_link: meetLink } : {}),
       });
-      setMeetLink(""); setActive(null);
       refetchPending();
     } catch (e: any) {
       alert(e.response?.data?.detail || "Error aprobando");
@@ -180,19 +177,10 @@ export default function TeacherPaymentsPage() {
                         En espera de confirmación por el staff
                       </span>
                     </div>
-                  ) : active === p.payment_id && p.payment_type === "single_class" ? (
-                    <div className="flex gap-2">
-                      <input value={meetLink} onChange={e => setMeetLink(e.target.value)}
-                        placeholder="Link de Google Meet" className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm" />
-                      <button onClick={() => approve(p)} disabled={!meetLink || processing === p.payment_id}
-                        className="px-4 bg-emerald-500 text-white rounded-xl text-sm font-bold disabled:opacity-50">
-                        {processing === p.payment_id ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirmar"}
-                      </button>
-                    </div>
                   ) : (
                     <div className="flex gap-2">
                       <button
-                        onClick={() => p.payment_type === "single_class" ? setActive(p.payment_id) : approve(p)}
+                        onClick={() => approve(p)}
                         disabled={processing === p.payment_id}
                         className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-xl disabled:opacity-50">
                         {processing === p.payment_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Confirmar pago

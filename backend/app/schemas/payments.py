@@ -51,17 +51,9 @@ class BookAndPayRequest(BaseModel):
     subject: Optional[str] = None 
 
 
-class SubmitPaymentReceiptRequest(BaseModel):
-    """
-    Paso 2: El estudiante sube el comprobante.
-    El slot pasa a 'pending_payment' y se bloquea.
-    """
-    class_id: int
-    payment_method: str      # "paypal" o "binance"
-    transaction_id: str      # ID de transacción externo
-    receipt_url: str         # URL de Cloudinary (el frontend sube el archivo)
-    receipt_public_id: str   # Para poder borrarlo si se rechaza
-    amount: float
+# BUG-04/12: SubmitPaymentReceiptRequest y su endpoint /submit-receipt fueron
+# eliminados (ya era código muerto, ningún cliente lo llamaba, y duplicaba el
+# flujo de "clase suelta pendiente de pago" que también se eliminó).
 
 
 class PaymentResponse(BaseModel):
@@ -135,7 +127,7 @@ class WithdrawalResponse(BaseModel):
         from_attributes = True
 
 class NotifyPaymentRequest(BaseModel):
-    type: str  # "package" | "single_class" | "unlimited_recharge"
+    type: str  # "package" | "renewal" | "package_change" | "unlimited_recharge"
     enrollment_id: Optional[int] = None
     package_id: Optional[int] =None
     class_id: Optional[int] = None
@@ -146,7 +138,8 @@ class NotifyPaymentRequest(BaseModel):
     @field_validator("type")
     @classmethod
     def validate_type(cls, v):
-        allowed = ("package", "renewal", "package_change", "single_class", "unlimited_recharge")
+        # BUG-04/12: "single_class" fue eliminado — ver notify_payment().
+        allowed = ("package", "renewal", "package_change", "unlimited_recharge")
         if v not in allowed:
             raise ValueError(f"type debe ser uno de: {allowed}")
         return v

@@ -57,8 +57,12 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: "auth-storage",
+      // BUG-16 fix: la cookie 'access_token' es la única fuente de verdad
+      // del token (proxy.ts, el middleware de rutas protegidas, corre en
+      // el servidor/edge y solo puede leer cookies, nunca localStorage).
+      // Ya no se persiste 'token' aquí para evitar que quede una segunda
+      // copia en localStorage que pueda desincronizarse de la cookie.
       partialize: (state) => ({
-        token: state.token,
         user: state.user,
       }),
       onRehydrateStorage: () => (state) => {

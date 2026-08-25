@@ -1,4 +1,5 @@
 import axios from "axios";
+import Cookies from "js-cookie";
 import { useAuthStore } from "@/store/authStore";
 
 const api = axios.create({
@@ -7,8 +8,13 @@ const api = axios.create({
 });
 
 // ── Request: adjuntar token ──
+// BUG-16 fix: leer el token directamente de la cookie 'access_token' en vez
+// de useAuthStore.getState().token. La cookie es la única fuente de verdad
+// (proxy.ts, el middleware de rutas protegidas, corre en el servidor/edge y
+// solo puede leer cookies) — mantener el token también en Zustand/localStorage
+// duplicaba la fuente de verdad y podía desincronizarse.
 api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().token;
+  const token = Cookies.get("access_token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -31,11 +37,15 @@ api.interceptors.response.use(
       const store = useAuthStore.getState();
       const current = store.user;
       // Solo actualizar si es el mismo usuario
+      // BUG-07 fix: usar setUser() en vez de mutar store.user directamente.
+      // Zustand solo notifica a los componentes suscritos y persiste a
+      // localStorage cuando el cambio pasa por set()/setUser(); la
+      // asignación directa nunca disparaba re-render ni persistía.
       if (current && "id" in current && current.id === data.id) {
-        store.user = {
+        store.setUser({
           ...current,
           ...data,
-        };
+        });
       }
     }
     return res;

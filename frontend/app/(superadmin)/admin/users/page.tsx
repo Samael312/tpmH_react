@@ -11,6 +11,7 @@ import {
   Check,
   X,
   AlertTriangle,
+  AlertCircle,
   RefreshCw,
   Users,
   Filter,
@@ -190,9 +191,15 @@ function ActiveToggleCell({
 }
 
 // ─── Página Principal ─────────────────────────────────────────────────────────
+const USERS_PAGE_SIZE = 100;
+
 export default function BulkEditStudentsPage() {
   const router = useRouter();
-  const { users, loading, isFetching, isError, refetch } = useAdminUsersList();
+  // BUG-10 fix: paginación real. El backend ahora devuelve 'total', así que
+  // ya no truncamos silenciosamente sobre USERS_PAGE_SIZE usuarios sin que
+  // el admin se entere — se muestra el total real y controles de página.
+  const [page, setPage] = useState(1);
+  const { users, total, totalPages, loading, isFetching, isError, refetch } = useAdminUsersList(page, USERS_PAGE_SIZE);
   
   const [rows, setRows] = useState<StudentRow[]>([]);
   const [filtered, setFiltered] = useState<StudentRow[]>([]);
@@ -619,6 +626,16 @@ export default function BulkEditStudentsPage() {
               </div>
             </div>
 
+            {search && totalPages > 1 && (
+              // BUG-10 fix: con paginación real, avisar que la búsqueda solo
+              // filtra dentro de la página actual, para no dar la falsa
+              // impresión de estar buscando entre todos los usuarios.
+              <p className="text-[11px] font-bold text-amber-600 flex items-center gap-1.5 px-1">
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                La búsqueda solo filtra dentro de la página actual ({page} de {totalPages}). Si no encuentras a alguien, prueba en otra página.
+              </p>
+            )}
+
             {/* Acciones Masivas sobre Filas Seleccionadas */}
             {selectedIds.size > 0 && (
               <div className="flex items-center gap-3 pt-3 border-t border-slate-100 flex-wrap animate-in fade-in duration-200">
@@ -958,20 +975,41 @@ export default function BulkEditStudentsPage() {
               </div>
             )}
 
-            {/* Resumen inferior */}
+            {/* Resumen inferior + paginación (BUG-10 fix) */}
             {!loading && filtered.length > 0 && (
-              <div className="border-t border-slate-100 px-6 py-3.5 flex items-center justify-between text-xs text-slate-400 font-bold bg-slate-50/50">
+              <div className="border-t border-slate-100 px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 font-bold bg-slate-50/50">
                 <span>
-                  Mostrando {filtered.length} de {rows.length} usuarios
+                  Mostrando {filtered.length} de {rows.length} usuarios en esta página
+                  {total > 0 && <> — {total} en total</>}
                 </span>
-                {dirtyRows.length > 0 && (
-                  <span className="text-amber-600 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                    {dirtyRows.length} cambio
-                    {dirtyRows.length !== 1 ? "s" : ""} pendiente
-                    {dirtyRows.length !== 1 ? "s" : ""}
-                  </span>
-                )}
+                <div className="flex items-center gap-3">
+                  {dirtyRows.length > 0 ? (
+                    <span className="text-amber-600 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                      {dirtyRows.length} cambio
+                      {dirtyRows.length !== 1 ? "s" : ""} pendiente
+                      {dirtyRows.length !== 1 ? "s" : ""} — guarda o revierte antes de cambiar de página
+                    </span>
+                  ) : totalPages > 1 && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={page <= 1}
+                        className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
+                      >
+                        Anterior
+                      </button>
+                      <span className="text-slate-500">Página {page} de {totalPages}</span>
+                      <button
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={page >= totalPages}
+                        className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

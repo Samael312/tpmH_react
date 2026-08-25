@@ -453,10 +453,29 @@ def update_class_status(
 ):
     class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
 
+    # BUG-05/17 fix: el profesor puede cambiar libremente el estado de una
+    # clase a completed/no_show/finalized, sin importar cuál era el estado
+    # de origen, pero solo dentro de una ventana de 72h desde que la clase
+    # terminó. Pasado ese plazo, el estado queda bloqueado.
+    ALLOWED_MANUAL_TARGETS = {"completed", "no_show", "finalized"}
+    if data.status in ALLOWED_MANUAL_TARGETS:
+        if utc_now() - class_.end_time_utc > timedelta(hours=72):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Ya pasaron 72h desde el fin de la clase; el estado quedó bloqueado."
+            )
+
     min_cancel_hours = get_business_rules(db)["min_cancel_hours"]
 
     old_status = class_.status
-    old_counts = class_counts_towards_package(old_status, class_.start_time_utc, min_cancel_hours=min_cancel_hours)
+    # BUG-05 fix: usar la fecha real de la transición anterior (updated_at)
+    # en vez de 'ahora', para no recalcular retroactivamente si una
+    # cancelación contaba o no como tardía según cuándo ocurrió realmente.
+    old_counts = class_counts_towards_package(
+        old_status, class_.start_time_utc,
+        reference_time=class_.updated_at,
+        min_cancel_hours=min_cancel_hours,
+    )
 
     class_.status = data.status
     new_counts = class_counts_towards_package(data.status, class_.start_time_utc, min_cancel_hours=min_cancel_hours)

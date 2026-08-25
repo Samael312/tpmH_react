@@ -134,16 +134,14 @@ function NotificationsSection() {
 function PendingPaymentsSection() {
   const { payments, loading, isError, refetch } = usePendingPayments()
   const [validating, setValidating] = useState<number | null>(null)
-  const [meetLink, setMeetLink] = useState('')
-  const [activePayment, setActivePayment] = useState<number | null>(null)
 
+  // BUG-04/12 fix: se eliminó "single_class" y el requisito de link de Meet
+  // al aprobar (antes este widget ni siquiera dejaba aprobar sin meetLink,
+  // aunque la mayoría de los pagos pendientes no son de ese tipo).
   const handleApprove = async (paymentId: number) => {
-    if (!meetLink.trim()) return
     setValidating(paymentId)
     try {
-      await api.patch(`/payments/${paymentId}/validate`, { action: 'approve', meet_link: meetLink })
-      setMeetLink('')
-      setActivePayment(null)
+      await api.patch(`/payments/${paymentId}/validate`, { action: 'approve' })
       refetch()
     } catch (e: any) {
       alert(e.response?.data?.detail || 'Error aprobando pago')
@@ -215,35 +213,17 @@ function PendingPaymentsSection() {
                   <Clock className="w-3 h-3" /> Expira: {new Date(p.payment_expires_at).toLocaleString('es')}
                 </p>
               )}
-              {activePayment === p.payment_id ? (
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="url"
-                    value={meetLink}
-                    onChange={e => setMeetLink(e.target.value)}
-                    placeholder="https://meet.google.com/xxx-xxxx-xxx"
-                    className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-pink-500"
-                  />
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="primary" loading={validating === p.payment_id} onClick={() => handleApprove(p.payment_id)}>
-                      Confirmar
-                    </Button>
-                    <Button size="sm" variant="secondary" onClick={() => setActivePayment(null)}>Cancelar</Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <Button
-                    size="sm" variant="primary" loading={validating === p.payment_id}
-                    onClick={() => p.payment_type === 'single_class' ? setActivePayment(p.payment_id) : handleApprove(p.payment_id)}
-                  >
-                    Confirmar
-                  </Button>
-                  <Button size="sm" variant="danger" loading={validating === p.payment_id} onClick={() => handleReject(p.payment_id)}>
-                    Rechazar
-                  </Button>
-                </div>
-              )}
+              <div className="flex gap-2">
+                <Button
+                  size="sm" variant="primary" loading={validating === p.payment_id}
+                  onClick={() => handleApprove(p.payment_id)}
+                >
+                  Confirmar
+                </Button>
+                <Button size="sm" variant="danger" loading={validating === p.payment_id} onClick={() => handleReject(p.payment_id)}>
+                  Rechazar
+                </Button>
+              </div>
             </div>
           ))}
           <Link href="/admin/payments" className="flex items-center justify-center gap-1.5 text-sm font-bold text-pink-600 hover:text-pink-700 py-2">

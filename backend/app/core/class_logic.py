@@ -71,11 +71,17 @@ def can_book_slot(
 
     end_approx = start_time_utc + timedelta(hours=3)
 
+    # BUG-04 fix: "expired" se trata igual que "cancelled" (no bloquea el
+    # slot). "pending" ya no es necesario en esta lista: las clases
+    # regulares ahora siempre se crean directamente como "confirmed"
+    # (ver book_class), por lo que ese estado ya no puede ocurrir para
+    # clases nuevas; se deja fuera de la exclusión a propósito por si
+    # existieran filas históricas previas a este cambio.
     query = db.query(Class).filter(
         Class.teacher_id == teacher_id,
         Class.start_time_utc < end_approx,
         Class.end_time_utc > start_time_utc,
-        Class.status.notin_(["cancelled", "pending", "pending_trial"])
+        Class.status.notin_(["cancelled", "expired", "pending_trial"])
     )
     if exclude_class_id:
         query = query.filter(Class.id != exclude_class_id)
@@ -86,7 +92,7 @@ def can_book_slot(
         Class.student_id == student_id,
         Class.start_time_utc < end_approx,
         Class.end_time_utc > start_time_utc,
-        Class.status.notin_(["cancelled", "pending", "pending_trial"])
+        Class.status.notin_(["cancelled", "expired", "pending_trial"])
     )
     if exclude_class_id:
         query_student = query_student.filter(Class.id != exclude_class_id)
@@ -126,7 +132,15 @@ def can_reschedule_class(
     now = utc_now()
     rules = get_business_rules(db)
 
-    if class_.status not in ["pending", "pending_trial", "confirmed"]:
+    # BUG-02 fix: el profesor tiene margen para reagendar una clase que quedó
+    # 'finalized' (limbo transitorio post-clase) sin que el sistema la haya
+    # resuelto todavía a completed/no_show. El estudiante no puede reagendar
+    # después de que la clase ya terminó.
+    reschedulable_statuses = ["pending", "pending_trial", "confirmed"]
+    if role in ("teacher", "teacher_admin"):
+        reschedulable_statuses.append("finalized")
+
+    if class_.status not in reschedulable_statuses:
         return False, f"No se puede reagendar una clase con estado '{class_.status}'"
 
     if role == "student":
@@ -205,7 +219,12 @@ def get_student_booking_stage(student_id: int, teacher_id: int, db: Session) -> 
     ).first()
 
     if active_enrollment:
-        if active_enrollment.package.classes_count is not None and active_enrollment.payment_status == "unpaid":
+        # BUG-19 fix: este chequeo antes era exclusivo de paquetes finitos
+        # (classes_count is not None). Los paquetes ilimitados también deben
+        # bloquearse mientras su pago inicial/renovación siga sin aprobar,
+        # igual que los finitos — si no, el estudiante podía llegar al
+        # selector de horarios sin que su compra hubiera sido aprobada.
+        if active_enrollment.payment_status == "unpaid":
             has_pending_payment = db.query(Payment).filter(
                 Payment.enrollment_id == active_enrollment.id,
                 Payment.status == "pending_review",
@@ -269,8 +288,12 @@ def finalize_past_classes(db: Session) -> int:
         c.status = "finalized"
         count += 1
 
+    # BUG-04/12 fix: "pending" y "pending_payment" para clases regulares ya
+    # no pueden producirse (el flujo de "reservar y pagar después" fue
+    # eliminado); solo queda "pending_trial" para clases de prueba nunca
+    # confirmadas por el profesor/staff.
     expired_pending = db.query(Class).filter(
-        Class.status.in_(["pending", "pending_trial", "pending_payment"]),
+        Class.status == "pending_trial",
         Class.end_time_utc < now,
     ).all()
     for c in expired_pending:

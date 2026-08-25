@@ -356,11 +356,12 @@ def get_teacher_available_slots(
     availability_ranges.extend(extra_availability)
 
     # 5. Obtener clases ya agendadas del profesor ese día
+    # BUG-04 fix: "expired" se trata igual que "cancelled" (no ocupa el slot).
     booked = db.query(Class).filter(
         Class.teacher_id == teacher.id,
         Class.start_time_utc >= day_start,
         Class.start_time_utc < day_end,
-        Class.status.notin_(["cancelled"])
+        Class.status.notin_(["cancelled", "expired"])
     ).all()
 
     busy_from_classes = [

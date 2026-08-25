@@ -46,7 +46,6 @@ from app.schemas.payments import (
     PaymentConfigResponse,
     PaymentResponse,
     ProcessWithdrawalRequest,
-    SubmitPaymentReceiptRequest,
     UpdatePaymentConfigRequest,
     ValidatePaymentRequest,
     WalletResponse,
@@ -157,9 +156,10 @@ def _apply_instant_switch_to_unlimited(
 def _get_enrollment_available_credits(enrollment: Enrollment, db: Session) -> int:
     """Créditos disponibles del enrollment ANTES del cambio de paquete."""
     if enrollment.package.classes_count is not None:
+        # BUG-04 fix: 'expired' se trata igual que 'cancelled' (no ocupa crédito).
         occupied_slots = db.query(Class).filter(
             Class.enrollment_id == enrollment.id,
-            Class.status != "cancelled",
+            Class.status.notin_(["cancelled", "expired"]),
         ).count()
         return max((enrollment.unlocked_credits or 0) - occupied_slots, 0)
     return enrollment.prepaid_unlimited_credits or 0
@@ -299,70 +299,13 @@ def update_payment_config(
 
 
 # ─── FLUJO DE RESERVA Y PAGO ─────────────────────────────────────────────────
-
-@router.post("/submit-receipt")
-def submit_payment_receipt(
-    data: SubmitPaymentReceiptRequest,
-    current_user: User = Depends(get_current_student),
-    db: Session = Depends(get_db)
-):
-    class_ = db.query(Class).filter(
-        Class.id == data.class_id,
-        Class.student_id == current_user.student_profile.id,
-        Class.status == "pending"
-    ).first()
-
-    if not class_:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Clase no encontrada o ya tiene un comprobante"
-        )
-
-    config = db.query(PaymentConfig).first()
-    if config:
-        method_enabled_map = {
-            "paypal": config.paypal_enabled,
-            "binance": config.binance_enabled,
-            "bank_transfer": config.bank_transfer_enabled,
-            "mobile_payment": config.mobile_payment_enabled,
-        }
-        if data.payment_method in method_enabled_map and not method_enabled_map[data.payment_method]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Este método de pago no está habilitado actualmente"
-            )
-
-    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == class_.teacher_id).first()
-    commission = teacher.commission_rate if teacher else 0.15
-    amount_platform = round(data.amount * commission, 2)
-    amount_teacher = round(data.amount - amount_platform, 2)
-
-    payment = Payment(
-        class_id=class_.id,
-        enrollment_id=class_.enrollment_id,
-        student_id=current_user.student_profile.id,
-        teacher_id=class_.teacher_id,
-        amount_total=data.amount,
-        amount_teacher=amount_teacher,
-        amount_platform=amount_platform,
-        payment_method=data.payment_method,
-        receipt_url=data.receipt_url,
-        receipt_public_id=data.receipt_public_id,
-        transaction_id=data.transaction_id,
-        status="pending_review"
-    )
-    db.add(payment)
-
-    class_.status = "pending_payment"
-    db.commit()
-    db.refresh(payment)
-
-    return {
-        "payment_id": payment.id,
-        "class_status": "pending_payment",
-        "message": "Comprobante recibido. El staff verificará el pago pronto."
-    }
-
+#
+# BUG-04/12/18/19: se eliminó por completo el endpoint /submit-receipt y el
+# flujo de "clase suelta pendiente de pago" (payment_type="single_class").
+# Ya era código muerto (ningún cliente lo llamaba) y, además, duplicaba una
+# lógica que el negocio decidió eliminar: ahora, para agendar, el crédito
+# (finito o prepagado ilimitado) debe existir de antemano; no se reserva un
+# horario a la espera de que el estudiante notifique el pago después.
 
 @router.post("/book", status_code=status.HTTP_201_CREATED)
 def book_class(
@@ -507,9 +450,10 @@ def book_class(
         if enrollment.payment_status == "unpaid":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Tu paquete está pendiente de confirmación de pago")
 
+        # BUG-04 fix: 'expired' se trata igual que 'cancelled' (no ocupa crédito).
         occupied_slots = db.query(Class).filter(
             Class.enrollment_id == enrollment.id,
-            Class.status != "cancelled",
+            Class.status.notin_(["cancelled", "expired"]),
         ).count()
 
         if occupied_slots >= enrollment.unlocked_credits:
@@ -572,6 +516,24 @@ def book_class(
 
     # ─── Paquete ilimitado ───
     else:
+        # BUG-04/12/18/19 fix: se elimina el flujo de "reservar primero,
+        # notificar el pago después, con expiración". Para poder agendar,
+        # el crédito prepagado debe existir de antemano (comprado y
+        # aprobado vía /payments/notify-payment type=unlimited_recharge,
+        # o ya incluido en la compra inicial del paquete). Si no hay
+        # saldo, se rechaza de forma limpia, sin crear ningún registro.
+        if enrollment.payment_status == "unpaid":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Tu paquete está pendiente de confirmación de pago"
+            )
+
+        if enrollment.prepaid_unlimited_credits <= 0:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "No tienes créditos disponibles. Compra créditos para poder agendar."
+            )
+
         can_book, error_msg = can_book_slot(
             start_time_utc=data.start_time_utc,
             teacher_id=enrollment.teacher_id,
@@ -580,8 +542,6 @@ def book_class(
         )
         if not can_book:
             raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
-
-        has_prepaid = enrollment.prepaid_unlimited_credits > 0
 
         new_class = Class(
             enrollment_id=enrollment.id,
@@ -594,14 +554,12 @@ def book_class(
             duration=data.duration_minutes,
             teacher_timezone=getattr(enrollment.teacher, "timezone", None),
             student_timezone=current_user.student_profile.timezone,
-            status="confirmed" if has_prepaid else "pending",
+            status="confirmed",
             day_of_week=day_of_week,
-            used_prepaid_credit=has_prepaid,
+            used_prepaid_credit=True,
         )
         db.add(new_class)
-
-        if has_prepaid:
-            enrollment.prepaid_unlimited_credits -= 1
+        enrollment.prepaid_unlimited_credits -= 1
 
         db.commit()
         db.refresh(new_class)
@@ -610,32 +568,7 @@ def book_class(
 
         teacher_user = enrollment.teacher.user if enrollment.teacher and enrollment.teacher.user else None
 
-        if has_prepaid:
-            send_class_confirmed_email(
-                to_email=current_user.email,
-                student_name=current_user.name,
-                teacher_name=f"{teacher_user.name} {teacher_user.surname}" if teacher_user else "",
-                subject=new_class.subject or "Clase",
-                class_start_local=format_local_datetime(new_class.start_time_utc, current_user.student_profile.timezone),
-                duration_minutes=new_class.duration,
-            )
-            if teacher_user:
-                send_class_confirmed_teacher_email(
-                    to_email=teacher_user.email,
-                    teacher_name=teacher_user.name,
-                    student_name=f"{current_user.name} {current_user.surname}",
-                    subject=new_class.subject or "Clase",
-                    class_start_local=format_local_datetime(new_class.start_time_utc, enrollment.teacher.timezone),
-                    duration_minutes=new_class.duration,
-                )
-
-            return {
-                "class_id": new_class.id,
-                "status": new_class.status,
-                "message": "Clase agendada usando tu saldo prepagado."
-            }
-
-        send_class_booking_confirmation(
+        send_class_confirmed_email(
             to_email=current_user.email,
             student_name=current_user.name,
             teacher_name=f"{teacher_user.name} {teacher_user.surname}" if teacher_user else "",
@@ -644,33 +577,19 @@ def book_class(
             duration_minutes=new_class.duration,
         )
         if teacher_user:
-            send_new_booking_teacher_email(
+            send_class_confirmed_teacher_email(
                 to_email=teacher_user.email,
                 teacher_name=teacher_user.name,
                 student_name=f"{current_user.name} {current_user.surname}",
                 subject=new_class.subject or "Clase",
                 class_start_local=format_local_datetime(new_class.start_time_utc, enrollment.teacher.timezone),
                 duration_minutes=new_class.duration,
-                is_trial=False,
             )
 
-        config = db.query(PaymentConfig).first()
         return {
             "class_id": new_class.id,
             "status": new_class.status,
-            "message": "Slot reservado. Notifica tu pago para confirmarla.",
-            "payment_instructions": {
-                "paypal_enabled": config.paypal_enabled if config else False,
-                "binance_enabled": config.binance_enabled if config else False,
-                "bank_transfer_enabled": config.bank_transfer_enabled if config else False,
-                "mobile_payment_enabled": config.mobile_payment_enabled if config else False,
-                "paypal_email": config.paypal_email if config else None,
-                "binance_address": config.binance_address if config else None,
-                "binance_network": config.binance_network if config else None,
-                "bank_transfer_details": config.bank_transfer_details if config else None,
-                "mobile_payment_details": config.mobile_payment_details if config else None,
-                "whatsapp_number": config.whatsapp_number if config else None,
-            }
+            "message": "Clase agendada usando tu saldo prepagado."
         }
 
 
@@ -700,6 +619,9 @@ def get_payments_pending_review(
             "student_name": f"{student_user.name} {student_user.surname}" if student_user else "Desconocido",
             "student_username": student_user.username if student_user else None,
         }
+        # BUG-04/12: "single_class" ya no se genera para pagos nuevos, pero se
+        # preserva el branch por compatibilidad con filas históricas previas
+        # a este cambio.
         if p.payment_type == "single_class" and p.class_id:
             class_ = db.query(Class).filter(Class.id == p.class_id).first()
             entry["class_start_utc"] = class_.start_time_utc if class_ else None
@@ -790,14 +712,9 @@ def validate_payment(
         payment.validated_at = now
         payment.rejection_reason = data.rejection_reason
 
-        if payment.payment_type == "single_class" and payment.class_id:
-            class_ = db.query(Class).filter(Class.id == payment.class_id).first()
-            if class_:
-                class_.status = "pending"
-
         student_user = payment.student.user if payment.student else None
         if student_user:
-            concept_map = {"single_class": "Clase suelta", "package": "Paquete", "renewal": "Renovación", "package_change": "Cambio de paquete", "unlimited_recharge": "Recarga de créditos"}
+            concept_map = {"package": "Paquete", "renewal": "Renovación", "package_change": "Cambio de paquete", "unlimited_recharge": "Recarga de créditos"}
             send_payment_failed_email(
                 to_email=student_user.email,
                 student_name=student_user.name,
@@ -826,38 +743,13 @@ def validate_payment(
     payment.validated_by = current_user.id
     payment.validated_at = now
 
-    if payment.payment_type == "single_class":
-        if not data.meet_link:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Debes proporcionar el link de Meet al aprobar")
-        class_ = db.query(Class).filter(Class.id == payment.class_id).first()
-        if class_:
-            class_.status = "confirmed"
-            class_.meet_link = data.meet_link
-            class_.payment_expires_at = None
+    # BUG-04/12 fix: se eliminó por completo el tipo de pago "single_class"
+    # (clase suelta reservada como 'pending' a la espera de notificar el
+    # pago). El link de Meet de las clases de paquete ya se genera
+    # automáticamente vía sincronización con Google Calendar al momento
+    # de la reserva, así que no hace falta pedirlo aquí.
 
-            student_user = payment.student.user if payment.student else None
-            teacher_profile = db.query(TeacherProfile).filter(TeacherProfile.id == payment.teacher_id).first()
-            
-            if student_user:
-                send_class_confirmed_email(
-                    to_email=student_user.email,
-                    student_name=student_user.name,
-                    teacher_name=f"{teacher_profile.user.name} {teacher_profile.user.surname}" if teacher_profile and teacher_profile.user else "",
-                    subject=class_.subject or "Clase",
-                    class_start_local=format_local_datetime(class_.start_time_utc, student_user.student_profile.timezone),
-                    duration_minutes=class_.duration,
-                )
-            if teacher_profile and teacher_profile.user:
-                send_class_confirmed_teacher_email(
-                    to_email=teacher_profile.user.email,
-                    teacher_name=teacher_profile.user.name,
-                    student_name=f"{student_user.name} {student_user.surname}" if student_user else "",
-                    subject=class_.subject or "Clase",
-                    class_start_local=format_local_datetime(class_.start_time_utc, teacher_profile.timezone),
-                    duration_minutes=class_.duration,
-                )
-
-    elif payment.payment_type == "unlimited_recharge":
+    if payment.payment_type == "unlimited_recharge":
         enrollment = db.query(Enrollment).filter(Enrollment.id == payment.enrollment_id).first()
         if enrollment:
             credits = payment.installment_index or 0
@@ -875,7 +767,6 @@ def validate_payment(
                 or enrollment.package_id
             )
             target_package = db.query(Package).filter(Package.id == target_package_id).first()
-            enrollment.paid_via_installments = payment.installment_index is not None
             is_renewal = enrollment.status == EnrollmentStatus.pending_renewal or payment.payment_type == "renewal"
             is_change = enrollment.status == EnrollmentStatus.pending_package_change or payment.payment_type == "package_change"
 
@@ -891,26 +782,37 @@ def validate_payment(
                 enrollment.renewal_requested_package_id = None
                 enrollment.change_requested_package_id = None
 
-            if payment.installment_index is not None:
-                enrollment.installments_paid = payment.installment_index
-                n = target_package.installment_count or 1
-                if target_package.classes_count is not None:
+            if target_package.classes_count is None:
+                # BUG-18 fix: paquete ILIMITADO. 'installment_index' aquí
+                # contiene la cantidad de créditos comprados (ver
+                # notify_payment), no un número de cuota — los paquetes
+                # ilimitados no usan pago en cuotas.
+                enrollment.paid_via_installments = False
+                credits = payment.installment_index or 0
+                enrollment.prepaid_unlimited_credits = (enrollment.prepaid_unlimited_credits or 0) + credits
+                enrollment.installments_paid = 1
+                enrollment.payment_status = "paid"
+            else:
+                enrollment.paid_via_installments = payment.installment_index is not None
+                if payment.installment_index is not None:
+                    enrollment.installments_paid = payment.installment_index
+                    n = target_package.installment_count or 1
                     credit_this_installment = _installment_credit_amount(
                         target_package.classes_count, n, payment.installment_index
                     )
                     enrollment.unlocked_credits = (enrollment.unlocked_credits or 0) + credit_this_installment
-                enrollment.payment_status = "paid" if payment.installment_index >= n else "partially_paid"
-            else:
-                enrollment.installments_paid = target_package.installment_count or 1
-                enrollment.unlocked_credits = target_package.classes_count if target_package.classes_count is not None else 0
-                enrollment.payment_status = "paid"
+                    enrollment.payment_status = "paid" if payment.installment_index >= n else "partially_paid"
+                else:
+                    enrollment.installments_paid = target_package.installment_count or 1
+                    enrollment.unlocked_credits = target_package.classes_count
+                    enrollment.payment_status = "paid"
 
             if enrollment.activated_at is None and enrollment.payment_status in ("paid", "partially_paid"):
                 enrollment.activated_at = now
 
     student_user = payment.student.user if payment.student else None
     if student_user and not payment.is_manual_grant:
-        concept_map = {"single_class": "Clase suelta", "package": "Paquete", "renewal": "Renovación", "package_change": "Cambio de paquete", "unlimited_recharge": "Recarga de créditos"}
+        concept_map = {"package": "Paquete", "renewal": "Renovación", "package_change": "Cambio de paquete", "unlimited_recharge": "Recarga de créditos"}
         send_payment_receipt_email(
             to_email=student_user.email,
             student_name=student_user.name,
@@ -1049,7 +951,12 @@ def request_withdrawal_v2(
     db: Session = Depends(get_db),
 ):
     teacher = current_user.teacher_profile
-    wallet = db.query(TeacherWallet).filter(TeacherWallet.teacher_id == teacher.id).first()
+    # BUG-13 fix: bloquear la fila con SELECT ... FOR UPDATE para evitar que
+    # dos solicitudes de retiro concurrentes lean el mismo saldo antes de
+    # que cualquiera de las dos haga commit (condición de carrera / TOCTOU).
+    wallet = db.query(TeacherWallet).filter(
+        TeacherWallet.teacher_id == teacher.id
+    ).with_for_update().first()
 
     if not wallet or data.amount > wallet.available_balance:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Saldo insuficiente. Disponible: ${wallet.available_balance if wallet else 0:.2f}")
@@ -1195,61 +1102,10 @@ def notify_payment(
 ):
     student_id = current_user.student_profile.id
 
-    # ── Clase suelta ──
-    if data.type == "single_class":
-        if not data.class_id:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "class_id es requerido")
-
-        class_ = db.query(Class).filter(
-            Class.id == data.class_id, Class.student_id == student_id, Class.status == "pending",
-        ).first()
-        if not class_:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Clase no encontrada o ya notificada")
-
-        if db.query(Payment).filter(Payment.class_id == class_.id, Payment.status == "pending_review").first():
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya notificaste el pago de esta clase")
-
-        enrollment = db.query(Enrollment).filter(Enrollment.id == class_.enrollment_id).first() if class_.enrollment_id else None
-        package = enrollment.package if enrollment else None
-        if not package:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "No se pudo determinar el precio de esta clase")
-
-        amount = package.price
-        now = utc_now()
-        hours_to_class = (class_.start_time_utc - now).total_seconds() / 3600
-        if hours_to_class > 24:
-            expires_at = class_.start_time_utc - timedelta(hours=12)
-        elif hours_to_class >= 12:
-            expires_at = now + timedelta(hours=4)
-        else:
-            expires_at = now + timedelta(hours=2)
-
-        class_.status = "pending_payment"
-        class_.payment_expires_at = expires_at
-
-        payment = Payment(
-            class_id=class_.id, enrollment_id=class_.enrollment_id,
-            student_id=student_id, teacher_id=class_.teacher_id,
-            amount_total=amount, amount_teacher=0, amount_platform=0,
-            payment_method="manual", transaction_id=data.transaction_reference,
-            status="pending_review", payment_type="single_class",
-        )
-        db.add(payment)
-        db.commit()
-        db.refresh(payment)
-        
-        admin_emails = [a.email for a in db.query(User).filter(User.role == UserRole.superadmin, User.is_active == True).all()]
-        for admin_email in admin_emails:
-            send_admin_payment_pending_email(
-                to_email=admin_email,
-                student_name=current_user.name,
-                amount=amount,
-                concept="single_class",
-                payment_method="manual",
-                transaction_reference=data.transaction_reference,
-            )
-            
-        return {"payment_id": payment.id, "class_status": class_.status, "expires_at": expires_at}
+    # BUG-04/12: se eliminó el tipo "single_class" (reservar una clase suelta
+    # como 'pending' y notificar su pago después). Ahora, para paquetes
+    # ilimitados, la única vía de conseguir créditos es "unlimited_recharge"
+    # (o la compra/renovación inicial del paquete, ver más abajo).
 
     # ── Recarga prepagada ilimitada ──
     if data.type == "unlimited_recharge":
@@ -1455,6 +1311,51 @@ def notify_payment(
 
     else:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"type inválido: {data.type}")
+
+    # BUG-18 fix: si el paquete (inicial o de renovación) es ILIMITADO, el
+    # estudiante debe indicar cuántos créditos quiere comprar — antes este
+    # dato nunca se pedía ni se cobraba, y al aprobarse el pago
+    # prepaid_unlimited_credits nunca se incrementaba (quedaba en 0 pase lo
+    # que pase). Se sigue la misma convención que "unlimited_recharge":
+    # la cantidad de créditos se guarda reutilizando el campo
+    # installment_index del Payment.
+    if package.classes_count is None:
+        if not data.credits_requested or data.credits_requested < 1:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "credits_requested es requerido para paquetes ilimitados"
+            )
+        if db.query(Payment).filter(
+            Payment.enrollment_id == enrollment.id,
+            Payment.status == "pending_review",
+            Payment.payment_type.in_(["package", "renewal", "package_change"]),
+        ).first():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay un pago pendiente de revisión")
+
+        amount = round(package.price * data.credits_requested, 2)
+        payment = Payment(
+            enrollment_id=enrollment.id, student_id=student_id, teacher_id=enrollment.teacher_id,
+            amount_total=amount, amount_teacher=0, amount_platform=0,
+            payment_method="manual", transaction_id=data.transaction_reference,
+            status="pending_review", payment_type=payment_type,
+            installment_index=data.credits_requested,
+        )
+        db.add(payment)
+        db.commit()
+        db.refresh(payment)
+
+        admin_emails = [a.email for a in db.query(User).filter(User.role == UserRole.superadmin, User.is_active == True).all()]
+        for admin_email in admin_emails:
+            send_admin_payment_pending_email(
+                to_email=admin_email,
+                student_name=current_user.name,
+                amount=amount,
+                concept=payment_type,
+                payment_method="manual",
+                transaction_reference=data.transaction_reference,
+            )
+
+        return {"payment_id": payment.id, "message": "Pago notificado, en espera de aprobación"}
 
     use_installments = data.installment_index is not None
 
