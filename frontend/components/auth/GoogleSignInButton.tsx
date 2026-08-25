@@ -57,6 +57,38 @@ function loadGsiScript(): Promise<void> {
   return scriptPromise;
 }
 
+// ─── Singleton de inicialización ───────────────────────────────────────────
+// google.accounts.id.initialize() solo debe llamarse UNA VEZ por sesión de
+// navegador. Como esta es una SPA (navegación client-side entre /login y
+// /register sin recargar la página), cada montaje del componente volvía a
+// llamar initialize(), y Google logueaba:
+//   "[GSI_LOGGER]: google.accounts.id.initialize() is called multiple times.
+//    This could cause unexpected behavior and only the last initialized
+//    instance will be used."
+// Solución: inicializar una sola vez con un callback estable que delega al
+// handler del componente actualmente montado (activeHandler), en vez de
+// re-inicializar en cada mount.
+let initializePromise: Promise<void> | null = null;
+type CredentialHandler = (response: { credential?: string }) => void;
+let activeHandler: CredentialHandler | null = null;
+
+function ensureInitialized(clientId: string): Promise<void> {
+  if (initializePromise) return initializePromise;
+
+  initializePromise = loadGsiScript().then(() => {
+    if (!window.google) throw new Error("Google Identity Services no disponible");
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: (response) => {
+        activeHandler?.(response);
+      },
+      auto_select: false,
+    });
+  });
+
+  return initializePromise;
+}
+
 function GoogleIcon({ className = "w-5 h-5" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24">
@@ -117,21 +149,24 @@ export default function GoogleSignInButton({
 
     let cancelled = false;
 
-    loadGsiScript()
+    // Este componente es el "activo": mientras esté montado, cualquier
+    // credencial que Google devuelva se enruta a sus callbacks. Al
+    // desmontarse (navegar a otra página), se libera para que el siguiente
+    // GoogleSignInButton que se monte tome el control — sin volver a llamar
+    // a initialize().
+    const handler: (response: { credential?: string }) => void = (response) => {
+      if (response?.credential) {
+        onCredentialRef.current(response.credential);
+      } else {
+        onErrorRef.current?.("Google no devolvió credenciales");
+      }
+    };
+
+    ensureInitialized(clientId)
       .then(() => {
         if (cancelled || !containerRef.current || !window.google) return;
 
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: (response) => {
-            if (response?.credential) {
-              onCredentialRef.current(response.credential);
-            } else {
-              onErrorRef.current?.("Google no devolvió credenciales");
-            }
-          },
-          auto_select: false,
-        });
+        activeHandler = handler;
 
         containerRef.current.innerHTML = "";
 
@@ -154,6 +189,7 @@ export default function GoogleSignInButton({
 
     return () => {
       cancelled = true;
+      if (activeHandler === handler) activeHandler = null;
     };
   }, [text]); // Solo depende de 'text', evita renderizados en bucle
 
