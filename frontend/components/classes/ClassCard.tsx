@@ -64,7 +64,10 @@ const MANUAL_STATUS_WINDOW_HOURS = 72;
 const TEACHER_CANCELABLE_STATUSES = ["pending_trial", "confirmed", "finalized"];
 
 const STUDENT_CANCELABLE = ["pending", "pending_trial", "pending_payment", "confirmed"];
-const STUDENT_RESCHEDULABLE = ["pending", "pending_trial", "confirmed"];
+// BUG-02 fix (ampliado): el estudiante también puede reagendar una clase
+// 'finalized', igual que el profesor, sin restricción de antelación (ver
+// can_reschedule_class en el backend).
+const STUDENT_RESCHEDULABLE = ["pending", "pending_trial", "confirmed", "finalized"];
 
 function PersonAvatar({ name, url, className }: { name?: string | null; url?: string | null; className?: string }) {
   if (url) return <img src={url} alt={name ?? ""} className={`${className} object-cover`} />;
@@ -242,7 +245,12 @@ export default function ClassCard({
   // los botones de Completar/No asistió justo cuando más se necesitan (después
   // de que la clase terminó). Ahora se basan en la ventana de 72h.
   const showTeacherActions = role === "teacher" && withinManualStatusWindow && !readOnly;
-  const hasAnyAction = !readOnly && ((canReschedule && (!isPast || role === "teacher")) || (canCancel && (!isPast || role === "teacher")) || showTeacherActions);
+  // Una clase 'finalized' ya pasó por definición, pero tanto profesor como
+  // estudiante pueden reagendarla sin restricción de antelación (BUG-02
+  // ampliado), así que el estado 'finalized' siempre puede ignorar el
+  // bloqueo por isPast a la hora de mostrar el botón de reagendar.
+  const canBypassPastForReschedule = role === "teacher" || class_.status === "finalized";
+  const hasAnyAction = !readOnly && ((canReschedule && (!isPast || canBypassPastForReschedule)) || (canCancel && (!isPast || role === "teacher")) || showTeacherActions);
 
   return (
     <div className={`group bg-white/90 backdrop-blur-xl rounded-2xl border border-white/80 shadow-lg shadow-slate-100/80 border-l-4 ${cfg.border} p-5 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden ${isHistory ? "opacity-75 hover:opacity-100" : ""}`}>
@@ -356,7 +364,7 @@ export default function ClassCard({
                     <Clock className="w-3.5 h-3.5" /> Sin resolver
                   </button>
                 )}
-                {canReschedule && (!isPast || role === "teacher") && (
+                {canReschedule && (!isPast || canBypassPastForReschedule) && (
                   <button onClick={handleRescheduleClick} disabled={updating} className="flex items-center justify-center gap-1.5 text-xs font-bold text-purple-600 bg-purple-50 hover:bg-purple-100 px-3.5 py-2 rounded-xl transition-colors disabled:opacity-50">
                     <RotateCcw className="w-3.5 h-3.5" /> Reagendar
                   </button>

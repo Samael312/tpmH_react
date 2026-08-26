@@ -132,18 +132,16 @@ def can_reschedule_class(
     now = utc_now()
     rules = get_business_rules(db)
 
-    # BUG-02 fix: el profesor tiene margen para reagendar una clase que quedó
-    # 'finalized' (limbo transitorio post-clase) sin que el sistema la haya
-    # resuelto todavía a completed/no_show. El estudiante no puede reagendar
-    # después de que la clase ya terminó.
-    reschedulable_statuses = ["pending", "pending_trial", "confirmed"]
-    if role in ("teacher", "teacher_admin"):
-        reschedulable_statuses.append("finalized")
+    # BUG-02 fix (ampliado): una clase que quedó 'finalized' (limbo transitorio
+    # post-clase, aún no resuelta a completed/no_show) puede reagendarse tanto
+    # por el profesor como por el estudiante, sin restricción de antelación
+    # (la clase ya pasó, así que exigir horas de anticipación no aplica).
+    reschedulable_statuses = ["pending", "pending_trial", "confirmed", "finalized"]
 
     if class_.status not in reschedulable_statuses:
         return False, f"No se puede reagendar una clase con estado '{class_.status}'"
 
-    if role == "student":
+    if role == "student" and class_.status != "finalized":
         time_until_class = class_.start_time_utc - now
         if time_until_class < timedelta(hours=rules["min_reschedule_hours_student"]):
             hours_left = int(time_until_class.total_seconds() / 3600)

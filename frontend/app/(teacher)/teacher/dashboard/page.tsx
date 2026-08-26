@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useTeacherClasses, useWallet, useTeacherProfile, type TeacherClass } from '@/hooks/useTeacherData'
 import ClassCard from '@/components/classes/ClassCard'
+import { RescheduleModal } from '@/components/classes/RescheduleModal'
 import StatCard from '@/components/ui/StatCard'
 import Card from '@/components/ui/Card'
 import Skeleton from '@/components/ui/Skeleton'
@@ -292,6 +293,7 @@ export default function TeacherDashboard() {
   const [selectedDate, setSelectedDate] = useState<string | null>(todayStr)
   const [showCalendar, setShowCalendar] = useState(false)
   const [tab, setTab] = useState<'upcoming' | 'history'>('upcoming')
+  const [rescheduleTarget, setRescheduleTarget] = useState<TeacherClass | null>(null)
 
   const { classes, loading, isFetching, isError, refetch } = useTeacherClasses({ includeHistory: true })
   const { wallet, isFetching: walletFetching, refetch: refetchWallet } = useWallet()
@@ -588,7 +590,13 @@ export default function TeacherDashboard() {
             ) : (
               <div className="space-y-4">
                 {selectedDateClasses.map(c => (
-                  <ClassCard key={c.id} class_={c} role="teacher" onUpdate={refetch} />
+                  <ClassCard
+                    key={c.id}
+                    class_={c}
+                    role="teacher"
+                    onUpdate={refetch}
+                    onReschedule={() => setRescheduleTarget(c)}
+                  />
                 ))}
               </div>
             )
@@ -603,13 +611,34 @@ export default function TeacherDashboard() {
             ) : (
               <div className="space-y-4">
                 {historyList.map(c => (
-                  <ClassCard key={c.id} class_={c} role="teacher" onUpdate={refetch} />
+                  <ClassCard
+                    key={c.id}
+                    class_={c}
+                    role="teacher"
+                    onUpdate={refetch}
+                    onReschedule={() => setRescheduleTarget(c)}
+                  />
                 ))}
               </div>
             )
           )}
         </div>
       </div>
+      {rescheduleTarget && profile?.user_username && (
+        <RescheduleModal
+          classItem={{
+            id: rescheduleTarget.id,
+            subject: rescheduleTarget.subject,
+            start_time_utc: rescheduleTarget.start_time_utc,
+            duration_minutes: rescheduleTarget.duration_minutes,
+            counterpart_name: rescheduleTarget.student_name,
+          }}
+          teacherUsername={profile.user_username}
+          endpoint={`/classes/teacher/${rescheduleTarget.id}/reschedule`}
+          onClose={() => setRescheduleTarget(null)}
+          onSaved={refetch}
+        />
+      )}
       <ChipiWidget screenName="teacher_home" />
     </>
   )
