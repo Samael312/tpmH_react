@@ -605,14 +605,24 @@ export default function MyClassesPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
 
-  const { classes, loading, refetch } = useStudentClasses(
-    tab === "history"
-  );
+  // Se pide siempre el historial completo (una sola query key) para que
+  // "Próximas" e "Historial" lean del mismo dataset. Antes, cada tab usaba
+  // una query distinta (includeHistory=false / true); al cambiar de tab se
+  // mostraban datos de una caché diferente -y potencialmente desactualizada-
+  // porque refetch() sólo refresca la query activa, causando que el conteo
+  // de "Próximas" fluctuara al alternar entre tabs.
+  const { classes, loading, refetch } = useStudentClasses(true);
 
   const safeClasses = Array.isArray(classes) ? classes : [];
 
+  // Mismo criterio que usa el backend para "próximas": estado no finalizado
+  // Y que todavía no haya empezado. Sin el chequeo de fecha, una clase que
+  // ya arrancó pero aún no fue finalizada por el backend se contaría como
+  // "próxima" en este tab aunque el backend ya no la considere así.
+  const now = Date.now();
   const upcomingAll = safeClasses.filter(
-    c => !HISTORY_STATUSES.includes(c.status)
+    c => !HISTORY_STATUSES.includes(c.status) &&
+      new Date(c.start_time_utc).getTime() >= now
   ).sort((a, b) =>
     new Date(a.start_time_utc).getTime() -
     new Date(b.start_time_utc).getTime()
