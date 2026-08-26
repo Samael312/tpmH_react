@@ -233,6 +233,12 @@ export default function PaymentsPage() {
                           Ref: <strong className="text-slate-600">{p.transaction_reference}</strong>
                         </div>
                       )}
+                      {p.submitted_at && (
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Solicitado: <strong className="text-slate-700">{new Date(p.submitted_at).toLocaleString('es')}</strong></span>
+                        </div>
+                      )}
                     </div>
 
                     {p.payment_expires_at && (
@@ -434,6 +440,12 @@ export default function PaymentsPage() {
                       {p.transaction_reference && (
                         <div className="font-mono text-slate-400">
                           Ref: <strong className="text-slate-600">{p.transaction_reference}</strong>
+                        </div>
+                      )}
+                      {p.submitted_at && (
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Solicitado: <strong className="text-slate-700">{new Date(p.submitted_at).toLocaleString('es')}</strong></span>
                         </div>
                       )}
                     </div>
