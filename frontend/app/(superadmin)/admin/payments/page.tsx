@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { usePendingPayments, useWithdrawals, useTeachers, usePaymentsHistory } from '@/hooks/useAdminData'
-import { Card, Badge, Button } from '@/components/ui'
+import { Card, Badge, Button, RejectReasonModal } from '@/components/ui'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 import Link from 'next/link'
@@ -48,6 +48,16 @@ export default function PaymentsPage() {
   const [validating, setValidating] = useState<number | null>(null)
   const [processing, setProcessing] = useState<number | null>(null)
 
+  // Motivo de rechazo: se captura en RejectReasonModal en vez de window.prompt().
+  // `target` guarda qué se está rechazando (pago o retiro) para que el modal
+  // sea uno solo, reutilizado por ambos flujos.
+  const [rejectTarget, setRejectTarget] = useState<
+    | { kind: 'payment'; paymentId: number; label: string }
+    | { kind: 'withdrawal'; withdrawalId: number; label: string }
+    | null
+  >(null)
+  const [rejecting, setRejecting] = useState(false)
+
   const { payments, loading: paymentsLoading, isFetching: paymentsFetching, isError: paymentsError, refetch: refetchPayments } = usePendingPayments()
   const { withdrawals, loading: withdrawalsLoading, isFetching: withdrawalsFetching, isError: withdrawalsError, refetch: refetchWithdrawals } = useWithdrawals()
   const { teachers: pendingTeachers, loading: teachersLoading, isFetching: teachersFetching, isError: teachersError, refetch: refetchTeachers } = useTeachers('pending')
@@ -85,21 +95,12 @@ export default function PaymentsPage() {
     }
   }
 
-  const handleReject = async (p: any) => {
-    const reason = prompt('Motivo del rechazo:')
-    if (!reason) return
-    setValidating(p.payment_id)
-    try {
-      await api.patch(`/payments/${p.payment_id}/validate`, {
-        action: 'reject',
-        rejection_reason: reason
-      })
-      refetchPayments()
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error rechazando el pago')
-    } finally {
-      setValidating(null)
-    }
+  const handleReject = (p: any) => {
+    setRejectTarget({
+      kind: 'payment',
+      paymentId: p.payment_id,
+      label: `${p.student_name ? `${p.student_name} · ` : ''}$${Number(p.amount).toFixed(2)}`,
+    })
   }
 
   const handleProcessWithdrawal = async (id: number) => {
@@ -114,17 +115,42 @@ export default function PaymentsPage() {
     }
   }
 
-  const handleRejectWithdrawal = async (id: number) => {
-    const reason = prompt('Motivo del rechazo:')
-    if (!reason) return
-    setProcessing(id)
+  const handleRejectWithdrawal = (id: number, teacherName?: string) => {
+    setRejectTarget({
+      kind: 'withdrawal',
+      withdrawalId: id,
+      label: teacherName || `Retiro #${id}`,
+    })
+  }
+
+  // Confirmación única del RejectReasonModal: despacha al endpoint correcto
+  // según qué se estaba rechazando (pago o retiro).
+  const handleConfirmReject = async (reason: string) => {
+    if (!rejectTarget) return
+    setRejecting(true)
     try {
-      await api.post(`/payments/admin/withdrawals/${id}/process`, { action: 'reject', rejection_reason: reason })
-      refetchWithdrawals()
+      if (rejectTarget.kind === 'payment') {
+        setValidating(rejectTarget.paymentId)
+        await api.patch(`/payments/${rejectTarget.paymentId}/validate`, {
+          action: 'reject',
+          rejection_reason: reason,
+        })
+        refetchPayments()
+      } else {
+        setProcessing(rejectTarget.withdrawalId)
+        await api.post(`/payments/admin/withdrawals/${rejectTarget.withdrawalId}/process`, {
+          action: 'reject',
+          rejection_reason: reason,
+        })
+        refetchWithdrawals()
+      }
+      setRejectTarget(null)
     } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error rechazando retiro')
+      alert(e.response?.data?.detail || `Error rechazando ${rejectTarget.kind === 'payment' ? 'el pago' : 'el retiro'}`)
     } finally {
+      setValidating(null)
       setProcessing(null)
+      setRejecting(false)
     }
   }
 
@@ -322,7 +348,7 @@ export default function PaymentsPage() {
                       <Button
                         variant="danger"
                         loading={processing === w.id}
-                        onClick={() => handleRejectWithdrawal(w.id)}
+                        onClick={() => handleRejectWithdrawal(w.id, w.teacher_name)}
                       >
                         Rechazar
                       </Button>
@@ -479,6 +505,15 @@ export default function PaymentsPage() {
           </div>
         )}
       </div>
+
+      <RejectReasonModal
+        open={!!rejectTarget}
+        title={rejectTarget?.kind === 'withdrawal' ? 'Rechazar retiro' : 'Rechazar pago'}
+        description={rejectTarget ? `Vas a rechazar: ${rejectTarget.label}` : undefined}
+        loading={rejecting}
+        onClose={() => { if (!rejecting) setRejectTarget(null) }}
+        onConfirm={handleConfirmReject}
+      />
 
       <ChipiWidget screenName="admin_payments" />
     </>
