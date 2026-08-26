@@ -188,6 +188,11 @@ def _apply_instant_package_change(
     else:
         enrollment.unlocked_credits = new_package.classes_count
         enrollment.status = EnrollmentStatus.active
+    # Migración grupal -> individual: si el enrollment venía de una
+    # cohorte y el paquete nuevo ya no es grupal, libera su cupo.
+    if enrollment.cohort_id and not new_package.is_group:
+        from app.core.group_cohort_logic import release_cohort_seat
+        release_cohort_seat(enrollment, db)
     db.commit()
 
 
@@ -208,6 +213,12 @@ def _apply_instant_switch_to_unlimited(
 
 def _get_enrollment_occupied_slots(enrollment: Enrollment, db: Session) -> int:
     """Créditos ya usados/agendados (no cancelados/expirados) del enrollment."""
+    if enrollment.cohort_id:
+        # Enrollment grupal: las clases no llevan Class.enrollment_id (una
+        # misma sesión es compartida por varios alumnos), se cuenta vía
+        # ClassParticipant. Ver app/core/group_cohort_logic.py.
+        from app.core.group_cohort_logic import get_enrollment_group_occupied_slots
+        return get_enrollment_group_occupied_slots(enrollment, db)
     return db.query(Class).filter(
         Class.enrollment_id == enrollment.id,
         Class.status.notin_(["cancelled", "expired"]),
@@ -763,6 +774,7 @@ def validate_payment(
     CONCEPT_MAP = {
         "package": "Paquete", "renewal": "Renovación", "package_change": "Cambio de paquete",
         "unlimited_recharge": "Recarga de créditos", "refund": "Reembolso",
+        "group_enrollment": "Inscripción a clase grupal",
     }
 
     # ── RECHAZAR PAGO ──
@@ -838,7 +850,7 @@ def validate_payment(
                 enrollment.activated_at = now
                 enrollment.payment_status = "paid"
 
-    elif payment.payment_type in ("package", "renewal", "package_change", "refund"):
+    elif payment.payment_type in ("package", "renewal", "package_change", "refund", "group_enrollment"):
         enrollment = db.query(Enrollment).filter(Enrollment.id == payment.enrollment_id).first()
         if enrollment:
             # Regla de negocio 3.1, Caso A + "Reembolso completo": no se
@@ -873,6 +885,12 @@ def validate_payment(
                     enrollment.status = EnrollmentStatus.active
                     enrollment.renewal_requested_package_id = None
                     enrollment.change_requested_package_id = None
+                    # Migración grupal -> individual aprobada con diferencia
+                    # de pago: libera el cupo de la cohorte ahora que el
+                    # cambio de paquete quedó confirmado.
+                    if enrollment.cohort_id and not target_package.is_group:
+                        from app.core.group_cohort_logic import release_cohort_seat
+                        release_cohort_seat(enrollment, db)
 
                 if target_package.classes_count is None:
                     # BUG-18 fix: paquete ILIMITADO. 'installment_index' aquí
@@ -1369,6 +1387,11 @@ def notify_payment(
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Paquete no encontrado, no disponible, o no pertenece a tu profesor actual")
         if new_package.id == current_enrollment.package_id:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya tienes este paquete activo")
+        if new_package.is_group:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "No puedes unirte a un paquete grupal por esta vía. Inscríbete a una cohorte disponible."
+            )
 
         # ── Paquete nuevo ilimitado: cambio instantáneo, sin cobro ──
         if new_package.classes_count is None:

@@ -269,13 +269,30 @@ def get_my_enrollments(
         teacher_user = e.teacher.user if e.teacher and e.teacher.user else None
 
         if e.package.classes_count is not None:
-            occupied_slots = db.query(Class).filter(
-                Class.enrollment_id == e.id,
-                Class.status != "cancelled",
-            ).count()
+            if e.cohort_id:
+                # Enrollment grupal: se cuenta vía ClassParticipant, no
+                # Class.enrollment_id (ver core/group_cohort_logic.py).
+                from app.core.group_cohort_logic import get_enrollment_group_occupied_slots
+                occupied_slots = get_enrollment_group_occupied_slots(e, db)
+            else:
+                occupied_slots = db.query(Class).filter(
+                    Class.enrollment_id == e.id,
+                    Class.status != "cancelled",
+                ).count()
             available_credits = max((e.unlocked_credits or 0) - occupied_slots, 0)
         else:
             available_credits = e.prepaid_unlimited_credits or 0
+
+        cohort_status = None
+        cohort_start_date = None
+        cohort_current_students = None
+        cohort_max_students = None
+        if e.cohort_id and e.cohort:
+            from app.core.group_cohort_logic import get_cohort_active_count
+            cohort_status = e.cohort.status.value if hasattr(e.cohort.status, "value") else e.cohort.status
+            cohort_start_date = e.cohort.start_date
+            cohort_current_students = get_cohort_active_count(e.cohort_id, db)
+            cohort_max_students = e.cohort.max_students
 
         result.append(EnrollmentResponse(
             id=e.id,
@@ -299,6 +316,12 @@ def get_my_enrollments(
             teacher_avatar=(teacher_user.avatar if teacher_user else None)
             or (e.teacher.profile_photo_url if e.teacher else None),
             teacher_username=teacher_user.username if teacher_user else None,
+            cohort_id=e.cohort_id,
+            cohort_status=cohort_status,
+            cohort_start_date=cohort_start_date,
+            cohort_current_students=cohort_current_students,
+            cohort_max_students=cohort_max_students,
+            credit_balance_usd=getattr(e, "credit_balance_usd", None),
         ))
 
     return result
@@ -410,6 +433,16 @@ def request_package_change(
             detail="Debes completar el pago de tu paquete actual antes de poder cambiarlo."
         )
 
+    # Los enrollments grupales tienen su propio flujo de migración
+    # (POST /cohorts/migrate-to-individual), que calcula la equivalencia
+    # vía ClassParticipant en vez de Class.enrollment_id (siempre 0 para
+    # un enrollment grupal) y libera el cupo de la cohorte al aprobarse.
+    if current_enrollment.cohort_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este es un paquete grupal. Usa la opción 'Cambiar a clases individuales' de tu panel de espera."
+        )
+
     new_package = db.query(Package).filter(
         Package.id == data.new_package_id,
         Package.teacher_id == current_enrollment.teacher_id,
@@ -420,6 +453,12 @@ def request_package_change(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Paquete no encontrado, no disponible, o no pertenece a tu profesor actual."
+        )
+
+    if new_package.is_group:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No puedes cambiarte a un paquete grupal por esta vía. Inscríbete a una cohorte disponible desde el perfil del profesor."
         )
 
     if new_package.id == current_enrollment.package_id:

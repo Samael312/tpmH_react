@@ -77,11 +77,19 @@ def can_book_slot(
     # (ver book_class), por lo que ese estado ya no puede ocurrir para
     # clases nuevas; se deja fuera de la exclusión a propósito por si
     # existieran filas históricas previas a este cambio.
+    #
+    # Las clases grupales ("group") se excluyen de este chequeo de
+    # disponibilidad del profesor: varios alumnos comparten el mismo
+    # Class/horario a propósito (ver can_join_group_class para el
+    # chequeo de cupo, que es el que corresponde ahí). Sin esta
+    # exclusión, el segundo alumno que intente unirse a la cohorte
+    # se encontraría con "El profesor ya tiene una clase en ese horario".
     query = db.query(Class).filter(
         Class.teacher_id == teacher_id,
         Class.start_time_utc < end_approx,
         Class.end_time_utc > start_time_utc,
-        Class.status.notin_(["cancelled", "expired", "pending_trial"])
+        Class.status.notin_(["cancelled", "expired", "pending_trial"]),
+        Class.class_type != ClassType.group,
     )
     if exclude_class_id:
         query = query.filter(Class.id != exclude_class_id)
@@ -98,6 +106,50 @@ def can_book_slot(
         query_student = query_student.filter(Class.id != exclude_class_id)
     if query_student.first():
         return False, "Ya tienes una clase en ese horario"
+
+    # Un alumno tampoco puede tener, a la misma hora, una participación
+    # activa en una clase grupal (vía ClassParticipant) — el chequeo de
+    # arriba solo cubre Class.student_id, que es NULL para clases grupales.
+    from app.models.class_participant import ClassParticipant
+    query_group_participation = (
+        db.query(ClassParticipant)
+        .join(Class, ClassParticipant.class_id == Class.id)
+        .filter(
+            ClassParticipant.student_id == student_id,
+            ClassParticipant.attendance_status != "cancelled",
+            Class.start_time_utc < end_approx,
+            Class.end_time_utc > start_time_utc,
+            Class.status.notin_(["cancelled", "expired"]),
+        )
+    )
+    if query_group_participation.first():
+        return False, "Ya tienes una clase en ese horario"
+
+    return True, ""
+
+
+def can_join_group_class(
+    class_: Class,
+    db: Session,
+) -> tuple[bool, str]:
+    """
+    Chequeo de cupo para una sesión grupal ya creada (Class con
+    class_type == "group"): ¿hay lugar para un alumno más?
+    Complementa a can_book_slot, que ya valida antelación mínima y que
+    ni el alumno ni el profesor tengan otro compromiso en ese horario.
+    """
+    if class_.class_type != ClassType.group:
+        return False, "Esta clase no es grupal"
+
+    if not class_.cohort_id:
+        return False, "Esta clase grupal no está asociada a ninguna cohorte"
+
+    active_participants = len([
+        p for p in class_.participants if p.attendance_status != "cancelled"
+    ])
+    max_students = class_.cohort.max_students if class_.cohort else None
+    if max_students is not None and active_participants >= max_students:
+        return False, "Esta clase grupal ya no tiene cupo disponible"
 
     return True, ""
 

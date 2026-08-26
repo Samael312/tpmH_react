@@ -75,6 +75,9 @@ class PackageResponse(BaseModel):
     installment_amount: Optional[float] = None
     is_active: bool
     created_at: datetime
+    is_group: bool = False
+    min_students: Optional[int] = None
+    max_students: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -101,6 +104,12 @@ class EnrollmentResponse(BaseModel):
     teacher_name: Optional[str] = None
     teacher_username: Optional[str] = None
     teacher_avatar: Optional[str] = None
+    cohort_id: Optional[int] = None
+    cohort_status: Optional[str] = None       # "filling" | "confirmed" | ... (solo si cohort_id)
+    cohort_start_date: Optional[datetime] = None
+    cohort_current_students: Optional[int] = None
+    cohort_max_students: Optional[int] = None
+    credit_balance_usd: Optional[float] = None
 
     class Config:
         from_attributes = True

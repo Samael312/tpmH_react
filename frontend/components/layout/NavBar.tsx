@@ -7,7 +7,7 @@ import { useAuthStore } from "@/store/authStore";
 import { 
   LayoutDashboard, Users, GraduationCap, Calendar, Settings, LogOut, 
   MonitorPlay, UserCircle, ClipboardEdit, CreditCard, Book, BarChart, ChevronLeft,
-  CheckCheck, Package as PackageIcon, MoreHorizontal
+  CheckCheck, Package as PackageIcon, MoreHorizontal, Users2
 } from "lucide-react";
 import { useUnreadNotificationCount } from "@/hooks/useAdminData";
 
@@ -41,6 +41,7 @@ const TEACHER_MORE: TabItem[] = [
   { href: "/teacher/materials", label: "Materiales", icon: <Book size={20} /> },
   { href: "/teacher/homework", label: "Tareas", icon: <ClipboardEdit size={20} /> },
   { href: "/teacher/packages", label: "Paquetes", icon: <CreditCard size={20} /> },
+  { href: "/teacher/cohorts", label: "Grupos", icon: <Users2 size={20} /> },
   { href: "/teacher/wallet", label: "Ganancias", icon: <BarChart size={20} /> },
 ];
 
@@ -254,6 +255,7 @@ export default function DashboardSidebar() {
                 <NavItem href="/teacher/payments" icon={<CreditCard size={20} />} label="Pagos" active={isActive("/teacher/payments")} collapsed={collapsed} />
                 <NavItem href="/teacher/homework" icon={<ClipboardEdit size={20} />} label="Tareas" active={isActive("/teacher/homework")} collapsed={collapsed} />
                 <NavItem href="/teacher/packages" icon={<CreditCard size={20} />} label="Paquetes" active={isActive("/teacher/packages")} collapsed={collapsed} />
+                <NavItem href="/teacher/cohorts" icon={<Users2 size={20} />} label="Grupos" active={isActive("/teacher/cohorts")} collapsed={collapsed} />
                 <NavItem href="/teacher/wallet" icon={<BarChart size={20} />} label="Ganancias" active={isActive("/teacher/wallet")} collapsed={collapsed} />
                 <NavItem href="/teacher/profile" icon={<UserCircle size={20} />} label="Mi Perfil" active={isActive("/teacher/profile")} collapsed={collapsed} />
               </nav>

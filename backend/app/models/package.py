@@ -37,6 +37,11 @@ class Package(Base):
     description_type = Column(String, default="paragraph")  # "paragraph" | "list"
     description_items = Column(JSONB, nullable=True)  # ["Punto 1", "Punto 2", ...]
 
+    # Clases grupales
+    is_group = Column(Boolean, default=False)
+    min_students = Column(Integer, nullable=True)  # referencia al crear una cohorte
+    max_students = Column(Integer, nullable=True)  # cupo máximo por cohorte
+
     # Campos para pagos en cuotas
     allow_installments = Column(Boolean, default=False)
     installment_count = Column(Integer, nullable=True)   # Número total de cuotas (ej. 3)
@@ -70,6 +75,12 @@ class Enrollment(Base):
     renewal_requested_package_id = Column(Integer, ForeignKey("packages.id"), nullable=True)
     change_requested_package_id = Column(Integer, ForeignKey("packages.id"), nullable=True)
 
+    # Clases grupales — NULL si es un enrollment individual
+    cohort_id = Column(Integer, ForeignKey("group_cohorts.id"), nullable=True)
+    # Resto fraccional a favor tras convertir créditos grupales a individuales
+    # (ver migración grupal -> individual en core/class_logic.py)
+    credit_balance_usd = Column(Float, nullable=True)
+
     # Gestión de Créditos, Activación y Cuotas
     unlocked_credits = Column(Integer, default=0)
     prepaid_unlimited_credits = Column(Integer, default=0)
@@ -88,3 +99,4 @@ class Enrollment(Base):
     change_requested_package = relationship("Package", foreign_keys=[change_requested_package_id], viewonly=True)
     classes = relationship("Class", back_populates="enrollment")
     payment = relationship("Payment", back_populates="enrollment", uselist=False)
+    cohort = relationship("GroupCohort", back_populates="enrollments")

@@ -16,7 +16,7 @@ export type BookingStage =
   
 export interface StudentClass {
   id: number;
-  class_type: "trial" | "regular";
+  class_type: "trial" | "regular" | "group";
   enrollment_id: number | null;
   subject: string | null;
   start_time_utc: string;
@@ -31,6 +31,9 @@ export interface StudentClass {
   package_name: string | null;
   class_count: string | null;
   teacher_phone?: string | null;
+  cohort_id?: number | null;
+  participant_count?: number | null;
+  participant_names?: string[] | null;
 }
 
 export interface AvailableSlot {
@@ -60,6 +63,9 @@ export interface StudentEnrollment {
     duration_minutes: number;
     is_active: boolean;
     created_at: string;
+    is_group?: boolean;
+    min_students?: number | null;
+    max_students?: number | null;
   };
   classes_used: number;
   unlocked_credits?: number;
@@ -79,6 +85,12 @@ export interface StudentEnrollment {
   teacher_avatar: string | null;
   created_at?: string;
   updated_at?: string;
+  cohort_id?: number | null;
+  cohort_status?: "filling" | "confirmed" | "in_progress" | "completed" | "cancelled" | null;
+  cohort_start_date?: string | null;
+  cohort_current_students?: number | null;
+  cohort_max_students?: number | null;
+  credit_balance_usd?: number | null;
 }
 
 export interface StudentMaterial {

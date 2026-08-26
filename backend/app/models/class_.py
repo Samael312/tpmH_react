@@ -8,6 +8,7 @@ import enum
 class ClassType(str, enum.Enum):
     trial   = "trial"    # Prueba — no consume del paquete, staff la ofrece
     regular = "regular"  # Clase normal del paquete
+    group   = "group"    # Sesión grupal — múltiples alumnos vía ClassParticipant
 
 
 class Class(Base):
@@ -16,7 +17,11 @@ class Class(Base):
     id = Column(Integer, primary_key=True, index=True)
     enrollment_id = Column(Integer, ForeignKey("enrollments.id"), nullable=True)
     teacher_id = Column(Integer, ForeignKey("teacher_profiles.id"), nullable=False)
-    student_id = Column(Integer, ForeignKey("student_profiles.id"), nullable=False)
+    # NULL solo cuando class_type == "group" (los alumnos viven en
+    # ClassParticipant). Para trial/regular sigue siendo obligatorio,
+    # validado a nivel de aplicación en core/class_logic.py.
+    student_id = Column(Integer, ForeignKey("student_profiles.id"), nullable=True)
+    cohort_id = Column(Integer, ForeignKey("group_cohorts.id"), nullable=True)
     class_type = Column(Enum(ClassType),default=ClassType.regular,nullable=False)
     subject = Column(String, nullable=True)
     start_time_utc = Column(DateTime(timezone=True), nullable=False)
@@ -48,6 +53,11 @@ class Class(Base):
 
     student = relationship("StudentProfile", backref="classes_as_student")
     teacher = relationship("TeacherProfile", backref="classes_as_teacher")
+    cohort = relationship("GroupCohort", back_populates="classes")
+    # Solo poblado para class_type == "group"
+    participants = relationship(
+        "ClassParticipant", back_populates="class_", cascade="all, delete-orphan"
+    )
 
     @property
     def duration_minutes(self):

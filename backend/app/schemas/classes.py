@@ -74,7 +74,7 @@ class ClassResponse(BaseModel):
     enrollment_id: Optional[int]
     teacher_id: int
     teacher_username: Optional[str] = None
-    student_id: int
+    student_id: Optional[int] = None
     class_type: str
     subject: Optional[str]
     start_time_utc: datetime
@@ -95,7 +95,11 @@ class ClassResponse(BaseModel):
     teacher_avatar: Optional[str] = None
     student_name: Optional[str] = None
     student_avatar: Optional[str] = None
-    student_phone: Optional[str] = None 
+    student_phone: Optional[str] = None
+    # Clases grupales: NULL en clases individuales
+    cohort_id: Optional[int] = None
+    participant_count: Optional[int] = None
+    participant_names: Optional[List[str]] = None
 
     class Config:
         from_attributes = True

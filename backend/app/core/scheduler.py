@@ -62,6 +62,57 @@ async def send_class_reminders():
 
         for class_ in upcoming:
             try:
+                teacher_profile = class_.teacher
+                teacher_user = db.query(User).filter(
+                    User.id == teacher_profile.user_id
+                ).first()
+                if not teacher_user:
+                    continue
+
+                if class_.class_type == "group":
+                    # Sesión compartida: se recuerda a cada alumno inscrito
+                    # (vía ClassParticipant, no Class.student_id, que es
+                    # NULL para clases grupales) y UNA sola vez al profesor
+                    # con el conteo total, en vez de un correo por alumno.
+                    from app.models.class_participant import ClassParticipant
+
+                    participants = (
+                        db.query(ClassParticipant, StudentProfile, User)
+                        .join(StudentProfile, ClassParticipant.student_id == StudentProfile.id)
+                        .join(User, StudentProfile.user_id == User.id)
+                        .filter(
+                            ClassParticipant.class_id == class_.id,
+                            ClassParticipant.attendance_status != "cancelled",
+                        )
+                        .all()
+                    )
+
+                    if not participants:
+                        continue
+
+                    for _participant, student_profile, student_user in participants:
+                        send_class_reminder_email(
+                            to_email=student_user.email,
+                            student_name=student_user.name,
+                            teacher_name=f"{teacher_user.name} {teacher_user.surname}",
+                            subject=class_.subject or "Clase",
+                            class_start_local=format_local_datetime(class_.start_time_utc, student_profile.timezone),
+                            hours_before=24,
+                        )
+
+                    send_class_reminder_teacher_email(
+                        to_email=teacher_user.email,
+                        teacher_name=teacher_user.name,
+                        student_name=f"{len(participants)} alumno(s) del grupo",
+                        subject=class_.subject or "Clase",
+                        class_start_local=format_local_datetime(class_.start_time_utc, teacher_profile.timezone),
+                        hours_before=24,
+                    )
+
+                    class_.reminder_sent_at = now
+                    db.commit()
+                    continue
+
                 student_profile = db.query(StudentProfile).filter(
                     StudentProfile.id == class_.student_id
                 ).first()
@@ -73,18 +124,14 @@ async def send_class_reminders():
                     User.id == student_profile.user_id
                 ).first()
 
-                teacher_profile = class_.teacher
-                teacher_user = db.query(User).filter(
-                    User.id == teacher_profile.user_id
-                ).first()
-
-                if not student_user or not teacher_user:
+                if not student_user:
                     continue
 
                 send_class_reminder_email(
                     to_email=student_user.email,
                     student_name=student_user.name,
                     teacher_name=f"{teacher_user.name} {teacher_user.surname}",
+                    subject=class_.subject or "Clase",
                     class_start_local=format_local_datetime(class_.start_time_utc, student_profile.timezone),
                     hours_before=24,
                 )
@@ -93,6 +140,7 @@ async def send_class_reminders():
                     to_email=teacher_user.email,
                     teacher_name=teacher_user.name,
                     student_name=f"{student_user.name} {student_user.surname}",
+                    subject=class_.subject or "Clase",
                     class_start_local=format_local_datetime(class_.start_time_utc, teacher_profile.timezone),
                     hours_before=24,
                 )

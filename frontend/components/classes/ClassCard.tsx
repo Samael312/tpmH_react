@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { User, Video, X, Clock, RotateCcw, Check, AlertCircle, Phone } from "lucide-react";
+import { User, Video, X, Clock, RotateCcw, Check, AlertCircle, Phone, Users2 } from "lucide-react";
 import api from "@/lib/api";
 import { getFlagForNationality } from "@/lib/nationalities";
 import { formatTimeTz, formatWeekdayShortTz, formatMonthShortTz, getDayOfMonthTz, getMyDisplayTimezone } from "@/lib/tzFormat";
@@ -26,6 +26,9 @@ export interface ClassCardData {
   student_avatar?: string | null;
   student_timezone?: string | null;
   student_phone?: string | null;
+  cohort_id?: number | null;
+  participant_count?: number | null;
+  participant_names?: string[] | null;
 }
 
 type Role = "student" | "teacher" | "teacher_admin";
@@ -156,11 +159,17 @@ export default function ClassCard({
   
   const isPast = endDate < new Date();
   const isHistory = HISTORY_STATUSES.includes(class_.status);
+  const isGroup = class_.class_type === "group";
 
   const personName = role === "student" ? class_.teacher_name : class_.student_name;
   const personAvatar = role === "student" ? class_.teacher_avatar : class_.student_avatar;
   const personNationality = role === "student" ? class_.teacher_nationality : class_.student_nationality;
   const personLabel = role === "student" ? "Prof." : "Est.";
+
+  // En una sesión grupal no hay un único "estudiante" (Class.student_id es
+  // NULL) — el profesor ve cuántos alumnos hay inscritos en vez del nombre
+  // de uno solo; el alumno sigue viendo a su profesor normalmente.
+  const groupmateCount = Math.max((class_.participant_count ?? 0) - (role === "student" ? 1 : 0), 0);
 
   const personPhone = role === "student" ? class_.teacher_phone : class_.student_phone;
   const myTimezone = (role === "teacher" ? class_.teacher_timezone : class_.student_timezone) || getMyDisplayTimezone();
@@ -236,10 +245,10 @@ export default function ClassCard({
     : [];
   const canReschedule = role === "teacher"
     ? !["completed", "cancelled", "no_show"].includes(class_.status)
-    : STUDENT_RESCHEDULABLE.includes(class_.status);
+    : STUDENT_RESCHEDULABLE.includes(class_.status) && !isGroup;
   const canCancel = role === "teacher"
     ? TEACHER_CANCELABLE_STATUSES.includes(class_.status)
-    : STUDENT_CANCELABLE.includes(class_.status);
+    : STUDENT_CANCELABLE.includes(class_.status) && !isGroup;
 
   // BUG-05/17 fix: antes 'showTeacherActions' exigía !isPast, lo que ocultaba
   // los botones de Completar/No asistió justo cuando más se necesitan (después
@@ -283,6 +292,11 @@ export default function ClassCard({
                   Prueba
                 </span>
               )}
+              {isGroup && (
+                <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                  <Users2 className="w-2.5 h-2.5" /> Grupal
+                </span>
+              )}
               {tzDiffLabel && (
                 <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-700">
                   <Clock className="w-2.5 h-2.5" /> {tzDiffLabel}
@@ -305,7 +319,7 @@ export default function ClassCard({
                 {" "}({duration} min)
               </span>
               
-              {personName && (
+              {personName && !(isGroup && role === "teacher") && (
                 <span className="flex items-center gap-1.5 text-slate-500">
                   <PersonAvatar name={personName} url={personAvatar} className="w-5 h-5 rounded-full flex-shrink-0" />
                   {personLabel}: <strong className="text-slate-700 truncate max-w-[120px]">{personName}</strong>
@@ -314,6 +328,23 @@ export default function ClassCard({
                       {getFlagForNationality(personNationality)} {personNationality}
                     </span>
                   )}
+                </span>
+              )}
+
+              {isGroup && role === "teacher" && (
+                <span
+                  className="flex items-center gap-1.5 text-slate-500"
+                  title={class_.participant_names?.join(", ") || undefined}
+                >
+                  <Users2 className="w-3.5 h-3.5 text-indigo-400" />
+                  <strong className="text-slate-700">{class_.participant_count ?? 0} alumno(s)</strong> inscrito(s)
+                </span>
+              )}
+
+              {isGroup && role === "student" && groupmateCount > 0 && (
+                <span className="flex items-center gap-1.5 text-slate-500">
+                  <Users2 className="w-3.5 h-3.5 text-indigo-400" />
+                  +{groupmateCount} compañero(s)
                 </span>
               )}
 

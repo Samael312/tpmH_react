@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from app.core.email import (
     send_class_cancelled_email, 
@@ -92,17 +92,38 @@ def _build_class_responses(classes: list[Class], db: Session) -> list[ClassRespo
         return []
 
     teacher_ids = {c.teacher_id for c in classes}
-    student_ids = {c.student_id for c in classes}
+    student_ids = {c.student_id for c in classes if c.student_id is not None}
+    group_class_ids = [c.id for c in classes if c.class_type == "group"]
 
     teachers = db.query(TeacherProfile).filter(TeacherProfile.id.in_(teacher_ids)).all()
     students = db.query(StudentProfile).filter(StudentProfile.id.in_(student_ids)).all()
     teacher_map = {t.id: t for t in teachers}
     student_map = {s.id: s for s in students}
 
+    # Para clases grupales: nombres de compañeros vía ClassParticipant,
+    # en un solo batch (evita N+1 por cada sesión grupal de la lista).
+    participants_by_class: dict[int, list[str]] = {}
+    if group_class_ids:
+        from app.models.class_participant import ClassParticipant
+        rows = (
+            db.query(ClassParticipant, StudentProfile, User)
+            .join(StudentProfile, ClassParticipant.student_id == StudentProfile.id)
+            .join(User, StudentProfile.user_id == User.id)
+            .filter(
+                ClassParticipant.class_id.in_(group_class_ids),
+                ClassParticipant.attendance_status != "cancelled",
+            )
+            .all()
+        )
+        for participant, student, user in rows:
+            participants_by_class.setdefault(participant.class_id, []).append(
+                f"{user.name} {user.surname}"
+            )
+
     result = []
     for c in classes:
         teacher = teacher_map.get(c.teacher_id)
-        student = student_map.get(c.student_id)
+        student = student_map.get(c.student_id) if c.student_id else None
         teacher_user = teacher.user if teacher else None
         student_user = student.user if student else None
 
@@ -131,6 +152,12 @@ def _build_class_responses(classes: list[Class], db: Session) -> list[ClassRespo
             or (student.profile_photo_url if student else None)
         )
         data["student_nationality"] = student_user.nationality if student_user else None
+
+        if c.class_type == "group":
+            names = participants_by_class.get(c.id, [])
+            data["participant_count"] = len(names)
+            data["participant_names"] = names
+
         result.append(ClassResponse(**data))
 
     return result
@@ -206,7 +233,23 @@ def get_my_classes_student(
     now = utc_now()
     student_id = current_user.student_profile.id
 
-    query = db.query(Class).filter(Class.student_id == student_id)
+    # Las clases individuales siguen filtrándose por Class.student_id; las
+    # grupales no llevan ese campo (compartido entre varios alumnos), así
+    # que se detectan vía ClassParticipant (ver models/class_participant.py).
+    from app.models.class_participant import ClassParticipant
+    group_class_ids = [
+        row[0] for row in db.query(ClassParticipant.class_id).filter(
+            ClassParticipant.student_id == student_id,
+            ClassParticipant.attendance_status != "cancelled",
+        ).all()
+    ]
+
+    query = db.query(Class).filter(
+        or_(
+            Class.student_id == student_id,
+            Class.id.in_(group_class_ids) if group_class_ids else False,
+        )
+    )
 
     if not include_history:
         query = query.filter(
