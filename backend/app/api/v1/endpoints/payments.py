@@ -108,6 +108,47 @@ def _credit_wallet(teacher_id: int, amount_teacher: float, db: Session):
     wallet.total_earned += amount_teacher
 
 
+DUPLICATE_PAYMENT_NOTIFICATION_WINDOW_SECONDS = 15
+
+
+def _find_recent_duplicate_payment(
+    db: Session,
+    student_id: int,
+    payment_type: str,
+    amount: float,
+    enrollment_id: Optional[int] = None,
+    window_seconds: int = DUPLICATE_PAYMENT_NOTIFICATION_WINDOW_SECONDS,
+) -> Optional[Payment]:
+    """
+    Busca un Payment prácticamente idéntico (mismo estudiante, enrollment,
+    tipo y monto) creado hace muy poco tiempo (por defecto, últimos 15
+    segundos), usando el timestamp `Payment.created_at` que ya persiste
+    cada pago.
+
+    Se usa como guarda de idempotencia justo antes de insertar un nuevo
+    Payment y de notificar por email al admin: evita que un doble clic o
+    un reintento del frontend generen dos registros de pago -y por lo
+    tanto dos correos consecutivos al admin pidiendo aprobar "la misma"
+    solicitud-. Complementa (no reemplaza) los chequeos de "ya hay un
+    pago pendiente de revisión" que ya existen en varias ramas de
+    notify_payment, porque esos chequeos por status pueden no ver un pago
+    que otro request insertó pero todavía no confirmó (commit) — la
+    ventana de carrera entre dos requests casi simultáneos.
+    """
+    cutoff = utc_now() - timedelta(seconds=window_seconds)
+    query = db.query(Payment).filter(
+        Payment.student_id == student_id,
+        Payment.payment_type == payment_type,
+        Payment.amount_total == amount,
+        Payment.created_at >= cutoff,
+    )
+    if enrollment_id is not None:
+        query = query.filter(Payment.enrollment_id == enrollment_id)
+    else:
+        query = query.filter(Payment.enrollment_id.is_(None))
+    return query.order_by(Payment.created_at.desc()).first()
+
+
 def _installment_amount(package: Package, index: int) -> float:
     """Monto de la cuota `index` (1-based). Reparte el residuo en la última cuota."""
     n = package.installment_count or 1
@@ -1180,6 +1221,13 @@ def notify_payment(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este enrollment no es de tipo ilimitado")
 
         amount = round(enrollment.package.price * data.credits_requested, 2)
+
+        duplicate = _find_recent_duplicate_payment(
+            db, student_id, "unlimited_recharge", amount, enrollment_id=enrollment.id,
+        )
+        if duplicate:
+            return {"payment_id": duplicate.id, "message": "Recarga notificada, en espera de aprobación"}
+
         payment = Payment(
             enrollment_id=enrollment.id, student_id=student_id, teacher_id=enrollment.teacher_id,
             amount_total=amount, amount_teacher=0, amount_platform=0,
@@ -1402,6 +1450,12 @@ def notify_payment(
                     f"Se generó una nota de reembolso de ${amount:.2f} (valor restante a tu favor). En espera de aprobación."
                 )
 
+        duplicate = _find_recent_duplicate_payment(
+            db, student_id, payment_type, amount, enrollment_id=current_enrollment.id,
+        )
+        if duplicate:
+            return {"payment_id": duplicate.id, "message": notify_msg}
+
         current_enrollment.status = EnrollmentStatus.pending_package_change
         current_enrollment.change_requested_package_id = new_package.id if apply_new_package else None
         db.commit()
@@ -1454,6 +1508,13 @@ def notify_payment(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay un pago pendiente de revisión")
 
         amount = round(package.price * data.credits_requested, 2)
+
+        duplicate = _find_recent_duplicate_payment(
+            db, student_id, payment_type, amount, enrollment_id=enrollment.id,
+        )
+        if duplicate:
+            return {"payment_id": duplicate.id, "message": "Pago notificado, en espera de aprobación"}
+
         payment = Payment(
             enrollment_id=enrollment.id, student_id=student_id, teacher_id=enrollment.teacher_id,
             amount_total=amount, amount_teacher=0, amount_platform=0,
@@ -1504,6 +1565,12 @@ def notify_payment(
         ).first():
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay un pago pendiente de revisión")
         amount = package.price
+
+    duplicate = _find_recent_duplicate_payment(
+        db, student_id, payment_type, amount, enrollment_id=enrollment.id,
+    )
+    if duplicate:
+        return {"payment_id": duplicate.id, "message": "Pago notificado, en espera de aprobación"}
 
     payment = Payment(
         enrollment_id=enrollment.id, student_id=student_id, teacher_id=enrollment.teacher_id,
