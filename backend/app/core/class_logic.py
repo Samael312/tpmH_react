@@ -153,6 +153,26 @@ def can_reschedule_class(
     return True, ""
 
 
+def resolve_status_after_reschedule(class_: Class) -> str:
+    """
+    Determina el status que debe quedar una clase tras reagendarla.
+
+    Regla general (ya vigente, BUG-04/12/18/19): reagendar NO resetea el
+    status a 'pending'/'pending_trial' — una clase 'confirmed' sigue
+    'confirmed', una 'pending_trial' sigue 'pending_trial' (es el único
+    estado "pendiente" que existe hoy para clases).
+
+    Única excepción: una clase 'finalized' (limbo transitorio post-clase que
+    el sistema aún no resolvió a completed/no_show) al reagendarse a una
+    fecha futura vuelve a ser una clase con clase por dar, así que debe
+    pasar a 'confirmed' para volver a aparecer en "Próximas" en vez de
+    quedar atascada en "Historial" con una fecha futura.
+    """
+    if class_.status == "finalized":
+        return "confirmed"
+    return class_.status
+
+
 def update_enrollment_counter(
     enrollment_id: int,
     delta: int,

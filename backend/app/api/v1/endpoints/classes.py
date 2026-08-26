@@ -28,6 +28,7 @@ from app.core.class_logic import (
     can_book_slot,
     can_cancel_class,
     can_reschedule_class,
+    resolve_status_after_reschedule,
     update_enrollment_counter,
     finalize_past_classes,
     class_counts_towards_package,
@@ -306,6 +307,9 @@ def reschedule_class_student(
     # recordatorios de 24h solo avisa clases con status 'confirmed', por lo
     # que la clase dejaba de recibir el recordatorio). El estado se conserva
     # tal cual estaba; can_reschedule_class ya validó que es reagendable.
+    # Excepción: 'finalized' → 'confirmed' (ver resolve_status_after_reschedule),
+    # para que la clase reagendada a futuro vuelva a aparecer en "Próximas".
+    class_.status = resolve_status_after_reschedule(class_)
     db.commit()
     db.refresh(class_)
     
@@ -594,7 +598,8 @@ def reschedule_class_teacher(
     class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
     # BUG fix: ver comentario equivalente en reschedule_class_student. El
     # profesor tampoco debe poder "desconfirmar" una clase ya paga/confirmada
-    # por el simple hecho de reagendarla.
+    # por el simple hecho de reagendarla. Excepción: 'finalized' → 'confirmed'.
+    class_.status = resolve_status_after_reschedule(class_)
     db.commit()
     db.refresh(class_)
 
@@ -633,6 +638,8 @@ def reschedule_class_admin(
     class_.end_time_utc = data.end_time_utc
     class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
     # BUG fix: ver comentario equivalente en reschedule_class_student.
+    # Excepción: 'finalized' → 'confirmed'.
+    class_.status = resolve_status_after_reschedule(class_)
     db.commit()
     db.refresh(class_)
 
