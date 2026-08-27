@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Upload, FileText, Image, Trash2,
@@ -102,6 +102,13 @@ function StudentAvatar({ s, className }: { s: Student; className?: string }) {
   );
 }
 
+interface TeacherCohort {
+  id: number;
+  package_name: string | null;
+  status: "filling" | "confirmed" | "in_progress" | "completed" | "cancelled";
+  current_students: number;
+}
+
 // ─── Modal Asignar ───────────────────────────────────────────────────────────
 function AssignModal({
   material,
@@ -115,6 +122,14 @@ function AssignModal({
   const [assigning, setAssigning] = useState(false);
   const [success, setSuccess]   = useState(false);
   const [search, setSearch]     = useState("");
+  const [cohorts, setCohorts] = useState<TeacherCohort[]>([]);
+  const [cohortId, setCohortId] = useState<number | null>(null);
+
+  useEffect(() => {
+    api.get<TeacherCohort[]>("/cohorts/teacher")
+      .then(res => setCohorts(res.data.filter(c => c.status !== "cancelled" && c.status !== "completed")))
+      .catch(() => { /* silencioso: la asignación grupal es opcional */ });
+  }, []);
 
   const toggle = (id: number) =>
     setSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
@@ -130,11 +145,12 @@ function AssignModal({
   });
 
   const assign = async () => {
-    if (!selected.length) return;
+    if (!selected.length && !cohortId) return;
     setAssigning(true);
     try {
       await api.post(`/materials/${material.id}/assign`, {
         student_ids: selected,
+        cohort_id: cohortId,
       });
       setSuccess(true);
       setTimeout(onClose, 1200);
@@ -202,6 +218,36 @@ function AssignModal({
           </div>
         ) : (
           <>
+            {cohorts.length > 0 && (
+              <div className="space-y-2 mb-4 pb-4 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-indigo-500" />
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    O asignar a un grupo completo
+                  </label>
+                </div>
+                <select
+                  value={cohortId ?? ""}
+                  onChange={e => setCohortId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl
+                            text-sm font-bold text-slate-800 px-4 py-3 focus:outline-none focus:bg-white
+                            focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 transition-all cursor-pointer"
+                >
+                  <option value="">Ninguno (solo estudiantes seleccionados abajo)</option>
+                  {cohorts.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.package_name ?? "Cohorte"} — {c.current_students} alumno{c.current_students !== 1 ? "s" : ""}
+                    </option>
+                  ))}
+                </select>
+                {cohortId && (
+                  <p className="text-[11px] text-indigo-600 font-bold">
+                    Se asignará a todos los integrantes activos de este grupo, además de los estudiantes que marques abajo.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="group relative mb-4">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2
                                   w-4 h-4 text-slate-400
@@ -259,7 +305,7 @@ function AssignModal({
 
             <button
               onClick={assign}
-              disabled={!selected.length || assigning}
+              disabled={(!selected.length && !cohortId) || assigning}
               className="w-full py-3.5 text-sm font-bold text-white rounded-xl
                          bg-gradient-to-r from-pink-500 to-rose-400
                          hover:from-pink-600 hover:to-rose-500
@@ -274,7 +320,7 @@ function AssignModal({
               ) : (
                 <>
                   <Users className="w-4 h-4" />
-                  Asignar a {selected.length} estudiante
+                  Asignar a {selected.length}{cohortId ? " + grupo" : ""} estudiante
                   {selected.length !== 1 ? "s" : ""}
                 </>
               )}

@@ -30,6 +30,9 @@ interface Package {
   is_active: boolean;
   allow_installments?: boolean;
   installment_count?: number | null;
+  is_group?: boolean;
+  min_students?: number | null;
+  max_students?: number | null;
 }
 
 interface EnrollmentCompliance {
@@ -60,6 +63,9 @@ const emptyForm = {
   classes_count: "4", price: "10", duration_minutes: 60,
   allow_installments: false,
   installment_count: "3",
+  is_group: false,
+  min_students: "3",
+  max_students: "6",
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -158,6 +164,9 @@ export default function TeacherPackagesPage() {
       duration_minutes: pkg.duration_minutes,
       allow_installments: pkg.allow_installments ?? false,
       installment_count: pkg.installment_count ? String(pkg.installment_count) : "3",
+      is_group: pkg.is_group ?? false,
+      min_students: pkg.min_students != null ? String(pkg.min_students) : "3",
+      max_students: pkg.max_students != null ? String(pkg.max_students) : "6",
     });
     setShowForm(true);
     scrollToForm();
@@ -178,6 +187,21 @@ export default function TeacherPackagesPage() {
       return;
     }
 
+    let minStudentsNum: number | null = null;
+    let maxStudentsNum: number | null = null;
+    if (form.is_group) {
+      minStudentsNum = parseInt(form.min_students, 10);
+      maxStudentsNum = parseInt(form.max_students, 10);
+      if (!Number.isFinite(minStudentsNum) || minStudentsNum < 1) {
+        setError("Introduce un mínimo de alumnos válido (mínimo 1) para el paquete grupal");
+        return;
+      }
+      if (!Number.isFinite(maxStudentsNum) || maxStudentsNum < minStudentsNum) {
+        setError("El máximo de alumnos no puede ser menor que el mínimo");
+        return;
+      }
+    }
+
     setSaving(true);
     setError("");
     try {
@@ -192,8 +216,11 @@ export default function TeacherPackagesPage() {
         classes_count: classesCountNum,
         price: priceNum,
         duration_minutes: form.duration_minutes,
-        allow_installments: form.allow_installments,
-        installment_count: unlimited ? null : (form.allow_installments ? parseInt(form.installment_count, 10) : null),
+        allow_installments: form.is_group ? false : form.allow_installments,
+        installment_count: (unlimited || form.is_group) ? null : (form.allow_installments ? parseInt(form.installment_count, 10) : null),
+        is_group: form.is_group,
+        min_students: form.is_group ? minStudentsNum : null,
+        max_students: form.is_group ? maxStudentsNum : null,
       };
       if (editingId) {
         await api.patch(`/packages/${editingId}`, payload);
@@ -426,6 +453,61 @@ export default function TeacherPackagesPage() {
                   />
                 </div>
 
+                {/* ─── Paquete grupal ─── */}
+                <div className="sm:col-span-2 space-y-3 pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                      Paquete grupal (clases compartidas por cohorte)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, is_group: !form.is_group, allow_installments: false })}
+                      className={`relative w-11 h-6 rounded-full transition-colors ${
+                        form.is_group ? "bg-pink-500" : "bg-slate-300"
+                      } cursor-pointer`}
+                    >
+                      <span className={`absolute top-[2px] left-[2px] w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${
+                        form.is_group ? "translate-x-5" : "translate-x-0"
+                      }`} />
+                    </button>
+                  </div>
+
+                  {form.is_group && (
+                    <div className="animate-in fade-in duration-300 space-y-3">
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        Los alumnos se inscriben en cohortes con cupo mínimo/máximo; no admite pago en cuotas
+                        (se cobra el total al inscribirse). Crea las cohortes desde la pestaña &quot;Grupos&quot;.
+                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                            Mín. alumnos por cohorte
+                          </label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={form.min_students}
+                            onChange={e => /^[0-9]*$/.test(e.target.value) && setForm({ ...form, min_students: e.target.value })}
+                            className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold px-4 py-3 focus:outline-none focus:border-pink-500 focus:bg-white transition-all"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                            Máx. alumnos por cohorte
+                          </label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={form.max_students}
+                            onChange={e => /^[0-9]*$/.test(e.target.value) && setForm({ ...form, max_students: e.target.value })}
+                            className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold px-4 py-3 focus:outline-none focus:border-pink-500 focus:bg-white transition-all"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* ─── Tipo de descripción ─── */}
                 <div className="sm:col-span-2 space-y-3">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
@@ -579,27 +661,28 @@ export default function TeacherPackagesPage() {
                 </div>
                 
                 {/* Pago en cuotas */}
-                <div className={`sm:col-span-2 space-y-3 pt-2 border-t border-slate-100 transition-opacity duration-300 ${unlimited ? 'opacity-50' : ''}`}>
+                <div className={`sm:col-span-2 space-y-3 pt-2 border-t border-slate-100 transition-opacity duration-300 ${(unlimited || form.is_group) ? 'opacity-50' : ''}`}>
                   <div className="flex items-center justify-between">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                       Permitir pago en cuotas
                       {unlimited && <span className="text-red-400 normal-case">(No disponible para clases ilimitadas)</span>}
+                      {!unlimited && form.is_group && <span className="text-red-400 normal-case">(No disponible para paquetes grupales)</span>}
                     </label>
                     <button
                       type="button"
-                      disabled={unlimited}
+                      disabled={unlimited || form.is_group}
                       onClick={() => setForm({ ...form, allow_installments: !form.allow_installments })}
                       className={`relative w-11 h-6 rounded-full transition-colors ${
-                        form.allow_installments && !unlimited ? "bg-pink-500" : "bg-slate-300"
-                      } ${unlimited ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                        form.allow_installments && !unlimited && !form.is_group ? "bg-pink-500" : "bg-slate-300"
+                      } ${(unlimited || form.is_group) ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                     >
                       <span className={`absolute top-[2px] left-[2px] w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${
-                        form.allow_installments && !unlimited ? "translate-x-5" : "translate-x-0"
+                        form.allow_installments && !unlimited && !form.is_group ? "translate-x-5" : "translate-x-0"
                       }`} />
                     </button>
                   </div>
                   
-                  {form.allow_installments && !unlimited && (
+                  {form.allow_installments && !unlimited && !form.is_group && (
                     <div className="animate-in fade-in duration-300">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Número de cuotas</label>
                       <input
@@ -679,7 +762,14 @@ export default function TeacherPackagesPage() {
                             {pkg.name}
                           </h3>
                         </div>
-                        <p className="text-[11px] text-slate-400 font-bold mb-2">{pkg.subject}</p>
+                        <p className="text-[11px] text-slate-400 font-bold mb-2 flex items-center gap-1.5">
+                          {pkg.subject}
+                          {pkg.is_group && (
+                            <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest">
+                              <Users className="w-2.5 h-2.5" /> Grupal
+                            </span>
+                          )}
+                        </p>
                         <div className="flex items-baseline gap-1">
                           <span className="text-3xl font-black text-slate-800">${priceDisplay}</span>
                           <span className="text-slate-500 text-xs font-medium">{priceSuffix}</span>

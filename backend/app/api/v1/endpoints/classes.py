@@ -273,6 +273,62 @@ def get_my_classes_student(
     )
 
 
+@router.delete("/{class_id}/leave")
+def leave_group_class(
+    class_id: int,
+    current_user: User = Depends(get_current_student),
+    db: Session = Depends(get_db)
+):
+    """
+    El estudiante cancela SU participación en una sesión grupal puntual
+    (Class con class_type='group'). No cancela la clase para los demás
+    inscritos — solo libera su propio cupo (vía ClassParticipant), igual
+    que hace release_cohort_seat al migrar de grupal a individual.
+
+    Equivalente grupal de DELETE /{class_id} (cancelación individual):
+    Class.student_id es NULL en clases grupales, así que no se puede
+    resolver ni cancelar con _get_class_or_404 + cancel_class_and_refund,
+    que asumen una relación 1:1 alumno-clase.
+    """
+    from app.models.class_participant import ClassParticipant
+
+    student_id = current_user.student_profile.id
+
+    class_ = db.query(Class).filter(
+        Class.id == class_id,
+        Class.class_type == ClassType.group,
+    ).first()
+    if not class_:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Clase grupal no encontrada")
+
+    participant = db.query(ClassParticipant).filter(
+        ClassParticipant.class_id == class_id,
+        ClassParticipant.student_id == student_id,
+        ClassParticipant.attendance_status != "cancelled",
+    ).first()
+    if not participant:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No estás inscrito en esta sesión")
+
+    can_cancel, error_msg = can_cancel_class(class_, current_user.id, db)
+    if not can_cancel:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
+
+    participant.attendance_status = "cancelled"
+    db.commit()
+
+    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == class_.teacher_id).first()
+    if teacher and teacher.user:
+        send_class_cancelled_teacher_email(
+            to_email=teacher.user.email,
+            teacher_name=teacher.user.name,
+            student_name=f"{current_user.name} {current_user.surname}",
+            class_start_local=format_local_datetime(class_.start_time_utc, teacher.timezone),
+            cancelled_by="student",
+        )
+
+    return {"message": "Saliste de la clase grupal exitosamente"}
+
+
 @router.delete("/{class_id}")
 def cancel_class_student(
     class_id: int,

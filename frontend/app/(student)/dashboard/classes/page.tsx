@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Clock, Video, Calendar, ChevronLeft,
   ChevronRight, AlertCircle, X, Check,
@@ -36,24 +37,37 @@ const HISTORY_STATUSES = ["completed", "cancelled", "no_show", "finalized"];
 function CancelModal({
   classId,
   classDate,
+  cohortId,
   onClose,
   onSaved,
 }: {
   classId: number;
   classDate: string;
+  cohortId?: number | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const isGroup = !!cohortId;
   const [cancelling, setCancelling] = useState(false);
   const [error, setError]           = useState("");
+  const [left, setLeft]             = useState(false);
+  const router = useRouter();
 
   const cancel = async () => {
     setCancelling(true);
     setError("");
     try {
-      await api.delete(`/classes/${classId}`);
-      onSaved();
-      onClose();
+      if (isGroup) {
+        // Salir de UNA sesión no basta: sale del grupo por completo,
+        // liberando su cupo en todas las sesiones futuras de la cohorte.
+        await api.post(`/cohorts/${cohortId}/leave`);
+        setLeft(true);
+        onSaved();
+      } else {
+        await api.delete(`/classes/${classId}`);
+        onSaved();
+        onClose();
+      }
     } catch (e: any) {
       setError(e.response?.data?.detail || "Error cancelando la clase");
     } finally {
@@ -62,6 +76,49 @@ function CancelModal({
   };
 
   const dateFormatted = formatDateHumanTz(classDate, getMyDisplayTimezone());
+
+  // Paso 2 (solo grupal): ya salió del grupo — ofrecer elegir nuevo paquete
+  if (left) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative w-full max-w-sm bg-white/95 backdrop-blur-2xl
+                        rounded-[2.5rem] shadow-2xl shadow-slate-200/60
+                        border border-white p-8
+                        animate-in fade-in zoom-in-95 duration-200">
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mb-4">
+              <Check className="w-7 h-7 text-emerald-500" />
+            </div>
+            <h2 className="text-xl font-black text-slate-800 tracking-tight mb-2">
+              Saliste del grupo
+            </h2>
+            <p className="text-sm text-slate-500">
+              Ya no formas parte de esa cohorte. Cuando quieras, puedes elegir un
+              nuevo paquete individual o unirte a otro grupo.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 text-sm font-bold text-slate-600
+                         bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+            >
+              Ahora no
+            </button>
+            <button
+              onClick={() => router.push("/dashboard/schedule")}
+              className="flex-1 py-3 text-sm font-bold text-white bg-emerald-500
+                         hover:bg-emerald-600 rounded-xl shadow-md shadow-emerald-100
+                         active:scale-[0.98] transition-all duration-200"
+            >
+              Elegir paquete
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -81,14 +138,24 @@ function CancelModal({
             <AlertCircle className="w-7 h-7 text-red-500" />
           </div>
           <h2 className="text-xl font-black text-slate-800 tracking-tight mb-2">
-            ¿Cancelar clase?
+            {isGroup ? "¿Salir del grupo?" : "¿Cancelar clase?"}
           </h2>
           <p className="text-sm text-slate-500">
-            La clase del{" "}
-            <span className="font-bold text-slate-700 capitalize">
-              {dateFormatted}
-            </span>{" "}
-            será cancelada. Esta acción no se puede deshacer.
+            {isGroup ? (
+              <>
+                Esto te saca de <span className="font-bold text-slate-700">todo el grupo</span>,
+                no solo de la clase del{" "}
+                <span className="font-bold text-slate-700 capitalize">{dateFormatted}</span>.
+                Perderás tu cupo en todas las próximas sesiones de esta cohorte.
+                Podrás elegir un nuevo paquete después. Esta acción no se puede deshacer.
+              </>
+            ) : (
+              <>
+                La clase del{" "}
+                <span className="font-bold text-slate-700 capitalize">{dateFormatted}</span>{" "}
+                será cancelada. Esta acción no se puede deshacer.
+              </>
+            )}
           </p>
         </div>
 
@@ -122,7 +189,7 @@ function CancelModal({
               <div className="w-4 h-4 border-2 border-white/40
                               border-t-white rounded-full animate-spin" />
             ) : (
-              <><X className="w-4 h-4" /> Cancelar clase</>
+              <><X className="w-4 h-4" /> {isGroup ? "Salir del grupo" : "Cancelar clase"}</>
             )}
           </button>
         </div>
@@ -230,7 +297,7 @@ export default function MyClassesPage() {
   const [tab, setTab] = useState<"upcoming" | "history">("upcoming");
   const [rescheduleTarget, setRescheduleTarget] = useState<any | null>(null);
   const [cancelTarget, setCancelTarget] = useState<{
-    id: number; date: string;
+    id: number; date: string; cohortId: number | null;
   } | null>(null);
 
   const weekDates = getWeekDates();
@@ -419,7 +486,7 @@ export default function MyClassesPage() {
                 role="student"
                 onReschedule={() => setRescheduleTarget(cls)}
                 onCancel={() =>
-                  setCancelTarget({ id: cls.id, date: cls.start_time_utc })
+                  setCancelTarget({ id: cls.id, date: cls.start_time_utc, cohortId: cls.cohort_id ?? null })
                 }
               />
             ))
@@ -447,6 +514,7 @@ export default function MyClassesPage() {
         <CancelModal
           classId={cancelTarget.id}
           classDate={cancelTarget.date}
+          cohortId={cancelTarget.cohortId}
           onClose={() => setCancelTarget(null)}
           onSaved={refetch}
         />

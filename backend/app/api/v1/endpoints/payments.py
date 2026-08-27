@@ -1290,6 +1290,11 @@ def notify_payment(
             ).first()
             if not package:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Paquete no encontrado")
+            if package.is_group:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "No puedes unirte a un paquete grupal por esta vía. Inscríbete a una cohorte disponible."
+                )
 
             stage = get_student_booking_stage(student_id, package.teacher_id, db)
             if stage != "needs_package":
@@ -1331,6 +1336,11 @@ def notify_payment(
         ).first()
         if not new_package:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Paquete no encontrado o no disponible")
+        if new_package.is_group:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "No puedes renovar hacia un paquete grupal por esta vía. Inscríbete a una cohorte disponible."
+            )
 
         existing_renewal = db.query(Enrollment).filter(
             Enrollment.student_id == student_id,

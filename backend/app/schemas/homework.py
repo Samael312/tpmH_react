@@ -9,7 +9,10 @@ class HomeworkCreate(BaseModel):
     title: str
     description: str
     due_date_utc: datetime
-    student_ids: List[int]  # A quién se asigna
+    student_ids: List[int] = []  # A quién se asigna individualmente
+    # Si se indica, la tarea también se asigna a todos los integrantes
+    # activos de esta cohorte grupal (unión con student_ids, sin duplicados).
+    cohort_id: Optional[int] = None
 
 
 class HomeworkResponse(BaseModel):

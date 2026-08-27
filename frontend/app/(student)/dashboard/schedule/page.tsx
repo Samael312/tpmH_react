@@ -6,7 +6,7 @@ import {
   Calendar, Clock, CreditCard,
   Check, X, ChevronLeft,
   ChevronRight, AlertCircle, AlertTriangle,
-  Sparkles, Package as PackageIcon, Hourglass,
+  Sparkles, Package as PackageIcon, Hourglass, Users2,
 } from "lucide-react";
 import api from "@/lib/api";
 import Link from "next/link";
@@ -626,6 +626,131 @@ function EnrollmentClassesList({ classes }: { classes: any[] }) {
 }
 
 // ─── Pantalla: elegir paquete inicial ────────────────────────────────────────
+// ─── Sección: paquetes grupales disponibles (cohortes con cupo) ────────────
+// Un paquete grupal (Package.is_group) es solo una plantilla — el estudiante
+// no "compra" el paquete directamente (eso no lo asocia a ninguna sesión
+// real), se inscribe en una cohorte concreta abierta para ese paquete vía
+// POST /cohorts/{id}/enroll. El backend bloquea explícitamente elegir un
+// paquete grupal por el camino normal de /payments/notify-payment
+// (type="package"/"renewal"), así que esta es la única vía correcta.
+interface GroupPackageLite {
+  id: number;
+  name: string;
+  price: number;
+  classes_count: number | null;
+}
+
+interface CohortLite {
+  id: number;
+  current_students: number;
+  max_students: number;
+  start_date?: string | null;
+}
+
+function GroupPackagesBrowser({
+  groupPackages,
+  onEnrolled,
+}: {
+  groupPackages: GroupPackageLite[];
+  onEnrolled: () => void;
+}) {
+  const [cohortsByPackage, setCohortsByPackage] = useState<Record<number, CohortLite[]>>({});
+  const [loadingCohorts, setLoadingCohorts] = useState(true);
+  const [joiningId, setJoiningId] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const [joined, setJoined] = useState(false);
+
+  useEffect(() => {
+    if (!groupPackages.length) { setLoadingCohorts(false); return; }
+    Promise.all(
+      groupPackages.map(pkg =>
+        api.get(`/cohorts/available`, { params: { package_id: pkg.id } })
+          .then(res => [pkg.id, res.data] as const)
+          .catch(() => [pkg.id, []] as const)
+      )
+    ).then(results => {
+      setCohortsByPackage(Object.fromEntries(results));
+    }).finally(() => setLoadingCohorts(false));
+  }, [groupPackages]);
+
+  const join = async (cohortId: number) => {
+    setError("");
+    setJoiningId(cohortId);
+    try {
+      await api.post(`/cohorts/${cohortId}/enroll`, { cohort_id: cohortId });
+      setJoined(true);
+      setTimeout(onEnrolled, 1200);
+    } catch (e) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      setError(err.response?.data?.detail || "Error al inscribirte en la cohorte");
+    } finally {
+      setJoiningId(null);
+    }
+  };
+
+  if (!groupPackages.length) return null;
+
+  if (joined) {
+    return (
+      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 flex gap-3 items-start">
+        <Check className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+        <p className="text-sm font-bold text-emerald-700">
+          Te inscribiste en la cohorte. Tu profesor(a) confirmará tu pago en breve.
+        </p>
+      </div>
+    );
+  }
+
+  const anyCohortAvailable = Object.values(cohortsByPackage).some(list => list.length > 0);
+
+  return (
+    <div className="space-y-3 pt-2">
+      <div className="flex items-center gap-2">
+        <Users2 className="w-4 h-4 text-indigo-500" />
+        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+          O únete a un paquete grupal
+        </h3>
+      </div>
+
+      {error && (
+        <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
+          <X className="w-4 h-4 flex-shrink-0" /> {error}
+        </div>
+      )}
+
+      {loadingCohorts ? (
+        <div className="h-16 bg-white rounded-2xl animate-pulse" />
+      ) : !anyCohortAvailable ? (
+        <p className="text-xs text-slate-400 font-bold">
+          No hay cohortes con cupo disponible en este momento.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {groupPackages.map(pkg => (cohortsByPackage[pkg.id] || []).map((cohort: CohortLite) => (
+            <div key={cohort.id} className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-4 flex flex-col gap-2">
+              <p className="text-sm font-black text-slate-800">{pkg.name}</p>
+              <p className="text-xs text-slate-500 font-bold">
+                {cohort.current_students}/{cohort.max_students} inscritos
+                {cohort.start_date ? ` · Inicia ${new Date(cohort.start_date).toLocaleDateString()}` : " · Aún sin fecha fija"}
+              </p>
+              <p className="text-xs text-slate-500">${pkg.price} {pkg.classes_count ? `· ${pkg.classes_count} clases` : ""}</p>
+              <button
+                onClick={() => join(cohort.id)}
+                disabled={joiningId !== null}
+                className="mt-1 w-full py-2.5 text-xs font-bold text-white rounded-xl bg-indigo-500 hover:bg-indigo-600 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {joiningId === cohort.id ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                ) : "Unirme a esta cohorte"}
+              </button>
+            </div>
+          )))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: string | null; onSelected: () => void }) {
   const [packages, setPackages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -644,6 +769,9 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
     setError("");
     setCheckoutTarget({ pkg, enrollmentId: null });
   };
+
+  const individualPackages = packages.filter(p => !p.is_group);
+  const groupPackages = packages.filter(p => p.is_group);
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -674,7 +802,7 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {packages.map(pkg => {
+          {individualPackages.map(pkg => {
             const accent = pkg.color || "#ec4899";
             const priceSuffix = priceLabelSuffix(pkg.classes_count);
             const priceDisplay = pkg.price?.toFixed
@@ -733,6 +861,8 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
           })}
         </div>
       )}
+
+      {!loading && <GroupPackagesBrowser groupPackages={groupPackages} onEnrolled={onSelected} />}
 
       {checkoutTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -793,6 +923,9 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
     setCheckoutTarget({ pkg, enrollmentId: lastEnrollmentId });
   };
 
+  const individualPackages = packages.filter(p => !p.is_group);
+  const groupPackages = packages.filter(p => p.is_group);
+
   if (loading) {
     return (
       <div className="flex justify-center py-24">
@@ -824,7 +957,7 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {packages.map(pkg => {
+          {individualPackages.map(pkg => {
             const accent = pkg.color || "#ec4899";
             const priceSuffix = priceLabelSuffix(pkg.classes_count);
             const priceDisplay = pkg.price?.toFixed
@@ -883,6 +1016,8 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
           })}
         </div>
       )}
+
+      {!loading && <GroupPackagesBrowser groupPackages={groupPackages} onEnrolled={onRequested} />}
 
       {checkoutTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

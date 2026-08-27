@@ -162,7 +162,10 @@ def assign_material(
     current_user: User = Depends(get_current_approved_teacher),
     db: Session = Depends(get_db)
 ):
-    """Asigna un material a uno o varios de TUS estudiantes (StudentProfile.id)"""
+    """
+    Asigna un material a uno o varios de TUS estudiantes (StudentProfile.id)
+    y/o a todos los integrantes de una de tus cohortes grupales (cohort_id).
+    """
     material = db.query(Material).filter(
         Material.id == material_id,
         Material.teacher_id == current_user.teacher_profile.id
@@ -171,13 +174,35 @@ def assign_material(
     if not material:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Material no encontrado")
 
+    target_ids = list(dict.fromkeys(data.student_ids))  # únicos, preserva orden
+
+    if data.cohort_id:
+        from app.core.group_cohort_logic import get_cohort_student_ids
+        cohort_student_ids = get_cohort_student_ids(
+            data.cohort_id, current_user.teacher_profile.id, db
+        )
+        if not cohort_student_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Cohorte no encontrada, no te pertenece, o no tiene integrantes activos"
+            )
+        for sid in cohort_student_ids:
+            if sid not in target_ids:
+                target_ids.append(sid)
+
+    if not target_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debes indicar al menos un estudiante o una cohorte"
+        )
+
     owned_ids = set(current_user.teacher_profile.students or [])
 
     assigned_count = 0
     already_assigned = 0
     skipped_not_mine = 0
 
-    for student_profile_id in data.student_ids:
+    for student_profile_id in target_ids:
         if student_profile_id not in owned_ids:
             skipped_not_mine += 1
             continue

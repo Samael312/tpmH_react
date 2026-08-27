@@ -49,8 +49,15 @@ class MaterialResponse(BaseModel):
 
 
 class AssignMaterialRequest(BaseModel):
-    """Asignar un material a uno o varios estudiantes"""
-    student_ids: List[int]
+    """
+    Asignar un material a uno o varios estudiantes individuales y/o a una
+    cohorte grupal completa (cohort_id). Si se pasa cohort_id, el material
+    se asigna a todos los integrantes activos de esa cohorte además de los
+    student_ids indicados explícitamente (unión de ambos, sin duplicados).
+    Al menos uno de los dos debe tener contenido.
+    """
+    student_ids: List[int] = []
+    cohort_id: Optional[int] = None
 
 
 class MaterialAssignmentResponse(BaseModel):

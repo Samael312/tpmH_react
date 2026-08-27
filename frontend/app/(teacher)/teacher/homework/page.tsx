@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   ClipboardList, Plus, Send, Star, Clock,
   CheckCircle, AlertCircle, ChevronDown,
-  X, Search, Calendar, Check, Users,
+  X, Search, Calendar, Check, Users, Users2,
   BarChart3, FileText, Edit2, Trash2, AlertTriangle, RefreshCw,
 } from "lucide-react";
 import api from "@/lib/api";
@@ -21,6 +21,13 @@ import {
   type HomeworkSubmission as Submission,
   type TeacherStudentBasic as Student,
 } from "@/hooks/useTeacherData";
+
+interface TeacherCohort {
+  id: number;
+  package_name: string | null;
+  status: "filling" | "confirmed" | "in_progress" | "completed" | "cancelled";
+  current_students: number;
+}
 
 function StudentAvatar({ s, className }: { s: Student; className?: string }) {
   if (s.avatar) {
@@ -530,6 +537,16 @@ export default function HomeworkPage() {
   const [creating, setCreating]     = useState(false);
   const [createError, setCreateError] = useState("");
 
+  // Asignar a un grupo (cohorte) completo, además de estudiantes individuales
+  const [cohorts, setCohorts] = useState<TeacherCohort[]>([]);
+  const [hwCohortId, setHwCohortId] = useState<number | null>(null);
+
+  useEffect(() => {
+    api.get<TeacherCohort[]>("/cohorts/teacher")
+      .then(res => setCohorts(res.data.filter(c => c.status !== "cancelled" && c.status !== "completed")))
+      .catch(() => { /* silencioso: la asignación grupal es opcional */ });
+  }, []);
+
   const {
     submissions,
     loading: loadingSubs,
@@ -557,7 +574,7 @@ export default function HomeworkPage() {
   };
 
   const createHomework = async () => {
-    if (!hwTitle || !hwContent || !hwDue || !hwStudents.length) return;
+    if (!hwTitle || !hwContent || !hwDue || (!hwStudents.length && !hwCohortId)) return;
     setCreating(true);
     setCreateError("");
     try {
@@ -567,9 +584,11 @@ export default function HomeworkPage() {
         description: hwContent,
         due_date_utc: dueDateUtc,
         student_ids: hwStudents,
+        cohort_id: hwCohortId,
       });
       setHwTitle(""); setHwContent(""); setHwDue("");
       setHwStudents([]);
+      setHwCohortId(null);
       setStudentSearch("");
       refetchHomework();
       setTab("review");
@@ -989,7 +1008,7 @@ export default function HomeworkPage() {
               <button
                 onClick={createHomework}
                 disabled={!hwTitle || !hwContent || !hwDue
-                          || !hwStudents.length || creating}
+                          || (!hwStudents.length && !hwCohortId) || creating}
                 className="w-full py-3.5 text-sm font-bold text-white rounded-xl
                            bg-gradient-to-r from-pink-500 to-rose-400
                            hover:from-pink-600 hover:to-rose-500
@@ -1025,6 +1044,39 @@ export default function HomeworkPage() {
                   </span>
                 )}
               </div>
+
+              {cohorts.length > 0 && (
+                <div className="space-y-2 pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <Users2 className="w-4 h-4 text-indigo-500" />
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      O asignar a un grupo completo
+                    </label>
+                  </div>
+                  <div className="relative">
+                    <select
+                      value={hwCohortId ?? ""}
+                      onChange={e => setHwCohortId(e.target.value ? Number(e.target.value) : null)}
+                      className="w-full appearance-none bg-slate-50 border-2 border-transparent rounded-xl
+                                text-sm font-bold text-slate-800 px-4 py-3 focus:outline-none focus:bg-white
+                                focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 transition-all cursor-pointer"
+                    >
+                      <option value="">Ninguno (solo estudiantes seleccionados abajo)</option>
+                      {cohorts.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.package_name ?? "Cohorte"} — {c.current_students} alumno{c.current_students !== 1 ? "s" : ""} ({c.status === "filling" ? "llenándose" : c.status === "confirmed" ? "confirmada" : "en curso"})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                  {hwCohortId && (
+                    <p className="text-[11px] text-indigo-600 font-bold">
+                      Se asignará a todos los integrantes activos de este grupo, además de los estudiantes que marques abajo.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="group relative">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2

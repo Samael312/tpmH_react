@@ -209,7 +209,18 @@ export default function ClassCard({
   const studentCancelInline = async () => {
     setUpdating(true); setError("");
     try {
-      await api.delete(`/classes/${class_.id}`);
+      if (isGroup) {
+        if (!class_.cohort_id) throw new Error("Esta clase grupal no tiene cohorte asociada");
+        const ok = window.confirm(
+          "Esto te saca de TODO el grupo, no solo de esta clase. " +
+          "Perderás tu cupo en todas las próximas sesiones de esta cohorte y " +
+          "podrás elegir un nuevo paquete después. ¿Deseas continuar?"
+        );
+        if (!ok) { setUpdating(false); return; }
+        await api.post(`/cohorts/${class_.cohort_id}/leave`);
+      } else {
+        await api.delete(`/classes/${class_.id}`);
+      }
       onUpdate?.();
     } catch (e: any) { setError(e.response?.data?.detail || "Error al cancelar"); } 
     finally { setUpdating(false); }
@@ -246,9 +257,14 @@ export default function ClassCard({
   const canReschedule = role === "teacher"
     ? !["completed", "cancelled", "no_show"].includes(class_.status)
     : STUDENT_RESCHEDULABLE.includes(class_.status) && !isGroup;
+  // Un alumno SÍ puede cancelar una sesión grupal — pero a diferencia de una
+  // clase individual, "Cancelar" para un grupo significa salir de TODA la
+  // cohorte (POST /cohorts/{cohort_id}/leave, con confirmación explícita en
+  // studentCancelInline), no solo de esta sesión puntual. Al salir, el
+  // enrollment queda cancelado y el alumno puede elegir un nuevo paquete.
   const canCancel = role === "teacher"
     ? TEACHER_CANCELABLE_STATUSES.includes(class_.status)
-    : STUDENT_CANCELABLE.includes(class_.status) && !isGroup;
+    : STUDENT_CANCELABLE.includes(class_.status);
 
   // BUG-05/17 fix: antes 'showTeacherActions' exigía !isPast, lo que ocultaba
   // los botones de Completar/No asistió justo cuando más se necesitan (después
@@ -402,7 +418,7 @@ export default function ClassCard({
                 )}
                 {canCancel && (!isPast || role === "teacher") && (
                   <button onClick={handleCancelClick} disabled={updating} className="flex items-center justify-center gap-1.5 text-xs font-bold text-red-500 bg-red-50 hover:bg-red-100 px-3.5 py-2 rounded-xl transition-colors disabled:opacity-50">
-                    <X className="w-3.5 h-3.5" /> Cancelar
+                    <X className="w-3.5 h-3.5" /> {isGroup && role === "student" ? "Salir" : "Cancelar"}
                   </button>
                 )}
               </>

@@ -55,7 +55,32 @@ def create_homework(
     current_user: User = Depends(get_current_approved_teacher),
     db: Session = Depends(get_db)
 ):
-    """El profesor crea una tarea y la asigna a estudiantes (solo los suyos)."""
+    """
+    El profesor crea una tarea y la asigna a estudiantes (solo los suyos)
+    y/o a todos los integrantes de una de sus cohortes grupales (cohort_id).
+    """
+    target_ids = list(dict.fromkeys(data.student_ids))  # únicos, preserva orden
+
+    if data.cohort_id:
+        from app.core.group_cohort_logic import get_cohort_student_ids
+        cohort_student_ids = get_cohort_student_ids(
+            data.cohort_id, current_user.teacher_profile.id, db
+        )
+        if not cohort_student_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Cohorte no encontrada, no te pertenece, o no tiene integrantes activos"
+            )
+        for sid in cohort_student_ids:
+            if sid not in target_ids:
+                target_ids.append(sid)
+
+    if not target_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debes indicar al menos un estudiante o una cohorte"
+        )
+
     homework = Homework(
         teacher_id=current_user.teacher_profile.id,
         title=data.title,
@@ -68,7 +93,7 @@ def create_homework(
     owned_ids = set(current_user.teacher_profile.students or [])
     assigned_count = 0
 
-    for student_id in data.student_ids:
+    for student_id in target_ids:
         if student_id not in owned_ids:
             continue
 

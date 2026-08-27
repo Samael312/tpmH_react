@@ -17,6 +17,28 @@ def get_cohort_active_count(cohort_id: int, db: Session) -> int:
     ).count()
 
 
+def get_cohort_student_ids(cohort_id: int, teacher_id: int, db: Session) -> list[int]:
+    """
+    StudentProfile.id de todos los integrantes activos (no cancelados) de
+    una cohorte, validando que le pertenezca al profesor que la consulta.
+    Usado para asignar materiales/tareas a un grupo entero de una sola vez
+    (ver endpoints /materials/{id}/assign y POST /homework/).
+    Devuelve [] si la cohorte no existe o no es del profesor.
+    """
+    cohort = db.query(GroupCohort).filter(
+        GroupCohort.id == cohort_id,
+        GroupCohort.teacher_id == teacher_id,
+    ).first()
+    if not cohort:
+        return []
+
+    rows = db.query(Enrollment.student_id).filter(
+        Enrollment.cohort_id == cohort_id,
+        Enrollment.status.notin_(["cancelled"]),
+    ).all()
+    return [r[0] for r in rows]
+
+
 def get_enrollment_group_occupied_slots(enrollment: Enrollment, db: Session) -> int:
     """
     Equivalente a _get_enrollment_occupied_slots (payments.py) pero para

@@ -11,6 +11,7 @@ from app.core.group_cohort_logic import (
     cancel_cohort,
     close_cohort,
     get_cohort_active_count,
+    release_cohort_seat,
 )
 from app.db.base import get_db
 from app.models.class_ import Class, ClassType
@@ -391,6 +392,38 @@ def enroll_in_cohort(
         "enrollment_id": enrollment.id,
         "cohort_id": cohort.id,
     }
+
+
+@router.post("/{cohort_id}/leave")
+def leave_cohort(
+    cohort_id: int,
+    current_user: User = Depends(get_current_student),
+    db: Session = Depends(get_db),
+):
+    """
+    El estudiante abandona una cohorte grupal POR COMPLETO (no solo una
+    sesión puntual, ver DELETE /classes/{id}/leave para eso): cancela su
+    Enrollment y libera su cupo en todas las sesiones futuras vía
+    release_cohort_seat. Al quedar sin enrollment activo con este profesor,
+    get_student_booking_stage lo llevará a "needs_renewal" (o
+    "needs_package" si nunca tuvo otro), habilitándolo para elegir un
+    nuevo paquete — individual o unirse a otra cohorte.
+    """
+    student_id = current_user.student_profile.id
+
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.cohort_id == cohort_id,
+        Enrollment.student_id == student_id,
+        Enrollment.status.notin_(["cancelled"]),
+    ).first()
+    if not enrollment:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No estás inscrito en esta cohorte")
+
+    release_cohort_seat(enrollment, db)
+    enrollment.status = EnrollmentStatus.cancelled
+    db.commit()
+
+    return {"message": "Saliste del grupo. Ya puedes elegir un nuevo paquete."}
 
 
 # ─── ESTUDIANTE — Cotización de migración grupal -> individual ────────────
