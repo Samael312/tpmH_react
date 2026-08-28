@@ -36,6 +36,36 @@ PACKAGE_CHANGE_BLOCKING_STATUSES = [
 router = APIRouter()
 
 
+def _validate_group_package_fields(is_group: bool, classes_count, min_students, max_students, allow_installments: bool):
+    """
+    Reglas propias de paquetes grupales, compartidas entre create y update:
+    - No se soporta "ilimitado" (classes_count=None) combinado con grupal —
+      create_group_session y el conteo de cupo asumen un número fijo de
+      sesiones por cohorte; permitir ilimitadas dejaba ese flujo sin probar
+      y potencialmente roto.
+    - No se soporta pago en cuotas en paquetes grupales (se cobra el total
+      al inscribirse, ver POST /cohorts/{id}/enroll).
+    - min/max de alumnos son obligatorios y coherentes si es grupal.
+    """
+    if not is_group:
+        return
+    if classes_count is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Un paquete grupal no puede tener clases ilimitadas"
+        )
+    if allow_installments:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Un paquete grupal no admite pago en cuotas"
+        )
+    if min_students is None or max_students is None or min_students < 1 or max_students < min_students:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Un paquete grupal requiere un mínimo y máximo de alumnos válidos"
+        )
+
+
 # ─── PROFESOR — Gestión de paquetes ─────────────────────────────────────────
 
 @router.post("/", response_model=PackageResponse, status_code=status.HTTP_201_CREATED)
@@ -46,6 +76,13 @@ def create_package(
 ):
     """El profesor crea un paquete de clases"""
     pkg_data = data.model_dump()
+    _validate_group_package_fields(
+        is_group=pkg_data.get("is_group", False),
+        classes_count=pkg_data.get("classes_count"),
+        min_students=pkg_data.get("min_students"),
+        max_students=pkg_data.get("max_students"),
+        allow_installments=pkg_data.get("allow_installments", False),
+    )
     if pkg_data.get("allow_installments") and pkg_data.get("installment_count"):
         if not pkg_data.get("installment_amount"):
             pkg_data["installment_amount"] = round(pkg_data["price"] / pkg_data["installment_count"], 2)
@@ -92,6 +129,14 @@ def update_package(
         )
 
     update_data = data.model_dump(exclude_unset=True)
+
+    _validate_group_package_fields(
+        is_group=update_data.get("is_group", package.is_group),
+        classes_count=update_data.get("classes_count", package.classes_count),
+        min_students=update_data.get("min_students", package.min_students),
+        max_students=update_data.get("max_students", package.max_students),
+        allow_installments=update_data.get("allow_installments", package.allow_installments),
+    )
 
     allow_inst = update_data.get("allow_installments", package.allow_installments)
     inst_count = update_data.get("installment_count", package.installment_count)

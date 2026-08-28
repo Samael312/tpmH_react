@@ -166,7 +166,14 @@ function StudentCard({ student }: { student: TeacherStudentFull }) {
                   return (
                     <div key={e.id} className="bg-white border border-slate-100 rounded-xl px-4 py-3 shadow-sm">
                       <div className="flex items-center justify-between gap-2 flex-wrap mb-1.5">
-                        <p className="text-xs font-black text-slate-800">{e.package_name}</p>
+                        <p className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                          {e.package_name}
+                          {e.is_group && (
+                            <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest">
+                              <Users className="w-2.5 h-2.5" /> Grupo{e.cohort_id ? ` #${e.cohort_id}` : ""}
+                            </span>
+                          )}
+                        </p>
                         <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${STATUS_BADGE[e.status] ?? "bg-slate-100 text-slate-500"}`}>
                           {STATUS_LABEL[e.status] ?? e.status}
                         </span>

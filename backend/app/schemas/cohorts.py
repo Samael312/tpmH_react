@@ -52,6 +52,11 @@ class CohortResponse(BaseModel):
 class GroupEnrollRequest(BaseModel):
     """El estudiante se inscribe a una cohorte abierta (status='filling')."""
     cohort_id: int
+    # Igual que en /payments/notify-payment: referencia del comprobante de
+    # pago (últimos dígitos, ID de transacción, etc). Antes este endpoint
+    # no lo pedía en absoluto — el Payment quedaba pending_review sin
+    # ningún dato que el profesor pudiera verificar contra su comprobante.
+    transaction_reference: Optional[str] = None
 
 
 class GroupToIndividualMigrationRequest(BaseModel):
@@ -81,6 +86,20 @@ class GroupSessionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SessionParticipantResponse(BaseModel):
+    """Un integrante de una sesión grupal puntual, con su asistencia."""
+    student_id: int
+    student_name: str
+    attendance_status: str  # "confirmed" | "no_show" | "cancelled"
+
+    class Config:
+        from_attributes = True
+
+
+class MarkAttendanceRequest(BaseModel):
+    attendance_status: str  # "confirmed" (asistió) | "no_show" (no asistió)
 
 
 class MigrationQuoteResponse(BaseModel):

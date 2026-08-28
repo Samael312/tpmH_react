@@ -48,14 +48,29 @@ def create_review(
 
     student_id = current_user.student_profile.id
 
-    # 2. Verificar que han tenido al menos una clase completada
-    completed_class = db.query(Class).filter(
+    # 2. Verificar que han tenido al menos una clase completada (individual
+    #    o grupal — Class.student_id es NULL en clases grupales, así que
+    #    ese caso se valida aparte vía ClassParticipant).
+    completed_individual = db.query(Class).filter(
         Class.teacher_id == teacher.id,
         Class.student_id == student_id,
         Class.status == "completed"
     ).first()
 
-    if not completed_class:
+    completed_group = None
+    if not completed_individual:
+        from app.models.class_participant import ClassParticipant
+        completed_group = db.query(Class).join(
+            ClassParticipant, ClassParticipant.class_id == Class.id
+        ).filter(
+            Class.teacher_id == teacher.id,
+            Class.status == "completed",
+            Class.class_type == "group",
+            ClassParticipant.student_id == student_id,
+            ClassParticipant.attendance_status != "cancelled",
+        ).first()
+
+    if not completed_individual and not completed_group:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo puedes dejar una reseña después de completar una clase"

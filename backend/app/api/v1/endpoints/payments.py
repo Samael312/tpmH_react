@@ -931,6 +931,45 @@ def validate_payment(
             if enrollment.activated_at is None and enrollment.payment_status in ("paid", "partially_paid"):
                 enrollment.activated_at = now
 
+    # Un alumno cuyo pago de inscripción a cohorte recién se aprueba no
+    # aparecía en las sesiones grupales que el profesor ya había agendado
+    # ANTES de la aprobación (solo se agregaba a las que se crearan
+    # después) — se le sumaba como participante a futuro pero quedaba
+    # "afuera" de sesiones ya visibles para el resto del grupo. Se
+    # agrega retroactivamente como ClassParticipant a las sesiones
+    # futuras de su cohorte que todavía tienen cupo.
+    if payment.payment_type == "group_enrollment":
+        enrollment_after = db.query(Enrollment).filter(Enrollment.id == payment.enrollment_id).first()
+        if enrollment_after and enrollment_after.cohort_id and enrollment_after.payment_status == "paid":
+            from app.models.class_ import Class, ClassType
+            from app.models.class_participant import ClassParticipant
+            from app.core.timezone import utc_now as _utc_now
+
+            future_sessions = db.query(Class).filter(
+                Class.cohort_id == enrollment_after.cohort_id,
+                Class.class_type == ClassType.group,
+                Class.start_time_utc > _utc_now(),
+                Class.status.notin_(["cancelled"]),
+            ).all()
+            cohort = enrollment_after.cohort
+            max_students = cohort.max_students if cohort else None
+            for session in future_sessions:
+                already_in = db.query(ClassParticipant).filter(
+                    ClassParticipant.class_id == session.id,
+                    ClassParticipant.student_id == enrollment_after.student_id,
+                ).first()
+                if already_in:
+                    continue
+                active_count = len([p for p in session.participants if p.attendance_status != "cancelled"])
+                if max_students is not None and active_count >= max_students:
+                    continue  # sesión ya llena — no forzar sobrecupo
+                db.add(ClassParticipant(
+                    class_id=session.id,
+                    student_id=enrollment_after.student_id,
+                    enrollment_id=enrollment_after.id,
+                    attendance_status="confirmed",
+                ))
+
     student_user = payment.student.user if payment.student else None
     if student_user and not payment.is_manual_grant:
         send_payment_receipt_email(

@@ -15,6 +15,7 @@ import PackageCheckout from "@/components/payments/PackageCheckout";
 import { formatTimeTz, formatDateHumanTz, getMyDisplayTimezone } from "@/lib/tzFormat";
 import { priceLabelSuffix } from "@/lib/packageThemes";
 import BuyCreditsModal from "@/components/payments/BuyCreditsModal";
+import PaymentMethodsInfo from "@/components/payments/PaymentMethodsInfo";
 import { useBusinessRules } from "@/hooks/useBusinessRules";
 
 type BookingStage =
@@ -656,9 +657,14 @@ function GroupPackagesBrowser({
 }) {
   const [cohortsByPackage, setCohortsByPackage] = useState<Record<number, CohortLite[]>>({});
   const [loadingCohorts, setLoadingCohorts] = useState(true);
-  const [joiningId, setJoiningId] = useState<number | null>(null);
+  const [joining, setJoining] = useState(false);
   const [error, setError] = useState("");
   const [joined, setJoined] = useState(false);
+  // Paso de confirmación antes de inscribir de verdad — antes un solo clic
+  // en "Unirme" ya disparaba el pago pendiente, sin mostrar cómo pagar ni
+  // pedir referencia de comprobante (a diferencia del checkout individual).
+  const [confirming, setConfirming] = useState<{ pkg: GroupPackageLite; cohort: CohortLite } | null>(null);
+  const [reference, setReference] = useState("");
 
   useEffect(() => {
     if (!groupPackages.length) { setLoadingCohorts(false); return; }
@@ -673,18 +679,22 @@ function GroupPackagesBrowser({
     }).finally(() => setLoadingCohorts(false));
   }, [groupPackages]);
 
-  const join = async (cohortId: number) => {
+  const confirmJoin = async () => {
+    if (!confirming) return;
     setError("");
-    setJoiningId(cohortId);
+    setJoining(true);
     try {
-      await api.post(`/cohorts/${cohortId}/enroll`, { cohort_id: cohortId });
+      await api.post(`/cohorts/${confirming.cohort.id}/enroll`, {
+        cohort_id: confirming.cohort.id,
+        transaction_reference: reference.trim() || undefined,
+      });
       setJoined(true);
       setTimeout(onEnrolled, 1200);
     } catch (e) {
       const err = e as { response?: { data?: { detail?: string } } };
       setError(err.response?.data?.detail || "Error al inscribirte en la cohorte");
     } finally {
-      setJoiningId(null);
+      setJoining(false);
     }
   };
 
@@ -697,6 +707,67 @@ function GroupPackagesBrowser({
         <p className="text-sm font-bold text-emerald-700">
           Te inscribiste en la cohorte. Tu profesor(a) confirmará tu pago en breve.
         </p>
+      </div>
+    );
+  }
+
+  // Paso 2: confirmar el pago (instrucciones + referencia) antes de inscribir
+  if (confirming) {
+    return (
+      <div className="space-y-4 pt-2">
+        <div className="flex items-center gap-2">
+          <Users2 className="w-4 h-4 text-indigo-500" />
+          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+            Confirmar inscripción — {confirming.pkg.name}
+          </h3>
+        </div>
+
+        {error && (
+          <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
+            <X className="w-4 h-4 flex-shrink-0" /> {error}
+          </div>
+        )}
+
+        <div className="bg-gradient-to-br from-pink-50 to-rose-50 border border-pink-100 rounded-2xl p-4 text-center">
+          <p className="text-[10px] font-black text-pink-500 uppercase tracking-widest mb-1">
+            Monto total a transferir
+          </p>
+          <p className="text-3xl font-black text-pink-600">${confirming.pkg.price.toFixed(2)} USD</p>
+        </div>
+
+        <PaymentMethodsInfo />
+
+        <div>
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+            Mensaje de transacción (opcional)
+          </label>
+          <input
+            type="text" value={reference} onChange={(e) => setReference(e.target.value)}
+            placeholder="Ej: últimos 4 dígitos, ID de transacción..."
+            className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-xs font-bold
+                       text-slate-800 placeholder:text-slate-400 px-4 py-3.5 focus:outline-none
+                       focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
+          />
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => { setConfirming(null); setReference(""); setError(""); }}
+            disabled={joining}
+            className="flex-1 py-3 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
+          >
+            Volver
+          </button>
+          <button
+            onClick={confirmJoin}
+            disabled={joining}
+            className="flex-1 py-3 text-sm font-bold text-white rounded-xl bg-indigo-500 hover:bg-indigo-600 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {joining ? (
+              <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+            ) : "Confirmar inscripción"}
+          </button>
+        </div>
       </div>
     );
   }
@@ -735,13 +806,10 @@ function GroupPackagesBrowser({
               </p>
               <p className="text-xs text-slate-500">${pkg.price} {pkg.classes_count ? `· ${pkg.classes_count} clases` : ""}</p>
               <button
-                onClick={() => join(cohort.id)}
-                disabled={joiningId !== null}
-                className="mt-1 w-full py-2.5 text-xs font-bold text-white rounded-xl bg-indigo-500 hover:bg-indigo-600 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                onClick={() => { setConfirming({ pkg, cohort }); setReference(""); setError(""); }}
+                className="mt-1 w-full py-2.5 text-xs font-bold text-white rounded-xl bg-indigo-500 hover:bg-indigo-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
               >
-                {joiningId === cohort.id ? (
-                  <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                ) : "Unirme a esta cohorte"}
+                Unirme a esta cohorte
               </button>
             </div>
           )))}

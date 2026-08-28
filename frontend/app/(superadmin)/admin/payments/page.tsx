@@ -41,6 +41,10 @@ const TYPE_BADGE: Record<string, { label: (p: any) => string; cls: string }> = {
     label: () => "Reembolso a favor del estudiante",
     cls: "bg-rose-100 text-rose-700 border-rose-200"
   },
+  group_enrollment: {
+    label: () => "Inscripción a grupo",
+    cls: "bg-indigo-100 text-indigo-700 border-indigo-200"
+  },
 }
 
 export default function PaymentsPage() {

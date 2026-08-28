@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Users2, Plus, Check, Calendar, Lock, Ban, ChevronRight,
-  AlertTriangle, Clock,
+  AlertTriangle, Clock, X, UserCheck, UserX,
 } from "lucide-react";
 import api from "@/lib/api";
 import { Card, Badge, Button, Skeleton, FullScreenModal } from "@/components/ui";
@@ -43,6 +43,12 @@ interface Session {
   participant_count: number;
 }
 
+interface SessionParticipant {
+  student_id: number;
+  student_name: string;
+  attendance_status: "confirmed" | "no_show" | "cancelled";
+}
+
 const STATUS_LABEL: Record<Cohort["status"], string> = {
   filling: "Llenándose",
   confirmed: "Confirmada",
@@ -71,6 +77,7 @@ export default function TeacherCohortsPage() {
 
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [sessionsByCohort, setSessionsByCohort] = useState<Record<number, Session[]>>({});
+  const [attendanceSession, setAttendanceSession] = useState<Session | null>(null);
 
   const [closingCohort, setClosingCohort] = useState<Cohort | null>(null);
   const [closeDate, setCloseDate] = useState("");
@@ -134,6 +141,13 @@ export default function TeacherCohortsPage() {
 
   const handleClose = async () => {
     if (!closingCohort || !closeDate) return;
+    if (closingCohort.current_students < closingCohort.min_students) {
+      const ok = window.confirm(
+        `Estás cerrando esta cohorte con ${closingCohort.current_students} de ${closingCohort.min_students} alumnos mínimos sugeridos. ` +
+        `¿Confirmas que quieres iniciarla igual con menos integrantes?`
+      );
+      if (!ok) return;
+    }
     setActionLoading(true);
     try {
       await api.post(`/cohorts/${closingCohort.id}/close`, {
@@ -191,7 +205,7 @@ export default function TeacherCohortsPage() {
           <p className="text-sm text-slate-500 mt-1">Gestiona tus cohortes: cupos, fecha de inicio y sesiones.</p>
         </div>
         <Button size="sm" onClick={() => setShowCreate(true)}>
-          <Plus className="w-4 h-4" /> Nueva cohorte
+          <Plus className="w-4 h-4" /> Nueva Grupo
         </Button>
       </div>
 
@@ -298,7 +312,12 @@ export default function TeacherCohortsPage() {
                           {new Date(s.start_time_utc).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" })}
                           {" · "}{s.duration} min
                         </span>
-                        <span className="text-slate-400">{s.participant_count} alumno(s)</span>
+                        <button
+                          onClick={() => setAttendanceSession(s)}
+                          className="text-pink-600 font-bold hover:underline flex items-center gap-1"
+                        >
+                          {s.participant_count} alumno(s)
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -313,7 +332,7 @@ export default function TeacherCohortsPage() {
       <FullScreenModal
         open={showCreate}
         onClose={() => setShowCreate(false)}
-        title="Nueva cohorte grupal"
+        title="Nueva Grupo"
         footer={
           <Button className="w-full" onClick={handleCreate} loading={creating} disabled={!form.package_id}>
             <Check className="w-4 h-4" /> Crear cohorte
@@ -455,6 +474,104 @@ export default function TeacherCohortsPage() {
           </div>
         </div>
       </FullScreenModal>
+
+      {attendanceSession && (
+        <AttendanceModal
+          session={attendanceSession}
+          onClose={() => setAttendanceSession(null)}
+        />
+      )}
     </div>
   );
 }
+
+// ─── Modal: asistencia por alumno de una sesión grupal ─────────────────────
+// Antes el único estado disponible era el de la Class compartida (todo el
+// grupo "completado" o "no_show" a la vez). Esto permite marcar
+// individualmente quién asistió a ESTA sesión puntual.
+function AttendanceModal({ session, onClose }: { session: Session; onClose: () => void }) {
+  const [participants, setParticipants] = useState<SessionParticipant[] | null>(null);
+  const [error, setError] = useState("");
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
+
+  useEffect(() => {
+    api.get<SessionParticipant[]>(`/cohorts/sessions/${session.id}/participants`)
+      .then(res => setParticipants(res.data))
+      .catch((e) => setError(e?.response?.data?.detail || "No se pudo cargar la lista"));
+  }, [session.id]);
+
+  const mark = async (studentId: number, status: "confirmed" | "no_show") => {
+    setUpdatingId(studentId);
+    try {
+      await api.patch(`/cohorts/sessions/${session.id}/participants/${studentId}/attendance`, {
+        attendance_status: status,
+      });
+      setParticipants(prev =>
+        prev ? prev.map(p => p.student_id === studentId ? { ...p, attendance_status: status } : p) : prev
+      );
+    } catch (e) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      setError(err?.response?.data?.detail || "No se pudo actualizar la asistencia");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  return (
+    <FullScreenModal
+      open
+      onClose={onClose}
+      title="Asistencia de la sesión"
+    >
+      <div className="space-y-3">
+        <p className="text-xs text-slate-500 flex items-center gap-1.5">
+          <Clock className="w-3.5 h-3.5" />
+          {new Date(session.start_time_utc).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" })}
+        </p>
+
+        {error && (
+          <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
+            <X className="w-4 h-4 flex-shrink-0" /> {error}
+          </div>
+        )}
+
+        {!participants ? (
+          <p className="text-xs text-slate-400">Cargando integrantes…</p>
+        ) : participants.length === 0 ? (
+          <p className="text-xs text-slate-400">No hay integrantes activos en esta sesión.</p>
+        ) : (
+          <ul className="space-y-2">
+            {participants.map(p => (
+              <li key={p.student_id} className="flex items-center justify-between bg-slate-50 rounded-xl px-3 py-2.5">
+                <span className="text-sm font-bold text-slate-700">{p.student_name}</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => mark(p.student_id, "confirmed")}
+                    disabled={updatingId === p.student_id}
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors disabled:opacity-50 ${
+                      p.attendance_status === "confirmed" ? "bg-emerald-500 text-white" : "bg-white text-emerald-500 border border-emerald-200 hover:bg-emerald-50"
+                    }`}
+                    title="Marcar como asistió"
+                  >
+                    <UserCheck className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => mark(p.student_id, "no_show")}
+                    disabled={updatingId === p.student_id}
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors disabled:opacity-50 ${
+                      p.attendance_status === "no_show" ? "bg-rose-500 text-white" : "bg-white text-rose-500 border border-rose-200 hover:bg-rose-50"
+                    }`}
+                    title="Marcar como no asistió"
+                  >
+                    <UserX className="w-4 h-4" />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </FullScreenModal>
+  );
+}
+

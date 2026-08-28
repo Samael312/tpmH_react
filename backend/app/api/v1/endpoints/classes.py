@@ -196,10 +196,40 @@ def _sync_google_calendar_cancelled(teacher_id: int, event_id: Optional[str], db
 
 def _send_reschedule_emails_helper(class_: Class, old_start: datetime, changed_by: str):
     """Función de ayuda para enviar correos tras la reprogramación"""
-    student_user = class_.student.user if class_.student else None
     teacher_user = class_.teacher.user if class_.teacher else None
-    student_name = f"{student_user.name} {student_user.surname}" if student_user else ""
     teacher_name = f"{teacher_user.name} {teacher_user.surname}" if teacher_user else ""
+
+    # Clases grupales: Class.student_id es NULL — recorrer cada participante
+    # activo vía ClassParticipant en vez de asumir un solo estudiante.
+    if class_.class_type == ClassType.group:
+        student_names = []
+        for participant in class_.participants:
+            if participant.attendance_status == "cancelled":
+                continue
+            student = participant.student
+            if student and student.user:
+                student_names.append(f"{student.user.name} {student.user.surname}")
+                send_class_rescheduled_student_email(
+                    to_email=student.user.email,
+                    student_name=student.user.name,
+                    teacher_name=teacher_name,
+                    old_start_local=format_local_datetime(old_start, student.timezone),
+                    new_start_local=format_local_datetime(class_.start_time_utc, student.timezone),
+                    changed_by=changed_by
+                )
+        if teacher_user and class_.teacher:
+            send_class_rescheduled_teacher_email(
+                to_email=teacher_user.email,
+                teacher_name=teacher_user.name,
+                student_name=f"tu grupo ({len(student_names)} alumno{'s' if len(student_names) != 1 else ''})",
+                old_start_local=format_local_datetime(old_start, class_.teacher.timezone),
+                new_start_local=format_local_datetime(class_.start_time_utc, class_.teacher.timezone),
+                changed_by=changed_by
+            )
+        return
+
+    student_user = class_.student.user if class_.student else None
+    student_name = f"{student_user.name} {student_user.surname}" if student_user else ""
 
     if student_user and class_.student:
         send_class_rescheduled_student_email(
@@ -644,17 +674,34 @@ def cancel_class_teacher(
     cancel_class_and_refund(class_, db, apply_late_cancel_penalty=False)
     db.commit()
 
-    # Notificar al estudiante (antes faltaba este email por completo)
-    student = db.query(StudentProfile).filter(StudentProfile.id == class_.student_id).first()
-    if student and student.user:
-        send_class_cancelled_email(
-            to_email=student.user.email,
-            student_name=student.user.name,
-            teacher_name=f"{current_user.name} {current_user.surname}",
-            class_start_local=format_local_datetime(class_.start_time_utc, student.timezone),
-            cancelled_by="teacher",
-            credit_returned=True,
-        )
+    # Notificar al/los estudiante(s) (antes faltaba este email por completo).
+    # En clases grupales Class.student_id es NULL — hay que recorrer cada
+    # participante activo vía ClassParticipant en vez de un solo lookup.
+    if class_.class_type == ClassType.group:
+        for participant in class_.participants:
+            if participant.attendance_status == "cancelled":
+                continue
+            student = db.query(StudentProfile).filter(
+                StudentProfile.id == participant.student_id
+            ).first()
+            if student and student.user:
+                send_class_cancelled_email(
+                    to_email=student.user.email,
+                    student_name=student.user.name,
+                    class_start_local=format_local_datetime(class_.start_time_utc, student.timezone),
+                    cancelled_by="teacher",
+                    credit_returned=True,
+                )
+    else:
+        student = db.query(StudentProfile).filter(StudentProfile.id == class_.student_id).first()
+        if student and student.user:
+            send_class_cancelled_email(
+                to_email=student.user.email,
+                student_name=student.user.name,
+                class_start_local=format_local_datetime(class_.start_time_utc, student.timezone),
+                cancelled_by="teacher",
+                credit_returned=True,
+            )
 
     _sync_google_calendar_cancelled(class_.teacher_id, class_.google_event_id, db)
     return {"message": "Clase cancelada por el profesor. El crédito ha sido reembolsado al estudiante."}
@@ -779,7 +826,6 @@ def cancel_class_admin(
         send_class_cancelled_email(
             to_email=student.user.email,
             student_name=student.user.name,
-            teacher_name=teacher_name,
             class_start_local=format_local_datetime(class_.start_time_utc, student.timezone),
             cancelled_by="staff",
             credit_returned=True,

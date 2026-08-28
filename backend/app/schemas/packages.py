@@ -20,6 +20,15 @@ class PackageCreate(BaseModel):
     allow_installments: bool = False
     installment_count: Optional[int] = None
     installment_amount: Optional[float] = None
+    # BUG: estos 3 campos nunca estuvieron declarados acá, así que Pydantic
+    # los descartaba en silencio del payload — el toggle "grupal" del
+    # formulario nunca llegaba a guardarse, el paquete quedaba is_group=False
+    # sin importar lo que mandara el frontend. Por eso no aparecía el badge
+    # "Grupal" en la tarjeta ni el creador de cohortes lo reconocía como
+    # paquete grupal disponible.
+    is_group: bool = False
+    min_students: Optional[int] = None
+    max_students: Optional[int] = None
 
     @field_validator("duration_minutes")
     @classmethod

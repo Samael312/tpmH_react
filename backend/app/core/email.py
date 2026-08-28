@@ -238,6 +238,36 @@ def send_class_reminder_email(
     return _send(to_email, f"Recordatorio: clase en {hours_before}h — {PLATFORM_NAME}", html)
 
 
+def send_cohort_ended_email(
+    to_email: str, student_name: str, package_name: str, reason: str,
+    credit_returned: bool | None = None,
+) -> bool:
+    """
+    Para cuando una cohorte grupal termina y el alumno queda libre de
+    elegir un nuevo paquete — a diferencia de una clase cancelada (que
+    tiene una fecha/hora puntual), acá lo que se cancela es la cohorte
+    completa, así que esta plantilla NO reutiliza el campo "Fecha y hora"
+    de send_class_cancelled_email (antes se le pasaba ahí una oración en
+    vez de un horario real, lo cual se leía sin sentido en el correo).
+    `reason`: "below_minimum" | "teacher_cancelled".
+    """
+    reason_text = {
+        "below_minimum": "el grupo no alcanzó el mínimo de alumnos necesario para continuar",
+        "teacher_cancelled": "tu profesor(a) decidió no continuar con este grupo",
+    }.get(reason, "tu grupo llegó a su fin")
+    credit_line = ""
+    if credit_returned is True:
+        credit_line = f'<p style="font-size:13px;color:{COLOR_GREEN};font-weight:700;">✓ Tu pago queda disponible para elegir un nuevo paquete.</p>'
+    body = f"""
+      <p>Hola {student_name}, tu grupo de <strong style="color:{COLOR_INK};">{package_name}</strong> terminó porque {reason_text}.</p>
+      {credit_line}
+      <p style="font-size:13px;color:{COLOR_MUTED};">Puedes elegir un paquete individual u otra cohorte con cupo disponible desde tu panel.</p>
+      {_cta_button("Elegir nuevo paquete", f"{settings.FRONTEND_URL}/dashboard/schedule")}
+    """
+    html = _base_template("Tu grupo terminó", _badge("Grupo finalizado", COLOR_AMBER), "Tu grupo terminó 👥", body)
+    return _send(to_email, f"Tu grupo de {package_name} terminó — {PLATFORM_NAME}", html)
+
+
 def send_class_cancelled_email(
     to_email: str, student_name: str, class_start_local: str, cancelled_by: str,
     reason: str | None = None, credit_returned: bool | None = None,

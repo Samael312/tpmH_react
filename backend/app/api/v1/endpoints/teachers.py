@@ -220,6 +220,8 @@ def get_my_students_full(
                 "classes_total": e.classes_total,
                 "status": e.status,
                 "created_at": e.created_at,
+                "cohort_id": e.cohort_id,
+                "is_group": bool(pkg.is_group) if pkg else False,
             })
 
         material_assignments = (

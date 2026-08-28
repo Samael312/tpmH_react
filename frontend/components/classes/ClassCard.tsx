@@ -255,7 +255,11 @@ export default function ClassCard({
     ? MANUAL_TARGET_STATUSES.filter((s) => s !== class_.status)
     : [];
   const canReschedule = role === "teacher"
-    ? !["completed", "cancelled", "no_show"].includes(class_.status)
+    // El profesor SÍ puede reagendar una clase 'no_show' — como cortesía
+    // cuando el alumno faltó (ver can_reschedule_class en el backend, que
+    // ahora permite esto solo para role="teacher"). El alumno nunca puede
+    // reagendar su propia falta (no está en STUDENT_RESCHEDULABLE).
+    ? !["completed", "cancelled"].includes(class_.status)
     : STUDENT_RESCHEDULABLE.includes(class_.status) && !isGroup;
   // Un alumno SÍ puede cancelar una sesión grupal — pero a diferencia de una
   // clase individual, "Cancelar" para un grupo significa salir de TODA la

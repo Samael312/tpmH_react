@@ -632,6 +632,7 @@ export default function TeacherDashboard() {
             start_time_utc: rescheduleTarget.start_time_utc,
             duration_minutes: rescheduleTarget.duration_minutes,
             counterpart_name: rescheduleTarget.student_name,
+            isGroup: rescheduleTarget.class_type === "group",
           }}
           teacherUsername={profile.user_username}
           endpoint={`/classes/teacher/${rescheduleTarget.id}/reschedule`}

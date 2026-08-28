@@ -20,6 +20,69 @@ MIN_CANCEL_HOURS = 12
 MIN_RESCHEDULE_HOURS_STUDENT = 12
 MIN_RESCHEDULE_HOURS_STAFF = 0
 
+def is_within_teacher_availability(
+    teacher_id: int,
+    start_utc: datetime,
+    end_utc: datetime,
+    db: Session,
+) -> tuple[bool, str]:
+    """
+    Verifica que [start_utc, end_utc) caiga dentro de un bloque de
+    disponibilidad declarado por el profesor (horario semanal recurrente
+    + excepciones puntuales de disponibilidad extra), y que no choque con
+    una excepción de bloqueo puntual (vacaciones, feriado, etc).
+
+    Reutiliza la misma fuente de verdad que /availability/slots (usada
+    para reservas individuales), pero evaluada como containment en vez de
+    generar una lista de slots — pensado para validar en el servidor un
+    horario ya elegido (ej. al agendar una sesión grupal de cohorte),
+    donde antes no había ningún chequeo contra la disponibilidad
+    declarada, solo contra choques con otras clases.
+    """
+    from app.models.availability import TeacherAvailability, TeacherAvailabilityException
+    from app.core.timezone import build_weekly_range_utc
+
+    date_str = start_utc.strftime("%Y-%m-%d")
+    day_of_week = start_utc.weekday()  # 0=Lunes ... 6=Domingo (ISO)
+
+    weekly_slots = db.query(TeacherAvailability).filter(
+        TeacherAvailability.teacher_id == teacher_id,
+        TeacherAvailability.day_of_week == day_of_week,
+        TeacherAvailability.is_available == True,
+    ).all()
+
+    availability_ranges = []
+    for slot in weekly_slots:
+        try:
+            r_start, r_end = build_weekly_range_utc(date_str, slot.start_time_utc, slot.end_time_utc)
+            availability_ranges.append((r_start, r_end))
+        except ValueError:
+            continue
+
+    day_start = start_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+
+    exceptions = db.query(TeacherAvailabilityException).filter(
+        TeacherAvailabilityException.teacher_id == teacher_id,
+        TeacherAvailabilityException.start_time_utc < day_end,
+        TeacherAvailabilityException.end_time_utc > day_start,
+    ).all()
+
+    for exc in exceptions:
+        if exc.is_available:
+            availability_ranges.append((exc.start_time_utc, exc.end_time_utc))
+        else:
+            # Bloqueo puntual: si se solapa con el horario pedido, no es válido
+            if exc.start_time_utc < end_utc and exc.end_time_utc > start_utc:
+                return False, "El profesor bloqueó ese horario (excepción de no disponibilidad)"
+
+    for r_start, r_end in availability_ranges:
+        if start_utc >= r_start and end_utc <= r_end:
+            return True, ""
+
+    return False, "Ese horario está fuera de tu disponibilidad declarada"
+
+
 def get_business_rules(db: Session) -> dict:
     """
     Lee las reglas de negocio configuradas por el superadmin desde
@@ -190,6 +253,14 @@ def can_reschedule_class(
     # (la clase ya pasó, así que exigir horas de anticipación no aplica).
     reschedulable_statuses = ["pending", "pending_trial", "confirmed", "finalized"]
 
+    # 'no_show' (el alumno faltó) NO es reagendable por el propio alumno —
+    # solo el profesor puede decidir darle una nueva oportunidad como
+    # cortesía. Antes ningún rol podía reagendarla (no estaba en la lista
+    # para nadie); ahora se habilita explícitamente solo para role="teacher"
+    # (el endpoint de admin ya bypasea esta función por completo).
+    if role == "teacher":
+        reschedulable_statuses = reschedulable_statuses + ["no_show"]
+
     if class_.status not in reschedulable_statuses:
         return False, f"No se puede reagendar una clase con estado '{class_.status}'"
 
@@ -214,13 +285,17 @@ def resolve_status_after_reschedule(class_: Class) -> str:
     'confirmed', una 'pending_trial' sigue 'pending_trial' (es el único
     estado "pendiente" que existe hoy para clases).
 
-    Única excepción: una clase 'finalized' (limbo transitorio post-clase que
+    Excepciones: una clase 'finalized' (limbo transitorio post-clase que
     el sistema aún no resolvió a completed/no_show) al reagendarse a una
     fecha futura vuelve a ser una clase con clase por dar, así que debe
     pasar a 'confirmed' para volver a aparecer en "Próximas" en vez de
-    quedar atascada en "Historial" con una fecha futura.
+    quedar atascada en "Historial" con una fecha futura. Mismo caso para
+    'no_show' cuando el PROFESOR decide reagendarla como cortesía (ver
+    can_reschedule_class) — el crédito ya se descontó al marcarla no_show
+    y no se vuelve a descontar acá, solo se libera la fecha para que
+    vuelva a aparecer como próxima clase.
     """
-    if class_.status == "finalized":
+    if class_.status in ("finalized", "no_show"):
         return "confirmed"
     return class_.status
 

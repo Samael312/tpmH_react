@@ -6,7 +6,8 @@ export interface TeacherClass {
   enrollment_id: number | null
   teacher_id: number
   student_id: number
-  class_type: 'trial' | 'regular'
+  class_type: 'trial' | 'regular' | 'group'
+  cohort_id?: number | null
   subject: string | null
   start_time_utc: string
   end_time_utc: string
@@ -75,6 +76,8 @@ export interface StudentEnrollmentSummary {
   classes_total: number | null
   status: string
   created_at: string
+  cohort_id?: number | null
+  is_group?: boolean
 }
 
 export interface StudentMaterialSummary {

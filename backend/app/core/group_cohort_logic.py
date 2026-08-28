@@ -6,7 +6,7 @@ from app.core.timezone import utc_now
 from app.models.class_ import Class, ClassType
 from app.models.class_participant import ClassParticipant
 from app.models.group_cohort import GroupCohort, CohortStatus
-from app.models.package import Enrollment
+from app.models.package import Enrollment, EnrollmentStatus
 
 
 def get_cohort_active_count(cohort_id: int, db: Session) -> int:
@@ -97,21 +97,40 @@ def close_cohort(cohort: GroupCohort, start_date, db: Session) -> None:
     cohort.closed_at = utc_now()
 
 
+def release_and_cancel_all_cohort_enrollments(cohort_id: int, db: Session) -> list[Enrollment]:
+    """
+    Libera el cupo y CANCELA cada enrollment activo de una cohorte —
+    lógica compartida entre cancel_cohort (el profesor la aborta porque
+    no se llenó) y complete_cohort (el paquete/las sesiones ya cumplieron
+    su ciclo pero el grupo quedó por debajo del mínimo). En ambos casos
+    el alumno debe quedar libre de elegir un nuevo paquete la próxima vez
+    que intente agendar (ver get_student_booking_stage).
+    No hace commit. Retorna los enrollments afectados para notificar.
+    """
+    affected = db.query(Enrollment).filter(
+        Enrollment.cohort_id == cohort_id,
+        Enrollment.status.notin_(["cancelled"]),
+    ).all()
+    for enrollment in affected:
+        release_cohort_seat(enrollment, db)
+        enrollment.status = EnrollmentStatus.cancelled
+    return affected
+
+
 def cancel_cohort(cohort: GroupCohort, db: Session) -> list[Enrollment]:
     """
-    Cancela una cohorte que no se llenó. Libera el cupo de TODOS sus
-    enrollments activos (quedan disponibles para que cada alumno elija
-    migrar a individual o ser reembolsado — ver endpoint de migración).
+    Cancela una cohorte que no se llenó (o que el profesor decide abortar
+    antes de que arrancara). Libera el cupo de TODOS sus enrollments
+    activos y además CANCELA cada enrollment por completo (antes solo se
+    liberaba el cupo y el enrollment quedaba "activo" pero sin cohorte —
+    un estado inconsistente: el alumno parecía tener un paquete grupal
+    utilizable sin ninguna cohorte real detrás). Al cancelar el
+    enrollment, get_student_booking_stage lo manda a
+    needs_renewal/needs_package la próxima vez que entre a agendar, y
+    puede elegir un paquete individual u otra cohorte con cupo.
     No hace commit. Retorna los enrollments afectados para que el caller
     pueda notificar a cada alumno.
     """
     cohort.status = CohortStatus.cancelled
     cohort.closed_at = utc_now()
-
-    affected = db.query(Enrollment).filter(
-        Enrollment.cohort_id == cohort.id,
-        Enrollment.status.notin_(["cancelled"]),
-    ).all()
-    for enrollment in affected:
-        release_cohort_seat(enrollment, db)
-    return affected
+    return release_and_cancel_all_cohort_enrollments(cohort.id, db)

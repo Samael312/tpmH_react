@@ -118,6 +118,8 @@ export interface RescheduleModalClassItem {
   duration_minutes?: number | null;
   /** Nombre de la otra persona involucrada, para mostrar contexto (profesor visto por el estudiante, o estudiante visto por el profesor). */
   counterpart_name?: string | null;
+  /** Si es una sesión grupal, reagendar mueve la hora para TODOS los inscritos — se muestra una advertencia y se pide confirmación extra. */
+  isGroup?: boolean;
 }
 
 interface RescheduleModalProps {
@@ -161,6 +163,12 @@ export function RescheduleModal({
 
   const reschedule = async () => {
     if (!selected || !classItem) return;
+    if (classItem.isGroup) {
+      const ok = window.confirm(
+        "Esta es una sesión GRUPAL: reagendarla mueve la hora para TODOS los alumnos inscritos, no solo para uno. ¿Confirmas el cambio de horario para todo el grupo?"
+      );
+      if (!ok) return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -228,6 +236,15 @@ export function RescheduleModal({
             </div>
           ) : (
             <div className="space-y-4">
+
+              {classItem.isGroup && (
+                <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex gap-3 items-start">
+                  <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs font-bold text-amber-700 leading-relaxed">
+                    Esta es una sesión grupal. Al reagendar, la hora cambia para <span className="underline">todos</span> los alumnos inscritos, no solo para uno.
+                  </p>
+                </div>
+              )}
 
               {/* Información de la clase actual */}
               <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex items-center gap-3.5 shadow-sm">

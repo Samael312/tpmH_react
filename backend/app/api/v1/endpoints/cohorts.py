@@ -11,8 +11,10 @@ from app.core.group_cohort_logic import (
     cancel_cohort,
     close_cohort,
     get_cohort_active_count,
+    release_and_cancel_all_cohort_enrollments,
     release_cohort_seat,
 )
+from app.core.timezone import utc_now
 from app.db.base import get_db
 from app.models.class_ import Class, ClassType
 from app.models.class_participant import ClassParticipant
@@ -28,7 +30,9 @@ from app.schemas.cohorts import (
     GroupEnrollRequest,
     GroupSessionCreate,
     GroupSessionResponse,
+    MarkAttendanceRequest,
     MigrationQuoteResponse,
+    SessionParticipantResponse,
 )
 
 router = APIRouter()
@@ -135,10 +139,9 @@ def cancel_cohort_endpoint(
     db: Session = Depends(get_db),
 ):
     """
-    Cancela una cohorte que no se llenó. Libera el cupo de todos sus
-    alumnos inscritos; cada uno queda con su enrollment activo pero sin
-    cohorte, listo para migrar a individual o para que el profesor/staff
-    gestione un reembolso manual.
+    Cancela una cohorte que no se llenó (o que el profesor decide abortar).
+    Cancela el enrollment de cada alumno inscrito (ver cancel_cohort) para
+    que quede libre de elegir un paquete nuevo, y le notifica por email.
     """
     cohort = db.query(GroupCohort).filter(
         GroupCohort.id == cohort_id,
@@ -149,9 +152,86 @@ def cancel_cohort_endpoint(
     if cohort.status not in (CohortStatus.filling, CohortStatus.confirmed):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Esta cohorte ya no se puede cancelar")
 
-    cancel_cohort(cohort, db)
+    package_name = cohort.package.name if cohort.package else "el paquete grupal"
+    affected = cancel_cohort(cohort, db)
     db.commit()
     db.refresh(cohort)
+
+    from app.core.email import send_cohort_ended_email
+    for enrollment in affected:
+        student = enrollment.student
+        if not student or not student.user:
+            continue
+        was_paid = enrollment.payment_status == "paid"
+        send_cohort_ended_email(
+            to_email=student.user.email,
+            student_name=student.user.name,
+            package_name=package_name,
+            reason="teacher_cancelled",
+            credit_returned=was_paid,
+        )
+
+    return _to_cohort_response(cohort, db)
+
+
+@router.post("/{cohort_id}/complete", response_model=CohortResponse)
+def complete_cohort_endpoint(
+    cohort_id: int,
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    El profesor marca una cohorte como finalizada — el paquete/las sesiones
+    ya cumplieron su ciclo (antes no existía ningún estado de "terminó
+    normalmente", solo "cancelada" antes de arrancar). Si al finalizar el
+    grupo quedó por debajo del mínimo declarado, se cancela el enrollment
+    de cada alumno restante y se le notifica por email (mismo mecanismo
+    que cancelar una cohorte), dejándolo libre de elegir un nuevo paquete.
+    Si el grupo llegó al mínimo, solo se marca como completada — esos
+    alumnos siguen el ciclo normal de renovación cuando se les agoten los
+    créditos, igual que cualquier paquete individual.
+    """
+    cohort = db.query(GroupCohort).filter(
+        GroupCohort.id == cohort_id,
+        GroupCohort.teacher_id == current_user.teacher_profile.id,
+    ).first()
+    if not cohort:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+    if cohort.status not in (CohortStatus.confirmed, CohortStatus.in_progress):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Solo se puede finalizar una cohorte confirmada o en curso"
+        )
+
+    active_count = get_cohort_active_count(cohort.id, db)
+    below_minimum = active_count < cohort.min_students
+    package_name = cohort.package.name if cohort.package else "el paquete grupal"
+
+    cohort.status = CohortStatus.completed
+    cohort.closed_at = utc_now()
+
+    affected = []
+    if below_minimum:
+        affected = release_and_cancel_all_cohort_enrollments(cohort.id, db)
+
+    db.commit()
+    db.refresh(cohort)
+
+    if affected:
+        from app.core.email import send_cohort_ended_email
+        for enrollment in affected:
+            student = enrollment.student
+            if not student or not student.user:
+                continue
+            was_paid = enrollment.payment_status == "paid"
+            send_cohort_ended_email(
+                to_email=student.user.email,
+                student_name=student.user.name,
+                package_name=package_name,
+                reason="below_minimum",
+                credit_returned=was_paid,
+            )
+
     return _to_cohort_response(cohort, db)
 
 
@@ -231,6 +311,18 @@ def create_group_session(
 
     end_time_utc = data.start_time_utc + timedelta(minutes=data.duration_minutes)
 
+    # Validar contra la disponibilidad declarada del profesor — antes se
+    # podía agendar una sesión grupal a cualquier hora sin chequear
+    # TeacherAvailability/excepciones (a diferencia de una reserva
+    # individual, que solo puede elegirse entre los slots que ya salen
+    # filtrados por disponibilidad en el selector del alumno).
+    from app.core.class_logic import is_within_teacher_availability
+    is_available, availability_msg = is_within_teacher_availability(
+        teacher_id, data.start_time_utc, end_time_utc, db
+    )
+    if not is_available:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, availability_msg)
+
     # Solo nos interesa que el profesor no tenga una clase INDIVIDUAL
     # (trial/regular) chocando con este horario — can_book_slot ya excluye
     # las "group" de este chequeo (ver class_logic.py), pero repetimos la
@@ -245,6 +337,21 @@ def create_group_session(
     ).first()
     if conflicting_individual_class:
         raise HTTPException(status.HTTP_409_CONFLICT, "Ya tienes una clase individual agendada en ese horario")
+
+    # Choque contra OTRA cohorte del mismo profesor a la misma hora — el
+    # chequeo de arriba solo excluye clases individuales, no otras sesiones
+    # grupales (BUG: antes dos cohortes distintas podían quedar agendadas
+    # en el mismo horario sin ningún aviso).
+    conflicting_group_session = db.query(Class).filter(
+        Class.teacher_id == teacher_id,
+        Class.class_type == ClassType.group,
+        Class.cohort_id != cohort.id,
+        Class.start_time_utc < end_time_utc,
+        Class.end_time_utc > data.start_time_utc,
+        Class.status.notin_(["cancelled"]),
+    ).first()
+    if conflicting_group_session:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Ya tienes otra sesión grupal agendada en ese horario")
 
     new_class = Class(
         enrollment_id=None,
@@ -277,6 +384,23 @@ def create_group_session(
 
     _sync_google_calendar_created(new_class, db)
 
+    # Notificar a cada alumno inscrito — a diferencia de una reserva
+    # individual, acá no hay un solo student_id: se recorre cada
+    # enrollment activo de la cohorte.
+    from app.core.email import send_class_booking_confirmation
+    from app.core.timezone import format_local_datetime
+    for enrollment in active_enrollments:
+        student_profile = enrollment.student
+        if student_profile and student_profile.user:
+            send_class_booking_confirmation(
+                to_email=student_profile.user.email,
+                student_name=student_profile.user.name,
+                teacher_name=f"{current_user.name} {current_user.surname}",
+                subject=package.subject,
+                class_start_local=format_local_datetime(data.start_time_utc, student_profile.timezone),
+                duration_minutes=data.duration_minutes,
+            )
+
     return _to_session_response(new_class)
 
 
@@ -295,6 +419,79 @@ def get_cohort_sessions(
         Class.status.notin_(["cancelled"]),
     ).order_by(Class.start_time_utc.asc()).all()
     return [_to_session_response(s) for s in sessions]
+
+
+@router.get("/sessions/{class_id}/participants", response_model=List[SessionParticipantResponse])
+def get_session_participants(
+    class_id: int,
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Lista los integrantes de UNA sesión grupal puntual con su asistencia
+    individual — antes no existía forma de ver esto desglosado por alumno,
+    el único estado disponible era el de la Class compartida (todo o nada).
+    """
+    class_ = db.query(Class).filter(
+        Class.id == class_id,
+        Class.class_type == ClassType.group,
+        Class.teacher_id == current_user.teacher_profile.id,
+    ).first()
+    if not class_:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Sesión grupal no encontrada")
+
+    result = []
+    for p in class_.participants:
+        if p.attendance_status == "cancelled":
+            continue
+        if not p.student or not p.student.user:
+            continue
+        result.append(SessionParticipantResponse(
+            student_id=p.student_id,
+            student_name=f"{p.student.user.name} {p.student.user.surname}",
+            attendance_status=p.attendance_status,
+        ))
+    return result
+
+
+@router.patch("/sessions/{class_id}/participants/{student_id}/attendance")
+def mark_participant_attendance(
+    class_id: int,
+    student_id: int,
+    data: MarkAttendanceRequest,
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    El profesor marca la asistencia de UN alumno en una sesión grupal —
+    a diferencia del estado general de la Class (que aplica a todos por
+    igual), esto permite reflejar que, por ejemplo, 4 de 6 asistieron.
+    Solo admite "confirmed" (asistió) o "no_show" (no asistió); para
+    sacar a un alumno de la sesión existe DELETE /classes/{id}/leave
+    (uso del propio alumno) — este endpoint no cancela participaciones.
+    """
+    if data.attendance_status not in ("confirmed", "no_show"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "attendance_status debe ser 'confirmed' o 'no_show'")
+
+    class_ = db.query(Class).filter(
+        Class.id == class_id,
+        Class.class_type == ClassType.group,
+        Class.teacher_id == current_user.teacher_profile.id,
+    ).first()
+    if not class_:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Sesión grupal no encontrada")
+
+    participant = db.query(ClassParticipant).filter(
+        ClassParticipant.class_id == class_id,
+        ClassParticipant.student_id == student_id,
+        ClassParticipant.attendance_status != "cancelled",
+    ).first()
+    if not participant:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ese alumno no está inscrito en esta sesión")
+
+    participant.attendance_status = data.attendance_status
+    db.commit()
+    return {"message": "Asistencia actualizada"}
 
 
 # ─── ESTUDIANTE — Descubrir e inscribirse ──────────────────────────────────
@@ -382,6 +579,7 @@ def enroll_in_cohort(
         payment_method="manual",
         status="pending_review",
         payment_type="group_enrollment",
+        transaction_id=data.transaction_reference,
     )
     db.add(payment)
     db.commit()
