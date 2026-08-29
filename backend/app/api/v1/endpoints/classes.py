@@ -49,6 +49,7 @@ from app.schemas.classes import (
     ClassResponse,
     RescheduleClassRequest,
     UpdateClassStatusRequest,
+    UpdateMeetLinkRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -646,6 +647,35 @@ def update_class_status(
                 student_name=student_user.name,
                 class_start_local=format_local_datetime(class_.start_time_utc, class_.student.timezone),
             )
+
+    _sync_google_calendar_updated(class_, db)
+    return _build_class_response(class_, db)
+
+
+@router.patch("/{class_id}/meet-link", response_model=ClassResponse)
+def update_meet_link(
+    class_id: int,
+    data: UpdateMeetLinkRequest,
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    El profesor carga/edita manualmente el link de la videollamada.
+    Campo 100% opcional: no bloquea ninguna otra acción sobre la clase.
+    Solo se permite mientras la clase está 'confirmed' (mismo estado en
+    el que ClassResponse se lo muestra al estudiante).
+    """
+    class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
+
+    if class_.status != "confirmed":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "El link solo se puede cargar/editar mientras la clase está confirmada."
+        )
+
+    class_.meet_link = data.meet_link
+    db.commit()
+    db.refresh(class_)
 
     _sync_google_calendar_updated(class_, db)
     return _build_class_response(class_, db)

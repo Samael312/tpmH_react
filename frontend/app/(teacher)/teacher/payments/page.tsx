@@ -59,7 +59,8 @@ export default function TeacherPaymentsPage() {
   });
 
   // BUG-04/12 fix: se eliminó "single_class" — ya no hace falta pedir el
-  // link de Meet al aprobar (se genera solo vía Google Calendar al reservar).
+  // link de Meet al aprobar. Es opcional y se carga por clase, una vez
+  // confirmada, desde el ícono de video en cada clase.
   const approve = async (p: any) => {
     setProcessing(p.payment_id);
     try {

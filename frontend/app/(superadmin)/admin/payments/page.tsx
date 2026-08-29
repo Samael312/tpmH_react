@@ -83,8 +83,8 @@ export default function PaymentsPage() {
   })
 
   // BUG-04/12 fix: se eliminó el tipo de pago "single_class" — el link de
-  // Meet ya no se pide al aprobar (las clases de paquete lo obtienen
-  // automáticamente vía sincronización con Google Calendar al reservar).
+  // Meet ya no se pide al aprobar. Es opcional y el profesor lo carga por
+  // clase, desde el ícono de video en cada clase confirmada.
   const handleApprove = async (p: any) => {
     setValidating(p.payment_id)
     try {

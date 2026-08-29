@@ -5,6 +5,7 @@ import { User, Video, X, Clock, RotateCcw, Check, AlertCircle, Phone, Users2 } f
 import api from "@/lib/api";
 import { getFlagForNationality } from "@/lib/nationalities";
 import { formatTimeTz, formatWeekdayShortTz, formatMonthShortTz, getDayOfMonthTz, getMyDisplayTimezone } from "@/lib/tzFormat";
+import { MeetLinkModal } from "./MeetLinkModal";
 
 export interface ClassCardData {
   id: number;
@@ -151,6 +152,7 @@ export default function ClassCard({
   const [newDate, setNewDate] = useState("");
   const [newTime, setNewTime] = useState("");
   const [error, setError] = useState("");
+  const [showMeetLinkModal, setShowMeetLinkModal] = useState(false);
 
   const cfg = STATUS_CONFIG[class_.status] ?? STATUS_CONFIG.pending;
   const start = new Date(class_.start_time_utc);
@@ -270,6 +272,14 @@ export default function ClassCard({
     ? TEACHER_CANCELABLE_STATUSES.includes(class_.status)
     : STUDENT_CANCELABLE.includes(class_.status);
 
+  // El link de la videollamada es 100% opcional: el profesor puede
+  // cargarlo/editarlo solo mientras la clase está 'confirmed' (mismo
+  // estado en el que el backend se lo empieza a mostrar al alumno). El
+  // alumno solo ve el botón de unirse si efectivamente hay un link cargado.
+  const canManageMeetLink = (role === "teacher" || role === "teacher_admin")
+    && class_.status === "confirmed" && !readOnly;
+  const canJoinMeetLink = role === "student" && !!class_.meet_link;
+
   // BUG-05/17 fix: antes 'showTeacherActions' exigía !isPast, lo que ocultaba
   // los botones de Completar/No asistió justo cuando más se necesitan (después
   // de que la clase terminó). Ahora se basan en la ventana de 72h.
@@ -279,7 +289,8 @@ export default function ClassCard({
   // ampliado), así que el estado 'finalized' siempre puede ignorar el
   // bloqueo por isPast a la hora de mostrar el botón de reagendar.
   const canBypassPastForReschedule = role === "teacher" || class_.status === "finalized";
-  const hasAnyAction = !readOnly && ((canReschedule && (!isPast || canBypassPastForReschedule)) || (canCancel && (!isPast || role === "teacher")) || showTeacherActions);
+  const hasAnyAction = !readOnly && ((canReschedule && (!isPast || canBypassPastForReschedule)) || (canCancel && (!isPast || role === "teacher")) || showTeacherActions || canManageMeetLink)
+    || canJoinMeetLink;
 
   return (
     <div className={`group bg-white/90 backdrop-blur-xl rounded-2xl border border-white/80 shadow-lg shadow-slate-100/80 border-l-4 ${cfg.border} p-5 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden ${isHistory ? "opacity-75 hover:opacity-100" : ""}`}>
@@ -388,7 +399,31 @@ export default function ClassCard({
         {/* LADO DERECHO: Acciones */}
         {hasAnyAction && (
           <div className="flex sm:flex-col gap-2 items-stretch sm:items-end justify-end flex-shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
-            
+
+            {canManageMeetLink && (
+              <button
+                onClick={() => setShowMeetLinkModal(true)}
+                className={`flex items-center justify-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl transition-colors ${
+                  class_.meet_link
+                    ? "text-sky-600 bg-sky-50 hover:bg-sky-100"
+                    : "text-slate-500 bg-slate-100 hover:bg-slate-200"
+                }`}
+              >
+                <Video className="w-3.5 h-3.5" /> {class_.meet_link ? "Editar link" : "Cargar link"}
+              </button>
+            )}
+
+            {canJoinMeetLink && (
+              <a
+                href={class_.meet_link ?? undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3.5 py-2 rounded-xl transition-colors"
+              >
+                <Video className="w-3.5 h-3.5" /> Unirse a la clase
+              </a>
+            )}
+
             {showInlineReschedule ? (
               <div className="flex flex-col gap-2 bg-slate-50 p-2 rounded-xl border border-slate-100 w-full sm:w-auto">
                 <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="text-xs px-2 py-1.5 rounded-lg border border-slate-200 bg-white" />
@@ -431,6 +466,19 @@ export default function ClassCard({
         )}
 
       </div>
+
+      {showMeetLinkModal && (
+        <MeetLinkModal
+          classItem={{
+            id: class_.id,
+            subject: class_.subject,
+            meet_link: class_.meet_link,
+            counterpart_name: personName,
+          }}
+          onClose={() => setShowMeetLinkModal(false)}
+          onSaved={() => onUpdate?.()}
+        />
+      )}
     </div>
   );
 }

@@ -837,9 +837,10 @@ def validate_payment(
 
     # BUG-04/12 fix: se eliminó por completo el tipo de pago "single_class"
     # (clase suelta reservada como 'pending' a la espera de notificar el
-    # pago). El link de Meet de las clases de paquete ya se genera
-    # automáticamente vía sincronización con Google Calendar al momento
-    # de la reserva, así que no hace falta pedirlo aquí.
+    # pago). El link de Meet es un campo opcional que el profesor carga
+    # manualmente por clase (PATCH /classes/{class_id}/meet-link, solo
+    # mientras la clase está 'confirmed') — no se genera automáticamente
+    # y no hace falta pedirlo aquí.
 
     if payment.payment_type == "unlimited_recharge":
         enrollment = db.query(Enrollment).filter(Enrollment.id == payment.enrollment_id).first()

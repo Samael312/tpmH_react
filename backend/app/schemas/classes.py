@@ -54,7 +54,6 @@ class RescheduleClassRequest(BaseModel):
 
 class UpdateClassStatusRequest(BaseModel):
     status: str
-    meet_link: Optional[str] = None
     notes: Optional[str] = None
 
     @field_validator("status")
@@ -66,6 +65,29 @@ class UpdateClassStatusRequest(BaseModel):
         ]
         if v not in allowed:
             raise ValueError(f"Estado inválido. Opciones: {allowed}")
+        return v
+
+
+class UpdateMeetLinkRequest(BaseModel):
+    """
+    El profesor carga/edita manualmente el link de la videollamada de una
+    clase. Es un campo opcional: la plataforma no genera ni requiere un
+    meet_link para que la clase funcione. Solo se puede cargar/editar
+    mientras la clase está 'confirmed' (mismo estado en el que se le
+    muestra al estudiante, ver ClassResponse.model_post_init).
+    """
+    meet_link: Optional[str] = None
+
+    @field_validator("meet_link")
+    @classmethod
+    def validate_meet_link(cls, v):
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
+            return None
+        if not (v.startswith("http://") or v.startswith("https://")):
+            raise ValueError("El link debe ser una URL válida (http:// o https://)")
         return v
 
 

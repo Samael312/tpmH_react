@@ -80,7 +80,10 @@ class PaymentResponse(BaseModel):
 class ValidatePaymentRequest(BaseModel):
     """El admin aprueba o rechaza un comprobante"""
     action: str              # "approve" o "reject"
-    meet_link: Optional[str] = None       # Obligatorio si action=approve
+    # NOTA: el link de Meet ya no se pide/gestiona al validar un pago (ver
+    # BUG-04/12 fix en payments.py). Se carga aparte, por el profesor, desde
+    # PATCH /classes/{class_id}/meet-link — es un campo 100% opcional que no
+    # bloquea ni afecta el flujo de aprobación de pagos.
     rejection_reason: Optional[str] = None  # Obligatorio si action=reject
 
     @field_validator("action")
