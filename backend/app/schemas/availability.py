@@ -103,11 +103,19 @@ class AvailableSlotResponse(BaseModel):
     El frontend convierte a zona local del usuario para mostrar.
     """
     start_time_utc: datetime    # "2025-04-14T13:00:00Z"
-    end_time_utc: datetime      # "2025-04-14T14:00:00Z"
-    duration_minutes: int
+    end_time_utc: datetime      # "2025-04-14T14:00:00Z" — fin REAL de la clase (sin margen)
+    duration_minutes: int       # duración real de la clase
     is_past: bool = False       # True si el slot ya pasó
     is_preferred: bool = False   # True si el slot coincide con la preferencia del estudiante
     is_available: bool = True      # True si el slot está disponible para reservar
+    # Margen de preparación (minutos) que este slot reserva después de
+    # end_time_utc para que el profesor se prepare para la siguiente clase.
+    buffer_minutes: int = 0
+    # Fin real de la clase + buffer_minutes — hasta cuándo queda ocupada
+    # la agenda del profesor por este bloque. Informativo para el
+    # frontend (mensaje al estudiante); NO es lo que se guarda como
+    # Class.end_time_utc.
+    block_end_time_utc: datetime
 
 class PreferenceDraft(BaseModel):
     day_of_week: int

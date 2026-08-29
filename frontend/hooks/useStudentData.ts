@@ -50,6 +50,11 @@ export interface AvailableSlot {
   is_preferred: boolean;
   is_available: boolean;
   is_past?: boolean;
+  // Margen de preparación (min) reservado después de end_time_utc, y hasta
+  // cuándo queda ocupada la agenda del profesor incluyéndolo. Informativo
+  // — lo que se reserva/guarda siempre es start/end_time_utc (sin margen).
+  buffer_minutes?: number;
+  block_end_time_utc?: string;
 }
 
 export interface StudentEnrollment {
@@ -230,12 +235,17 @@ export function useMyTeachers() {
   };
 }
 
-export function useAvailableSlots(date: string, duration: number, teacherUsername: string | null) {
+export function useAvailableSlots(
+  date: string,
+  duration: number,
+  teacherUsername: string | null,
+  classType: "trial" | "regular" | "group" = "regular",
+) {
   const query = useQuery({
-    queryKey: ["student", "available-slots", teacherUsername, date, duration],
+    queryKey: ["student", "available-slots", teacherUsername, date, duration, classType],
     queryFn: async () => {
       const res = await api.get(
-        `/availability/${teacherUsername}/slots?date=${date}&duration=${duration}`
+        `/availability/${teacherUsername}/slots?date=${date}&duration=${duration}&class_type=${classType}`
       );
       return res.data as AvailableSlot[];
     },

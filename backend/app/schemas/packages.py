@@ -1,7 +1,6 @@
 from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime
-from app.schemas.classes import ALLOWED_DURATIONS
 
 ALLOWED_DESCRIPTION_TYPES = ["paragraph", "list"]
 
@@ -16,7 +15,7 @@ class PackageCreate(BaseModel):
     color: Optional[str] = "#ec4899"
     classes_count: Optional[int] = None
     price: float
-    duration_minutes: int = 60
+    duration_minutes: int = 50
     allow_installments: bool = False
     installment_count: Optional[int] = None
     installment_amount: Optional[float] = None

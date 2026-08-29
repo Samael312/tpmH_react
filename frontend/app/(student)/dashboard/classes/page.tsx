@@ -517,6 +517,7 @@ export default function MyClassesPage() {
             start_time_utc: rescheduleTarget.start_time_utc,
             duration_minutes: rescheduleTarget.duration_minutes,
             counterpart_name: rescheduleTarget.teacher_name,
+            classType: rescheduleTarget.class_type,
           }}
           teacherUsername={rescheduleTarget.teacher_username}
           endpoint={`/classes/${rescheduleTarget.id}/reschedule`}

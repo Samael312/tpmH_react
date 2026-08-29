@@ -29,7 +29,7 @@ class Package(Base):
     description = Column(String, nullable=True)
     classes_count = Column(Integer, nullable=True)  # NULL si es paquete ilimitado/mensual
     price = Column(Float, nullable=False)
-    duration_minutes = Column(Integer, default=60)
+    duration_minutes = Column(Integer, default=50)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     icon = Column(String, nullable=True, default="📦")

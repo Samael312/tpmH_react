@@ -158,13 +158,21 @@ function StepSelectSlot({
   isTrial?: boolean;
 }) {
   const { rules } = useBusinessRules();
-  const DURATIONS = rules.allowed_class_durations; // ej: ALLOWED_DURATIONS
+  const DURATIONS = rules.allowed_class_durations; // pool configurado por el superadmin
   const [date, setDate] = useState("");
-  const [duration, setDuration] = useState(isTrial ? 30 : 60);
+  const [duration, setDuration] = useState(isTrial ? rules.trial_duration_minutes : (rules.allowed_class_durations[0] ?? 50));
   const [subjectOptions, setSubjectOptions] = useState<string[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<string>("");
-  const { slots, loading } = useAvailableSlots(date, duration, teacherUsername);
+  const { slots, loading } = useAvailableSlots(date, duration, teacherUsername, isTrial ? "trial" : "regular");
   const myTz = getMyDisplayTimezone();
+
+  useEffect(() => {
+    // La duración de la prueba no la elige el estudiante — siempre es la
+    // configurada por el superadmin (rules.trial_duration_minutes). Se
+    // sincroniza acá porque `rules` llega async (arranca con el fallback
+    // del hook y se actualiza cuando responde el backend).
+    if (isTrial) setDuration(rules.trial_duration_minutes);
+  }, [isTrial, rules.trial_duration_minutes]);
 
   useEffect(() => {
     if (!isTrial || !teacherUsername) return;
@@ -234,7 +242,7 @@ function StepSelectSlot({
           <div className="bg-purple-50 border border-purple-100 rounded-2xl p-5 flex gap-3 items-start">
             <Sparkles className="w-5 h-5 text-purple-400 flex-shrink-0 mt-0.5" />
             <p className="text-sm font-bold text-purple-700 leading-relaxed">
-              Tu primera clase es una prueba gratuita de 30 minutos. Una vez
+              Tu primera clase es una prueba gratuita de {rules.trial_duration_minutes} minutos. Una vez
               completada, podrás elegir tu paquete de clases regulares.
             </p>
           </div>
@@ -345,6 +353,9 @@ function StepConfirmTrial({
   const myTz = getMyDisplayTimezone();
   const fmtDate = formatDateHumanTz(date + "T00:00:00", myTz); 
   const fmtTime = formatTimeTz(slot.start_time_utc, myTz);
+  const fmtEndTime = formatTimeTz(slot.end_time_utc, myTz);
+  const bufferMinutes: number = slot.buffer_minutes ?? 0;
+  const durationMinutes: number = slot.duration_minutes;
 
   const confirmTrial = async () => {
     setBooking(true);
@@ -354,7 +365,7 @@ function StepConfirmTrial({
         teacher_username: teacherUsername,
         start_time_utc: slot.start_time_utc,
         end_time_utc: slot.end_time_utc,
-        duration_minutes: 30,
+        duration_minutes: durationMinutes,
         subject,
       });
       setDone(true);
@@ -380,7 +391,7 @@ function StepConfirmTrial({
             {fmtTime}
           </span>
           <span className="bg-white/20 px-3 py-1.5 rounded-full text-sm font-bold">
-            30 min
+            {durationMinutes} min
           </span>
           {subject && (
             <span className="bg-white/20 px-3 py-1.5 rounded-full text-sm font-bold">
@@ -411,6 +422,13 @@ function StepConfirmTrial({
             Esta clase de prueba es completamente gratuita y no requiere pago.
             Solo confirma el horario para reservarla.
           </p>
+          {bufferMinutes > 0 && (
+            <p className="text-xs text-slate-400 bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 leading-relaxed">
+              Tu clase termina a las <strong className="text-slate-600">{fmtEndTime}</strong>.
+              Dejamos {bufferMinutes} min de margen después para que tu profesor(a)
+              se prepare para su siguiente clase.
+            </p>
+          )}
           <div className="flex gap-3">
             <button onClick={onBack} className="flex-1 py-3.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
               Volver
@@ -453,6 +471,8 @@ function StepPayment({
   const myTz = getMyDisplayTimezone();
   const fmtDate = formatDateHumanTz(date + "T00:00:00", myTz);
   const fmtTime = formatTimeTz(slot.start_time_utc, myTz);
+  const fmtEndTime = formatTimeTz(slot.end_time_utc, myTz);
+  const bufferMinutes: number = slot.buffer_minutes ?? 0;
 
   const bookSlot = async () => {
     setBooking(true);
@@ -528,6 +548,13 @@ function StepPayment({
           <p className="text-sm text-slate-500 leading-relaxed">
             Confirma este horario para reservarlo usando tus créditos disponibles.
           </p>
+          {bufferMinutes > 0 && (
+            <p className="text-xs text-slate-400 bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 leading-relaxed">
+              Tu clase termina a las <strong className="text-slate-600">{fmtEndTime}</strong>.
+              Dejamos {bufferMinutes} min de margen después para que tu profesor(a)
+              se prepare para su siguiente clase.
+            </p>
+          )}
           <div className="flex gap-3">
             <button onClick={onBack} className="flex-1 py-3.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
               Volver
@@ -1170,7 +1197,7 @@ export default function SchedulePage() {
   const [step, setStep] = useState<"select" | "payment">("select");
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
-  const [selectedDuration, setSelectedDuration] = useState(60);
+  const [selectedDuration, setSelectedDuration] = useState(50);
   const [selectedSubject, setSelectedSubject] = useState<string | undefined>(undefined);
   const [selectedTeacherUsername, setSelectedTeacherUsername] = useState<string | null>(null);
 

@@ -72,7 +72,7 @@ class GroupToIndividualMigrationRequest(BaseModel):
 class GroupSessionCreate(BaseModel):
     """El profesor agenda una sesión concreta dentro de una cohorte ya confirmada."""
     start_time_utc: datetime
-    duration_minutes: int = 60
+    duration_minutes: int = 50
 
 
 class GroupSessionResponse(BaseModel):

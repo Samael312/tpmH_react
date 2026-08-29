@@ -327,14 +327,22 @@ def create_group_session(
 
     end_time_utc = data.start_time_utc + timedelta(minutes=data.duration_minutes)
 
+    # Margen de preparación para clases grupales (mismo criterio que las
+    # regulares, según confirmaste): se fija una sola vez al crear la
+    # sesión y define el bloque real ocupado en la agenda del profesor.
+    from app.core.class_logic import get_buffer_minutes_for_type
+    group_buffer = get_buffer_minutes_for_type(ClassType.group, db)
+    occupied_end_time_utc = end_time_utc + timedelta(minutes=group_buffer)
+
     # Validar contra la disponibilidad declarada del profesor — antes se
     # podía agendar una sesión grupal a cualquier hora sin chequear
     # TeacherAvailability/excepciones (a diferencia de una reserva
     # individual, que solo puede elegirse entre los slots que ya salen
-    # filtrados por disponibilidad en el selector del alumno).
+    # filtrados por disponibilidad en el selector del alumno). El bloque
+    # que debe caber en la disponibilidad incluye el margen de preparación.
     from app.core.class_logic import is_within_teacher_availability
     is_available, availability_msg = is_within_teacher_availability(
-        teacher_id, data.start_time_utc, end_time_utc, db
+        teacher_id, data.start_time_utc, occupied_end_time_utc, db
     )
     if not is_available:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, availability_msg)
@@ -344,13 +352,19 @@ def create_group_session(
     # las "group" de este chequeo (ver class_logic.py), pero repetimos la
     # consulta acá explícitamente en vez de reutilizar can_book_slot, que
     # está pensada para un alumno puntual, no para "el profesor en general".
-    conflicting_individual_class = db.query(Class).filter(
+    # El choque se evalúa contra el bloque REAL ocupado por cada clase
+    # existente (su propio end_time_utc + buffer_minutes), no solo su
+    # horario visible.
+    candidate_individual = db.query(Class).filter(
         Class.teacher_id == teacher_id,
         Class.class_type != ClassType.group,
-        Class.start_time_utc < end_time_utc,
-        Class.end_time_utc > data.start_time_utc,
+        Class.start_time_utc < occupied_end_time_utc,
         Class.status.notin_(["cancelled", "expired", "pending_trial"]),
-    ).first()
+    ).all()
+    conflicting_individual_class = any(
+        data.start_time_utc < (c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0))
+        for c in candidate_individual
+    )
     if conflicting_individual_class:
         raise HTTPException(status.HTTP_409_CONFLICT, "Ya tienes una clase individual agendada en ese horario")
 
@@ -358,14 +372,17 @@ def create_group_session(
     # chequeo de arriba solo excluye clases individuales, no otras sesiones
     # grupales (BUG: antes dos cohortes distintas podían quedar agendadas
     # en el mismo horario sin ningún aviso).
-    conflicting_group_session = db.query(Class).filter(
+    candidate_group = db.query(Class).filter(
         Class.teacher_id == teacher_id,
         Class.class_type == ClassType.group,
         Class.cohort_id != cohort.id,
-        Class.start_time_utc < end_time_utc,
-        Class.end_time_utc > data.start_time_utc,
+        Class.start_time_utc < occupied_end_time_utc,
         Class.status.notin_(["cancelled"]),
-    ).first()
+    ).all()
+    conflicting_group_session = any(
+        data.start_time_utc < (c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0))
+        for c in candidate_group
+    )
     if conflicting_group_session:
         raise HTTPException(status.HTTP_409_CONFLICT, "Ya tienes otra sesión grupal agendada en ese horario")
 
@@ -379,6 +396,7 @@ def create_group_session(
         start_time_utc=data.start_time_utc,
         end_time_utc=end_time_utc,
         duration=data.duration_minutes,
+        buffer_minutes=group_buffer,
         teacher_timezone=current_user.teacher_profile.timezone,
         student_timezone=None,
         status="confirmed",
@@ -415,6 +433,7 @@ def create_group_session(
                 subject=package.subject,
                 class_start_local=format_local_datetime(data.start_time_utc, student_profile.timezone),
                 duration_minutes=data.duration_minutes,
+                buffer_minutes=group_buffer,
             )
 
     return _to_session_response(new_class)

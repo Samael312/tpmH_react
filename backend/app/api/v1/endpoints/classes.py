@@ -33,8 +33,8 @@ from app.core.class_logic import (
     finalize_past_classes,
     class_counts_towards_package,
     cancel_class_and_refund,
-    validate_class_duration,
     get_business_rules,
+    get_buffer_minutes_for_type,
 )
 from app.core.timezone import UTC, utc_now, format_local_datetime
 from app.db.base import get_db
@@ -426,7 +426,7 @@ def reschedule_class_student(
     old_start = class_.start_time_utc
 
     class_.start_time_utc = data.start_time_utc
-    class_.end_time_utc = data.end_time_utc
+    class_.end_time_utc = data.start_time_utc + timedelta(minutes=class_.duration)
     class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
     # BUG fix: reagendar ya NO resetea el estado a 'pending'/'pending_trial'.
     # Esa reasignación venía del viejo flujo de "reservar y confirmar/pagar
@@ -481,10 +481,14 @@ def book_trial_class(
             detail="Estudiante no encontrado"
         )
 
-    can_duration, duration_msg = validate_class_duration(data.duration_minutes, db)
-
-    if not can_duration:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=duration_msg)
+    # La duración de la clase de prueba NO es una elección libre del staff
+    # (a diferencia de una clase regular): es un valor único configurado
+    # por el superadmin (rules["trial_duration_minutes"]). Se ignora
+    # data.duration_minutes / data.end_time_utc y se recalcula acá, igual
+    # que en el flujo de reserva del estudiante (payments.py::book_class).
+    rules = get_business_rules(db)
+    trial_duration = rules["trial_duration_minutes"]
+    trial_buffer = get_buffer_minutes_for_type(ClassType.trial, db)
 
     can_book, error_msg = can_book_slot(
         start_time_utc=data.start_time_utc,
@@ -508,8 +512,9 @@ def book_trial_class(
         class_type=ClassType.trial,
         subject=data.subject,
         start_time_utc=data.start_time_utc,
-        end_time_utc=data.end_time_utc,
-        duration=data.duration_minutes,
+        end_time_utc=data.start_time_utc + timedelta(minutes=trial_duration),
+        duration=trial_duration,
+        buffer_minutes=trial_buffer,
         teacher_timezone=teacher.timezone,
         student_timezone=student.timezone,
         status="pending_trial",
@@ -770,7 +775,7 @@ def reschedule_class_teacher(
     old_start = class_.start_time_utc
 
     class_.start_time_utc = data.start_time_utc
-    class_.end_time_utc = data.end_time_utc
+    class_.end_time_utc = data.start_time_utc + timedelta(minutes=class_.duration)
     class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
     # BUG fix: ver comentario equivalente en reschedule_class_student. El
     # profesor tampoco debe poder "desconfirmar" una clase ya paga/confirmada
@@ -811,7 +816,7 @@ def reschedule_class_admin(
     old_start = class_.start_time_utc
 
     class_.start_time_utc = data.start_time_utc
-    class_.end_time_utc = data.end_time_utc
+    class_.end_time_utc = data.start_time_utc + timedelta(minutes=class_.duration)
     class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
     # BUG fix: ver comentario equivalente en reschedule_class_student.
     # Excepción: 'finalized' → 'confirmed'.

@@ -14,7 +14,7 @@ from app.auth.dependencies import (
 )
 from app.models.class_ import Class, ClassType 
 from app.core.timezone import utc_now             
-from app.core.class_logic import get_business_rules
+from app.core.class_logic import get_business_rules, validate_package_duration
 from app.models.user import User
 from app.models.package import Package, Enrollment, EnrollmentStatus
 from app.models.teacher import TeacherProfile
@@ -75,6 +75,10 @@ def create_package(
     db: Session = Depends(get_db)
 ):
     """El profesor crea un paquete de clases"""
+    can_duration, duration_msg = validate_package_duration(data.duration_minutes, db)
+    if not can_duration:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, duration_msg)
+
     pkg_data = data.model_dump()
     _validate_group_package_fields(
         is_group=pkg_data.get("is_group", False),
@@ -129,6 +133,11 @@ def update_package(
         )
 
     update_data = data.model_dump(exclude_unset=True)
+
+    if "duration_minutes" in update_data:
+        can_duration, duration_msg = validate_package_duration(update_data["duration_minutes"], db)
+        if not can_duration:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, duration_msg)
 
     _validate_group_package_fields(
         is_group=update_data.get("is_group", package.is_group),

@@ -234,28 +234,40 @@ def get_all_slots_utc(
     busy_ranges: List[Tuple[datetime, datetime]],
     duration_minutes: int,
     step_minutes: int = 30,
+    occupancy_minutes: int | None = None,
 ) -> List[Tuple[datetime, bool]]:
     """
     Igual que get_available_slots_utc pero NO descarta los slots ocupados:
     devuelve todos los slots dentro de los rangos de disponibilidad,
     marcando cada uno con su estado de ocupación (is_busy).
 
+    duration_minutes: duración REAL de la clase (lo que ve/reserva el
+        estudiante como horario de su clase).
+    occupancy_minutes: tamaño del bloque que en realidad ocupa la agenda
+        del profesor (duración real + margen de preparación). Se usa para
+        el chequeo de choques y para decidir si el bloque cabe dentro de
+        la disponibilidad declarada. Si no se pasa, se asume igual a
+        duration_minutes (comportamiento anterior, sin margen).
+
     Returns:
         Lista de tuplas (slot_start_utc, is_busy) ordenada cronológicamente.
         Si un slot cae en más de un rango, se marca ocupado si lo está
         en cualquiera de ellos.
     """
-    duration = timedelta(minutes=duration_minutes)
+    occupancy_minutes = occupancy_minutes if occupancy_minutes is not None else duration_minutes
+    occupancy = timedelta(minutes=occupancy_minutes)
     step = timedelta(minutes=step_minutes)
 
     slots: dict[datetime, bool] = {}
 
     for range_start, range_end in availability_ranges:
         curr = range_start
-        while curr + duration <= range_end:
-            slot_end = curr + duration
+        # El bloque completo (clase + margen) debe caber dentro del rango
+        # de disponibilidad declarado por el profesor.
+        while curr + occupancy <= range_end:
+            occupied_end = curr + occupancy
             is_busy = any(
-                curr < busy_end and slot_end > busy_start
+                curr < busy_end and occupied_end > busy_start
                 for busy_start, busy_end in busy_ranges
             )
             if curr not in slots or is_busy:

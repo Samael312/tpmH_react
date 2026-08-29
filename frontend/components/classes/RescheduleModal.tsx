@@ -120,6 +120,14 @@ export interface RescheduleModalClassItem {
   counterpart_name?: string | null;
   /** Si es una sesión grupal, reagendar mueve la hora para TODOS los inscritos — se muestra una advertencia y se pide confirmación extra. */
   isGroup?: boolean;
+  /**
+   * Tipo real de la clase ("trial" | "regular" | "group") — determina qué
+   * margen de preparación se le suma a `duration_minutes` al pedir los
+   * slots disponibles (ver useAvailableSlots). Si no se pasa, se infiere
+   * de `isGroup` (trial/regular no se pueden distinguir solo con ese
+   * booleano, así que se asume "regular" por defecto).
+   */
+  classType?: "trial" | "regular" | "group";
 }
 
 interface RescheduleModalProps {
@@ -147,7 +155,8 @@ export function RescheduleModal({
   const [selected, setSelected] = useState<any>(null);
 
   const currentDuration = classItem?.duration_minutes || 60;
-  const { slots, loading } = useAvailableSlots(date, currentDuration, teacherUsername ?? null);
+  const resolvedClassType = classItem?.classType ?? (classItem?.isGroup ? "group" : "regular");
+  const { slots, loading } = useAvailableSlots(date, currentDuration, teacherUsername ?? null, resolvedClassType);
 
   // Formateador coherente en la hora local DE QUIEN REAGENDA (no del dispositivo)
   const myTz = getMyDisplayTimezone();

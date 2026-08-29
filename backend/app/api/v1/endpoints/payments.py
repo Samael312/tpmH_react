@@ -17,6 +17,8 @@ from app.core.class_logic import (
     can_book_slot, 
     get_student_booking_stage,
     validate_class_duration,
+    get_business_rules,
+    get_buffer_minutes_for_type,
     )
 from app.core.email import (
     send_class_booking_confirmation,
@@ -421,8 +423,15 @@ def book_class(
         _ensure_teacher_linked(current_user, teacher, db)
         _sync_student_teacher_username(current_user, teacher, db)
 
+        rules = get_business_rules(db)
+        trial_duration = rules["trial_duration_minutes"]
+        trial_buffer = get_buffer_minutes_for_type(ClassType.trial, db)
+
         trial_start = data.start_time_utc
-        trial_end = trial_start + timedelta(minutes=30)
+        # Se recalcula server-side a partir de la duración de prueba
+        # configurada — NUNCA se confía en un end_time_utc que mande el
+        # cliente (podría venir con el margen ya incluido, o manipulado).
+        trial_end = trial_start + timedelta(minutes=trial_duration)
         day_of_week = DAYS_ES[trial_start.weekday()]
 
         can_book, error_msg = can_book_slot(
@@ -450,7 +459,8 @@ def book_class(
             subject=trial_subject,
             start_time_utc=trial_start,
             end_time_utc=trial_end,
-            duration=30,
+            duration=trial_duration,
+            buffer_minutes=trial_buffer,
             teacher_timezone=teacher.timezone,
             student_timezone=current_user.student_profile.timezone,
             status="pending_trial",
@@ -472,7 +482,8 @@ def book_class(
                 student_phone=current_user.phone_number,
                 subject=trial_subject,
                 class_start_local=format_local_datetime(trial_start, teacher.timezone),
-                duration_minutes=30,
+                duration_minutes=trial_duration,
+                buffer_minutes=trial_buffer,
                 is_trial=True,
             )
         send_class_booking_confirmation(
@@ -481,7 +492,8 @@ def book_class(
             teacher_name=f"{teacher.user.name} {teacher.user.surname}" if teacher.user else "",
             subject=trial_subject,
             class_start_local=format_local_datetime(trial_start, current_user.student_profile.timezone),
-            duration_minutes=30,
+            duration_minutes=trial_duration,
+            buffer_minutes=trial_buffer,
             is_trial=True,
         )
 
@@ -536,6 +548,8 @@ def book_class(
         if not can_book:
             raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
 
+        regular_buffer = get_buffer_minutes_for_type(ClassType.regular, db)
+
         new_class = Class(
             enrollment_id=enrollment.id,
             teacher_id=enrollment.teacher_id,
@@ -543,8 +557,13 @@ def book_class(
             class_type=ClassType.regular,
             subject=enrollment.package.subject,
             start_time_utc=data.start_time_utc,
-            end_time_utc=data.end_time_utc,
+            # Se recalcula server-side a partir de duration_minutes en vez
+            # de confiar en el end_time_utc que manda el cliente (que viene
+            # del slot elegido y podría no coincidir con la duración real
+            # si alguien lo manipula).
+            end_time_utc=data.start_time_utc + timedelta(minutes=data.duration_minutes),
             duration=data.duration_minutes,
+            buffer_minutes=regular_buffer,
             teacher_timezone=getattr(enrollment.teacher, "timezone", None),
             student_timezone=current_user.student_profile.timezone,
             status="confirmed",
@@ -565,6 +584,7 @@ def book_class(
             subject=new_class.subject or "Clase",
             class_start_local=format_local_datetime(new_class.start_time_utc, current_user.student_profile.timezone),
             duration_minutes=new_class.duration,
+            buffer_minutes=new_class.buffer_minutes,
         )
         if teacher_user:
             send_class_confirmed_teacher_email(
@@ -611,6 +631,8 @@ def book_class(
         if not can_book:
             raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
 
+        regular_buffer = get_buffer_minutes_for_type(ClassType.regular, db)
+
         new_class = Class(
             enrollment_id=enrollment.id,
             teacher_id=enrollment.teacher_id,
@@ -618,8 +640,9 @@ def book_class(
             class_type=ClassType.regular,
             subject=enrollment.package.subject,
             start_time_utc=data.start_time_utc,
-            end_time_utc=data.end_time_utc,
+            end_time_utc=data.start_time_utc + timedelta(minutes=data.duration_minutes),
             duration=data.duration_minutes,
+            buffer_minutes=regular_buffer,
             teacher_timezone=getattr(enrollment.teacher, "timezone", None),
             student_timezone=current_user.student_profile.timezone,
             status="confirmed",
@@ -643,6 +666,7 @@ def book_class(
             subject=new_class.subject or "Clase",
             class_start_local=format_local_datetime(new_class.start_time_utc, current_user.student_profile.timezone),
             duration_minutes=new_class.duration,
+            buffer_minutes=new_class.buffer_minutes,
         )
         if teacher_user:
             send_class_confirmed_teacher_email(

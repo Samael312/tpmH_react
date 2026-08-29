@@ -275,13 +275,26 @@ def delete_exception(
 def get_teacher_available_slots(
     teacher_username: str,
     date: str = Query(..., description="Fecha en formato YYYY-MM-DD"),
-    duration: int = Query(60, description="Duración en minutos", ge=30, le=180),
+    duration: int = Query(60, description="Duración REAL de la clase en minutos", ge=15, le=180),
+    class_type: str = Query(
+        "regular",
+        description="'trial' | 'regular' | 'group' — determina el margen de preparación aplicado",
+    ),
     current_user: Optional[User] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Devuelve los slots disponibles de un profesor para una fecha.
     Devuelve UTC. El frontend convierte a zona local del usuario.
+
+    `duration` es la duración REAL de la clase (lo que ve el estudiante).
+    Internamente se le suma el margen de preparación correspondiente al
+    `class_type` (ver core/class_logic.py::get_buffer_minutes_for_type)
+    para calcular el bloque real que ocupa la agenda del profesor — ese
+    bloque más grande es el que se usa para detectar choques y para
+    verificar que quepa dentro de la disponibilidad declarada, pero el
+    `end_time_utc` devuelto en cada slot sigue siendo el fin real de la
+    clase (start + duration), no el fin del bloque.
     """
 
     # 1. Verificar que el profesor existe y está aprobado
@@ -364,8 +377,11 @@ def get_teacher_available_slots(
         Class.status.notin_(["cancelled", "expired"])
     ).all()
 
+    # El bloque que cada clase existente ocupa en la agenda incluye su
+    # propio margen de preparación (Class.buffer_minutes), no solo su
+    # horario real — así el siguiente slot ofrecido ya deja ese hueco.
     busy_from_classes = [
-        (c.start_time_utc, c.end_time_utc)
+        (c.start_time_utc, c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0))
         for c in booked
     ]
 
@@ -376,21 +392,31 @@ def get_teacher_available_slots(
         db=db,
     )
 
-    # 6. Calcular slots libres en UTC
+    # 6. Margen de preparación según el tipo de clase, y bloque real que
+    # ocupa la agenda del profesor (duración real + margen).
+    from app.core.class_logic import get_business_rules, get_buffer_minutes_for_type
+    business_rules = get_business_rules(db)
+    prep_buffer_minutes = get_buffer_minutes_for_type(class_type, db)
+    occupancy_minutes = duration + prep_buffer_minutes
+
+    # 7. Calcular slots libres en UTC. busy_from_classes ya incluye, para
+    # cada clase existente, su propio margen de preparación (ver más
+    # abajo), así que el choque se detecta correctamente contra el
+    # bloque real ocupado por cada clase, no solo su horario "visible".
     all_busy = busy_from_exceptions + busy_from_classes + busy_from_google
 
     all_slots = get_all_slots_utc(
         availability_ranges=availability_ranges,
         busy_ranges=all_busy,
         duration_minutes=duration,
+        occupancy_minutes=occupancy_minutes,
     )
 
     if not all_slots:
         return []
 
-    # 6b. Margen mínimo de reserva configurado por el superadmin (en minutos)
-    from app.core.class_logic import get_business_rules
-    min_booking_buffer_minutes = get_business_rules(db)["min_booking_hours"] * 60
+    # 7b. Margen mínimo de reserva configurado por el superadmin (en minutos)
+    min_booking_buffer_minutes = business_rules["min_booking_hours"] * 60
 
     # 7. Obtener preferencias del estudiante si está autenticado
     student_preferences = []
@@ -413,20 +439,23 @@ def get_teacher_available_slots(
                 return True
         return False
 
-    # 8. Construir respuesta final
+    # 8. Construir respuesta final. end_time_utc es el fin REAL de la clase
+    # (start + duration); block_end_time_utc es informativo (hasta cuándo
+    # queda ocupada la agenda del profesor, incluyendo el margen).
     duration_td = timedelta(minutes=duration)
+    occupancy_td = timedelta(minutes=occupancy_minutes)
 
     result = []
     for slot_start, is_busy in all_slots:
-        slot_end = slot_start + duration_td
-
         result.append(AvailableSlotResponse(
             start_time_utc=slot_start,
-            end_time_utc=slot_end,
+            end_time_utc=slot_start + duration_td,
             duration_minutes=duration,
             is_past=is_slot_in_past(slot_start, buffer_minutes=min_booking_buffer_minutes),
             is_preferred=is_preferred_slot(slot_start, student_preferences),
-            is_available=not is_busy
+            is_available=not is_busy,
+            buffer_minutes=prep_buffer_minutes,
+            block_end_time_utc=slot_start + occupancy_td,
         ))
 
     return result
@@ -439,7 +468,8 @@ featured_teacher = os.getenv("FEATURED_TEACHER_USERNAME", "mar12")  # Fallback a
 )
 def get_featured_teacher_slots(
     date: str = Query(...),
-    duration: int = Query(60, ge=30, le=180),
+    duration: int = Query(60, ge=15, le=180),
+    class_type: str = Query("regular"),
     current_user: Optional[User] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -476,6 +506,7 @@ def get_featured_teacher_slots(
         teacher_username=teacher_username,
         date=date,
         duration=duration,
+        class_type=class_type,
         current_user=current_user,
         db=db,
     )

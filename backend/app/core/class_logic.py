@@ -10,7 +10,7 @@ from app.models.student import StudentProfile
 from app.models.teacher import TeacherProfile
 from app.core.timezone import utc_now, UTC
 import logging
-from app.schemas.classes import ALLOWED_DURATIONS
+from app.schemas.classes import CLASS_DURATION_OPTIONS, DEFAULT_BUFFER_MINUTES
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,7 @@ MIN_BOOKING_HOURS = 1
 MIN_CANCEL_HOURS = 12
 MIN_RESCHEDULE_HOURS_STUDENT = 12
 MIN_RESCHEDULE_HOURS_STAFF = 0
+DEFAULT_TRIAL_DURATION_MINUTES = 25
 
 def is_within_teacher_availability(
     teacher_id: int,
@@ -94,27 +95,74 @@ def get_business_rules(db: Session) -> dict:
             "min_booking_hours": MIN_BOOKING_HOURS,
             "min_cancel_hours": MIN_CANCEL_HOURS,
             "min_reschedule_hours_student": MIN_RESCHEDULE_HOURS_STUDENT,
-            "allowed_class_durations": ALLOWED_DURATIONS,
-            "allowed_package_durations": [30, 60],
+            "allowed_class_durations": [d for d in CLASS_DURATION_OPTIONS if d != DEFAULT_TRIAL_DURATION_MINUTES],
+            "allowed_package_durations": [d for d in CLASS_DURATION_OPTIONS if d != DEFAULT_TRIAL_DURATION_MINUTES],
             "low_credit_threshold": 1,
             "low_credit_renotify_days": 6,
+            "trial_duration_minutes": DEFAULT_TRIAL_DURATION_MINUTES,
+            "buffer_trial_minutes": DEFAULT_BUFFER_MINUTES["trial"],
+            "buffer_regular_minutes": DEFAULT_BUFFER_MINUTES["regular"],
+            "buffer_group_minutes": DEFAULT_BUFFER_MINUTES["group"],
         }
     return {
         "min_booking_hours": config.min_booking_hours or MIN_BOOKING_HOURS,
         "min_cancel_hours": config.min_cancel_hours or MIN_CANCEL_HOURS,
         "min_reschedule_hours_student": config.min_reschedule_hours_student or MIN_RESCHEDULE_HOURS_STUDENT,
-        "allowed_class_durations": config.allowed_class_durations or ALLOWED_DURATIONS,
-        "allowed_package_durations": config.allowed_package_durations or [30, 60],
+        "allowed_class_durations": config.allowed_class_durations or [50, 80, 110],
+        "allowed_package_durations": config.allowed_package_durations or [50, 80, 110],
         "low_credit_threshold": config.low_credit_threshold or 1,
         "low_credit_renotify_days": config.low_credit_renotify_days or 6,
+        "trial_duration_minutes": config.trial_duration_minutes or DEFAULT_TRIAL_DURATION_MINUTES,
+        "buffer_trial_minutes": (
+            config.buffer_trial_minutes if config.buffer_trial_minutes is not None
+            else DEFAULT_BUFFER_MINUTES["trial"]
+        ),
+        "buffer_regular_minutes": (
+            config.buffer_regular_minutes if config.buffer_regular_minutes is not None
+            else DEFAULT_BUFFER_MINUTES["regular"]
+        ),
+        "buffer_group_minutes": (
+            config.buffer_group_minutes if config.buffer_group_minutes is not None
+            else DEFAULT_BUFFER_MINUTES["group"]
+        ),
     }
 
 def validate_class_duration(duration_minutes: int, db: Session) -> tuple[bool, str]:
+    """Valida una duración de clase REGULAR contra el subconjunto configurado
+    por el superadmin. No aplica a trial (ver get_trial_duration_minutes,
+    que no es una elección del usuario sino un valor fijo de config)."""
     rules = get_business_rules(db)
     allowed = rules["allowed_class_durations"]
     if duration_minutes not in allowed:
         return False, f"Duración inválida. Opciones permitidas: {allowed}"
     return True, ""
+
+
+def validate_package_duration(duration_minutes: int, db: Session) -> tuple[bool, str]:
+    """Valida la duración de clase de un PAQUETE contra el subconjunto
+    configurado por el superadmin (allowed_package_durations) — catálogo
+    independiente de allowed_class_durations, aunque hoy comparten el mismo
+    pool fijo (CLASS_DURATION_OPTIONS)."""
+    rules = get_business_rules(db)
+    allowed = rules["allowed_package_durations"]
+    if duration_minutes not in allowed:
+        return False, f"Duración inválida. Opciones permitidas: {allowed}"
+    return True, ""
+
+
+def get_buffer_minutes_for_type(class_type, db: Session) -> int:
+    """
+    Minutos de margen que se descuentan del final real de una clase de este
+    tipo, según la config vigente. `class_type` puede ser un ClassType o su
+    valor string ("trial" | "regular" | "group").
+    """
+    rules = get_business_rules(db)
+    type_value = getattr(class_type, "value", class_type)
+    return {
+        "trial": rules["buffer_trial_minutes"],
+        "regular": rules["buffer_regular_minutes"],
+        "group": rules["buffer_group_minutes"],
+    }.get(type_value, rules["buffer_regular_minutes"])
 
 
 # ─── Validaciones ───────────────────────────────────────────────────────────
@@ -132,7 +180,16 @@ def can_book_slot(
     if start_time_utc < now + timedelta(hours=rules["min_booking_hours"]):
         return False, f"Debes agendar con al menos {rules['min_booking_hours']} hora(s) de antelación"
 
+    # Prefiltro amplio en SQL (3h cubre de sobra cualquier duración+margen
+    # posible hoy: máximo 110min + 10min = 120min). El chequeo exacto de
+    # solape se hace en Python más abajo, porque necesita sumarle a cada
+    # clase existente SU PROPIO margen de preparación (Class.buffer_minutes),
+    # que ya no es igual a end_time_utc a secas.
     end_approx = start_time_utc + timedelta(hours=3)
+    lookback = start_time_utc - timedelta(hours=3)
+
+    def _occupied_end(c: Class) -> datetime:
+        return c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0)
 
     # BUG-04 fix: "expired" se trata igual que "cancelled" (no bloquea el
     # slot). "pending" ya no es necesario en esta lista: las clases
@@ -150,24 +207,24 @@ def can_book_slot(
     query = db.query(Class).filter(
         Class.teacher_id == teacher_id,
         Class.start_time_utc < end_approx,
-        Class.end_time_utc > start_time_utc,
+        Class.start_time_utc > lookback,
         Class.status.notin_(["cancelled", "expired", "pending_trial"]),
         Class.class_type != ClassType.group,
     )
     if exclude_class_id:
         query = query.filter(Class.id != exclude_class_id)
-    if query.first():
-        return False, "El profesor ya tiene una clase en ese horario"
+    if any(start_time_utc < _occupied_end(c) for c in query.all()):
+        return False, "El profesor ya tiene una clase en ese horario (o no ha pasado su margen de preparación)"
 
     query_student = db.query(Class).filter(
         Class.student_id == student_id,
         Class.start_time_utc < end_approx,
-        Class.end_time_utc > start_time_utc,
+        Class.start_time_utc > lookback,
         Class.status.notin_(["cancelled", "expired", "pending_trial"])
     )
     if exclude_class_id:
         query_student = query_student.filter(Class.id != exclude_class_id)
-    if query_student.first():
+    if any(start_time_utc < _occupied_end(c) for c in query_student.all()):
         return False, "Ya tienes una clase en ese horario"
 
     # Un alumno tampoco puede tener, a la misma hora, una participación
@@ -181,11 +238,11 @@ def can_book_slot(
             ClassParticipant.student_id == student_id,
             ClassParticipant.attendance_status != "cancelled",
             Class.start_time_utc < end_approx,
-            Class.end_time_utc > start_time_utc,
+            Class.start_time_utc > lookback,
             Class.status.notin_(["cancelled", "expired"]),
         )
     )
-    if query_group_participation.first():
+    if any(start_time_utc < _occupied_end(c) for c in query_group_participation.all()):
         return False, "Ya tienes una clase en ese horario"
 
     return True, ""

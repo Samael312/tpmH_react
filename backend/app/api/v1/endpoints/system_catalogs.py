@@ -13,7 +13,7 @@ from app.schemas.system_catalog import (
     BusinessRulesResponse,
     UpdateBusinessRulesRequest,
 )
-from app.schemas.classes import ALLOWED_DURATIONS
+from app.schemas.classes import CLASS_DURATION_OPTIONS, DEFAULT_BUFFER_MINUTES
 
 router = APIRouter()
 
@@ -61,10 +61,26 @@ def get_business_rules(db: Session = Depends(get_db)):
         min_booking_hours=config.min_booking_hours or 1,
         min_cancel_hours=config.min_cancel_hours or 12,
         min_reschedule_hours_student=config.min_reschedule_hours_student or 12,
-        allowed_class_durations=config.allowed_class_durations or ALLOWED_DURATIONS,
-        allowed_package_durations=config.allowed_package_durations or [30, 60],
+        allowed_class_durations=config.allowed_class_durations or [50, 80, 110],
+        allowed_package_durations=config.allowed_package_durations or [50, 80, 110],
         low_credit_threshold=config.low_credit_threshold or 1,
         low_credit_renotify_days=config.low_credit_renotify_days or 6,
+        trial_duration_minutes=config.trial_duration_minutes or 25,
+        buffer_trial_minutes=(
+            config.buffer_trial_minutes
+            if config.buffer_trial_minutes is not None
+            else DEFAULT_BUFFER_MINUTES["trial"]
+        ),
+        buffer_regular_minutes=(
+            config.buffer_regular_minutes
+            if config.buffer_regular_minutes is not None
+            else DEFAULT_BUFFER_MINUTES["regular"]
+        ),
+        buffer_group_minutes=(
+            config.buffer_group_minutes
+            if config.buffer_group_minutes is not None
+            else DEFAULT_BUFFER_MINUTES["group"]
+        ),
     )
 
 

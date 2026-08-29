@@ -182,9 +182,21 @@ def send_welcome_email(to_email: str, user_name: str, role: str) -> bool:
 # ESTUDIANTE
 # ══════════════════════════════════════════════════════════════════════════
 
+def _duration_and_buffer_rows(duration_minutes: int, buffer_minutes: int = 0) -> list:
+    rows = [_detail_row("Duración", f"{duration_minutes} minutos")]
+    if buffer_minutes:
+        rows.append(_detail_row(
+            "Margen de preparación",
+            f"{buffer_minutes} minutos después de la clase, reservados para que "
+            f"tu profesor(a) se prepare para su siguiente clase",
+        ))
+    return rows
+
+
 def send_class_booking_confirmation(
     to_email: str, student_name: str, teacher_name: str, subject: str,
     class_start_local: str, duration_minutes: int, is_trial: bool = False,
+    buffer_minutes: int = 0,
 ) -> bool:
     body = f"""
       <p>Hola {student_name},</p>
@@ -193,7 +205,7 @@ def send_class_booking_confirmation(
         _detail_row("Profesor", teacher_name),
         _detail_row("Materia", subject),
         _detail_row("Fecha y hora", class_start_local),
-        _detail_row("Duración", f"{duration_minutes} minutos"),
+        *_duration_and_buffer_rows(duration_minutes, buffer_minutes),
       ])}
       <p>Podrás ver el estado de tu clase desde tu panel en cualquier momento.</p>
       {_cta_button("Ver mis clases", f"{settings.FRONTEND_URL}/dashboard/classes")}
@@ -395,6 +407,7 @@ def send_new_booking_teacher_email(
     to_email: str, teacher_name: str, student_first_name: str, student_last_name: str,
     student_nationality: str | None, student_phone: str | None, subject: str,
     class_start_local: str, duration_minutes: int, is_trial: bool = False,
+    buffer_minutes: int = 0,
 ) -> bool:
     student_full_name = f"{student_first_name} {student_last_name}".strip()
     body = f"""
@@ -405,7 +418,7 @@ def send_new_booking_teacher_email(
         _detail_row("Teléfono / WhatsApp", student_phone or "No especificado"),
         _detail_row("Materia", subject),
         _detail_row("Fecha y hora", class_start_local),
-        _detail_row("Duración", f"{duration_minutes} minutos"),
+        *_duration_and_buffer_rows(duration_minutes, buffer_minutes),
       ])}
       {_cta_button("Ver mi agenda", f"{settings.FRONTEND_URL}/teacher/dashboard")}
     """
@@ -606,14 +619,14 @@ def send_package_expiring_email(
 
 def send_class_confirmed_email(
     to_email: str, student_name: str, teacher_name: str, subject: str,
-    class_start_local: str, duration_minutes: int,
+    class_start_local: str, duration_minutes: int, buffer_minutes: int = 0,
 ) -> bool:
     body = f"""
       <p>Hola {student_name}, tu clase con <strong style="color:{COLOR_INK};">{teacher_name}</strong> está confirmada.</p>
       {_detail_table([
         _detail_row("Materia", subject),
         _detail_row("Fecha y hora", class_start_local),
-        _detail_row("Duración", f"{duration_minutes} minutos"),
+        *_duration_and_buffer_rows(duration_minutes, buffer_minutes),
       ])}
       {_cta_button("Ver mis clases", f"{settings.FRONTEND_URL}/dashboard/classes")}
     """

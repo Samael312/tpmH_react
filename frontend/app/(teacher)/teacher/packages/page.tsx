@@ -24,6 +24,7 @@ import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
+import { useBusinessRules } from "@/hooks/useBusinessRules";
 
 const emptyForm = {
   name: "", subject: "", description: "",
@@ -31,7 +32,7 @@ const emptyForm = {
   description_items: [] as string[],
   icon: DEFAULT_PACKAGE_THEME.icon,
   color: DEFAULT_PACKAGE_THEME.color,
-  classes_count: "4", price: "10", duration_minutes: 60,
+  classes_count: "4", price: "10", duration_minutes: 50,
   allow_installments: false,
   installment_count: "3",
   is_group: false,
@@ -105,6 +106,7 @@ export default function TeacherPackagesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const { rules } = useBusinessRules();
   const formRef = useRef<HTMLDivElement>(null);
   const role = useAuthStore(s => s.user?.role);
   const canManagePayments = role === "teacher_admin" || role === "superadmin";
@@ -430,6 +432,25 @@ export default function TeacherPackagesPage() {
                                text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none focus:bg-white
                                focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
                   />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                    Duración por clase
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {(rules.allowed_package_durations ?? [50, 80, 110]).map(d => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setForm({ ...form, duration_minutes: d })}
+                        className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all
+                          ${form.duration_minutes === d ? "border-pink-400 bg-pink-50 text-pink-600" : "border-slate-100 bg-slate-50 text-slate-500"}`}
+                      >
+                        {d} min
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* ─── Paquete grupal ─── */}

@@ -28,6 +28,15 @@ class Class(Base):
     end_time_utc = Column(DateTime(timezone=True), nullable=False)
     day_of_week = Column(String, nullable=True) # Nuevo campo (ej. "Lunes", "Martes")
     duration = Column(Integer, nullable=False)
+    # Minutos de margen que esta clase reserva DESPUÉS de su fin real
+    # (end_time_utc) para que el profesor se prepare para la siguiente.
+    # Se fija una sola vez al crear la clase, según su class_type y los
+    # valores configurados por el superadmin (buffer_trial_minutes /
+    # buffer_regular_minutes / buffer_group_minutes en PlatformConfig) —
+    # ver core/class_logic.py::get_buffer_minutes_for_type. El "bloque"
+    # que realmente ocupa la agenda del profesor es siempre
+    # [start_time_utc, end_time_utc + buffer_minutes).
+    buffer_minutes = Column(Integer, nullable=False, default=10)
     google_event_id = Column(String, nullable=True)  # Para sync con Calendar
     status = Column(String, default="pending")
     # pending_trial      → bloquea horario

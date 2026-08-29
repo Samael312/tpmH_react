@@ -3,7 +3,20 @@ from typing import Optional, List
 from datetime import datetime
 
 
-ALLOWED_DURATIONS = [30, 60]
+# Pool fijo (no editable a mano) del que el superadmin puede elegir
+# subconjuntos para clases regulares/paquetes, y un valor único para la
+# duración de la clase de prueba. Ver core/class_logic.py::get_business_rules
+# para los valores por defecto de duración de prueba y márgenes (buffers).
+CLASS_DURATION_OPTIONS = [25, 50, 80, 110]
+
+# Compatibilidad con código/imports existentes que aún usan este nombre.
+ALLOWED_DURATIONS = CLASS_DURATION_OPTIONS
+
+# Márgenes de preparación (minutos) que se descuentan del final "real" de la
+# clase respecto al bloque que ocupa en la agenda del profesor. Son los
+# defaults usados si PlatformConfig todavía no tiene fila — el valor
+# efectivo siempre se lee de get_business_rules().
+DEFAULT_BUFFER_MINUTES = {"trial": 5, "regular": 10, "group": 10}
 
 
 class BookClassRequest(BaseModel):

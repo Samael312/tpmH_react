@@ -197,37 +197,92 @@ function PaymentMethodsEditor({ title, items, onSave }: { title: string; items: 
   )
 }
 
-function DurationListEditor({ label, values, onChange }: {
-  label: string; values: number[]; onChange: (v: number[]) => void
-}) {
-  const [input, setInput] = useState('')
+// Pool fijo de duraciones — ya no es un catálogo de texto libre. El
+// superadmin solo puede elegir subconjuntos de estas 4 opciones.
+const CLASS_DURATION_OPTIONS = [25, 50, 80, 110]
 
-  const add = () => {
-    const n = parseInt(input, 10)
-    if (!isNaN(n) && n > 0 && !values.includes(n)) {
+function DurationCheckboxEditor({ label, values, onChange, hint }: {
+  label: string; values: number[]; onChange: (v: number[]) => void; hint?: string
+}) {
+  const toggle = (n: number) => {
+    if (values.includes(n)) {
+      // Siempre debe quedar al menos una duración habilitada.
+      if (values.length === 1) return
+      onChange(values.filter(v => v !== n).sort((a, b) => a - b))
+    } else {
       onChange([...values, n].sort((a, b) => a - b))
     }
-    setInput('')
   }
-  const remove = (n: number) => onChange(values.filter(v => v !== n))
 
   return (
     <div>
       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{label}</label>
-      <div className="flex flex-wrap gap-2 mb-2">
-        {values.map(v => (
-          <span key={v} className="inline-flex items-center gap-1.5 bg-white border border-slate-200 text-xs font-bold text-slate-700 px-3 py-1.5 rounded-xl">
-            {v} min
-            <button onClick={() => remove(v)} className="text-slate-300 hover:text-rose-400">✕</button>
-          </span>
+      {hint && <p className="text-[10px] text-slate-400 mb-2">{hint}</p>}
+      <div className="flex flex-wrap gap-2">
+        {CLASS_DURATION_OPTIONS.map(n => {
+          const active = values.includes(n)
+          return (
+            <button
+              key={n}
+              type="button"
+              onClick={() => toggle(n)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
+                active
+                  ? 'bg-pink-500 border-pink-500 text-white'
+                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+              }`}
+            >
+              {n} min
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function TrialDurationEditor({ label, value, onChange, hint }: {
+  label: string; value: number; onChange: (v: number) => void; hint?: string
+}) {
+  return (
+    <div>
+      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{label}</label>
+      {hint && <p className="text-[10px] text-slate-400 mb-2">{hint}</p>}
+      <div className="flex flex-wrap gap-2">
+        {CLASS_DURATION_OPTIONS.map(n => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => onChange(n)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
+              value === n
+                ? 'bg-amber-400 border-amber-400 text-white'
+                : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+            }`}
+          >
+            {n} min
+          </button>
         ))}
       </div>
-      <div className="flex gap-2">
-        <input type="number" value={input} onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), add())}
-          placeholder="Ej: 45" className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm" />
-        <button onClick={add} className="px-3 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-bold">+</button>
-      </div>
+    </div>
+  )
+}
+
+function BufferMinutesEditor({ label, value, onChange, hint }: {
+  label: string; value: number; onChange: (v: number) => void; hint?: string
+}) {
+  return (
+    <div>
+      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{label}</label>
+      {hint && <p className="text-[10px] text-slate-400 mb-2">{hint}</p>}
+      <input
+        type="number"
+        min={0}
+        max={60}
+        value={value}
+        onChange={e => onChange(Math.max(0, Math.min(60, parseInt(e.target.value, 10) || 0)))}
+        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold"
+      />
     </div>
   )
 }
@@ -317,6 +372,15 @@ export default function SettingsPage() {
       const r = await api.patch('/system-catalogs/business-rules', patch)
       setBusinessRules(r.data)
       setRulesDirty(false)
+      // BUG fix: faltaba este refetch (a diferencia de savePaymentConfig /
+      // savePlatformConfig, que sí lo hacen). Sin él, el cache de React
+      // Query de useAdminBusinessRules quedaba con los datos viejos, y en
+      // cuanto rulesDirty pasaba a false el useEffect de sincronización de
+      // más arriba pisaba el businessRules recién guardado con ese cache
+      // desactualizado — la casilla volvía a marcarse como antes justo
+      // después de guardar, aunque el backend sí había guardado el cambio
+      // (por eso al refrescar la página manualmente se veía correcto).
+      await refetchBusinessRules()
     } catch (e: any) {
       alert(e.response?.data?.detail || 'Error guardando')
     } finally {
@@ -949,16 +1013,64 @@ export default function SettingsPage() {
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold" />
               </div>
             ))}
-            <DurationListEditor
-              label="Duraciones permitidas para clases"
+            <DurationCheckboxEditor
+              label="Duraciones permitidas para clases regulares"
               values={businessRules.allowed_class_durations ?? []}
               onChange={v => updateBusinessRules({ ...businessRules, allowed_class_durations: v })}
             />
-            <DurationListEditor
+            <DurationCheckboxEditor
               label="Duraciones permitidas para paquetes"
               values={businessRules.allowed_package_durations ?? []}
               onChange={v => updateBusinessRules({ ...businessRules, allowed_package_durations: v })}
             />
+          </div>
+
+          <div className="pt-2 border-t border-slate-100">
+            <div className="flex items-center gap-3 mb-4 mt-2">
+              <div className="w-1.5 h-6 bg-amber-400 rounded-full" />
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                Clase de prueba
+              </h3>
+            </div>
+            <TrialDurationEditor
+              label="Duración de la clase de prueba"
+              value={businessRules.trial_duration_minutes ?? 25}
+              onChange={v => updateBusinessRules({ ...businessRules, trial_duration_minutes: v })}
+              hint="Duración real de la clase de prueba. Es un único valor, no una lista — hoy 25 min, editable acá si cambia en el futuro."
+            />
+          </div>
+
+          <div className="pt-2 border-t border-slate-100">
+            <div className="flex items-center gap-3 mb-4 mt-2">
+              <div className="w-1.5 h-6 bg-amber-400 rounded-full" />
+              <div>
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                  Márgenes de preparación
+                </h3>
+                <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                  Minutos que se descuentan del final real de la clase para dejarle tiempo al
+                  profesor de prepararse para la siguiente (ej. una clase de 50 min con 10 min de
+                  margen termina a los 50 min, pero bloquea la agenda del profesor por 60 min).
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <BufferMinutesEditor
+                label="Margen — clase de prueba"
+                value={businessRules.buffer_trial_minutes ?? 5}
+                onChange={v => updateBusinessRules({ ...businessRules, buffer_trial_minutes: v })}
+              />
+              <BufferMinutesEditor
+                label="Margen — clase regular"
+                value={businessRules.buffer_regular_minutes ?? 10}
+                onChange={v => updateBusinessRules({ ...businessRules, buffer_regular_minutes: v })}
+              />
+              <BufferMinutesEditor
+                label="Margen — clase grupal"
+                value={businessRules.buffer_group_minutes ?? 10}
+                onChange={v => updateBusinessRules({ ...businessRules, buffer_group_minutes: v })}
+              />
+            </div>
           </div>
           <Button
             variant="primary"

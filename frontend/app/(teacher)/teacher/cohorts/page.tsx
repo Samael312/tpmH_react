@@ -16,6 +16,7 @@ import {
   type TeacherCohortItem as Cohort,
   type TeacherPackage as Package,
 } from "@/hooks/useTeacherData";
+import { useBusinessRules } from "@/hooks/useBusinessRules";
 
 interface Session {
   id: number;
@@ -95,7 +96,20 @@ export default function TeacherCohortsPage() {
   const [actionLoading, setActionLoading] = useState(false);
 
   const [schedulingCohort, setSchedulingCohort] = useState<Cohort | null>(null);
-  const [sessionForm, setSessionForm] = useState({ date: "", time: "", duration: "60" });
+  const { rules } = useBusinessRules();
+  const [sessionForm, setSessionForm] = useState({ date: "", time: "", duration: "50" });
+
+  // La duración por defecto del form depende del catálogo configurado por
+  // el superadmin, que llega async — se sincroniza cuando esté disponible.
+  useEffect(() => {
+    if (rules.allowed_class_durations?.length) {
+      setSessionForm(f => (
+        rules.allowed_class_durations.includes(Number(f.duration))
+          ? f
+          : { ...f, duration: String(rules.allowed_class_durations[0]) }
+      ));
+    }
+  }, [rules.allowed_class_durations]);
 
   const toggleExpand = async (cohort: Cohort) => {
     if (expandedId === cohort.id) {
@@ -195,7 +209,7 @@ export default function TeacherCohortsPage() {
       const res = await api.get<Session[]>(`/cohorts/${schedulingCohort.id}/sessions`);
       setSessionsByCohort((prev) => ({ ...prev, [schedulingCohort.id]: res.data }));
       setSchedulingCohort(null);
-      setSessionForm({ date: "", time: "", duration: "60" });
+      setSessionForm({ date: "", time: "", duration: String(rules.allowed_class_durations?.[0] ?? 50) });
     } catch (err: any) {
       alert(err?.response?.data?.detail || "No se pudo agendar la sesión");
     } finally {
@@ -489,15 +503,23 @@ export default function TeacherCohortsPage() {
             </div>
           </div>
           <div>
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Duración (minutos)</label>
-            <input
-              type="number"
-              min={15}
-              step={15}
-              className="w-full mt-2 border border-slate-200 rounded-xl px-3 py-2.5 text-sm"
-              value={sessionForm.duration}
-              onChange={(e) => setSessionForm({ ...sessionForm, duration: e.target.value })}
-            />
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Duración</label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {rules.allowed_class_durations.map(d => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setSessionForm({ ...sessionForm, duration: String(d) })}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-colors ${
+                    Number(sessionForm.duration) === d
+                      ? "border-pink-400 bg-pink-50 text-pink-600"
+                      : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                  }`}
+                >
+                  {d} min
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </FullScreenModal>
