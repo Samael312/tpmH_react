@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Video, X, Check, AlertCircle, Link2 } from "lucide-react";
 import api from "@/lib/api";
 
@@ -25,6 +26,17 @@ export function MeetLinkModal({ classItem, onClose, onSaved }: MeetLinkModalProp
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [mounted, setMounted] = useState(false);
+
+  // El modal se monta vía portal directamente en <body>: ClassCard usa
+  // backdrop-blur/transform, que crean un "containing block" para elementos
+  // `fixed`, y eso hacía que el modal quedara atrapado dentro del recuadro
+  // de la card en vez de cubrir toda la pantalla. Con createPortal se
+  // renderiza fuera de ese árbol, evitando el problema sin importar desde
+  // dónde se invoque.
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const save = async () => {
     setSaving(true);
@@ -42,9 +54,9 @@ export function MeetLinkModal({ classItem, onClose, onSaved }: MeetLinkModalProp
     }
   };
 
-  if (!classItem) return null;
+  if (!classItem || !mounted) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-slate-900/50 backdrop-blur-md transition-opacity"
@@ -168,6 +180,7 @@ export function MeetLinkModal({ classItem, onClose, onSaved }: MeetLinkModalProp
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { User, Video, X, Clock, RotateCcw, Check, AlertCircle, Phone, Users2 } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { User, Video, X, Clock, RotateCcw, Check, AlertCircle, Phone, Users2, ChevronDown } from "lucide-react";
 import api from "@/lib/api";
 import { getFlagForNationality } from "@/lib/nationalities";
 import { formatTimeTz, formatWeekdayShortTz, formatMonthShortTz, getDayOfMonthTz, getMyDisplayTimezone } from "@/lib/tzFormat";
@@ -153,6 +154,64 @@ export default function ClassCard({
   const [newTime, setNewTime] = useState("");
   const [error, setError] = useState("");
   const [showMeetLinkModal, setShowMeetLinkModal] = useState(false);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const actionsTriggerRef = useRef<HTMLButtonElement>(null);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
+
+  // El menú "Acciones" se porta a <body> (ver render más abajo) porque la
+  // card tiene overflow-hidden para las esquinas redondeadas, y eso recorta
+  // cualquier dropdown posicionado con `absolute` dentro de ella — solo se
+  // alcanzaba a ver la primera opción. Al portarlo calculamos su posición
+  // en pantalla a partir del botón que lo dispara.
+  const toggleActionsMenu = () => {
+  if (!showActionsMenu && actionsTriggerRef.current) {
+    const rect = actionsTriggerRef.current.getBoundingClientRect();
+    const menuHeight = 180; // Altura estimada del menú desplegable
+    const spaceBelow = window.innerHeight - rect.bottom;
+
+    // Si no hay suficiente espacio abajo, lo desplegamos hacia arriba
+    if (spaceBelow < menuHeight) {
+      setMenuPos({
+        top: Math.max(10, rect.top - menuHeight - 6),
+        right: window.innerWidth - rect.right,
+      });
+    } else {
+      setMenuPos({
+        top: rect.bottom + 6,
+        right: window.innerWidth - rect.right,
+      });
+    }
+  }
+  setShowActionsMenu((v) => !v);
+};
+
+  // Cierra el menú de "Acciones" al hacer click fuera de él (botón o panel
+  // portado, que viven en dos subárboles del DOM distintos)
+  useEffect(() => {
+    if (!showActionsMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const clickedTrigger = actionsTriggerRef.current?.contains(target);
+      const clickedMenu = actionsMenuRef.current?.contains(target);
+      if (!clickedTrigger && !clickedMenu) setShowActionsMenu(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showActionsMenu]);
+
+  // Si la card se mueve en pantalla (scroll/resize) mientras el menú está
+  // abierto, mejor cerrarlo en vez de dejarlo desalineado del botón.
+  useEffect(() => {
+    if (!showActionsMenu) return;
+    const handleReposition = () => setShowActionsMenu(false);
+    window.addEventListener("scroll", handleReposition, true);
+    window.addEventListener("resize", handleReposition);
+    return () => {
+      window.removeEventListener("scroll", handleReposition, true);
+      window.removeEventListener("resize", handleReposition);
+    };
+  }, [showActionsMenu]);
 
   const cfg = STATUS_CONFIG[class_.status] ?? STATUS_CONFIG.pending;
   const start = new Date(class_.start_time_utc);
@@ -292,6 +351,74 @@ export default function ClassCard({
   const hasAnyAction = !readOnly && ((canReschedule && (!isPast || canBypassPastForReschedule)) || (canCancel && (!isPast || role === "teacher")) || showTeacherActions || canManageMeetLink)
     || canJoinMeetLink;
 
+  // Acciones de "estado/gestión" de la clase (Completar, No asistió, Sin
+  // resolver, Reagendar, Cancelar). Antes cada una era un botón apilado en
+  // columna, lo que hacía la card gigante cuando había varias disponibles a
+  // la vez. Ahora se agrupan: si hay una sola, se muestra como botón suelto;
+  // si hay varias, se agrupan bajo un único menú desplegable "Acciones".
+  type StatusAction = {
+    key: string;
+    label: string;
+    icon: React.ReactNode;
+    onClick: () => void;
+    pillClass: string;
+    menuClass: string;
+  };
+
+  const statusActions: StatusAction[] = [];
+  if (!readOnly) {
+    if (showTeacherActions && teacherNextActions.includes("completed")) {
+      statusActions.push({
+        key: "completed",
+        label: "Completar",
+        icon: <Check className="w-3.5 h-3.5" />,
+        onClick: () => teacherUpdateStatus("completed"),
+        pillClass: "text-emerald-600 bg-emerald-50 hover:bg-emerald-100",
+        menuClass: "text-emerald-600 hover:bg-emerald-50",
+      });
+    }
+    if (showTeacherActions && teacherNextActions.includes("no_show")) {
+      statusActions.push({
+        key: "no_show",
+        label: "No asistió",
+        icon: <AlertCircle className="w-3.5 h-3.5" />,
+        onClick: () => teacherUpdateStatus("no_show"),
+        pillClass: "text-orange-600 bg-orange-50 hover:bg-orange-100",
+        menuClass: "text-orange-600 hover:bg-orange-50",
+      });
+    }
+    if (showTeacherActions && teacherNextActions.includes("finalized")) {
+      statusActions.push({
+        key: "finalized",
+        label: "Sin resolver",
+        icon: <Clock className="w-3.5 h-3.5" />,
+        onClick: () => teacherUpdateStatus("finalized"),
+        pillClass: "text-slate-600 bg-slate-100 hover:bg-slate-200",
+        menuClass: "text-slate-600 hover:bg-slate-50",
+      });
+    }
+    if (canReschedule && (!isPast || canBypassPastForReschedule)) {
+      statusActions.push({
+        key: "reschedule",
+        label: "Reagendar",
+        icon: <RotateCcw className="w-3.5 h-3.5" />,
+        onClick: handleRescheduleClick,
+        pillClass: "text-purple-600 bg-purple-50 hover:bg-purple-100",
+        menuClass: "text-purple-600 hover:bg-purple-50",
+      });
+    }
+    if (canCancel && (!isPast || role === "teacher")) {
+      statusActions.push({
+        key: "cancel",
+        label: isGroup && role === "student" ? "Salir" : "Cancelar",
+        icon: <X className="w-3.5 h-3.5" />,
+        onClick: handleCancelClick,
+        pillClass: "text-red-500 bg-red-50 hover:bg-red-100",
+        menuClass: "text-red-500 hover:bg-red-50",
+      });
+    }
+  }
+
   return (
     <div className={`group bg-white/90 backdrop-blur-xl rounded-2xl border border-white/80 shadow-lg shadow-slate-100/80 border-l-4 ${cfg.border} p-5 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden ${isHistory ? "opacity-75 hover:opacity-100" : ""}`}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -398,7 +525,7 @@ export default function ClassCard({
 
         {/* LADO DERECHO: Acciones */}
         {hasAnyAction && (
-          <div className="flex sm:flex-col gap-2 items-stretch sm:items-end justify-end flex-shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
+          <div className="flex flex-wrap gap-2 items-center justify-end flex-shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
 
             {canManageMeetLink && (
               <button
@@ -433,39 +560,58 @@ export default function ClassCard({
                   <button onClick={() => setShowInlineReschedule(false)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-1.5 rounded-lg text-xs font-bold transition-colors">X</button>
                 </div>
               </div>
-            ) : (
-              <>
-                {showTeacherActions && teacherNextActions.includes("completed") && (
-                  <button onClick={() => teacherUpdateStatus("completed")} disabled={updating} className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3.5 py-2 rounded-xl transition-colors disabled:opacity-50">
-                    <Check className="w-3.5 h-3.5" /> Completar
-                  </button>
-                )}
-                {showTeacherActions && teacherNextActions.includes("no_show") && (
-                  <button onClick={() => teacherUpdateStatus("no_show")} disabled={updating} className="flex items-center justify-center gap-1.5 text-xs font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 px-3.5 py-2 rounded-xl transition-colors disabled:opacity-50">
-                    <AlertCircle className="w-3.5 h-3.5" /> No asistió
-                  </button>
-                )}
-                {showTeacherActions && teacherNextActions.includes("finalized") && (
-                  <button onClick={() => teacherUpdateStatus("finalized")} disabled={updating} className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl transition-colors disabled:opacity-50">
-                    <Clock className="w-3.5 h-3.5" /> Sin resolver
-                  </button>
-                )}
-                {canReschedule && (!isPast || canBypassPastForReschedule) && (
-                  <button onClick={handleRescheduleClick} disabled={updating} className="flex items-center justify-center gap-1.5 text-xs font-bold text-purple-600 bg-purple-50 hover:bg-purple-100 px-3.5 py-2 rounded-xl transition-colors disabled:opacity-50">
-                    <RotateCcw className="w-3.5 h-3.5" /> Reagendar
-                  </button>
-                )}
-                {canCancel && (!isPast || role === "teacher") && (
-                  <button onClick={handleCancelClick} disabled={updating} className="flex items-center justify-center gap-1.5 text-xs font-bold text-red-500 bg-red-50 hover:bg-red-100 px-3.5 py-2 rounded-xl transition-colors disabled:opacity-50">
-                    <X className="w-3.5 h-3.5" /> {isGroup && role === "student" ? "Salir" : "Cancelar"}
-                  </button>
-                )}
-              </>
-            )}
+            ) : statusActions.length === 1 ? (
+              // Una sola acción disponible: botón directo, sin menú de por medio
+              <button
+                onClick={statusActions[0].onClick}
+                disabled={updating}
+                className={`flex items-center justify-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl transition-colors disabled:opacity-50 ${statusActions[0].pillClass}`}
+              >
+                {statusActions[0].icon} {statusActions[0].label}
+              </button>
+            ) : statusActions.length > 1 ? (
+              // Varias acciones disponibles: se agrupan en un único menú
+              // desplegable "Acciones" para que la card no crezca en altura.
+              // El botón vive aquí, pero el panel del menú se porta a
+              // <body> (ver abajo) para no quedar recortado por el
+              // overflow-hidden de la card.
+              <button
+                ref={actionsTriggerRef}
+                onClick={toggleActionsMenu}
+                disabled={updating}
+                className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl transition-colors disabled:opacity-50"
+              >
+                Acciones
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showActionsMenu ? "rotate-180" : ""}`} />
+              </button>
+            ) : null}
           </div>
         )}
 
       </div>
+
+      {showActionsMenu && menuPos && createPortal(
+        <div
+          ref={actionsMenuRef}
+          style={{ position: "fixed", top: menuPos.top, right: menuPos.right }}
+          className="w-44 max-h-[calc(100vh-20px)] overflow-y-auto bg-white rounded-xl shadow-xl shadow-slate-300/40 border border-slate-100 py-1.5 z-50"
+        >
+          {statusActions.map((action) => (
+            <button
+              key={action.key}
+              disabled={updating}
+              onClick={() => {
+                setShowActionsMenu(false);
+                action.onClick();
+              }}
+              className={`w-full flex items-center gap-2 px-3.5 py-2 text-xs font-bold transition-colors disabled:opacity-50 ${action.menuClass}`}
+            >
+              {action.icon} {action.label}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
 
       {showMeetLinkModal && (
         <MeetLinkModal
