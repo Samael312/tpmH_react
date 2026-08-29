@@ -12,6 +12,14 @@ export type BookingStage =
   | "renew_required"
   | "renewal_pending"
   | "ready";
+
+export interface RejectedPaymentInfo {
+  payment_id: number;
+  amount: number;
+  payment_type: string | null;
+  rejection_reason: string | null;
+  rejected_at: string | null;
+}
   
 export interface StudentClass {
   id: number;
@@ -267,14 +275,18 @@ export function useBookingStage() {
     queryKey: ["student", "booking-status"],
     queryFn: async () => {
       const res = await api.get("/payments/booking-status");
-      return res.data.stage as BookingStage;
+      return {
+        stage: res.data.stage as BookingStage,
+        lastRejectedPayment: (res.data.last_rejected_payment ?? null) as RejectedPaymentInfo | null,
+      };
     },
   });
 
   return {
     // Preserva el fallback original: si falla, se asume "ready" en vez de
     // bloquear la pantalla indefinidamente.
-    stage: query.isError ? ("ready" as BookingStage) : (query.data ?? "loading"),
+    stage: query.isError ? ("ready" as BookingStage) : (query.data?.stage ?? "loading"),
+    lastRejectedPayment: query.isError ? null : (query.data?.lastRejectedPayment ?? null),
     isFetching: query.isFetching,
     isError: query.isError,
     refetch: query.refetch,
@@ -285,6 +297,7 @@ export function useBookingStage() {
 export interface BookingStatusInfo {
   stage: BookingStage;
   enrollmentId: number | null;
+  lastRejectedPayment: RejectedPaymentInfo | null;
 }
 
 export function useBookingStatusFor(teacherUsername: string | null, isSingleTenant: boolean) {
@@ -298,6 +311,7 @@ export function useBookingStatusFor(teacherUsername: string | null, isSingleTena
       return {
         stage: res.data.stage as BookingStage,
         enrollmentId: res.data.enrollment_id ?? null,
+        lastRejectedPayment: (res.data.last_rejected_payment ?? null) as RejectedPaymentInfo | null,
       } as BookingStatusInfo;
     },
     enabled,
@@ -309,6 +323,7 @@ export function useBookingStatusFor(teacherUsername: string | null, isSingleTena
     // consultar (falta elegir profesor), se muestra "loading".
     stage: !enabled ? ("loading" as BookingStage) : query.isError ? ("ready" as BookingStage) : (query.data?.stage ?? "loading"),
     enrollmentId: query.data?.enrollmentId ?? null,
+    lastRejectedPayment: query.isError ? null : (query.data?.lastRejectedPayment ?? null),
     isFetching: query.isFetching,
     isError: query.isError,
     refetch: query.refetch,

@@ -21,6 +21,8 @@ import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
+import RejectedPaymentNotice from "@/components/payments/RejectedPaymentNotice";
+import type { RejectedPaymentInfo } from "@/hooks/useStudentData";
 
 type BookingStage =
   | "loading"
@@ -823,7 +825,15 @@ function GroupPackagesBrowser({
   );
 }
 
-function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: string | null; onSelected: () => void }) {
+function NeedsPackageScreen({
+  teacherUsername,
+  onSelected,
+  lastRejectedPayment,
+}: {
+  teacherUsername: string | null;
+  onSelected: () => void;
+  lastRejectedPayment: RejectedPaymentInfo | null;
+}) {
   const [packages, setPackages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -847,12 +857,16 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 flex gap-3 items-start">
-        <Check className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
-        <p className="text-sm font-bold text-emerald-700 leading-relaxed">
-          ¡Completaste tu clase de prueba! Elige un paquete para seguir agendando tus próximas clases.
-        </p>
-      </div>
+      {lastRejectedPayment ? (
+        <RejectedPaymentNotice payment={lastRejectedPayment} variant="full" />
+      ) : (
+        <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 flex gap-3 items-start">
+          <Check className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+          <p className="text-sm font-bold text-emerald-700 leading-relaxed">
+            ¡Completaste tu clase de prueba! Elige un paquete para seguir agendando tus próximas clases.
+          </p>
+        </div>
+      )}
 
       {error && (
         <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
@@ -967,7 +981,15 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
 }
 
 // ─── Pantalla: renovación requerida ─────────────────────────────────────────
-function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername: string | null; onRequested: () => void }) {
+function NeedsRenewalScreen({
+  teacherUsername,
+  onRequested,
+  lastRejectedPayment,
+}: {
+  teacherUsername: string | null;
+  onRequested: () => void;
+  lastRejectedPayment: RejectedPaymentInfo | null;
+}) {
   const [packages, setPackages] = useState<any[]>([]);
   const [lastEnrollmentId, setLastEnrollmentId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1008,13 +1030,17 @@ function NeedsRenewalScreen({ teacherUsername, onRequested }: { teacherUsername:
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex gap-3 items-start">
-        <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-        <p className="text-sm font-bold text-amber-700 leading-relaxed">
-          Ya usaste todas las clases de tu paquete anterior. Elige tu siguiente
-          paquete — tu profesor(a) confirmará el pago y lo activará.
-        </p>
-      </div>
+      {lastRejectedPayment ? (
+        <RejectedPaymentNotice payment={lastRejectedPayment} variant="full" />
+      ) : (
+        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex gap-3 items-start">
+          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <p className="text-sm font-bold text-amber-700 leading-relaxed">
+            Ya usaste todas las clases de tu paquete anterior. Elige tu siguiente
+            paquete — tu profesor(a) confirmará el pago y lo activará.
+          </p>
+        </div>
+      )}
 
       {error && (
         <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
@@ -1176,6 +1202,7 @@ export default function SchedulePage() {
   const {
     stage,
     enrollmentId,
+    lastRejectedPayment,
     isFetching: stageFetching,
     refetch: refetchStage,
   } = useBookingStatusFor(selectedTeacherUsername, isSingleTenant);
@@ -1428,6 +1455,7 @@ export default function SchedulePage() {
                   refetchStage();
                   refetchEnrollments();
                 }}
+                lastRejectedPayment={lastRejectedPayment}
               />
             )}
 
@@ -1439,6 +1467,7 @@ export default function SchedulePage() {
               <NeedsRenewalScreen
                 teacherUsername={selectedTeacherUsername}
                 onRequested={refetchStage}
+                lastRejectedPayment={lastRejectedPayment}
               />
             )}
 

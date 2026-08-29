@@ -1246,10 +1246,33 @@ def get_booking_status(
         Enrollment.teacher_id == teacher.id
     ).order_by(Enrollment.created_at.desc()).first()
 
+    # ── Último pago rechazado (para mostrarle al estudiante por qué volvió
+    #    a "elegir paquete" / "renovar") ─────────────────────────────────
+    # get_student_booking_stage() puede haber cancelado el enrollment que
+    # tenía el pago rechazado (ver core/class_logic.py), así que no
+    # filtramos por enrollment_id — buscamos el pago más reciente de este
+    # estudiante con este profesor. Si el más reciente fue rechazado y no
+    # hay un intento posterior que lo reemplace, se lo mostramos.
+    last_payment = db.query(Payment).filter(
+        Payment.student_id == student_id,
+        Payment.teacher_id == teacher.id,
+    ).order_by(Payment.created_at.desc()).first()
+
+    last_rejected_payment = None
+    if last_payment is not None and last_payment.status == "rejected":
+        last_rejected_payment = {
+            "payment_id": last_payment.id,
+            "amount": last_payment.amount_total,
+            "payment_type": last_payment.payment_type,
+            "rejection_reason": last_payment.rejection_reason,
+            "rejected_at": last_payment.validated_at,
+        }
+
     return {
         "stage": stage,
         "teacher_username": teacher.user_username,
-        "enrollment_id": enrollment.id if enrollment else None
+        "enrollment_id": enrollment.id if enrollment else None,
+        "last_rejected_payment": last_rejected_payment,
     }
 
 

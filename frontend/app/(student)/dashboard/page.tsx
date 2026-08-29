@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import PackageCheckout from "@/components/payments/PackageCheckout";
 import BuyCreditsModal from "@/components/payments/BuyCreditsModal";
+import RejectedPaymentNotice from "@/components/payments/RejectedPaymentNotice";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
@@ -121,7 +122,7 @@ export default function StudentDashboard() {
   const { user } = useAuthStore();
   const { classes: classesData, loading: classesLoading, isFetching: classesFetching, isError: classesError, refetch: refetchClasses } = useStudentClasses();
   const { enrollments, loading: enrollmentsLoading, isFetching: enrollmentsFetching, isError: enrollmentsError, refetch: refetchEnrollments } = useEnrollments();
-  const { stage, isFetching: stageFetching, refetch: refetchStage } = useBookingStage();
+  const { stage, lastRejectedPayment, isFetching: stageFetching, refetch: refetchStage } = useBookingStage();
 
   const [changePackageTarget, setChangePackageTarget] = useState<any | null>(null);
   const [installmentTarget, setInstallmentTarget] = useState<any | null>(null);
@@ -208,6 +209,10 @@ export default function StudentDashboard() {
             <RefreshButton onRefresh={handleRefresh} isFetching={isFetching} />
           </DesktopOnly>
         </div>
+
+        {lastRejectedPayment && (stage === "needs_package" || stage === "needs_renewal" || stage === "renew_required") && (
+          <RejectedPaymentNotice payment={lastRejectedPayment} variant="compact" />
+        )}
 
         {stage === "needs_trial" && !hasTrial && (
           <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-[2rem] p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-purple-200 animate-in fade-in slide-in-from-bottom-4 duration-500">
