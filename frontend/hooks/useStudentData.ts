@@ -417,6 +417,13 @@ export interface StudentPreference {
   end_time_utc: string;
 }
 
+// Referencia estable para el fallback: si se usara `?? []` inline, cada
+// render mientras query.data es undefined crearía un array nuevo, y como
+// availability/page.tsx usa `preferences` como dependencia de un useEffect,
+// eso disparaba el efecto en cada render -> setState -> nuevo render ->
+// nuevo [] -> loop infinito ("Maximum update depth exceeded").
+const EMPTY_PREFERENCES: StudentPreference[] = [];
+
 export function useStudentPreferences() {
   const query = useQuery({
     queryKey: ["student", "preferences"],
@@ -427,7 +434,7 @@ export function useStudentPreferences() {
   });
 
   return {
-    preferences: query.data ?? [],
+    preferences: query.data ?? EMPTY_PREFERENCES,
     loading: query.isLoading,
     isFetching: query.isFetching,
     isError: query.isError,
