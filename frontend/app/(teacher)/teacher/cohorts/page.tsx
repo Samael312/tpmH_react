@@ -3,35 +3,19 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Users2, Plus, Check, Calendar, Lock, Ban, ChevronRight,
-  AlertTriangle, Clock, X, UserCheck, UserX,
+  AlertTriangle, Clock, X, UserCheck, UserX, RefreshCw,
 } from "lucide-react";
 import api from "@/lib/api";
 import { Card, Badge, Button, Skeleton, FullScreenModal } from "@/components/ui";
-
-interface Package {
-  id: number;
-  name: string;
-  subject: string;
-  price: number;
-  classes_count: number | null;
-  is_group: boolean;
-  min_students: number | null;
-  max_students: number | null;
-}
-
-interface Cohort {
-  id: number;
-  package_id: number;
-  package_name: string | null;
-  teacher_id: number;
-  start_date: string | null;
-  status: "filling" | "confirmed" | "in_progress" | "completed" | "cancelled";
-  min_students: number;
-  max_students: number;
-  current_students: number;
-  created_at: string;
-  closed_at: string | null;
-}
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
+import { usePageTopBar } from "@/lib/mobileTopBar";
+import {
+  useTeacherCohorts,
+  useTeacherPackages,
+  type TeacherCohortItem as Cohort,
+  type TeacherPackage as Package,
+} from "@/hooks/useTeacherData";
 
 interface Session {
   id: number;
@@ -66,10 +50,37 @@ const STATUS_BADGE: Record<Cohort["status"], "success" | "warning" | "info" | "n
 };
 
 export default function TeacherCohortsPage() {
-  const [cohorts, setCohorts] = useState<Cohort[]>([]);
-  const [groupPackages, setGroupPackages] = useState<Package[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    cohorts,
+    loading: loadingCohorts,
+    isFetching: fetchingCohorts,
+    isError: cohortsError,
+    refetch: refetchCohorts,
+  } = useTeacherCohorts();
+  const {
+    packages: allPackages,
+    loading: loadingPackages,
+    isFetching: fetchingPackages,
+    isError: packagesError,
+    refetch: refetchPackages,
+  } = useTeacherPackages();
+
+  const groupPackages: Package[] = (allPackages ?? []).filter((p) => p.is_group);
+  const loading = loadingCohorts || loadingPackages;
+  const isFetching = fetchingCohorts || fetchingPackages;
+  const error = (cohortsError || packagesError)
+    ? "No pudimos cargar tus cohortes. Intenta de nuevo."
+    : null;
+
+  const loadData = useCallback(async () => {
+    await Promise.all([refetchCohorts(), refetchPackages()]);
+  }, [refetchCohorts, refetchPackages]);
+
+  usePageTopBar({
+    title: "Clases grupales",
+    onRefresh: loadData,
+    isFetching,
+  });
 
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -85,24 +96,6 @@ export default function TeacherCohortsPage() {
 
   const [schedulingCohort, setSchedulingCohort] = useState<Cohort | null>(null);
   const [sessionForm, setSessionForm] = useState({ date: "", time: "", duration: "60" });
-
-  const loadData = useCallback(async () => {
-    setError(null);
-    try {
-      const [cohortsRes, packagesRes] = await Promise.all([
-        api.get<Cohort[]>("/cohorts/teacher"),
-        api.get<Package[]>("/packages/my-packages"),
-      ]);
-      setCohorts(cohortsRes.data);
-      setGroupPackages(packagesRes.data.filter((p) => p.is_group));
-    } catch {
-      setError("No pudimos cargar tus cohortes. Intenta de nuevo.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { loadData(); }, [loadData]);
 
   const toggleExpand = async (cohort: Cohort) => {
     if (expandedId === cohort.id) {
@@ -204,19 +197,32 @@ export default function TeacherCohortsPage() {
           </h1>
           <p className="text-sm text-slate-500 mt-1">Gestiona tus cohortes: cupos, fecha de inicio y sesiones.</p>
         </div>
-        <Button size="sm" onClick={() => setShowCreate(true)}>
-          <Plus className="w-4 h-4" /> Nueva Grupo
-        </Button>
+        <div className="flex items-center gap-2">
+          <DesktopOnly>
+            <RefreshButton onRefresh={loadData} isFetching={isFetching} />
+          </DesktopOnly>
+          <Button size="sm" onClick={() => setShowCreate(true)}>
+            <Plus className="w-4 h-4" /> Nueva Grupo
+          </Button>
+        </div>
       </div>
 
       {loading && (
         <div className="space-y-3">
-          {[1, 2].map((i) => <Skeleton key={i} className="h-28 rounded-[2rem]" />)}
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-[2rem]" />)}
         </div>
       )}
 
-      {error && (
-        <Card className="p-6 text-center text-sm text-rose-500">{error}</Card>
+      {error && !loading && (
+        <Card className="p-6 text-center text-sm text-rose-500 flex flex-col items-center gap-3">
+          <span>{error}</span>
+          <button
+            onClick={() => loadData()}
+            className="flex items-center gap-2 px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white text-xs font-bold rounded-xl transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+          </button>
+        </Card>
       )}
 
       {!loading && !error && cohorts.length === 0 && (

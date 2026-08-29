@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   Package as PackageIcon, Plus, X, Check, Edit2,
@@ -14,45 +14,16 @@ import { useAuthStore } from "@/store/authStore";
 // in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
-
-interface Package {
-  id: number;
-  name: string;
-  subject: string;
-  description: string | null;
-  description_type: "paragraph" | "list";
-  description_items: string[] | null;
-  icon: string;
-  color: string;
-  classes_count: number | null;
-  price: number;
-  duration_minutes: number;
-  is_active: boolean;
-  allow_installments?: boolean;
-  installment_count?: number | null;
-  is_group?: boolean;
-  min_students?: number | null;
-  max_students?: number | null;
-}
-
-interface EnrollmentCompliance {
-  id: number;
-  student_id: number;
-  student_username: string;
-  student_name: string;
-  package_id: number;
-  package_name: string;
-  classes_used: number;
-  classes_total: number | null;
-  available_credits: number | null;
-  status: string;
-  completed_count: number;
-  no_show_count: number;
-  cancelled_late_count: number;
-  renewal_requested_package_name: string | null;
-  change_requested_package_name: string | null;
-  created_at: string;
-}
+import {
+  useTeacherPackages,
+  useTeacherEnrollments,
+  type TeacherPackage as Package,
+  type TeacherEnrollmentCompliance as EnrollmentCompliance,
+} from "@/hooks/useTeacherData";
+import Skeleton from "@/components/ui/Skeleton";
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
+import { usePageTopBar } from "@/lib/mobileTopBar";
 
 const emptyForm = {
   name: "", subject: "", description: "",
@@ -97,12 +68,35 @@ export default function TeacherPackagesPage() {
   const ICON_OPTIONS = catalogs?.package_icon_options?.length ? catalogs.package_icon_options : DEFAULT_ICON_OPTIONS;
   const THEME_PRESETS = catalogs?.theme_presets?.length ? catalogs.theme_presets : DEFAULT_THEME_PRESETS;
   
+  const {
+    packages,
+    loading: loadingPackages,
+    isFetching: fetchingPackages,
+    refetch: refetchPackages,
+  } = useTeacherPackages();
+  const {
+    enrollments,
+    loading: loadingEnrollments,
+    isFetching: fetchingEnrollments,
+    refetch: refetchEnrollments,
+  } = useTeacherEnrollments();
+
+  const loading = loadingPackages || loadingEnrollments;
+  const isFetching = fetchingPackages || fetchingEnrollments;
+
+  const fetchAll = useCallback(async () => {
+    await Promise.all([refetchPackages(), refetchEnrollments()]);
+  }, [refetchPackages, refetchEnrollments]);
+
+  usePageTopBar({
+    title: "Paquetes",
+    onRefresh: fetchAll,
+    isFetching,
+  });
+
   const [kind, setKind] = useState<"subject" | "language">("subject");
   const [unlimited, setUnlimited] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
-  const [packages, setPackages] = useState<Package[]>([]);
-  const [enrollments, setEnrollments] = useState<EnrollmentCompliance[]>([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -120,24 +114,6 @@ export default function TeacherPackagesPage() {
       formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
   };
-
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [pkgRes, enrRes] = await Promise.all([
-        api.get("/packages/my-packages"),
-        api.get("/packages/teacher/enrollments"),
-      ]);
-      setPackages(pkgRes.data);
-      setEnrollments(enrRes.data);
-    } catch {
-      /* silencioso */
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -288,6 +264,9 @@ export default function TeacherPackagesPage() {
                   Ver pagos pendientes <ChevronRight className="w-4 h-4" />
                 </Link>
               )}
+              <DesktopOnly>
+                <RefreshButton onRefresh={fetchAll} isFetching={isFetching} />
+              </DesktopOnly>
               <button 
                 onClick={openCreate} 
                 className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-pink-200 hover:shadow-pink-300 hover:-translate-y-0.5 active:scale-95 transition-all duration-300"
@@ -724,7 +703,7 @@ export default function TeacherPackagesPage() {
             <h2 className="text-lg font-black text-slate-800">Paquetes ({packages.length})</h2>
             {loading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[1, 2, 3].map(i => <div key={i} className="h-40 bg-white rounded-2xl animate-pulse" />)}
+                {[1, 2, 3].map(i => <Skeleton key={i} className="h-40 rounded-2xl" />)}
               </div>
             ) : packages.length === 0 ? (
               <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg py-16 text-center">
@@ -831,7 +810,7 @@ export default function TeacherPackagesPage() {
 
             {loading ? (
               <div className="space-y-3">
-                {[1, 2].map(i => <div key={i} className="h-20 bg-white rounded-2xl animate-pulse" />)}
+                {[1, 2].map(i => <Skeleton key={i} className="h-20 rounded-2xl" />)}
               </div>
             ) : enrollments.length === 0 ? (
               <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg py-12 text-center">

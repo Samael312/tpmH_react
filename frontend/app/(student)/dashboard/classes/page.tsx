@@ -13,6 +13,10 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 import ClassCard from "@/components/classes/ClassCard";
 import { RescheduleModal } from "@/components/classes/RescheduleModal";
 import { getMyDisplayTimezone, formatTimeTz, formatDateHumanTz } from "@/lib/tzFormat";
+import Skeleton from "@/components/ui/Skeleton";
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
+import { usePageTopBar } from "@/lib/mobileTopBar";
 
 const STATUS_CONFIG: Record<string, {
   label: string;
@@ -311,7 +315,13 @@ export default function MyClassesPage() {
   // mostraban datos de una caché diferente -y potencialmente desactualizada-
   // porque refetch() sólo refresca la query activa, causando que el conteo
   // de "Próximas" fluctuara al alternar entre tabs.
-  const { classes, loading, refetch } = useStudentClasses(true);
+  const { classes, loading, isFetching, refetch } = useStudentClasses(true);
+
+  usePageTopBar({
+    title: "Mis Clases",
+    onRefresh: refetch,
+    isFetching,
+  });
 
   const safeClasses = Array.isArray(classes) ? classes : [];
 
@@ -354,13 +364,18 @@ export default function MyClassesPage() {
 
       <div className="relative space-y-6">
 
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">
-            Mis Clases
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Gestiona tus sesiones activas e historial
-          </p>
+        <div className="flex items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div>
+            <h1 className="text-3xl font-black text-slate-800 tracking-tight">
+              Mis Clases
+            </h1>
+            <p className="text-slate-500 mt-1">
+              Gestiona tus sesiones activas e historial
+            </p>
+          </div>
+          <DesktopOnly>
+            <RefreshButton onRefresh={refetch} isFetching={isFetching} />
+          </DesktopOnly>
         </div>
 
         {/* Selector de semana + calendario específico */}
@@ -464,8 +479,7 @@ export default function MyClassesPage() {
                         delay-150 space-y-3">
           {loading ? (
             Array.from({ length: 3 }).map((_, i) => (
-              <div key={i}
-                className="h-28 bg-white rounded-2xl animate-pulse" />
+              <Skeleton key={i} className="h-28 rounded-2xl" />
             ))
           ) : displayed.length === 0 ? (
           <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg py-16 text-center">

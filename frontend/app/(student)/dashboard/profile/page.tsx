@@ -15,6 +15,10 @@ import {
   GOALS as FALLBACK_GOALS, 
   PAYMENT_METHODS as FALLBACK_METHODS
 } from "@/lib/teacherOptions";
+import { useStudentProfileData } from "@/hooks/useStudentData";
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
+import { usePageTopBar } from "@/lib/mobileTopBar";
 
 // ─── Helpers & Formateadores de Errores ──────────────────────────────────────
 function formatErrorMessage(error: any, fallbackMessage: string): string {
@@ -142,8 +146,14 @@ export default function StudentProfilePage() {
   const { user, setUser, logout } = useAuthStore();
   const [nationality, setNationality] = useState("");
   const [profile, setProfile] = useState<any>(null);
-  const [loadingProfile, setLoadingProfile] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const {
+    data: profileQueryData,
+    loading: loadingProfile,
+    isFetching: fetchingProfile,
+    isError: profileHasError,
+    refetch: refetchProfile,
+  } = useStudentProfileData();
+  const loadError = profileHasError ? "No se pudo cargar la información del perfil." : null;
   const [isEditing, setIsEditing] = useState(false);
   const [timezonesList, setTimezonesList] = useState<string[]>(DEFAULT_TIMEZONES);
 
@@ -232,27 +242,18 @@ export default function StudentProfilePage() {
     setAvatarUrl(photo);
   }, [user?.username, catalogs.student_goals]);
 
-  // ─── GET: Obtener información del usuario y estudiante ──────────────────────
-  const fetchProfileData = useCallback(async () => {
-    setLoadingProfile(true);
-    setLoadError(null);
-    try {
-      const [userRes, studentRes] = await Promise.all([
-        api.get("/users/me"),
-        api.get("/users/me/student-profile")
-      ]);
-
-      populateFields(userRes.data, studentRes.data);
-    } catch (err: any) {
-      setLoadError(formatErrorMessage(err, "No se pudo cargar la información del perfil."));
-    } finally {
-      setLoadingProfile(false);
-    }
-  }, [populateFields]);
-
+  // ─── Sincroniza el formulario cuando llegan (o se refrescan) los datos ──────
   useEffect(() => {
-    fetchProfileData();
-  }, [fetchProfileData]);
+    if (profileQueryData) {
+      populateFields(profileQueryData.user, profileQueryData.studentProfile);
+    }
+  }, [profileQueryData, populateFields]);
+
+  usePageTopBar({
+    title: "Mi Perfil",
+    onRefresh: refetchProfile,
+    isFetching: fetchingProfile,
+  });
 
   // Handler para alternar métodos de pago
   const togglePay = useCallback((v: string) => {
@@ -308,6 +309,7 @@ export default function StudentProfilePage() {
 
       setInfoFeedback({ msg: "Perfil actualizado correctamente", type: "success" });
       setIsEditing(false);
+      refetchProfile();
     } catch (e: any) {
       setInfoFeedback({
         msg: formatErrorMessage(e, "Error al guardar los cambios"),
@@ -317,7 +319,7 @@ export default function StudentProfilePage() {
       setSavingInfo(false);
       setTimeout(() => setInfoFeedback(null), 4000);
     }
-  }, [timezone, username, name, surname, email, phoneCountry.dialCode, phoneRest, nationality, goal, payMethods, populateFields, user, setUser, avatarUrl]);
+  }, [timezone, username, name, surname, email, phoneCountry.dialCode, phoneRest, nationality, goal, payMethods, populateFields, user, setUser, avatarUrl, refetchProfile]);
 
   // ─── POST: Cambiar Contraseña ────────────────────────────────────────────────
   const savePw = useCallback(async () => {
@@ -383,6 +385,7 @@ export default function StudentProfilePage() {
       if (setUser && user) {
         setUser({ ...user, avatar_url: newAvatarUrl });
       }
+      refetchProfile();
     } catch (e: any) {
       setInfoFeedback({
         msg: formatErrorMessage(e, "Error al subir la imagen"),
@@ -391,7 +394,7 @@ export default function StudentProfilePage() {
     } finally {
       setUploading(false);
     }
-  }, [user, setUser]);
+  }, [user, setUser, refetchProfile]);
 
   const displayName = useMemo(
     () => `${name} ${surname}`.trim() || user?.name || "Estudiante",
@@ -412,7 +415,7 @@ export default function StudentProfilePage() {
           <h2 className="text-xl font-black text-slate-800 mb-2">Error al cargar perfil</h2>
           <p className="text-slate-500 text-sm mb-6">{loadError}</p>
           <button
-            onClick={fetchProfileData}
+            onClick={() => refetchProfile()}
             className="inline-flex items-center gap-2 px-6 py-3 bg-pink-500 hover:bg-pink-600 text-white rounded-xl font-bold text-sm shadow-md transition-all active:scale-95"
           >
             <RefreshCw className="w-4 h-4" />
@@ -468,6 +471,10 @@ export default function StudentProfilePage() {
               </span>
             </div>
           </div>
+
+          <DesktopOnly>
+            <RefreshButton onRefresh={refetchProfile} isFetching={fetchingProfile} />
+          </DesktopOnly>
         </div>
 
         {/* ─── Grid Principal (2 Columnas) ─── */}

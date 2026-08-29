@@ -1,4 +1,3 @@
-import { useState, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 
@@ -196,63 +195,52 @@ export interface MyTeacherInfo {
 }
 
 export function useMyTeachers() {
-  const [teachers, setTeachers] = useState<MyTeacherInfo[]>([]);
-  const [isSingleTenant, setIsSingleTenant] = useState(true);
-  const [loading, setLoading] = useState(true);
-
-  const fetch = useCallback(async () => {
-    setLoading(true);
-    try {
+  const query = useQuery({
+    queryKey: ["student", "my-teachers"],
+    queryFn: async () => {
       const [cfgRes, teachersRes] = await Promise.all([
         api.get("/admin/platform-config"),
         api.get("/users/me/teachers"),
       ]);
-      setIsSingleTenant(!!cfgRes.data?.is_single_tenant);
-      setTeachers(Array.isArray(teachersRes.data) ? teachersRes.data : []);
-    } catch (error) {
-      console.error("Error fetching my teachers:", error);
-      setTeachers([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return {
+        isSingleTenant: !!cfgRes.data?.is_single_tenant,
+        teachers: (Array.isArray(teachersRes.data) ? teachersRes.data : []) as MyTeacherInfo[],
+      };
+    },
+  });
 
-  useEffect(() => { fetch(); }, [fetch]);
+  const teachers = query.data?.teachers ?? [];
 
   return {
-    loading,
-    isSingleTenant,
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    isSingleTenant: query.data?.isSingleTenant ?? true,
     teachers,
     hasAnyTeacher: teachers.length > 0,
-    refetch: fetch,
+    refetch: query.refetch,
   };
 }
 
 export function useAvailableSlots(date: string, duration: number, teacherUsername: string | null) {
-  const [slots, setSlots]     = useState<AvailableSlot[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const fetch = useCallback(async () => {
-    if (!date || !teacherUsername) {
-      setSlots([]);
-      return;
-    }
-    setLoading(true);
-    try {
+  const query = useQuery({
+    queryKey: ["student", "available-slots", teacherUsername, date, duration],
+    queryFn: async () => {
       const res = await api.get(
         `/availability/${teacherUsername}/slots?date=${date}&duration=${duration}`
       );
-      setSlots(res.data);
-    } catch (error) {
-      console.error("Error fetching available slots:", error);
-      setSlots([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [date, duration, teacherUsername]);
+      return res.data as AvailableSlot[];
+    },
+    enabled: !!date && !!teacherUsername,
+  });
 
-  useEffect(() => { fetch(); }, [fetch]);
-  return { slots, loading, refetch: fetch };
+  return {
+    slots: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
 }
 
 export function useEnrollments() {
@@ -293,6 +281,40 @@ export function useBookingStage() {
   };
 }
 
+// ─── Estado del flujo de reserva, con soporte multi-profesor ─────────────────
+export interface BookingStatusInfo {
+  stage: BookingStage;
+  enrollmentId: number | null;
+}
+
+export function useBookingStatusFor(teacherUsername: string | null, isSingleTenant: boolean) {
+  const enabled = isSingleTenant || !!teacherUsername;
+
+  const query = useQuery({
+    queryKey: ["student", "booking-status", teacherUsername ?? "single-tenant"],
+    queryFn: async () => {
+      const params = teacherUsername ? `?teacher_username=${teacherUsername}` : "";
+      const res = await api.get(`/payments/booking-status${params}`);
+      return {
+        stage: res.data.stage as BookingStage,
+        enrollmentId: res.data.enrollment_id ?? null,
+      } as BookingStatusInfo;
+    },
+    enabled,
+  });
+
+  return {
+    // Preserva el fallback original: si falla, se asume "ready" en vez de
+    // bloquear la pantalla indefinidamente. Si aún no hay condiciones para
+    // consultar (falta elegir profesor), se muestra "loading".
+    stage: !enabled ? ("loading" as BookingStage) : query.isError ? ("ready" as BookingStage) : (query.data?.stage ?? "loading"),
+    enrollmentId: query.data?.enrollmentId ?? null,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
+}
+
 // ─── Paquetes disponibles de un profesor (modal de cambio de paquete) ────────
 export function useTeacherPackagesFor(teacherUsername: string | undefined, enabled: boolean) {
   const query = useQuery({
@@ -312,75 +334,136 @@ export function useTeacherPackagesFor(teacherUsername: string | undefined, enabl
   };
 }
 
+export interface MaterialAssignmentFull {
+  id: number;
+  material_id: number;
+  student_id: number;
+  progress: string;
+  assigned_at: string;
+  completed_at?: string;
+  material: {
+    id: number;
+    title: string;
+    description?: string;
+    category: string;
+    level?: string;
+    file_url?: string;
+    vocabulary_words?: string[];
+  };
+}
+
 export function useStudentMaterials() {
-  const [materials, setMaterials] = useState<StudentMaterial[]>([]);
-  const [loading, setLoading]     = useState(true);
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true);
+  const query = useQuery({
+    queryKey: ["student", "materials"],
+    queryFn: async () => {
       const res = await api.get("/materials/student/my-materials");
-      setMaterials(res.data);
-    } catch (error) { 
-      console.error("Error fetching materials:", error);
-      setMaterials([]);
-    } finally { 
-      setLoading(false); 
-    }
-  }, []);
+      return res.data as MaterialAssignmentFull[];
+    },
+  });
 
-  useEffect(() => { fetch(); }, [fetch]);
-  return { materials, loading, refetch: fetch };
+  return {
+    materials: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
 }
 
 export function useStudentHomework() {
-  const [homeworks, setHomeworks] = useState<StudentHomework[]>([]);
-  const [loading, setLoading]     = useState(true);
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true);
+  const query = useQuery({
+    queryKey: ["student", "homework"],
+    queryFn: async () => {
       const res = await api.get("/homework/student/my-homework");
-      setHomeworks(res.data);
-    } catch (error) { 
-      console.error("Error fetching homework:", error);
-      setHomeworks([]);
-    } finally { 
-      setLoading(false); 
-    }
-  }, []);
+      return res.data as StudentHomework[];
+    },
+  });
 
-  useEffect(() => { fetch(); }, [fetch]);
-  return { homeworks, loading, refetch: fetch };
+  return {
+    homeworks: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
+}
+
+// ─── Preferencias horarias del estudiante ────────────────────────────────────
+export interface StudentPreference {
+  day_of_week: number;
+  start_time_utc: string;
+  end_time_utc: string;
+}
+
+export function useStudentPreferences() {
+  const query = useQuery({
+    queryKey: ["student", "preferences"],
+    queryFn: async () => {
+      const res = await api.get("/users/me/preferences");
+      return res.data as StudentPreference[];
+    },
+  });
+
+  return {
+    preferences: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
+}
+
+// ─── Perfil del estudiante (usuario + student-profile combinados) ───────────
+export interface StudentProfileData {
+  user: any;
+  studentProfile: any;
+}
+
+export function useStudentProfileData() {
+  const query = useQuery({
+    queryKey: ["student", "profile"],
+    queryFn: async () => {
+      const [userRes, studentRes] = await Promise.all([
+        api.get("/users/me"),
+        api.get("/users/me/student-profile"),
+      ]);
+      return { user: userRes.data, studentProfile: studentRes.data } as StudentProfileData;
+    },
+  });
+
+  return {
+    data: query.data ?? null,
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
 }
 
 export function useFeaturedTeacher() {
-  const [teacher, setTeacher] = useState<TeacherPublicProfile | null>(null);
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true);
+  const query = useQuery({
+    queryKey: ["student", "featured-teacher"],
+    queryFn: async () => {
       const username = process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "mar12";
-      
       const [tRes, rRes] = await Promise.all([
         api.get(`/teachers/${username}`),
         api.get(`/reviews/${username}`),
       ]);
-      setTeacher(tRes.data);
-      setReviews(rRes.data);
-    } catch (error) { 
-      console.error("Error fetching teacher profile:", error);
-      setTeacher(null);
-      setReviews([]);
-    } finally { 
-      setLoading(false); 
-    }
-  }, []);
+      return {
+        teacher: tRes.data as TeacherPublicProfile,
+        reviews: rRes.data as Review[],
+      };
+    },
+  });
 
-  useEffect(() => { fetch(); }, [fetch]);
-  return { teacher, reviews, loading, refetch: fetch };
+  return {
+    teacher: query.data?.teacher ?? null,
+    reviews: query.data?.reviews ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
 }
 
 export interface TeacherDirectoryItem {
@@ -399,12 +482,9 @@ export interface TeacherDirectoryItem {
 }
 
 export function useTeacherDirectory() {
-  const [teachers, setTeachers] = useState<TeacherDirectoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true);
+  const query = useQuery({
+    queryKey: ["student", "teacher-directory"],
+    queryFn: async () => {
       const res = await api.get("/teachers/");
       const list: TeacherDirectoryItem[] = res.data || [];
 
@@ -422,17 +502,17 @@ export function useTeacherDirectory() {
           }
         })
       );
-      setTeachers(withRatings);
-    } catch (error) {
-      console.error("Error fetching teachers directory:", error);
-      setTeachers([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return withRatings;
+    },
+  });
 
-  useEffect(() => { fetch(); }, [fetch]);
-  return { teachers, loading, refetch: fetch };
+  return {
+    teachers: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
 }
 
 export interface PlatformConfigInfo {
@@ -450,22 +530,19 @@ export interface PlatformConfigInfo {
 }
 
 export function usePlatformConfig() {
-  const [config, setConfig] = useState<PlatformConfigInfo | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true);
+  const query = useQuery({
+    queryKey: ["student", "platform-config"],
+    queryFn: async () => {
       const res = await api.get("/admin/platform-config");
-      setConfig(res.data);
-    } catch (error) {
-      console.error("Error fetching platform config:", error);
-      setConfig(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return res.data as PlatformConfigInfo;
+    },
+  });
 
-  useEffect(() => { fetch(); }, [fetch]);
-  return { config, loading, refetch: fetch };
+  return {
+    config: query.data ?? null,
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
 }

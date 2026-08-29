@@ -9,6 +9,10 @@ import {
 import { useStudentHomework } from "@/hooks/useStudentData";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import Skeleton from "@/components/ui/Skeleton";
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
+import { usePageTopBar } from "@/lib/mobileTopBar";
 
 const STATUS_CONFIG: Record<string, {
   label: string;
@@ -431,7 +435,7 @@ function HomeworkCard({
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function StudentHomeworkPage() {
-  const { homeworks, loading, refetch } = useStudentHomework();
+  const { homeworks, loading, isFetching, refetch } = useStudentHomework();
   const [tab, setTab] = useState<"pending" | "graded">("pending");
   const [submitTarget, setSubmitTarget] = useState<any | null>(null);
 
@@ -440,6 +444,12 @@ export default function StudentHomeworkPage() {
 
   const pendingUnsent = pending.filter((h) => h.status === "pending").length;
   const displayed     = tab === "pending" ? pending : graded;
+
+  usePageTopBar({
+    title: "Mis Tareas",
+    onRefresh: refetch,
+    isFetching,
+  });
 
   return (
     <>
@@ -454,13 +464,18 @@ export default function StudentHomeworkPage() {
       />
 
       <div className="relative space-y-6">
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">
-            Mis Tareas
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Entrega tus actividades y revisa tus calificaciones
-          </p>
+        <div className="flex items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div>
+            <h1 className="text-3xl font-black text-slate-800 tracking-tight">
+              Mis Tareas
+            </h1>
+            <p className="text-slate-500 mt-1">
+              Entrega tus actividades y revisa tus calificaciones
+            </p>
+          </div>
+          <DesktopOnly>
+            <RefreshButton onRefresh={refetch} isFetching={isFetching} />
+          </DesktopOnly>
         </div>
 
         <div
@@ -534,10 +549,7 @@ export default function StudentHomeworkPage() {
         >
           {loading ? (
             Array.from({ length: 3 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-28 bg-white rounded-2xl animate-pulse"
-              />
+              <Skeleton key={i} className="h-28 rounded-2xl" />
             ))
           ) : displayed.length === 0 ? (
             <div

@@ -1,12 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Check, Loader2, AlertCircle, Calendar, UserCheck, MessageCircle, Star } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { useMyTeachers } from "@/hooks/useStudentData";
 import PublicProfileView, { PublicProfileTeacher, PublicProfileReview } from "@/components/teacher/PublicProfileView";
+import Skeleton from "@/components/ui/Skeleton";
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
+import { usePageTopBar } from "@/lib/mobileTopBar";
+
+interface TeacherBrowseData {
+  teacher: PublicProfileTeacher;
+  reviews: PublicProfileReview[];
+  myTeacherUsername: string | null;
+  isStudent: boolean;
+}
 
 export default function TeacherBrowsePage() {
   const params = useParams();
@@ -15,6 +27,7 @@ export default function TeacherBrowsePage() {
 
   const { teachers: myTeachers, isSingleTenant, refetch: refetchMyTeachers } = useMyTeachers();
   const isMine = myTeachers.some(t => t.teacher_username === username);
+  const queryClient = useQueryClient();
 
   const [unlinking, setUnlinking] = useState(false);
   const [unlinkError, setUnlinkError] = useState("");
@@ -22,12 +35,40 @@ export default function TeacherBrowsePage() {
   const [chooseError, setChooseError] = useState("");
   const [chosen, setChosen] = useState(false);
 
-  const [teacher, setTeacher] = useState<PublicProfileTeacher | null>(null);
-  const [reviews, setReviews] = useState<PublicProfileReview[]>([]);
-  const [myTeacherUsername, setMyTeacherUsername] = useState<string | null>(null);
-  const [isStudent, setIsStudent] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const {
+    data,
+    isLoading: loading,
+    isFetching,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ["student", "teacher-browse", username],
+    queryFn: async () => {
+      const [tRes, rRes, sRes] = await Promise.all([
+        api.get(`/teachers/${username}`),
+        api.get(`/reviews/${username}`).catch(() => ({ data: [] })),
+        api.get("/users/me/student-profile").catch(() => ({ data: {} })),
+      ]);
+      return {
+        teacher: tRes.data,
+        reviews: Array.isArray(rRes.data) ? rRes.data : [],
+        myTeacherUsername: sRes.data?.teacher_username ?? null,
+        isStudent: !!sRes.data && Object.keys(sRes.data).length > 0,
+      } as TeacherBrowseData;
+    },
+    enabled: !!username,
+  });
+
+  const teacher = data?.teacher ?? null;
+  const reviews = data?.reviews ?? [];
+  const isStudent = data?.isStudent ?? false;
+  const error = isError ? "No se pudo cargar el perfil de este profesor." : "";
+
+  usePageTopBar({
+    title: teacher?.name ?? "Profesor",
+    onRefresh: refetch,
+    isFetching,
+  });
 
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [reviewRating, setReviewRating] = useState(0);
@@ -63,25 +104,6 @@ export default function TeacherBrowsePage() {
     }
   };
 
-  useEffect(() => {
-    if (!username) return;
-    setLoading(true);
-    setError("");
-    Promise.all([
-      api.get(`/teachers/${username}`),
-      api.get(`/reviews/${username}`).catch(() => ({ data: [] })),
-      api.get("/users/me/student-profile").catch(() => ({ data: {} })),
-    ])
-      .then(([tRes, rRes, sRes]) => {
-        setTeacher(tRes.data);
-        setReviews(Array.isArray(rRes.data) ? rRes.data : []);
-        setMyTeacherUsername(sRes.data?.teacher_username ?? null);
-        setIsStudent(!!sRes.data && Object.keys(sRes.data).length > 0);
-      })
-      .catch(() => setError("No se pudo cargar el perfil de este profesor."))
-      .finally(() => setLoading(false));
-  }, [username]);
-
   const submitReview = async () => {
     if (reviewRating === 0) {
       setReviewError("Por favor selecciona una calificación en estrellas.");
@@ -96,7 +118,10 @@ export default function TeacherBrowsePage() {
     try {
       await api.post(`/reviews/${username}`, { rating: reviewRating, comment: reviewComment });
       const rRes = await api.get(`/reviews/${username}`);
-      setReviews(Array.isArray(rRes.data) ? rRes.data : []);
+      queryClient.setQueryData<TeacherBrowseData | undefined>(
+        ["student", "teacher-browse", username],
+        (prev) => prev ? { ...prev, reviews: Array.isArray(rRes.data) ? rRes.data : [] } : prev
+      );
       setShowReviewForm(false);
       setReviewRating(0);
       setReviewComment("");
@@ -115,8 +140,14 @@ export default function TeacherBrowsePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-pink-500 animate-spin" />
+      <div className="min-h-screen bg-slate-50 px-4 py-8 space-y-6 max-w-5xl mx-auto">
+        <Skeleton className="h-56 rounded-[2rem]" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Skeleton className="h-24 rounded-2xl" />
+          <Skeleton className="h-24 rounded-2xl" />
+          <Skeleton className="h-24 rounded-2xl" />
+        </div>
+        <Skeleton className="h-40 rounded-2xl" />
       </div>
     );
   }
@@ -127,6 +158,12 @@ export default function TeacherBrowsePage() {
         <div className="bg-white rounded-3xl p-8 shadow-xl text-center max-w-md w-full border border-slate-100 space-y-4">
           <h2 className="text-xl font-black text-slate-800">Perfil no disponible</h2>
           <p className="text-sm text-slate-500">{error || "No se pudo encontrar este profesor."}</p>
+          <button
+            onClick={() => refetch()}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-pink-500 hover:bg-pink-600 text-white rounded-xl font-bold text-sm shadow-md transition-all active:scale-95"
+          >
+            Reintentar
+          </button>
         </div>
       </div>
     );
@@ -134,6 +171,11 @@ export default function TeacherBrowsePage() {
 
   return (
     <>
+      <DesktopOnly>
+        <div className="max-w-5xl mx-auto px-4 pt-4 flex justify-end">
+          <RefreshButton onRefresh={refetch} isFetching={isFetching} />
+        </div>
+      </DesktopOnly>
       <PublicProfileView
         teacher={teacher}
         reviews={reviews}

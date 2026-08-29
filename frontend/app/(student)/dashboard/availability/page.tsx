@@ -9,6 +9,10 @@ import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { utcTimeToLocal } from "@/lib/scheduleUtc";
 import { getMyDisplayTimezone } from "@/lib/tzFormat";
+import { useStudentPreferences } from "@/hooks/useStudentData";
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
+import { usePageTopBar } from "@/lib/mobileTopBar";
 
 const DAYS = [
   { value: 0, label: "Lunes", short: "Lun" },
@@ -29,8 +33,12 @@ interface PreferenceDraft {
 }
 
 export default function StudentPreferencesPage() {
-  const [preferences, setPreferences] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    preferences,
+    loading,
+    isFetching,
+    refetch: refetchPreferences,
+  } = useStudentPreferences();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
@@ -41,26 +49,29 @@ export default function StudentPreferencesPage() {
     0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [],
   });
 
-  const fetchPreferences = async () => {
-  setLoading(true);
-  try {
-    const res = await api.get("/users/me/preferences");
-    setPreferences(res.data);
-    
+  usePageTopBar({
+    title: "Disponibilidad",
+    onRefresh: refetchPreferences,
+    isFetching,
+  });
+
+  // Deriva los bloques seleccionados (en horario local) cada vez que cambian
+  // las preferencias que vienen del servidor (cache de react-query).
+  useEffect(() => {
     const userTimezone = getMyDisplayTimezone();
     const initialSlots: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-    
-    res.data.forEach((pref: any) => {
+
+    preferences.forEach((pref: any) => {
       // Declaramos 'day' ANTES del try para que el catch pueda acceder a él
-      const day = pref.day_of_week; 
-      
+      const day = pref.day_of_week;
+
       try {
         const localStart = utcTimeToLocal(pref.start_time_utc, day, userTimezone);
         const localEnd = utcTimeToLocal(pref.end_time_utc, day, userTimezone);
 
         const startHour = parseInt(localStart.split(":")[0]);
         let endHour = parseInt(localEnd.split(":")[0]);
-        
+
         if (localEnd.startsWith("00:0") && startHour > 0) {
           endHour = 24;
         }
@@ -70,24 +81,15 @@ export default function StudentPreferencesPage() {
           if (!initialSlots[day].includes(hourStr)) {
             initialSlots[day].push(hourStr);
           }
-        } 
+        }
       } catch (err) {
         // Ahora esto funcionará perfectamente
         console.error(`Error processing preference for day ${day}:`, err);
       }
     });
-    
-    setSelectedSlots(initialSlots);
-  } catch (e) {
-    console.error("Error fetching preferences", e);
-  } finally {
-    setLoading(false);
-  }
-};
 
-  useEffect(() => {
-    fetchPreferences();
-  }, []);
+    setSelectedSlots(initialSlots);
+  }, [preferences]);
 
   // Convert individual hours into contiguous blocks automatically
   useEffect(() => {
@@ -167,7 +169,7 @@ export default function StudentPreferencesPage() {
         slots: blocks,
       });
       setSuccessMsg("¡Preferencias actualizadas con éxito!");
-      fetchPreferences();
+      refetchPreferences();
     } catch (e: any) {
       const detail = e.response?.data?.detail;
       let errorMessage = "Error guardando las preferencias";
@@ -270,13 +272,18 @@ export default function StudentPreferencesPage() {
               Configura tus franjas horarias favoritas para que el sistema destaque automáticamente tus mejores opciones al agendar.
             </p>
           </div>
-          <div className="bg-white/80 backdrop-blur-xl border border-white shadow-xl shadow-slate-200/50 px-5 py-3 rounded-2xl flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-purple-500" />
-            </div>
-            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Activas</p>
-              <p className="text-lg font-black text-slate-800">{preferences.length} bloques</p>
+          <div className="flex items-center gap-2">
+            <DesktopOnly>
+              <RefreshButton onRefresh={refetchPreferences} isFetching={isFetching} />
+            </DesktopOnly>
+            <div className="bg-white/80 backdrop-blur-xl border border-white shadow-xl shadow-slate-200/50 px-5 py-3 rounded-2xl flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-purple-500" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Activas</p>
+                <p className="text-lg font-black text-slate-800">{preferences.length} bloques</p>
+              </div>
             </div>
           </div>
         </div>

@@ -534,6 +534,9 @@ export interface TeacherPackage {
   is_active: boolean
   allow_installments?: boolean
   installment_count?: number | null
+  is_group?: boolean
+  min_students?: number | null
+  max_students?: number | null
 }
 
 export function useTeacherPackages() {
@@ -584,6 +587,39 @@ export function useTeacherEnrollments() {
 
   return {
     enrollments: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
+
+// ─── Cohortes grupales del profesor ──────────────────────────────────────────
+export interface TeacherCohortItem {
+  id: number
+  package_id: number
+  package_name: string | null
+  teacher_id: number
+  start_date: string | null
+  status: "filling" | "confirmed" | "in_progress" | "completed" | "cancelled"
+  min_students: number
+  max_students: number
+  current_students: number
+  created_at: string
+  closed_at: string | null
+}
+
+export function useTeacherCohorts() {
+  const query = useQuery({
+    queryKey: ["teacher", "cohorts"],
+    queryFn: async () => {
+      const res = await api.get('/cohorts/teacher')
+      return res.data as TeacherCohortItem[]
+    },
+  })
+
+  return {
+    cohorts: query.data ?? [],
     loading: query.isLoading,
     isFetching: query.isFetching,
     isError: query.isError,

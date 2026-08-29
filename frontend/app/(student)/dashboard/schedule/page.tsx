@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAvailableSlots, useEnrollments, useMyTeachers, useStudentClasses } from "@/hooks/useStudentData";
+import { useAvailableSlots, useEnrollments, useMyTeachers, useStudentClasses, useBookingStatusFor } from "@/hooks/useStudentData";
 import {
   Calendar, Clock, CreditCard,
   Check, X, ChevronLeft,
@@ -17,6 +17,10 @@ import { priceLabelSuffix } from "@/lib/packageThemes";
 import BuyCreditsModal from "@/components/payments/BuyCreditsModal";
 import PaymentMethodsInfo from "@/components/payments/PaymentMethodsInfo";
 import { useBusinessRules } from "@/hooks/useBusinessRules";
+import Skeleton from "@/components/ui/Skeleton";
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
+import { usePageTopBar } from "@/lib/mobileTopBar";
 
 type BookingStage =
   | "loading"
@@ -790,7 +794,7 @@ function GroupPackagesBrowser({
       )}
 
       {loadingCohorts ? (
-        <div className="h-16 bg-white rounded-2xl animate-pulse" />
+        <Skeleton className="h-16 rounded-2xl" />
       ) : !anyCohortAvailable ? (
         <p className="text-xs text-slate-400 font-bold">
           No hay cohortes con cupo disponible en este momento.
@@ -860,7 +864,7 @@ function NeedsPackageScreen({ teacherUsername, onSelected }: { teacherUsername: 
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[1, 2].map(i => (
-            <div key={i} className="h-40 bg-white rounded-2xl animate-pulse" />
+            <Skeleton key={i} className="h-40 rounded-2xl" />
           ))}
         </div>
       ) : packages.length === 0 ? (
@@ -1137,8 +1141,6 @@ function RenewalPendingScreen() {
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function SchedulePage() {
-  const [stage, setStage] = useState<BookingStage>("loading");
-  const [enrollmentId, setEnrollmentId] = useState<number | null>(null);
   const [step, setStep] = useState<"select" | "payment">("select");
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
@@ -1171,18 +1173,25 @@ export default function SchedulePage() {
     ? enrollments.find(e => e.status === "active" && e.teacher_username === selectedTeacherUsername)
     : enrollments.find(e => e.status === "active");
 
-  const loadStage = () => {
-    if (!isSingleTenant && !selectedTeacherUsername) { setStage("loading"); return; }
-    const params = selectedTeacherUsername ? `?teacher_username=${selectedTeacherUsername}` : "";
-    api.get(`/payments/booking-status${params}`)
-      .then(res => {
-        setStage(res.data.stage);
-        if (res.data.enrollment_id) setEnrollmentId(res.data.enrollment_id);
-      })
-      .catch(() => setStage("ready"));
-  };
+  const {
+    stage,
+    enrollmentId,
+    isFetching: stageFetching,
+    refetch: refetchStage,
+  } = useBookingStatusFor(selectedTeacherUsername, isSingleTenant);
 
-  useEffect(() => { loadStage(); }, [selectedTeacherUsername, isSingleTenant]);
+  const refetchAll = () => {
+    refetchStage();
+    refetchEnrollments();
+    refetchClasses();
+  };
+  const isFetching = stageFetching;
+
+  usePageTopBar({
+    title: "Agendar Clase",
+    onRefresh: refetchAll,
+    isFetching,
+  });
 
   const handleSlotSelect = (
     date: string, slot: any, duration: number, subject?: string
@@ -1204,6 +1213,7 @@ export default function SchedulePage() {
   const handleBookingSuccess = () => {
     refetchEnrollments();
     refetchClasses();
+    refetchStage();
     resetToSelect();
   };
 
@@ -1217,16 +1227,17 @@ export default function SchedulePage() {
       <div className="relative space-y-6">
         {/* Header */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="flex items-center gap-4">
-            {step === "payment" && stage === "ready" && (
-              <button
-                onClick={resetToSelect}
-                className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm hover:border-pink-300 transition-colors"
-              >
-                <ChevronLeft className="w-5 h-5 text-slate-600" />
-              </button>
-            )}
-            <div>
+          <div className="flex items-center gap-4 justify-between">
+            <div className="flex items-center gap-4">
+              {step === "payment" && stage === "ready" && (
+                <button
+                  onClick={resetToSelect}
+                  className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm hover:border-pink-300 transition-colors"
+                >
+                  <ChevronLeft className="w-5 h-5 text-slate-600" />
+                </button>
+              )}
+              <div>
               <h1 className="text-3xl font-black text-slate-800 tracking-tight">
                 {stage === "needs_trial" && step === "select" && "Reserva tu clase de prueba"}
                 {stage === "needs_trial" && step === "payment" && "Confirmar clase de prueba"}
@@ -1251,7 +1262,11 @@ export default function SchedulePage() {
                 {stage === "ready" && step === "select" && "Selecciona fecha y horario disponible"}
                 {stage === "ready" && step === "payment" && "Completa el pago para confirmar tu clase"}
               </p>
+              </div>
             </div>
+            <DesktopOnly>
+              <RefreshButton onRefresh={refetchAll} isFetching={isFetching} />
+            </DesktopOnly>
           </div>
 
           {/* Steps indicator */}
@@ -1376,8 +1391,12 @@ export default function SchedulePage() {
         {!needsTeacherSelection && !teacherBlocked && (
           <div className="animate-in fade-in duration-300">
             {stage === "loading" && (
-              <div className="flex justify-center py-24">
-                <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
+              <div className="space-y-4 py-4">
+                <Skeleton className="h-20 rounded-2xl" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Skeleton className="h-40 rounded-2xl" />
+                  <Skeleton className="h-40 rounded-2xl" />
+                </div>
               </div>
             )}
 
@@ -1396,7 +1415,7 @@ export default function SchedulePage() {
                 teacherUsername={selectedTeacherUsername}
                 subject={selectedSubject}
                 onBack={resetToSelect}
-                onBooked={loadStage}
+                onBooked={refetchStage}
               />
             )}
 
@@ -1406,7 +1425,7 @@ export default function SchedulePage() {
               <NeedsPackageScreen
                 teacherUsername={selectedTeacherUsername}
                 onSelected={() => {
-                  loadStage();
+                  refetchStage();
                   refetchEnrollments();
                 }}
               />
@@ -1419,7 +1438,7 @@ export default function SchedulePage() {
             {(stage === "needs_renewal" || stage === "renew_required") && (
               <NeedsRenewalScreen
                 teacherUsername={selectedTeacherUsername}
-                onRequested={loadStage}
+                onRequested={refetchStage}
               />
             )}
 

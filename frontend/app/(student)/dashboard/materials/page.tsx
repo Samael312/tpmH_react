@@ -13,26 +13,14 @@ import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
+import { useStudentMaterials, type MaterialAssignmentFull as MaterialAssignment } from "@/hooks/useStudentData";
+import { useQueryClient } from "@tanstack/react-query";
+import Skeleton from "@/components/ui/Skeleton";
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
+import { usePageTopBar } from "@/lib/mobileTopBar";
 
-interface Material {
-  id: number;
-  title: string;
-  description?: string;
-  category: string;
-  level?: string;
-  file_url?: string;
-  vocabulary_words?: string[];
-}
-
-interface MaterialAssignment {
-  id: number;
-  material_id: number;
-  student_id: number;
-  progress: string;
-  assigned_at: string;
-  completed_at?: string;
-  material: Material;
-}
+type Material = MaterialAssignment["material"];
 
 const CATEGORIES = ["all", "Grammar", "Reading", "Exercises", "Vocabulary"];
 
@@ -81,12 +69,23 @@ function ExpandableDescription({ text }: { text: string }) {
 
 export default function StudentMaterialsPage() {
   const { catalogs } = useSystemCatalogs();
-  
-  const [materials, setMaterials] = useState<MaterialAssignment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  const {
+    materials,
+    loading,
+    isFetching,
+    refetch: refetchMaterials,
+  } = useStudentMaterials();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+
+  usePageTopBar({
+    title: "Materiales",
+    onRefresh: refetchMaterials,
+    isFetching,
+  });
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [audioCache, setAudioCache] = useState<Record<number, Record<string, string | null>>>({});
@@ -178,30 +177,14 @@ export default function StudentMaterialsPage() {
     advanceSequence();
   }, [playingAllId, ensureVocabAudio, advanceSequence, stopPlayback]);
 
-  const fetchMaterials = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await api.get("/materials/student/my-materials");
-      setMaterials(res.data);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchMaterials();
-  }, [fetchMaterials]);
-
   const updateProgress = async (assignmentId: number, newProgress: string) => {
     setUpdatingId(assignmentId);
     try {
       const res = await api.patch(`/materials/student/${assignmentId}/progress`, {
         progress: newProgress,
       });
-      setMaterials(prev =>
-        prev.map(item => (item.id === assignmentId ? res.data : item))
+      queryClient.setQueryData<MaterialAssignment[]>(["student", "materials"], (prev) =>
+        (prev ?? []).map(item => (item.id === assignmentId ? res.data : item))
       );
     } catch (e: any) {
       alert(e.response?.data?.detail || "Error actualizando el progreso");
@@ -244,31 +227,36 @@ export default function StudentMaterialsPage() {
               </p>
             </div>
 
-            {!loading && totalCount > 0 && (
-              <div className="flex items-center gap-4 bg-white/80 backdrop-blur-xl border border-white px-5 py-3 rounded-2xl shadow-lg shadow-slate-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-pink-50 border border-pink-100 flex items-center justify-center text-pink-600">
-                    <BarChart3 className="w-5 h-5" />
+            <div className="flex items-center gap-3">
+              <DesktopOnly>
+                <RefreshButton onRefresh={refetchMaterials} isFetching={isFetching} />
+              </DesktopOnly>
+              {!loading && totalCount > 0 && (
+                <div className="flex items-center gap-4 bg-white/80 backdrop-blur-xl border border-white px-5 py-3 rounded-2xl shadow-lg shadow-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-pink-50 border border-pink-100 flex items-center justify-center text-pink-600">
+                      <BarChart3 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-500">Progreso general</span>
+                        <span className="text-xs font-black text-pink-600">{progressPercent}%</span>
+                      </div>
+                      <div className="w-32 bg-slate-100 h-2 rounded-full mt-1 overflow-hidden">
+                        <div 
+                          className="bg-gradient-to-r from-pink-500 to-rose-400 h-full rounded-full transition-all duration-500" 
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-500">Progreso general</span>
-                      <span className="text-xs font-black text-pink-600">{progressPercent}%</span>
-                    </div>
-                    <div className="w-32 bg-slate-100 h-2 rounded-full mt-1 overflow-hidden">
-                      <div 
-                        className="bg-gradient-to-r from-pink-500 to-rose-400 h-full rounded-full transition-all duration-500" 
-                        style={{ width: `${progressPercent}%` }}
-                      />
-                    </div>
+                  <div className="h-8 w-px bg-slate-200 mx-1 hidden sm:block" />
+                  <div className="text-xs text-slate-500 hidden sm:block">
+                    <span className="font-black text-slate-800">{completedCount}</span> de <span className="font-black text-slate-800">{totalCount}</span> listos
                   </div>
                 </div>
-                <div className="h-8 w-px bg-slate-200 mx-1 hidden sm:block" />
-                <div className="text-xs text-slate-500 hidden sm:block">
-                  <span className="font-black text-slate-800">{completedCount}</span> de <span className="font-black text-slate-800">{totalCount}</span> listos
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {/* Tarjetas de estadísticas / Resumen rápido */}
@@ -324,7 +312,7 @@ export default function StudentMaterialsPage() {
             {loading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {[1, 2, 3, 4, 5, 6].map(i => (
-                  <div key={i} className="h-56 bg-white/80 backdrop-blur-xl border border-white rounded-2xl animate-pulse p-6 flex flex-col justify-between shadow-lg" />
+                  <Skeleton key={i} className="h-56 rounded-2xl" />
                 ))}
               </div>
             ) : filtered.length === 0 ? (
