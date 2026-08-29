@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import get_current_student, get_current_teacher_or_teacher_admin
 from app.core.group_cohort_logic import (
     cancel_cohort,
+    cancel_future_cohort_sessions,
     close_cohort,
     get_cohort_active_count,
     release_and_cancel_all_cohort_enrollments,
@@ -154,8 +155,13 @@ def cancel_cohort_endpoint(
 
     package_name = cohort.package.name if cohort.package else "el paquete grupal"
     affected = cancel_cohort(cohort, db)
+    cancelled_sessions = cancel_future_cohort_sessions(cohort.id, db)
     db.commit()
     db.refresh(cohort)
+
+    from app.api.v1.endpoints.classes import _sync_google_calendar_cancelled
+    for session in cancelled_sessions:
+        _sync_google_calendar_cancelled(session.teacher_id, session.google_event_id, db)
 
     from app.core.email import send_cohort_ended_email
     for enrollment in affected:
@@ -210,12 +216,22 @@ def complete_cohort_endpoint(
     cohort.status = CohortStatus.completed
     cohort.closed_at = utc_now()
 
+    # "Completada" siempre significa que el ciclo de esta cohorte terminó,
+    # tanto si llegó al mínimo como si no — cualquier sesión futura que
+    # haya quedado agendada de más se cancela en ambos casos (mismo bug
+    # que en cancel_cohort_endpoint: antes las Class quedaban huérfanas).
+    cancelled_sessions = cancel_future_cohort_sessions(cohort.id, db)
+
     affected = []
     if below_minimum:
         affected = release_and_cancel_all_cohort_enrollments(cohort.id, db)
 
     db.commit()
     db.refresh(cohort)
+
+    from app.api.v1.endpoints.classes import _sync_google_calendar_cancelled
+    for session in cancelled_sessions:
+        _sync_google_calendar_cancelled(session.teacher_id, session.google_event_id, db)
 
     if affected:
         from app.core.email import send_cohort_ended_email

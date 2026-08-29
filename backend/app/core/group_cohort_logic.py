@@ -117,6 +117,33 @@ def release_and_cancel_all_cohort_enrollments(cohort_id: int, db: Session) -> li
     return affected
 
 
+def cancel_future_cohort_sessions(cohort_id: int, db: Session) -> list[Class]:
+    """
+    Cancela las sesiones (Class) FUTURAS que ya estaban agendadas para
+    una cohorte que se acaba de cancelar o completar bajo el mínimo.
+
+    BUG encontrado: release_cohort_seat solo cancela la participación de
+    CADA ALUMNO (ClassParticipant) en esas sesiones — nunca tocaba la fila
+    de Class en sí. El resultado era una sesión "confirmed" sin ningún
+    participante activo, que seguía apareciendo en el calendario del
+    profesor como si fuera a dictarse, y que el scheduler eventualmente
+    intentaría procesar/finalizar sin alumnos reales detrás.
+
+    No hace commit. Retorna las sesiones canceladas para que el caller
+    pueda sincronizar Google Calendar si corresponde.
+    """
+    now = utc_now()
+    future_sessions = db.query(Class).filter(
+        Class.cohort_id == cohort_id,
+        Class.class_type == ClassType.group,
+        Class.start_time_utc > now,
+        Class.status.notin_(["cancelled"]),
+    ).all()
+    for session in future_sessions:
+        session.status = "cancelled"
+    return future_sessions
+
+
 def cancel_cohort(cohort: GroupCohort, db: Session) -> list[Enrollment]:
     """
     Cancela una cohorte que no se llenó (o que el profesor decide abortar

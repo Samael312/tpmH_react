@@ -212,6 +212,7 @@ coverage/
 htmlcov/
 jest-coverage/
 frontend/coverage/
+*.patch
 
 # ============================================
 # DOCKER

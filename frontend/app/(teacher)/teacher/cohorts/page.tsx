@@ -157,7 +157,7 @@ export default function TeacherCohortsPage() {
   };
 
   const handleCancel = async (cohort: Cohort) => {
-    if (!confirm(`¿Cancelar la cohorte de "${cohort.package_name}"? Se liberará el cupo de los ${cohort.current_students} alumno(s) inscrito(s), quienes podrán migrar a clases individuales.`)) {
+    if (!confirm(`¿Cancelar la cohorte de "${cohort.package_name}"? Se cancelará la inscripción de los ${cohort.current_students} alumno(s), quienes quedarán libres de elegir un nuevo paquete (individual u otra cohorte). También se cancelarán las sesiones futuras ya agendadas.`)) {
       return;
     }
     try {
@@ -165,6 +165,21 @@ export default function TeacherCohortsPage() {
       await loadData();
     } catch (err: any) {
       alert(err?.response?.data?.detail || "No se pudo cancelar la cohorte");
+    }
+  };
+
+  const handleComplete = async (cohort: Cohort) => {
+    const belowMinimum = cohort.current_students < cohort.min_students;
+    const msg = belowMinimum
+      ? `Estás finalizando esta cohorte con ${cohort.current_students} de ${cohort.min_students} alumnos mínimos. Como quedó por debajo del mínimo, se cancelará la inscripción de todos y se les notificará para que elijan un nuevo paquete. ¿Confirmas?`
+      : `¿Marcar esta cohorte como finalizada? Se cancelará cualquier sesión futura que haya quedado agendada de más.`;
+    if (!confirm(msg)) return;
+    try {
+      await api.post(`/cohorts/${cohort.id}/complete`);
+      await loadData();
+    } catch (err) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      alert(e?.response?.data?.detail || "No se pudo finalizar la cohorte");
     }
   };
 
@@ -294,6 +309,12 @@ export default function TeacherCohortsPage() {
               <div className="flex flex-wrap gap-2 mt-4">
                 <Button size="sm" onClick={() => setSchedulingCohort(cohort)}>
                   <Plus className="w-3.5 h-3.5" /> Agendar sesión
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => handleComplete(cohort)}>
+                  <Check className="w-3.5 h-3.5" /> Finalizar cohorte
+                </Button>
+                <Button size="sm" variant="danger" onClick={() => handleCancel(cohort)}>
+                  <Ban className="w-3.5 h-3.5" /> Cancelar cohorte
                 </Button>
               </div>
             )}
