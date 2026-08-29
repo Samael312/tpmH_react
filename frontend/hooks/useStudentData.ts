@@ -300,8 +300,15 @@ export interface BookingStatusInfo {
   lastRejectedPayment: RejectedPaymentInfo | null;
 }
 
-export function useBookingStatusFor(teacherUsername: string | null, isSingleTenant: boolean) {
-  const enabled = isSingleTenant || !!teacherUsername;
+export function useBookingStatusFor(teacherUsername: string | null, isSingleTenant: boolean, ready: boolean = true) {
+  // `ready` debe ser false mientras useMyTeachers() aún no resuelve. Su
+  // `isSingleTenant` cae en un fallback optimista (`true`) antes de tener
+  // datos reales; sin esta guarda, este hook se habilitaba de inmediato con
+  // ese fallback y disparaba una primera petición con teacherUsername=null,
+  // para luego volver a dispararse (con la queryKey ya cambiada) en cuanto
+  // useMyTeachers() resolvía y seteaba el teacherUsername real — es decir,
+  // dos cargas casi seguidas de /payments/booking-status.
+  const enabled = ready && (isSingleTenant || !!teacherUsername);
 
   const query = useQuery({
     queryKey: ["student", "booking-status", teacherUsername ?? "single-tenant"],

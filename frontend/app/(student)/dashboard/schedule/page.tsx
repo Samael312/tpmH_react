@@ -1205,7 +1205,7 @@ export default function SchedulePage() {
     lastRejectedPayment,
     isFetching: stageFetching,
     refetch: refetchStage,
-  } = useBookingStatusFor(selectedTeacherUsername, isSingleTenant);
+  } = useBookingStatusFor(selectedTeacherUsername, isSingleTenant, !teachersLoading);
 
   const refetchAll = () => {
     refetchStage();
