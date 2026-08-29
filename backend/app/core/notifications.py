@@ -9,6 +9,7 @@ def create_notification(
     title: str,
     message: Optional[str] = None,
     related_teacher_id: Optional[int] = None,
+    related_support_ticket_id: Optional[int] = None,
     recipient_role: str = "staff",
 ) -> Notification:
     """
@@ -22,6 +23,7 @@ def create_notification(
         title=title,
         message=message,
         related_teacher_id=related_teacher_id,
+        related_support_ticket_id=related_support_ticket_id,
     )
     db.add(notification)
     return notification

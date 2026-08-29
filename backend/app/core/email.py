@@ -403,6 +403,19 @@ def send_teacher_status_update_email(
     return _send(to_email, f"Estado de tu perfil: {label} — {PLATFORM_NAME}", html)
 
 
+def send_support_ticket_response_email(
+    to_email: str, user_name: str, subject: str, admin_response: str, portal_path: str,
+) -> bool:
+    body = f"""
+      <p>Hola {user_name}, nuestro equipo respondió tu ticket de soporte.</p>
+      {_detail_table([_detail_row("Asunto", subject)])}
+      <p style="font-size:13px;color:{COLOR_MUTED};"><strong>Respuesta del equipo:</strong> {admin_response}</p>
+      {_cta_button("Ver mi ticket", f"{settings.FRONTEND_URL}{portal_path}")}
+    """
+    html = _base_template("Respondimos tu ticket de soporte", _badge("Respondido", COLOR_GREEN), "Tu ticket de soporte fue respondido 💬", body)
+    return _send(to_email, f"Respondimos tu ticket: {subject} — {PLATFORM_NAME}", html)
+
+
 def send_new_booking_teacher_email(
     to_email: str, teacher_name: str, student_first_name: str, student_last_name: str,
     student_nationality: str | None, student_phone: str | None, subject: str,
@@ -547,6 +560,22 @@ def send_withdrawal_processed_email(
 # ══════════════════════════════════════════════════════════════════════════
 # SUPERADMIN / STAFF
 # ══════════════════════════════════════════════════════════════════════════
+
+def send_admin_new_support_ticket_email(
+    to_email: str, user_name: str, user_role_label: str, category_label: str, subject: str, message: str,
+) -> bool:
+    body = f"""
+      <p>{user_name} ({user_role_label}) envió un nuevo ticket de soporte.</p>
+      {_detail_table([
+        _detail_row("Categoría", category_label),
+        _detail_row("Asunto", subject),
+      ])}
+      <p style="font-size:13px;color:{COLOR_MUTED};"><strong>Mensaje:</strong> {message}</p>
+      {_cta_button("Ver bandeja de soporte", f"{settings.FRONTEND_URL}/admin/support")}
+    """
+    html = _base_template("Nuevo ticket de soporte", _badge("Pendiente", COLOR_AMBER), "Nuevo ticket de soporte 🎫", body)
+    return _send(to_email, f"Nuevo ticket de soporte: {subject} — {PLATFORM_NAME}", html)
+
 
 def send_admin_new_teacher_pending_email(
     to_email: str, teacher_name: str, teacher_email: str, subjects_or_languages: list[str],

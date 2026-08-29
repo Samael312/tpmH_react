@@ -17,4 +17,5 @@ from app.models.google_calendar import GoogleCalendarToken
 from app.models.student_teacher_link import StudentTeacherLink
 from app.models.notification import Notification
 from app.models.teacher_appeal import TeacherAppeal
+from app.models.support_ticket import SupportTicket, SupportCategory, SupportTicketStatus
 from app.models.system_catalog import SystemCatalog

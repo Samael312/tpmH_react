@@ -16,7 +16,8 @@ from app.models.payment import Payment, Withdrawal
 from app.models.package import Enrollment, EnrollmentStatus
 from app.models.teacher_appeal import TeacherAppeal
 from app.models.notification import Notification
-from app.core.email import send_teacher_status_update_email
+from app.models.support_ticket import SupportCategory, SupportTicket, SupportTicketStatus
+from app.core.email import send_teacher_status_update_email, send_support_ticket_response_email
 from app.core.timezone import utc_now, UTC
 from app.core.notifications import create_notification, get_unread_count
 from app.models.student_teacher_link import StudentTeacherLink
@@ -36,6 +37,10 @@ from app.schemas.notifications import (
     ResolveAppealRequest,
     TeacherAppealResponse,
     TeacherAppealWithTeacherResponse,
+)
+from app.schemas.support import (
+    ResolveSupportTicketRequest,
+    SupportTicketWithUserResponse,
 )
 from app.models.payment_config import PlatformConfig
 
@@ -528,6 +533,116 @@ def resolve_appeal(
         "message": "Apelación aprobada" if data.action == "approve" else "Apelación rechazada",
         "appeal_exhausted": teacher.appeal_exhausted,
     }
+
+
+# ─── TICKETS DE SOPORTE (bandeja del admin) ─────────────────────────────────
+# Bugs, errores o dudas que un student/teacher reportó porque Chipi no pudo
+# resolverlas. Flujo simple tipo apelación: 1 mensaje → 1 respuesta que cierra
+# el ticket. Accesible tanto a superadmin como a teacher_admin (get_current_staff).
+
+@router.get(
+    "/support-tickets",
+    response_model=List[SupportTicketWithUserResponse],
+)
+def list_support_tickets(
+    status_filter: Optional[str] = Query(None, description="pending | answered"),
+    category_filter: Optional[str] = Query(None, description="bug | error | question | other"),
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """Bandeja global de tickets de soporte, filtrable por estado y categoría."""
+    query = db.query(SupportTicket)
+    if status_filter:
+        query = query.filter(SupportTicket.status == status_filter)
+    if category_filter:
+        query = query.filter(SupportTicket.category == category_filter)
+
+    tickets = query.order_by(SupportTicket.created_at.desc()).all()
+
+    result = []
+    for t in tickets:
+        user = t.user
+        if not user:
+            continue
+        result.append(SupportTicketWithUserResponse(
+            id=t.id,
+            category=t.category.value if hasattr(t.category, "value") else t.category,
+            subject=t.subject,
+            message=t.message,
+            screen_context=t.screen_context,
+            status=t.status.value if hasattr(t.status, "value") else t.status,
+            admin_response=t.admin_response,
+            created_at=t.created_at,
+            resolved_at=t.resolved_at,
+            user_notified_seen=t.user_notified_seen or False,
+            user_id=user.id,
+            user_name=user.name,
+            user_surname=user.surname,
+            user_username=user.username,
+            user_email=user.email,
+            user_role=user.role.value if hasattr(user.role, "value") else user.role,
+        ))
+    return result
+
+
+@router.patch("/support-tickets/{ticket_id}/resolve", response_model=SupportTicketWithUserResponse)
+def resolve_support_ticket(
+    ticket_id: int,
+    data: ResolveSupportTicketRequest,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    Responde y cierra un ticket pendiente. Notifica al usuario por email y
+    reactiva el aviso in-app (user_notified_seen=False) en su bandeja.
+    """
+    ticket = db.query(SupportTicket).filter(
+        SupportTicket.id == ticket_id,
+        SupportTicket.status == SupportTicketStatus.pending,
+    ).first()
+    if not ticket:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ticket no encontrado o ya respondido")
+
+    user = ticket.user
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario del ticket no encontrado")
+
+    ticket.admin_response = data.admin_response
+    ticket.status = SupportTicketStatus.answered
+    ticket.resolved_at = utc_now()
+    ticket.resolved_by = current_user.id
+    ticket.user_notified_seen = False
+
+    db.commit()
+    db.refresh(ticket)
+
+    portal_path = "/teacher/support" if user.role == UserRole.teacher else "/dashboard/support"
+    send_support_ticket_response_email(
+        to_email=user.email,
+        user_name=user.name,
+        subject=ticket.subject,
+        admin_response=ticket.admin_response,
+        portal_path=portal_path,
+    )
+
+    return SupportTicketWithUserResponse(
+        id=ticket.id,
+        category=ticket.category.value if hasattr(ticket.category, "value") else ticket.category,
+        subject=ticket.subject,
+        message=ticket.message,
+        screen_context=ticket.screen_context,
+        status=ticket.status.value if hasattr(ticket.status, "value") else ticket.status,
+        admin_response=ticket.admin_response,
+        created_at=ticket.created_at,
+        resolved_at=ticket.resolved_at,
+        user_notified_seen=ticket.user_notified_seen or False,
+        user_id=user.id,
+        user_name=user.name,
+        user_surname=user.surname,
+        user_username=user.username,
+        user_email=user.email,
+        user_role=user.role.value if hasattr(user.role, "value") else user.role,
+    )
 
 
 # ─── NOTIFICACIONES (panel de staff) ─────────────────────────────────────────

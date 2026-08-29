@@ -110,7 +110,7 @@ function NotificationsSection() {
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <Link
-                  href="/admin/teachers"
+                  href="/admin/support"
                   className="text-xs font-bold text-pink-600 hover:text-pink-700 bg-white px-3 py-1.5 rounded-lg border border-pink-100 transition-colors"
                 >
                   Revisar

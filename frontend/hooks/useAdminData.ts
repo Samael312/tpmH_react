@@ -322,6 +322,48 @@ export function useTeacherAppeals(teacherId: number | undefined) {
   }
 }
 
+// ─── Tickets de soporte (bugs / errores / dudas de student o teacher) ────────
+export interface SupportTicketWithUser {
+  id: number
+  category: 'bug' | 'error' | 'question' | 'other'
+  subject: string
+  message: string
+  screen_context: string | null
+  status: 'pending' | 'answered'
+  admin_response: string | null
+  created_at: string
+  resolved_at: string | null
+  user_notified_seen: boolean
+  user_id: number
+  user_name: string
+  user_surname: string
+  user_username: string
+  user_email: string
+  user_role: string
+}
+
+export function useSupportTickets(statusFilter?: string, categoryFilter?: string) {
+  const query = useQuery({
+    queryKey: ['admin', 'support-tickets', statusFilter, categoryFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (statusFilter) params.set('status_filter', statusFilter)
+      if (categoryFilter) params.set('category_filter', categoryFilter)
+      const qs = params.toString()
+      const res = await api.get(`/admin/support-tickets${qs ? `?${qs}` : ''}`)
+      return res.data as SupportTicketWithUser[]
+    },
+  })
+
+  return {
+    tickets: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
+
 // ─── Estudiantes baneados ─────────────────────────────────────────────────────
 export function useBannedStudents() {
   const query = useQuery({

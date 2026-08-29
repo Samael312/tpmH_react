@@ -7,9 +7,10 @@ import { useAuthStore } from "@/store/authStore";
 import { 
   LayoutDashboard, Users, GraduationCap, Calendar, Settings, LogOut, 
   MonitorPlay, UserCircle, ClipboardEdit, CreditCard, Book, BarChart, ChevronLeft,
-  CheckCheck, Package as PackageIcon, MoreHorizontal, Users2
+  CheckCheck, Package as PackageIcon, MoreHorizontal, Users2, LifeBuoy
 } from "lucide-react";
 import { useUnreadNotificationCount } from "@/hooks/useAdminData";
+import { useUnreadSupportCount } from "@/hooks/useSupport";
 
 import { useMobileTopBar } from "@/lib/mobileTopBar";
 import RefreshButton from "@/components/ui/RefreshButton";
@@ -29,6 +30,7 @@ const STUDENT_MORE: TabItem[] = [
   { href: "/dashboard/materials", label: "Materiales", icon: <Book size={20} /> },
   { href: "/dashboard/homework", label: "Tareas", icon: <ClipboardEdit size={20} /> },
   { href: "/dashboard/teachers", label: "Profesores", icon: <GraduationCap size={20} /> },
+  { href: "/dashboard/support", label: "Soporte", icon: <LifeBuoy size={20} /> },
 ];
 
 const TEACHER_MAIN: TabItem[] = [
@@ -43,6 +45,7 @@ const TEACHER_MORE: TabItem[] = [
   { href: "/teacher/packages", label: "Paquetes", icon: <CreditCard size={20} /> },
   { href: "/teacher/cohorts", label: "Grupos", icon: <Users2 size={20} /> },
   { href: "/teacher/wallet", label: "Ganancias", icon: <BarChart size={20} /> },
+  { href: "/teacher/support", label: "Soporte", icon: <LifeBuoy size={20} /> },
 ];
 
 const ADMIN_MAIN: TabItem[] = [
@@ -53,6 +56,7 @@ const ADMIN_MAIN: TabItem[] = [
 ];
 const ADMIN_MORE: TabItem[] = [
   { href: "/admin/package-requests", label: "Solicitudes", icon: <PackageIcon size={20} /> },
+  { href: "/admin/support", label: "Soporte", icon: <LifeBuoy size={20} /> },
   { href: "/admin/settings", label: "Configuración", icon: <Settings size={20} /> },
 ];
 
@@ -151,7 +155,10 @@ export default function DashboardSidebar() {
 
   const role = user?.role || "";
   const showAdminMenu = ["superadmin", "teacher_admin"].includes(role);
+  const showTeacherMenu = ["teacher", "teacher_admin"].includes(role);
+  const showStudentMenu = role === "student";
   const { count: unreadCount } = useUnreadNotificationCount(showAdminMenu);
+  const { count: unreadSupportCount } = useUnreadSupportCount(showStudentMenu || (showTeacherMenu && role === "teacher"));
 
   useEffect(() => {
     setIsMounted(true);
@@ -168,9 +175,6 @@ export default function DashboardSidebar() {
   if (!isMounted) {
     return <aside className="hidden md:flex w-64 bg-white border-r border-pink-100 min-h-screen shadow-xl shadow-pink-500/5 flex-shrink-0 z-50" />;
   }
-
-  const showTeacherMenu = ["teacher", "teacher_admin"].includes(role);
-  const showStudentMenu = role === "student";
 
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
 
@@ -234,6 +238,7 @@ export default function DashboardSidebar() {
                 <NavItem href="/dashboard/materials" icon={<Book size={20} />} label="Materiales" active={isActive("/dashboard/materials")} collapsed={collapsed} />
                 <NavItem href="/dashboard/homework" icon={<ClipboardEdit size={20} />} label="Mis Tareas" active={isActive("/dashboard/homework")} collapsed={collapsed} />
                 <NavItem href="/dashboard/teachers" icon={<GraduationCap size={20} />} label="Profesores" active={isActive("/dashboard/teachers")} collapsed={collapsed} />
+                <NavItem href="/dashboard/support" icon={<LifeBuoy size={20} />} label="Soporte" active={isActive("/dashboard/support")} collapsed={collapsed} badge={unreadSupportCount > 0 ? unreadSupportCount : undefined} />
                 <NavItem href="/dashboard/profile" icon={<UserCircle size={20} />} label="Mi Perfil" active={isActive("/dashboard/profile")} collapsed={collapsed} />
               </nav>
             </div>
@@ -257,6 +262,7 @@ export default function DashboardSidebar() {
                 <NavItem href="/teacher/packages" icon={<CreditCard size={20} />} label="Paquetes" active={isActive("/teacher/packages")} collapsed={collapsed} />
                 <NavItem href="/teacher/cohorts" icon={<Users2 size={20} />} label="Grupos" active={isActive("/teacher/cohorts")} collapsed={collapsed} />
                 <NavItem href="/teacher/wallet" icon={<BarChart size={20} />} label="Ganancias" active={isActive("/teacher/wallet")} collapsed={collapsed} />
+                <NavItem href="/teacher/support" icon={<LifeBuoy size={20} />} label="Soporte" active={isActive("/teacher/support")} collapsed={collapsed} badge={unreadSupportCount > 0 ? unreadSupportCount : undefined} />
                 <NavItem href="/teacher/profile" icon={<UserCircle size={20} />} label="Mi Perfil" active={isActive("/teacher/profile")} collapsed={collapsed} />
               </nav>
             </div>
@@ -283,6 +289,7 @@ export default function DashboardSidebar() {
                 <NavItem href="/admin/students" icon={<GraduationCap size={20} />} label="Estudiantes" active={isActive("/admin/students")} collapsed={collapsed} />
                 <NavItem href="/admin/users" icon={<Users size={20} />} label="Edición de Usuarios" active={isActive("/admin/users")} collapsed={collapsed} />
                 <NavItem href="/admin/payments" icon={<CreditCard size={20} />} label="Pagos y Facturas" active={isActive("/admin/payments")} collapsed={collapsed} />
+                <NavItem href="/admin/support" icon={<LifeBuoy size={20} />} label="Soporte" active={isActive("/admin/support")} collapsed={collapsed} />
                 <NavItem href="/admin/settings" icon={<Settings size={20} />} label="Configuración" active={isActive("/admin/settings")} collapsed={collapsed} />
                 <NavItem href="/admin/flow-tester" icon={<CheckCheck size={20} />} label="Flow Tester" active={isActive("/admin/flow-tester")} collapsed={collapsed} />
               </nav>

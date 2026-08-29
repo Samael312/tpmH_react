@@ -11,6 +11,7 @@ class NotificationResponse(BaseModel):
     title: str
     message: Optional[str] = None
     related_teacher_id: Optional[int] = None
+    related_support_ticket_id: Optional[int] = None
     is_read: bool
     created_at: datetime
 

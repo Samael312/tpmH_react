@@ -2,10 +2,11 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
-import { X, Send, Minimize2, Sparkles, RotateCcw, Bot } from "lucide-react";
+import { X, Send, Minimize2, Sparkles, RotateCcw, Bot, LifeBuoy } from "lucide-react";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { usePathname } from "next/navigation";
+import SupportTicketModal from "@/components/support/SupportTicketModal";
 
 interface Message {
   id: string;
@@ -44,6 +45,7 @@ function useScreenName(): string {
     "/dashboard/homework":                     "homework_student",
     "/dashboard/profile":                      "student_profile",
     "/dashboard/availability":                 "student-preferences",
+    "/dashboard/support":                      "support_student",
 
     // Profesor
     "/teacher/dashboard":                      "teacher_home",
@@ -56,6 +58,7 @@ function useScreenName(): string {
     "/teacher/packages":                       "teacher_packages",
     "/teacher/profile/preview":                "teacher-view",
     "/teacher/students":                       "teacher_students", 
+    "/teacher/support":                        "support_teacher",
 
     // Admin
     "/admin":                       "admin_home",
@@ -65,7 +68,8 @@ function useScreenName(): string {
     "/admin/payments":              "admin_payments",
     "/admin/settings":              "admin_settings",
     "/admin/package-requests":      "admin_package_requests",
-    "/admin/students/bulk-edit":    "admin_edit_students"
+    "/admin/students/bulk-edit":    "admin_edit_students",
+    "/admin/support":               "admin_support"
   };
 
   if (MAP[pathname]) return MAP[pathname];
@@ -132,8 +136,11 @@ interface ChipiWidgetProps {
 export default function ChipiWidget({ screenName }: ChipiWidgetProps) {
   const autoScreen  = useScreenName();
   const screen      = screenName ?? autoScreen;
+  const { user }    = useAuthStore();
+  const canReportToSupport = user?.role === "student" || user?.role === "teacher";
 
   const [open, setOpen]                 = useState(false);
+  const [supportOpen, setSupportOpen]   = useState(false);
   const [input, setInput]               = useState("");
   const [messages, setMessages]         = useState<Message[]>([
     {
@@ -377,6 +384,20 @@ export default function ChipiWidget({ screenName }: ChipiWidgetProps) {
           </div>
         )}
 
+        {/* Enlace a soporte humano — solo para student/teacher autenticados */}
+        {canReportToSupport && (
+          <div className="px-4 py-2 bg-white border-t border-slate-100 flex-shrink-0">
+            <button
+              onClick={() => setSupportOpen(true)}
+              className="w-full flex items-center justify-center gap-1.5 text-[11px] font-bold
+                         text-slate-400 hover:text-pink-600 transition-colors py-1"
+            >
+              <LifeBuoy className="w-3.5 h-3.5" />
+              ¿Chipi no resolvió tu duda? Habla con soporte
+            </button>
+          </div>
+        )}
+
         {/* Área de Input */}
         <div className="p-3 bg-white border-t border-slate-100 flex-shrink-0">
           <div className="flex items-center gap-2 bg-slate-50 rounded-2xl border border-slate-200/80 p-1.5 focus-within:border-pink-400 focus-within:ring-4 focus-within:ring-pink-50/50 transition-all">
@@ -445,6 +466,17 @@ export default function ChipiWidget({ screenName }: ChipiWidgetProps) {
           </div>
         )}
       </button>
+
+      {canReportToSupport && (
+        <SupportTicketModal
+          open={supportOpen}
+          onClose={() => setSupportOpen(false)}
+          screenContext={screen}
+          initialMessage={
+            [...messages].reverse().find(m => m.role === "user" && !m.loading)?.content ?? ""
+          }
+        />
+      )}
     </>
   );
 }

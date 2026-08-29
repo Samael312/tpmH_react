@@ -5,7 +5,7 @@ from app.api.v1.endpoints import (
     materials, homework,
     admin, payments, reviews,
     chipi, tts, calendar, ai_debug, system_catalogs,
-    cohorts,
+    cohorts, support,
 )
 
 api_router = APIRouter()
@@ -26,4 +26,5 @@ api_router.include_router(calendar.router, prefix="/calendar", tags=["Google Cal
 api_router.include_router(ai_debug.router, prefix="/ai-tools", tags=["AI Tools"])
 api_router.include_router(payments.router, prefix="/payments", tags=["Pagos"])
 api_router.include_router(cohorts.router, prefix="/cohorts", tags=["Clases grupales"])
+api_router.include_router(support.router, prefix="/support", tags=["Soporte"])
 api_router.include_router(system_catalogs.router, prefix="/system-catalogs", tags=["Catálogos del Sistema"])
