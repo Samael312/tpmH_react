@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useRef, Suspense } from "react";
+import { useEffect, useState, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, AlertTriangle, Loader2, Calendar } from "lucide-react";
 import api from "@/lib/api";
+import { usePageTopBar } from "@/lib/mobileTopBar";
 
 function CalendarCallbackInner() {
   const router = useRouter();
@@ -15,15 +16,11 @@ function CalendarCallbackInner() {
   // Referencia para prevenir doble ejecución en React.StrictMode
   const hasExecuted = useRef(false);
 
-  useEffect(() => {
-    // Si ya se envió la petición una vez, abortamos las llamadas duplicadas
-    if (hasExecuted.current) return;
-
+  const runCallback = useCallback(() => {
     const code = searchParams.get("code");
     const oauthError = searchParams.get("error");
 
     if (oauthError) {
-      hasExecuted.current = true;
       setStatus("error");
       setErrorMsg(
         oauthError === "access_denied"
@@ -34,14 +31,13 @@ function CalendarCallbackInner() {
     }
 
     if (!code) {
-      hasExecuted.current = true;
       setStatus("error");
       setErrorMsg("No se recibió el código de autorización de Google.");
       return;
     }
 
-    // Marcamos como ejecutado justo antes de lanzar la llamada HTTP
-    hasExecuted.current = true;
+    setStatus("loading");
+    setErrorMsg("");
 
     api
       .post("/calendar/callback", { code })
@@ -55,8 +51,22 @@ function CalendarCallbackInner() {
           e.response?.data?.detail || "Error conectando con Google Calendar."
         );
       });
+  }, [searchParams, router]);
+
+  useEffect(() => {
+    // Si ya se envió la petición una vez, abortamos las llamadas duplicadas
+    if (hasExecuted.current) return;
+    hasExecuted.current = true;
+    runCallback();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Registra título en la topbar mobile; el refresh solo tiene sentido para reintentar tras un error
+  usePageTopBar({
+    title: "Conectar calendario",
+    onRefresh: status === "error" ? runCallback : undefined,
+    isFetching: status === "loading",
+  });
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -91,12 +101,20 @@ function CalendarCallbackInner() {
               <AlertTriangle className="w-5 h-5 text-rose-500" />
             </div>
             <p className="text-sm font-bold text-rose-600">{errorMsg}</p>
-            <button
-              onClick={() => router.replace("/teacher/profile")}
-              className="mt-2 px-5 py-2.5 text-xs font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-md active:scale-[0.97] transition-all"
-            >
-              Volver a mi perfil
-            </button>
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              <button
+                onClick={runCallback}
+                className="mt-2 px-5 py-2.5 text-xs font-bold text-slate-700 rounded-xl bg-white border border-slate-200 shadow-sm hover:bg-slate-50 active:scale-[0.97] transition-all"
+              >
+                Reintentar
+              </button>
+              <button
+                onClick={() => router.replace("/teacher/profile")}
+                className="mt-2 px-5 py-2.5 text-xs font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-md active:scale-[0.97] transition-all"
+              >
+                Volver a mi perfil
+              </button>
+            </div>
           </>
         )}
       </div>

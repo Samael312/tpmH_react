@@ -7,6 +7,7 @@ import Image from "next/image";
 import { Lock, Eye, EyeOff, Check, ArrowLeft, AlertTriangle } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import Skeleton from "@/components/ui/Skeleton";
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -163,7 +164,7 @@ export default function ResetPasswordPage() {
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
         <div className="absolute top-[-100px] right-[-80px] w-[400px] h-[400px] bg-pink-300/20 rounded-full blur-[100px] pointer-events-none" />
 
-        <div className="relative w-full max-w-sm animate-in fade-in slide-in-from-bottom-6 duration-500">
+        <div className="relative w-full max-w-sm sm:max-w-md animate-in fade-in slide-in-from-bottom-6 duration-500">
           <div className="flex flex-col items-center mb-8">
             <div className="w-14 h-14 rounded-[1.25rem] overflow-hidden shadow-xl shadow-pink-200 mb-4">
               <Image src="/assets/logo.png" alt="TuProfeMaria" width={56} height={56} className="object-contain w-full h-full" />
@@ -172,8 +173,16 @@ export default function ResetPasswordPage() {
             <p className="text-slate-500 text-sm mt-1 text-center">Elige una contraseña segura</p>
           </div>
 
-          <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-8">
-            <Suspense fallback={<div className="flex justify-center py-8"><div className="w-6 h-6 border-2 border-pink-200 border-t-pink-500 rounded-full animate-spin" /></div>}>
+          <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6 sm:p-8">
+            <Suspense
+              fallback={
+                <div className="space-y-4">
+                  <Skeleton className="h-14 w-full rounded-xl" />
+                  <Skeleton className="h-14 w-full rounded-xl" />
+                  <Skeleton className="h-12 w-full rounded-xl" />
+                </div>
+              }
+            >
               <ResetPasswordForm />
             </Suspense>
           </div>

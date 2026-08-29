@@ -21,6 +21,7 @@ import { useAuthStore } from "@/store/authStore";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { usePlatformTenantMode } from "@/lib/platformTenantMode";
+import Skeleton from "@/components/ui/Skeleton";
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
   return (
@@ -205,8 +206,8 @@ export default function RegisterPage() {
         <div className="absolute top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/25 rounded-full blur-[120px] pointer-events-none" />
         <div className="absolute bottom-[-100px] left-[-100px] w-[400px] h-[400px] bg-rose-300/20 rounded-full blur-[100px] pointer-events-none" />
 
-        <main className="flex-1 flex justify-center items-center pt-1 p-3 relative z-10">
-          <div className="w-full max-w-[23rem] my-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <main className="flex-1 flex justify-center items-center pt-1 p-3 sm:p-6 relative z-10">
+          <div className="w-full max-w-[23rem] sm:max-w-[26rem] my-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             
             {/* Header del Formulario */}
             <div className="flex flex-col items-center mb-3">
@@ -325,11 +326,11 @@ export default function RegisterPage() {
                       Mientras se confirma el modo, mostramos un skeleton del
                       mismo tamaño para que el selector no "salte" al aparecer. */}
                   {!configLoaded ? (
-                    <div className="space-y-1 animate-pulse">
-                      <div className="h-2.5 w-10 bg-slate-100 rounded" />
+                    <div className="space-y-1">
+                      <Skeleton className="h-2.5 w-10 rounded" />
                       <div className="grid grid-cols-2 gap-1.5">
-                        <div className="h-8 bg-slate-100 rounded-xl" />
-                        <div className="h-8 bg-slate-100 rounded-xl" />
+                        <Skeleton className="h-8 rounded-xl" />
+                        <Skeleton className="h-8 rounded-xl" />
                       </div>
                     </div>
                   ) : (

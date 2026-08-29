@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 
 export interface LandingTeacher {
@@ -57,6 +57,15 @@ interface PlatformConfigResp {
   } | null;
 }
 
+interface LandingData {
+  isSingleTenant: boolean;
+  teachers: LandingTeacher[];
+  reviews: LandingReview[];
+  packages: LandingPackage[];
+  platformName: string;
+  platformTagline: string | null;
+}
+
 const FALLBACK_USERNAME =
   process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "mar12";
 
@@ -65,123 +74,121 @@ function displayName(t: any): string {
   return full || t?.user_username?.replace(/[_.]/g, " ") || "Profesor";
 }
 
-export function useLandingData() {
-  const [loading, setLoading] = useState(true);
-  const [isSingleTenant, setIsSingleTenant] = useState(true);
-  const [teachers, setTeachers] = useState<LandingTeacher[]>([]);
-  const [reviews, setReviews] = useState<LandingReview[]>([]);
-  const [packages, setPackages] = useState<LandingPackage[]>([]);
-  const [platformName, setPlatformName] = useState("TuProfeMaria");
-  const [platformTagline, setPlatformTagline] = useState<string | null>(null);
+async function fetchLandingData(): Promise<LandingData> {
+  const cfgRes = await api.get("/admin/platform-config");
+  const cfg: PlatformConfigResp = cfgRes.data;
+  const platformName = cfg.platform_name || "TuProfeMaria";
+  const platformTagline = cfg.platform_tagline ?? null;
+  const isSingleTenant = cfg.is_single_tenant;
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const cfgRes = await api.get("/admin/platform-config");
-      const cfg: PlatformConfigResp = cfgRes.data;
-      setPlatformName(cfg.platform_name || "TuProfeMaria");
-      setPlatformTagline(cfg.platform_tagline ?? null);
-      setIsSingleTenant(cfg.is_single_tenant);
+  if (isSingleTenant) {
+    // ── Modo single-tenant: solo la profesora destacada ──
+    const username = cfg.featured_teacher?.username || FALLBACK_USERNAME;
 
-      if (cfg.is_single_tenant) {
-        // ── Modo single-tenant: solo la profesora destacada ──
-        const username = cfg.featured_teacher?.username || FALLBACK_USERNAME;
+    const [tRes, rRes, pRes] = await Promise.all([
+      api.get(`/teachers/${username}`),
+      api.get(`/reviews/${username}`).catch(() => ({ data: [] })),
+      api.get(`/packages/teacher/${username}`).catch(() => ({ data: [] })),
+    ]);
 
-        const [tRes, rRes, pRes] = await Promise.all([
-          api.get(`/teachers/${username}`),
-          api.get(`/reviews/${username}`).catch(() => ({ data: [] })),
-          api.get(`/packages/teacher/${username}`).catch(() => ({ data: [] })),
-        ]);
+    const teacherName = displayName(tRes.data);
+    const teacherAvatar = tRes.data.profile_photo_url ?? null;
 
-        setTeachers([tRes.data]);
-        setReviews(rRes.data);
+    return {
+      isSingleTenant,
+      platformName,
+      platformTagline,
+      teachers: [tRes.data],
+      reviews: rRes.data,
+      packages: (pRes.data || []).map((p: any) => ({
+        ...p,
+        teacher_username: username,
+        teacher_name: teacherName,
+        teacher_avatar: teacherAvatar,
+      })),
+    };
+  }
 
-        const teacherName = displayName(tRes.data);
-        const teacherAvatar = tRes.data.profile_photo_url ?? null;
-        setPackages(
-          (pRes.data || []).map((p: any) => ({
-            ...p,
-            teacher_username: username,
-            teacher_name: teacherName,
-            teacher_avatar: teacherAvatar,
-          }))
-        );
-      } else {
-        // ── Modo multi-tenant: combinar hasta 5 profesores aprobados ──
-        const listRes = await api.get("/teachers/");
-        const list: LandingTeacher[] = (listRes.data || []).slice(0, 5);
-        setTeachers(list);
+  // ── Modo multi-tenant: combinar hasta 5 profesores aprobados ──
+  const listRes = await api.get("/teachers/");
+  const list: LandingTeacher[] = (listRes.data || []).slice(0, 5);
 
-        if (list.length > 0) {
-          const [reviewArrays, packageArrays] = await Promise.all([
-            Promise.all(
-              list.map((t) =>
-                api
-                  .get(`/reviews/${t.user_username}`)
-                  .then((r) =>
-                    (r.data || []).map((rev: any) => ({
-                      ...rev,
-                      teacher_username: t.user_username,
-                    }))
-                  )
-                  .catch(() => [])
-              )
-            ),
-            Promise.all(
-              list.map((t) =>
-                api
-                  .get(`/packages/teacher/${t.user_username}`)
-                  .then((r) =>
-                    (r.data || []).map((p: any) => ({
-                      ...p,
-                      teacher_username: t.user_username,
-                      teacher_name: displayName(t),
-                      teacher_avatar: t.profile_photo_url ?? null,
-                    }))
-                  )
-                  .catch(() => [])
-              )
-            ),
-          ]);
+  if (list.length === 0) {
+    return {
+      isSingleTenant,
+      platformName,
+      platformTagline,
+      teachers: [],
+      reviews: [],
+      packages: [],
+    };
+  }
 
-          const mergedReviews = reviewArrays
-            .flat()
-            .sort(
-              (a: any, b: any) =>
-                new Date(b.created_at).getTime() -
-                new Date(a.created_at).getTime()
-            );
+  const [reviewArrays, packageArrays] = await Promise.all([
+    Promise.all(
+      list.map((t) =>
+        api
+          .get(`/reviews/${t.user_username}`)
+          .then((r) =>
+            (r.data || []).map((rev: any) => ({
+              ...rev,
+              teacher_username: t.user_username,
+            }))
+          )
+          .catch(() => [])
+      )
+    ),
+    Promise.all(
+      list.map((t) =>
+        api
+          .get(`/packages/teacher/${t.user_username}`)
+          .then((r) =>
+            (r.data || []).map((p: any) => ({
+              ...p,
+              teacher_username: t.user_username,
+              teacher_name: displayName(t),
+              teacher_avatar: t.profile_photo_url ?? null,
+            }))
+          )
+          .catch(() => [])
+      )
+    ),
+  ]);
 
-          setReviews(mergedReviews);
-          setPackages(packageArrays.flat());
-        } else {
-          setReviews([]);
-          setPackages([]);
-        }
-      }
-    } catch (e) {
-      console.error("Error cargando datos de landing:", e);
-      setTeachers([]);
-      setReviews([]);
-      setPackages([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const mergedReviews = reviewArrays
+    .flat()
+    .sort(
+      (a: any, b: any) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
 
   return {
-    loading,
     isSingleTenant,
-    teachers,
-    reviews,
-    packages,
     platformName,
     platformTagline,
-    refetch: load,
+    teachers: list,
+    reviews: mergedReviews,
+    packages: packageArrays.flat(),
+  };
+}
+
+export function useLandingData() {
+  const { data, isLoading, isFetching, refetch } = useQuery({
+    queryKey: ["landing-data"],
+    queryFn: fetchLandingData,
+    staleTime: 5 * 60 * 1000, // 5 min: contenido público, no urge revalidar en cada visita
+  });
+
+  return {
+    loading: isLoading,
+    isFetching,
+    isSingleTenant: data?.isSingleTenant ?? true,
+    teachers: data?.teachers ?? [],
+    reviews: data?.reviews ?? [],
+    packages: data?.packages ?? [],
+    platformName: data?.platformName ?? "TuProfeMaria",
+    platformTagline: data?.platformTagline ?? null,
+    refetch,
   };
 }
 

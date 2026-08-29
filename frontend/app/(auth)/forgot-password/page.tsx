@@ -53,7 +53,7 @@ const handleSubmit = async (e: React.SubmitEvent) => {
       <div className="absolute top-[-100px] right-[-80px] w-[400px] h-[400px]
                       bg-pink-300/20 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="relative w-full max-w-sm
+      <div className="relative w-full max-w-sm sm:max-w-md
                       animate-in fade-in slide-in-from-bottom-6 duration-500">
 
         {/* Logo */}
@@ -79,7 +79,7 @@ const handleSubmit = async (e: React.SubmitEvent) => {
         </div>
 
         <div className="bg-white/80 backdrop-blur-xl rounded-[2rem]
-                        border border-white shadow-2xl shadow-slate-200/50 p-8">
+                        border border-white shadow-2xl shadow-slate-200/50 p-6 sm:p-8">
 
           {/* Pestañas */}
           <div className="flex gap-1 bg-slate-100 rounded-xl p-1 mb-6">

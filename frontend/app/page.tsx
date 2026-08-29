@@ -15,6 +15,7 @@ import PackagesCarousel from "@/components/landing/PackagesCarousel";
 import TeacherVideosCarousel from "@/components/landing/TeacherVideosCarousel";
 import Carousel from "@/components/landing/Carousel";
 import { priceLabelSuffix } from "@/lib/packageThemes";
+import Skeleton from "@/components/ui/Skeleton";
 
 interface NavItem {
   id: string;
@@ -277,7 +278,7 @@ export default function LandingPage() {
           </div>
 
           {loading ? (
-            <div className="h-64 bg-slate-100/60 rounded-[2rem] animate-pulse" />
+            <Skeleton className="h-64 w-full rounded-[2rem]" />
           ) : isSingleTenant ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
               <div className="bg-white/80 backdrop-blur-sm rounded-[2rem] border border-rose-100 shadow-xl p-8">
@@ -388,7 +389,7 @@ export default function LandingPage() {
             {loading ? (
               <div className="flex gap-5 overflow-hidden">
                 {[1,2,3].map(i => (
-                  <div key={i} className="w-[210px] aspect-[9/12] bg-slate-800/60 rounded-[1.75rem] animate-pulse flex-shrink-0 border border-white/5" />
+                  <Skeleton key={i} className="w-[210px] aspect-[9/12] rounded-[1.75rem] flex-shrink-0 bg-slate-800/40 border border-white/5" />
                 ))}
               </div>
             ) : (
@@ -411,7 +412,7 @@ export default function LandingPage() {
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
               {[1, 2, 3, 4].map(i => (
-                <div key={i} className="h-96 bg-slate-100/60 rounded-[2rem] animate-pulse" />
+                <Skeleton key={i} className="h-96 w-full rounded-[2rem]" />
               ))}
             </div>
           ) : packages.length === 0 ? (

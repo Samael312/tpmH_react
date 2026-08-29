@@ -5,6 +5,8 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 import PublicProfileView, { PublicProfileTeacher } from "@/components/teacher/PublicProfileView";
 import { useTeacherProfile, useTeacherOwnReviews } from "@/hooks/useTeacherData";
 import Skeleton from "@/components/ui/Skeleton";
+import RefreshButton from "@/components/ui/RefreshButton";
+import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 
 export default function TeacherProfilePreviewPage() {
@@ -52,6 +54,11 @@ export default function TeacherProfilePreviewPage() {
 
   return (
     <>
+      <DesktopOnly>
+        <div className="max-w-3xl mx-auto pt-4 flex justify-end">
+          <RefreshButton onRefresh={refetch} isFetching={isFetching} />
+        </div>
+      </DesktopOnly>
       <PublicProfileView
         teacher={teacher}
         reviews={reviews}

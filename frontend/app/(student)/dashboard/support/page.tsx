@@ -2,11 +2,8 @@
 
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import SupportTicketsView from "@/components/support/SupportTicketsView";
-import { usePageTopBar } from "@/lib/mobileTopBar";
 
 export default function StudentSupportPage() {
-  usePageTopBar({ title: "Soporte" });
-
   return (
     <>
       <div className="min-h-screen bg-slate-50 relative overflow-hidden">

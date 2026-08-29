@@ -5,6 +5,8 @@ import { LifeBuoy, Bug, AlertTriangle, HelpCircle, MoreHorizontal, ChevronDown, 
 import { useMySupportTickets, markSupportTicketSeen, SupportTicket } from "@/hooks/useSupport";
 import SupportTicketModal from "@/components/support/SupportTicketModal";
 import Skeleton from "@/components/ui/Skeleton";
+import RefreshButton from "@/components/ui/RefreshButton";
+import { usePageTopBar } from "@/lib/mobileTopBar";
 
 const CATEGORY_CONFIG: Record<string, { label: string; icon: React.ReactNode }> = {
   bug: { label: "Bug", icon: <Bug className="w-3.5 h-3.5" /> },
@@ -87,18 +89,24 @@ function TicketCard({ ticket, onSeen }: { ticket: SupportTicket; onSeen: () => v
   );
 }
 
-export default function SupportTicketsView() {
-  const { tickets, loading, refetch } = useMySupportTickets();
+export default function SupportTicketsView({ title = "Soporte" }: { title?: string }) {
+  const { tickets, loading, isFetching, refetch } = useMySupportTickets();
   const [modalOpen, setModalOpen] = useState(false);
+
+  // Registra título + refresh en la topbar mobile (renderizada por el layout del rol)
+  usePageTopBar({ title, onRefresh: refetch, isFetching });
 
   const pending = tickets.filter((t) => t.status === "pending").length;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">Soporte</h1>
-          <p className="text-slate-500 mt-1">Reporta bugs, errores o dudas y sigue tus respuestas aquí</p>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="min-w-0">
+            <h1 className="text-3xl font-black text-slate-800 tracking-tight">Soporte</h1>
+            <p className="text-slate-500 mt-1">Reporta bugs, errores o dudas y sigue tus respuestas aquí</p>
+          </div>
+          <RefreshButton onRefresh={refetch} isFetching={isFetching} className="hidden md:flex" />
         </div>
         <button
           onClick={() => setModalOpen(true)}

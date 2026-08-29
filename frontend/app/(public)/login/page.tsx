@@ -202,8 +202,8 @@ export default function LoginPage() {
       <div className="absolute top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/25 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-100px] left-[-100px] w-[400px] h-[400px] bg-rose-300/20 rounded-full blur-[100px] pointer-events-none" />
 
-      <main className="flex-1 flex justify-center pt-8 p-4 relative z-10">
-        <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-6 duration-500">
+      <main className="flex-1 flex justify-center pt-8 p-4 sm:p-6 relative z-10">
+        <div className="w-full max-w-md lg:max-w-lg animate-in fade-in slide-in-from-bottom-6 duration-500">
 
           {/* Logo y Encabezado */}
           <div className="flex flex-col items-center mb-8">
@@ -229,7 +229,7 @@ export default function LoginPage() {
           )}
 
           {/* Formulario */}
-          <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6">
+          <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6 sm:p-8">
             <form onSubmit={handleSubmit} className="space-y-3">
               <div className="group">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Usuario o email</label>
