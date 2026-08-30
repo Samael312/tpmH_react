@@ -1,6 +1,7 @@
 from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime
+from app.schemas.god_mode import GodModeActionBase
 
 
 # Pool fijo (no editable a mano) del que el superadmin puede elegir
@@ -150,3 +151,70 @@ class ClassListResponse(BaseModel):
     total: int
     upcoming: int
     completed: int
+
+
+# ─── MODO DIOS ──────────────────────────────────────────────────────────
+
+CLASS_STATUS_OPTIONS = [
+    "pending", "pending_trial", "pending_payment", "confirmed",
+    "completed", "cancelled", "no_show", "rescheduled", "finalized",
+]
+
+
+class GodModeCreateClassRequest(GodModeActionBase):
+    """
+    Crea una clase individual (regular o trial) para cualquier par
+    profesor-alumno, sin pasar por los flujos normales de reserva.
+    """
+    teacher_id: int
+    student_id: int
+    start_time_utc: datetime
+    duration_minutes: int
+    class_type: str = "regular"
+    subject: Optional[str] = None
+    enrollment_id: Optional[int] = None
+    status: str = "confirmed"
+    notes: Optional[str] = None
+    # Si es True, se salta can_book_slot por completo (permite doble-booking
+    # real). Por defecto False: igual se valida que no choque con otra
+    # clase, para no crear inconsistencias por accidente.
+    skip_conflict_check: bool = False
+
+    @field_validator("class_type")
+    @classmethod
+    def validate_class_type(cls, v):
+        if v not in ("regular", "trial"):
+            raise ValueError("class_type debe ser 'regular' o 'trial' (las grupales se crean desde /cohorts)")
+        return v
+
+    @field_validator("duration_minutes")
+    @classmethod
+    def validate_duration_minutes(cls, v):
+        if v < 15 or v > 240:
+            raise ValueError("Duración fuera de rango razonable (15-240 min)")
+        return v
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v):
+        if v not in CLASS_STATUS_OPTIONS:
+            raise ValueError(f"Estado inválido. Opciones: {CLASS_STATUS_OPTIONS}")
+        return v
+
+
+class GodModeRescheduleClassRequest(GodModeActionBase):
+    start_time_utc: datetime
+    duration_minutes: Optional[int] = None
+    skip_conflict_check: bool = False
+
+
+class GodModeForceStatusRequest(GodModeActionBase):
+    status: str
+    notes: Optional[str] = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v):
+        if v not in CLASS_STATUS_OPTIONS:
+            raise ValueError(f"Estado inválido. Opciones: {CLASS_STATUS_OPTIONS}")
+        return v

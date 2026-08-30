@@ -1,6 +1,7 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 from typing import Optional, List
 from datetime import datetime
+from app.schemas.god_mode import GodModeActionBase
 
 
 # ─── Configuración de pagos ──────────────────────────────────────────────────
@@ -190,3 +191,36 @@ class ProcessWithdrawalRequest(BaseModel):
         if v not in ("complete", "reject"):
             raise ValueError("action debe ser 'complete' o 'reject'")
         return v
+
+
+# ─── MODO DIOS ──────────────────────────────────────────────────────────
+
+PAYMENT_STATUS_OPTIONS = ["pending_review", "under_review", "approved", "rejected"]
+
+
+class GodModeEditPaymentRequest(GodModeActionBase):
+    """
+    Edita un Payment ya registrado. Si el pago ya estaba 'approved' y se
+    cambia el monto, o si se cambia el status hacia/desde 'approved', el
+    endpoint ajusta el saldo de la billetera del profesor para que no
+    quede desincronizado con lo que realmente se le acreditó.
+    """
+    amount_total: Optional[float] = Field(None, gt=0)
+    status: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    transaction_id: Optional[str] = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v):
+        if v is not None and v not in PAYMENT_STATUS_OPTIONS:
+            raise ValueError(f"status debe ser uno de: {PAYMENT_STATUS_OPTIONS}")
+        return v
+
+
+class GodModeEditPaymentResponse(BaseModel):
+    message: str
+    payment: PaymentResponse
+
+    class Config:
+        from_attributes = True

@@ -1,6 +1,7 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 from typing import Optional, List
 from datetime import datetime
+from app.schemas.god_mode import GodModeActionBase
 
 ALLOWED_DESCRIPTION_TYPES = ["paragraph", "list"]
 
@@ -165,6 +166,55 @@ class PackageChangeRequest(BaseModel):
     """
     current_enrollment_id: int
     new_package_id: int
+
+
+class GodModeEnrollmentAdjustRequest(GodModeActionBase):
+    """
+    Ajuste directo de los contadores de un enrollment, saltándose el
+    flujo normal de pagos/renovación. Todos los campos son opcionales:
+    solo se tocan los que vengan seteados (no se pisa el resto).
+    """
+    unlocked_credits: Optional[int] = Field(None, ge=0)
+    classes_used: Optional[int] = Field(None, ge=0)
+    classes_total: Optional[int] = Field(None, ge=0)
+    prepaid_unlimited_credits: Optional[int] = Field(None, ge=0)
+    installments_paid: Optional[int] = Field(None, ge=0)
+    payment_status: Optional[str] = None
+    status: Optional[str] = None
+
+    @field_validator("payment_status")
+    @classmethod
+    def validate_payment_status(cls, v):
+        if v is not None and v not in ("unpaid", "partially_paid", "paid"):
+            raise ValueError("payment_status debe ser: unpaid, partially_paid o paid")
+        return v
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v):
+        allowed = {"active", "completed", "cancelled", "pending_renewal", "pending_package_change"}
+        if v is not None and v not in allowed:
+            raise ValueError(f"status debe ser uno de: {sorted(allowed)}")
+        return v
+
+
+class GodModeChangePackageRequest(GodModeActionBase):
+    """
+    Cambia el paquete de un enrollment de forma instantánea, sin pasar
+    por request-package-change ni por ningún pago. Pensado para casos
+    donde el staff ya validó el pago por fuera del sistema (WhatsApp,
+    transferencia manual sin comprobante subido, etc.).
+    """
+    new_package_id: int
+    reset_classes_used: bool = False
+
+
+class GodModeEnrollmentResponse(BaseModel):
+    message: str
+    enrollment: EnrollmentResponse
+
+    class Config:
+        from_attributes = True
 
 
 class PackageChangeApprovalResponse(BaseModel):

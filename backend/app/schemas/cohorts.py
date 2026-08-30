@@ -1,6 +1,7 @@
 from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import datetime
+from app.schemas.god_mode import GodModeActionBase
 
 
 class CohortCreate(BaseModel):
@@ -57,6 +58,61 @@ class GroupEnrollRequest(BaseModel):
     # no lo pedía en absoluto — el Payment quedaba pending_review sin
     # ningún dato que el profesor pudiera verificar contra su comprobante.
     transaction_reference: Optional[str] = None
+
+
+# ─── MODO DIOS ──────────────────────────────────────────────────────────
+
+
+class GodModeMoveCohortRequest(GodModeActionBase):
+    """
+    Mueve el enrollment de un alumno a otra cohorte (o lo convierte a
+    individual si new_cohort_id es None). `force=True` salta la
+    validación de cupo disponible en la cohorte destino.
+    """
+    new_cohort_id: Optional[int] = None
+    force: bool = False
+    reset_classes_used: bool = False
+
+
+class GodModeCohortEditRequest(GodModeActionBase):
+    """Edita min/max de una cohorte ya creada, o fuerza su fecha de inicio."""
+    min_students: Optional[int] = None
+    max_students: Optional[int] = None
+    start_date: Optional[datetime] = None
+
+    @field_validator("min_students", "max_students")
+    @classmethod
+    def validate_positive(cls, v):
+        if v is not None and v < 1:
+            raise ValueError("Debe ser al menos 1")
+        return v
+
+
+class GodModeCohortReopenRequest(GodModeActionBase):
+    """Reabre una cohorte cancelada/completada. new_status debe ser 'filling' o 'confirmed'."""
+    new_status: str = "filling"
+
+    @field_validator("new_status")
+    @classmethod
+    def validate_new_status(cls, v):
+        if v not in ("filling", "confirmed"):
+            raise ValueError("new_status debe ser 'filling' o 'confirmed'")
+        return v
+
+
+class GodModeCohortActionResponse(BaseModel):
+    message: str
+    cohort: CohortResponse
+
+    class Config:
+        from_attributes = True
+
+
+class GodModeMoveCohortResponse(BaseModel):
+    message: str
+
+    class Config:
+        from_attributes = True
 
 
 class GroupToIndividualMigrationRequest(BaseModel):
