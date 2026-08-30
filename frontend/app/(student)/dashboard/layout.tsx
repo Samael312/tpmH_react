@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
 import api from "@/lib/api";
 import NavBar from "@/components/layout/NavBar";
+import DashboardTopbar from "@/components/layout/DashboardTopbar";
 import {
   Home,
   CalendarDays,
@@ -110,31 +111,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
 
       {/* ─── Área de Contenido ─── */}
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto relative bg-slate-50 pt-14 pb-20 md:pt-0 md:pb-0">
-        {/* Topbar: SOLO desktop (en mobile ya existe MobileTopBar dentro de NavBar) */}
-        <header className="hidden md:flex h-20 sticky top-0 z-10 border-b border-pink-100/50
-                           bg-white/80 backdrop-blur-md px-8
-                           items-center justify-between shadow-sm shadow-slate-100/50">
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] font-black text-white bg-pink-500 px-2 py-0.5 rounded-full uppercase tracking-tighter shadow-sm shadow-pink-200">
-              Live
-            </span>
-            <div className="text-xs text-slate-400 font-bold uppercase tracking-[0.2em]">
-              Dashboard
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="hidden md:flex flex-col items-end">
-              <span className="text-xs font-bold text-slate-700">{user?.name}</span>
-              <span className="text-[10px] text-pink-400 font-medium italic leading-none">
-                Estudiante
-              </span>
-            </div>
-            <div className="w-10 h-10 rounded-full bg-pink-100 border-2 border-white shadow-sm flex items-center justify-center text-pink-500 font-bold">
-              {user?.name?.charAt(0)}
-            </div>
-          </div>
-        </header>
+        <DashboardTopbar variant="student" />
 
         <div className="max-w-7xl mx-auto px-6 py-8 md:px-10 md:py-12 min-h-full flex flex-col w-full">
           <div className="flex-1">{children}</div>
