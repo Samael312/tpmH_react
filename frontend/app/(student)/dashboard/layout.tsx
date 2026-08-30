@@ -110,14 +110,16 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       <NavBar />
 
       {/* ─── Área de Contenido ─── */}
-      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto relative bg-slate-50 pt-14 pb-20 md:pt-0 md:pb-0">
+      <main className="flex-1 flex flex-col min-w-0 bg-slate-50 pt-14 pb-20 md:pt-0 md:pb-0">
         <DashboardTopbar variant="student" />
 
-        <div className="max-w-7xl mx-auto px-6 py-8 md:px-10 md:py-12 min-h-full flex flex-col w-full">
-          <div className="flex-1">{children}</div>
-          <footer className="text-center py-6 mt-12 text-slate-400 text-sm font-medium border-t border-slate-200/60">
-            © {new Date().getFullYear()} TuProfeMaria. Todos los derechos reservados.
-          </footer>
+        <div className="flex-1 overflow-y-auto relative">
+          <div className="max-w-7xl mx-auto px-6 py-8 md:px-10 md:py-12 min-h-full flex flex-col">
+            <div className="flex-1">{children}</div>
+            <footer className="text-center py-6 mt-12 text-slate-400 text-sm font-medium border-t border-slate-200/60">
+              © {new Date().getFullYear()} TuProfeMaria. Todos los derechos reservados.
+            </footer>
+          </div>
         </div>
       </main>
     </div>
