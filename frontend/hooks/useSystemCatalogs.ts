@@ -6,11 +6,18 @@ export interface PaymentMethodOption { value: string; label: string; icon: strin
 export interface ThemePreset { label: string; value: string }
 export interface SubjectTheme { icon: string; color: string }
 
+// Los objetivos del estudiante están agrupados por categoría (p. ej.
+// "idiomas" y "academico") porque la plataforma no es solo de idiomas:
+// las sugerencias que tienen sentido para aprender inglés no son las
+// mismas que para reforzar matemática, física, música, etc.
+export type GoalCategoryKey = string;
+export type StudentGoalsCatalog = Record<GoalCategoryKey, StudentGoal[]>;
+
 export interface SystemCatalogs {
   subjects: string[];
   languages: string[];
   skill_suggestions: string[];
-  student_goals: StudentGoal[];
+  student_goals: StudentGoalsCatalog;
   student_payment_methods: PaymentMethodOption[];
   withdrawal_methods: PaymentMethodOption[];
   material_categories: string[];
@@ -21,7 +28,7 @@ export interface SystemCatalogs {
 }
 
 const FALLBACK: SystemCatalogs = {
-  subjects: [], languages: [], skill_suggestions: [], student_goals: [],
+  subjects: [], languages: [], skill_suggestions: [], student_goals: {},
   student_payment_methods: [], withdrawal_methods: [], material_categories: [],
   material_levels: [], theme_presets: [], package_icon_options: [], subject_theme_map: {},
 };

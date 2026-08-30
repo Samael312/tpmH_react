@@ -16,7 +16,7 @@ import { NATIONALITIES } from "@/lib/nationalities";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 // in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
-import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS, GOALS as FALLBACK_GOALS, PAYMENT_METHODS as FALLBACK_METHODS} from "@/lib/teacherOptions";
+import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS, GOALS as FALLBACK_GOALS, GOAL_CATEGORIES, PAYMENT_METHODS as FALLBACK_METHODS, normalizeGoalsCatalog, flattenGoals } from "@/lib/teacherOptions";
 
 
 
@@ -187,11 +187,24 @@ function StepPreferences({
   const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
   const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
   const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
-  const GOALS = catalogs.student_goals.length ? catalogs.student_goals : FALLBACK_GOALS;
 
-  
+  // Los objetivos sugeridos están agrupados por categoría (idiomas vs.
+  // otras materias) porque la plataforma no es solo de idiomas.
+  const GOALS_BY_CATEGORY = normalizeGoalsCatalog(catalogs.student_goals) ?? FALLBACK_GOALS;
+  const ALL_GOALS = useMemo(() => flattenGoals(GOALS_BY_CATEGORY), [GOALS_BY_CATEGORY]);
+
+  const [goalCategory, setGoalCategory] = useState<string>(() => {
+    // Si el estudiante ya trae un goal cargado, seleccionamos la categoría
+    // a la que pertenece; si no, arrancamos en la primera disponible.
+    const found = Object.entries(GOALS_BY_CATEGORY).find(([, items]) =>
+      items.some((g) => g.text === goal)
+    );
+    return found?.[0] ?? GOAL_CATEGORIES[0].key;
+  });
+  const GOALS = GOALS_BY_CATEGORY[goalCategory] ?? [];
+
   const [useCustomGoal, setUseCustomGoal] = useState(() => {
-    return Boolean(goal && !GOALS.some((g) => g.text === goal));
+    return Boolean(goal && !ALL_GOALS.some((g) => g.text === goal));
   });
 
   const valid = Boolean(timezone && goal.trim() && phone.trim() && nationality);
@@ -346,6 +359,25 @@ function StepPreferences({
 
       <div>
         <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-4">¿Cuál es tu objetivo principal? *</label>
+
+        {/* Selector de categoría: idiomas vs. otras materias */}
+        <div className="flex gap-2 mb-4">
+          {GOAL_CATEGORIES.map((cat) => (
+            <button
+              key={cat.key}
+              type="button"
+              onClick={() => setGoalCategory(cat.key)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 transition-all duration-200 ${
+                goalCategory === cat.key
+                  ? "border-pink-500 bg-pink-50 text-pink-700"
+                  : "border-slate-100 bg-white text-slate-500 hover:border-pink-200"
+              }`}
+            >
+              <span>{cat.icon}</span> {cat.label}
+            </button>
+          ))}
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {GOALS.map((g) => (
             <button

@@ -53,22 +53,55 @@ function CatalogEditor({ catalogKey, label, items, onSave }: {
   )
 }
 
-function GoalsEditor({ items, onSave }: { items: any[]; onSave: (v: any[]) => Promise<void> }) {
-  const [list, setList] = useState(items)
+// Categorías de objetivo. La plataforma no es solo de idiomas, así que
+// los objetivos sugeridos se agrupan (idiomas vs. otras materias) y el
+// admin edita cada grupo por separado. Si en BD todavía hubiera una
+// lista plana vieja (pre-migración), la tratamos como el grupo "idiomas".
+const GOAL_CATEGORY_TABS = [
+  { key: 'idiomas', label: 'Idiomas' },
+  { key: 'academico', label: 'Otras materias' },
+]
+
+function GoalsEditor({ items, onSave }: { items: any; onSave: (v: Record<string, any[]>) => Promise<void> }) {
+  const normalized: Record<string, any[]> = Array.isArray(items)
+    ? { idiomas: items }
+    : (items && typeof items === 'object' ? items : {})
+
+  const [grouped, setGrouped] = useState<Record<string, any[]>>(normalized)
+  const [tab, setTab] = useState<string>(GOAL_CATEGORY_TABS[0].key)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => setList(items), [items])
+  useEffect(() => setGrouped(Array.isArray(items) ? { idiomas: items } : (items && typeof items === 'object' ? items : {})), [items])
+
+  const list = grouped[tab] ?? []
+  const setList = (next: any[]) => setGrouped({ ...grouped, [tab]: next })
 
   const update = (i: number, field: string, value: string) => {
     const next = [...list]; next[i] = { ...next[i], [field]: value }; setList(next)
   }
   const remove = (i: number) => setList(list.filter((_, idx) => idx !== i))
   const add = () => setList([...list, { text: '', desc: '', icon: '🎯' }])
-  const save = async () => { setSaving(true); try { await onSave(list) } finally { setSaving(false) } }
+  const save = async () => { setSaving(true); try { await onSave(grouped) } finally { setSaving(false) } }
 
   return (
     <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-3">
       <p className="text-xs font-black text-slate-700">Objetivos de aprendizaje</p>
+      <p className="text-[10px] text-slate-400">
+        Se muestran agrupados por categoría en el onboarding, porque las sugerencias de idiomas
+        (ej. TOEFL, pronunciación) no aplican a otras materias (ej. Matemática, Música).
+      </p>
+
+      <div className="flex gap-2">
+        {GOAL_CATEGORY_TABS.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+              tab === t.key ? 'bg-pink-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+            }`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <div className="space-y-2">
         {list.map((g, i) => (
           <div key={i} className="flex gap-2 items-center bg-white border border-slate-200 rounded-xl p-2">
@@ -81,6 +114,9 @@ function GoalsEditor({ items, onSave }: { items: any[]; onSave: (v: any[]) => Pr
             <button onClick={() => remove(i)} className="text-slate-300 hover:text-rose-400 px-2">✕</button>
           </div>
         ))}
+        {!list.length && (
+          <p className="text-xs text-slate-400 italic px-1">Sin objetivos en esta categoría todavía.</p>
+        )}
       </div>
       <div className="flex gap-2">
         <button onClick={add} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold">+ Añadir objetivo</button>
@@ -953,7 +989,7 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <GoalsEditor items={catalogs.student_goals ?? []} onSave={v => saveCatalog('student_goals', v)} />
+              <GoalsEditor items={catalogs.student_goals ?? {}} onSave={v => saveCatalog('student_goals', v)} />
               <PaymentMethodsEditor title="Métodos de pago (estudiante)" items={catalogs.student_payment_methods ?? []} onSave={v => saveCatalog('student_payment_methods', v)} />
               <PaymentMethodsEditor title="Métodos de retiro (profesor)" items={catalogs.withdrawal_methods ?? []} onSave={v => saveCatalog('withdrawal_methods', v)} />
             </Card>

@@ -16,14 +16,60 @@ export const SKILL_SUGGESTIONS = [
   "Business English", "IELTS", "TOEFL", "Niños", "Viajes", "Redacción",
 ];
 
-export const GOALS = [
-  { text: "Conversaciones cotidianas", desc: "Hablar de temas del día a día", icon: "🗣️" },
-  { text: "Mejorar pronunciación", desc: "Fluidez y acento natural", icon: "🎙️" },
-  { text: "Ampliar vocabulario", desc: "Palabras para situaciones reales", icon: "📚" },
-  { text: "Comprender audios/videos", desc: "Entender a hablantes nativos", icon: "🎧" },
-  { text: "Preparar exámenes", desc: "TOEFL, IELTS, Cambridge, etc.", icon: "📝" },
-  { text: "Viajar al extranjero", desc: "Sobrevivir en otro país en inglés", icon: "✈️" },
-];
+// Categorías de objetivo de aprendizaje. La plataforma no es solo de
+// idiomas (hay Matemática, Física, Música, Programación, etc.), así que
+// las sugerencias de "goal" se agrupan por categoría y el estudiante
+// elige cuál se ajusta a lo que busca antes de ver las tarjetas.
+export const GOAL_CATEGORIES = [
+  { key: "idiomas", label: "Idiomas", icon: "🌐" },
+  { key: "academico", label: "Otras materias", icon: "📘" },
+] as const;
+
+export type GoalCategoryKey = typeof GOAL_CATEGORIES[number]["key"];
+
+export const GOALS: Record<GoalCategoryKey, { text: string; desc: string; icon: string }[]> = {
+  idiomas: [
+    { text: "Conversaciones cotidianas", desc: "Hablar de temas del día a día", icon: "🗣️" },
+    { text: "Mejorar pronunciación", desc: "Fluidez y acento natural", icon: "🎙️" },
+    { text: "Ampliar vocabulario", desc: "Palabras para situaciones reales", icon: "📚" },
+    { text: "Comprender audios/videos", desc: "Entender a hablantes nativos", icon: "🎧" },
+    { text: "Preparar exámenes", desc: "TOEFL, IELTS, Cambridge, etc.", icon: "📝" },
+    { text: "Viajar al extranjero", desc: "Comunicarme sin problemas en otro país", icon: "✈️" },
+  ],
+  academico: [
+    { text: "Reforzar lo que veo en clase", desc: "Entender mejor los temas de mi curso", icon: "📘" },
+    { text: "Ponerme al día", desc: "Recuperar contenido atrasado", icon: "⏱️" },
+    { text: "Preparar un examen", desc: "Estudiar para una evaluación o admisión", icon: "📝" },
+    { text: "Resolver dudas puntuales", desc: "Ayuda con tareas o ejercicios específicos", icon: "❓" },
+    { text: "Aprender desde cero", desc: "Empezar sin conocimientos previos", icon: "🌱" },
+    { text: "Prepararme para una competencia", desc: "Olimpiadas, concursos u otros retos", icon: "🏆" },
+  ],
+};
+
+/**
+ * Acepta tanto el formato nuevo (dict agrupado por categoría) como el
+ * formato viejo (lista plana, legado del catálogo pre-migración) y
+ * siempre devuelve un dict agrupado. Así el frontend no rompe si el
+ * catálogo en BD todavía no fue migrado o el admin guardó una lista.
+ */
+export function normalizeGoalsCatalog(
+  raw: unknown
+): Record<string, { text: string; desc: string; icon: string }[]> {
+  if (Array.isArray(raw) && raw.length) {
+    return { idiomas: raw as { text: string; desc: string; icon: string }[] };
+  }
+  if (raw && typeof raw === "object" && Object.keys(raw).length) {
+    return raw as Record<string, { text: string; desc: string; icon: string }[]>;
+  }
+  return GOALS;
+}
+
+/** Aplana todas las categorías en una sola lista (para detectar objetivos personalizados). */
+export function flattenGoals(
+  grouped: Record<string, { text: string; desc: string; icon: string }[]>
+): { text: string; desc: string; icon: string }[] {
+  return Object.values(grouped).flat();
+}
 
 export const PAYMENT_METHODS =  [
   { value: "Paypal",       label: "PayPal",             icon: "💳", color: "text-blue-600" },

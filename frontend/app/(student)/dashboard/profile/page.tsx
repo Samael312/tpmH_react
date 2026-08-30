@@ -13,7 +13,10 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { 
   GOALS as FALLBACK_GOALS, 
-  PAYMENT_METHODS as FALLBACK_METHODS
+  GOAL_CATEGORIES,
+  PAYMENT_METHODS as FALLBACK_METHODS,
+  normalizeGoalsCatalog,
+  flattenGoals,
 } from "@/lib/teacherOptions";
 import { useStudentProfileData } from "@/hooks/useStudentData";
 import RefreshButton from "@/components/ui/RefreshButton";
@@ -196,10 +199,20 @@ export default function StudentProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   // ─── Normalización de opciones ────────────────────────────────────────────────
+  // Los objetivos están agrupados por categoría (idiomas vs. otras materias),
+  // ya que la plataforma no es solo de idiomas.
+  const goalsByCategory = useMemo(
+    () => normalizeGoalsCatalog(catalogs.student_goals) ?? FALLBACK_GOALS,
+    [catalogs.student_goals]
+  );
+  const allGoalsFlat = useMemo(() => flattenGoals(goalsByCategory), [goalsByCategory]);
+
+  const [goalCategory, setGoalCategory] = useState<string>(GOAL_CATEGORIES[0].key);
+
   const normalizedGoals = useMemo(() => {
-    const goals = catalogs.student_goals?.length ? catalogs.student_goals : FALLBACK_GOALS;
-    return goals.map(g => typeof g === "string" ? { text: g, desc: "", icon: "🎯" } : g);
-  }, [catalogs.student_goals]);
+    const goals = goalsByCategory[goalCategory] ?? [];
+    return goals.map(g => (typeof g === "string" ? { text: g, desc: "", icon: "🎯" } : g));
+  }, [goalsByCategory, goalCategory]);
 
   const normalizedPaymentMethods = useMemo(() => {
     const methods = catalogs.student_payment_methods?.length ? catalogs.student_payment_methods : FALLBACK_METHODS;
@@ -230,9 +243,15 @@ export default function StudentProfilePage() {
 
     const loadedGoal = studentData.goal ?? "";
     setGoal(loadedGoal);
-    
-    // Verificamos si el goal cargado existe en nuestra lista normalizada para saber si es personalizado
-    const isCustom = Boolean(loadedGoal) && !(catalogs.student_goals?.length ? catalogs.student_goals : FALLBACK_GOALS)
+
+    // Buscamos a qué categoría pertenece el goal ya guardado, para abrir
+    // esa pestaña por defecto (si no coincide con ninguna, es personalizado).
+    const matchedCategory = Object.entries(goalsByCategory).find(([, items]) =>
+      items.some(g => (typeof g === "string" ? g : g.text) === loadedGoal)
+    );
+    setGoalCategory(matchedCategory?.[0] ?? GOAL_CATEGORIES[0].key);
+
+    const isCustom = Boolean(loadedGoal) && !allGoalsFlat
       .some(g => (typeof g === "string" ? g : g.text) === loadedGoal);
       
     setUseCustomGoal(isCustom);
@@ -240,7 +259,7 @@ export default function StudentProfilePage() {
 
     const photo = userData.avatar_url ?? userData.avatar ?? studentData.profile_photo_url ?? null;
     setAvatarUrl(photo);
-  }, [user?.username, catalogs.student_goals]);
+  }, [user?.username, goalsByCategory, allGoalsFlat]);
 
   // ─── Sincroniza el formulario cuando llegan (o se refrescan) los datos ──────
   useEffect(() => {
@@ -640,6 +659,26 @@ export default function StudentProfilePage() {
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
                       Objetivo de aprendizaje
                     </label>
+
+                    {/* Selector de categoría: idiomas vs. otras materias */}
+                    <div className="flex gap-1.5 mb-2">
+                      {GOAL_CATEGORIES.map(cat => (
+                        <button
+                          key={cat.key}
+                          type="button"
+                          disabled={savingInfo}
+                          onClick={() => setGoalCategory(cat.key)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border-2 transition-all duration-200 disabled:opacity-60 ${
+                            goalCategory === cat.key
+                              ? "border-pink-400 bg-pink-50 text-pink-700"
+                              : "border-slate-100 bg-white text-slate-500 hover:border-slate-200"
+                          }`}
+                        >
+                          <span>{cat.icon}</span> {cat.label}
+                        </button>
+                      ))}
+                    </div>
+
                     <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                       {normalizedGoals.map(g => (
                         <button
