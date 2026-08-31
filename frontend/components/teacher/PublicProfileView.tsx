@@ -1,8 +1,28 @@
 "use client";
 
+import React from "react";
 import { Star, MessageCircle, Globe, Award, BookOpen, PlayCircle } from "lucide-react";
 import { shadeColor, DEFAULT_THEME_COLOR } from "@/lib/color";
 import { getFlagForNationality } from "@/lib/nationalities";
+
+// ─── Iconos redes sociales ────────────────────────────────────────────────
+function InstagramIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.5" cy="6.5" r="0.5" fill="currentColor" />
+    </svg>
+  );
+}
+function YoutubeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+      <path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" />
+      <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
 
 export interface PublicProfileTeacher {
   user_username: string;
@@ -76,10 +96,28 @@ export default function PublicProfileView({
   const isApproved = teacher.status === "approved";
   const name = displayTeacherName(teacher);
 
-  const openLink = (url: string) => {
-    if (!url) return;
-    window.open(url.startsWith("http") ? url : `https://${url}`, "_blank", "noopener,noreferrer");
+  /** Arma el href correcto para cada red social a partir de lo cargado por el profesor. */
+  const getSocialHref = (key: "instagram" | "youtube" | "whatsapp" | "website", value: string): string | null => {
+    if (!value) return null;
+    if (key === "whatsapp") {
+      const digits = value.replace(/\D/g, "");
+      return digits ? `https://wa.me/${digits}` : null;
+    }
+    if (key === "instagram") {
+      if (value.startsWith("http")) return value;
+      const handle = value.replace(/^@/, "");
+      return handle ? `https://instagram.com/${handle}` : null;
+    }
+    return value.startsWith("http") ? value : `https://${value}`;
   };
+
+  // Íconos simplificados sin forzar color, tomarán el color blanco del contenedor principal en el hero
+  const socialButtons: { key: "instagram" | "youtube" | "whatsapp" | "website"; label: string; icon: React.ReactNode }[] = [
+    { key: "instagram", label: "Instagram", icon: <InstagramIcon /> },
+    { key: "youtube", label: "YouTube", icon: <YoutubeIcon /> },
+    { key: "whatsapp", label: "WhatsApp", icon: <MessageCircle className="w-4 h-4" /> },
+    { key: "website", label: "Sitio web", icon: <Globe className="w-4 h-4" /> },
+  ];
 
   return (
     <div className="min-h-screen bg-slate-50 relative overflow-hidden py-10 px-4 sm:px-6 lg:px-8">
@@ -138,6 +176,8 @@ export default function PublicProfileView({
                     {getFlagForNationality(teacher.nationality)} {teacher.nationality}
                   </p>
                 )}
+                
+                {/* ─── Calificación, Idiomas y Redes Sociales ─── */}
                 <div className="flex items-center gap-3 flex-wrap pt-2">
                   <div className="flex items-center gap-2 bg-white/15 backdrop-blur-md px-3.5 py-1.5 rounded-full shadow-inner">
                     <Star className="w-4 h-4 text-amber-300 fill-amber-300" />
@@ -150,6 +190,26 @@ export default function PublicProfileView({
                       {l}
                     </span>
                   ))}
+
+                  {/* Redes sociales trasladadas al banner principal */}
+                  {socialButtons.map((s) => {
+                    const raw = teacher.social_links?.[s.key];
+                    if (!raw) return null;
+                    const href = getSocialHref(s.key, raw);
+                    if (!href) return null;
+                    return (
+                      <a
+                        key={s.key}
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={s.label}
+                        className="flex items-center justify-center w-8 h-8 rounded-full bg-white/15 backdrop-blur-md text-white shadow-inner hover:bg-white/25 hover:-translate-y-0.5 transition-all"
+                      >
+                        {s.icon}
+                      </a>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -299,17 +359,6 @@ export default function PublicProfileView({
                   ))}
                 </div>
               </div>
-            )}
-
-            {teacher.social_links?.website && (
-              <button
-                type="button"
-                onClick={() => openLink(teacher.social_links!.website)}
-                className="w-full flex items-center justify-center gap-2 bg-white/80 backdrop-blur-xl border border-white shadow-lg rounded-2xl px-5 py-3.5 text-sm font-bold text-slate-600 hover:-translate-y-0.5 transition-all"
-              >
-                <Globe className="w-4 h-4" style={{ color: accent }} />
-                Sitio web
-              </button>
             )}
           </div>
 

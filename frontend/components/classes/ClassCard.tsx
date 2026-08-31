@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { User, Video, X, Clock, RotateCcw, Check, AlertCircle, Phone, Users2, ChevronDown } from "lucide-react";
+import { User, Video, X, Clock, RotateCcw, Check, AlertCircle, Phone, Users2, ChevronDown, MessageCircle } from "lucide-react";
 import api from "@/lib/api";
 import { getFlagForNationality } from "@/lib/nationalities";
 import { formatTimeTz, formatWeekdayShortTz, formatMonthShortTz, getDayOfMonthTz, getMyDisplayTimezone } from "@/lib/tzFormat";
@@ -143,6 +143,13 @@ function getTimezoneDiffLabel(otherTz?: string | null, myTz?: string | null): st
   const sign = diffHours > 0 ? "+" : "";
   const rounded = Math.abs(diffHours % 1) < 0.01 ? diffHours.toFixed(0) : diffHours.toFixed(1);
   return `${sign}${rounded}h respecto a ti`;
+}
+
+/** Construye el link de wa.me a partir de un teléfono, quitando todo lo que no sea dígito. */
+function getWhatsAppLink(phone?: string | null): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  return digits ? `https://wa.me/${digits}` : null;
 }
 
 export default function ClassCard({
@@ -514,10 +521,26 @@ export default function ClassCard({
               )}
 
               {personPhone && (
-                <span className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-lg font-bold">
-                  <Phone className="w-3.5 h-3.5 text-emerald-500" />
-                  {personPhone}
-                </span>
+                <>
+                  {getWhatsAppLink(personPhone) ? (
+                    <a
+                      href={getWhatsAppLink(personPhone)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Abrir WhatsApp"
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 px-2.5 py-1 rounded-lg font-bold transition-colors cursor-pointer group/wa"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 text-emerald-600 group-hover/wa:scale-110 transition-transform" />
+                      <span>{personPhone}</span>
+                    </a>
+                  ) : (
+                    <span className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-lg font-bold">
+                      <Phone className="w-3.5 h-3.5 text-emerald-500" />
+                      {personPhone}
+                    </span>
+                  )}
+                </>
               )}
             </div>
 
