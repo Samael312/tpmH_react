@@ -3,10 +3,22 @@
 // En vez de construir 13 pantallas separadas (una por endpoint), cada
 // acción se describe acá como datos: qué campos pide, de qué tipo son,
 // a qué endpoint y método pega. `GodModeActionRunner` lee este registro
-// y arma el formulario dinámicamente. Agregar una acción nueva a futuro
+// y arma el formulario dinámicamente, en el orden exacto del array
+// `fields` (importa el orden: un selector que depende de otro campo debe
+// aparecer después de él en el array). Agregar una acción nueva a futuro
 // es agregar una entrada acá, no construir un componente nuevo.
 
-export type GodModeFieldType = "number" | "text" | "textarea" | "select" | "checkbox" | "datetime";
+export type GodModeFieldType =
+  | "number" | "text" | "textarea" | "select" | "checkbox" | "datetime"
+  // ── Campos "inteligentes": en vez de escribir un ID a mano, consultan
+  // la base de datos y arman un selector dependiente de otros campos ya
+  // elegidos en el mismo formulario (profesor → alumno → enrollment/clase).
+  | "teacher-select"
+  | "student-select"      // depende de teacher_id
+  | "enrollment-select"   // depende de teacher_id + student_id
+  | "class-select"        // depende de teacher_id + student_id
+  | "subject-display"     // depende de enrollment_id — autocompleta desde el paquete, editable si no hay enrollment
+  | "availability-picker"; // depende de teacher_id (+ duration_minutes del mismo form) — abre el modal de disponibilidad real
 
 export interface GodModeField {
   name: string;
@@ -18,6 +30,18 @@ export interface GodModeField {
   options?: { value: string; label: string }[];
   /** Solo para type="number": si no se envía, el campo se omite del body (ajuste parcial) */
   optionalNumber?: boolean;
+  /** Nombres de otros campos del mismo formulario de los que depende este selector */
+  dependsOn?: string[];
+  /** true = el valor va en la URL (buildUrl lo lee de v[name]); false/undefined = va en el body */
+  isPathParam?: boolean;
+  /**
+   * Si es true, este campo se muestra en el formulario para ayudar a
+   * filtrar otro selector en cascada (ej: teacher_id/student_id como
+   * ayuda para elegir class_id) pero NO se envía en el body/URL del
+   * request — el campo del que realmente depende el backend ya lo
+   * identifica todo (ej: class_id).
+   */
+  excludeFromPayload?: boolean;
 }
 
 export interface GodModeAction {
@@ -26,10 +50,10 @@ export interface GodModeAction {
   description: string;
   category: "Créditos y Paquetes" | "Cohortes" | "Clases" | "Pagos" | "Alumnos";
   method: "patch" | "post" | "delete";
-  /** Construye la URL a partir de los valores de pathParams */
+  /** Construye la URL a partir de los valores de los campos marcados isPathParam */
   buildUrl: (v: Record<string, string>) => string;
-  pathParams: GodModeField[];
-  bodyFields: GodModeField[];
+  /** Todos los campos del formulario, en el orden en que deben renderizarse */
+  fields: GodModeField[];
   destructive?: boolean;
 }
 
@@ -62,8 +86,8 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     category: "Créditos y Paquetes",
     method: "patch",
     buildUrl: v => `/god-mode/enrollments/${v.enrollment_id}/adjust`,
-    pathParams: [{ name: "enrollment_id", label: "ID del enrollment", type: "number", required: true }],
-    bodyFields: [
+    fields: [
+      { name: "enrollment_id", label: "ID del enrollment", type: "number", required: true, isPathParam: true },
       { name: "unlocked_credits", label: "Créditos disponibles", type: "number", optionalNumber: true },
       { name: "classes_used", label: "Clases usadas", type: "number", optionalNumber: true },
       { name: "classes_total", label: "Clases totales del paquete", type: "number", optionalNumber: true },
@@ -82,8 +106,8 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     category: "Créditos y Paquetes",
     method: "post",
     buildUrl: v => `/god-mode/enrollments/${v.enrollment_id}/change-package`,
-    pathParams: [{ name: "enrollment_id", label: "ID del enrollment", type: "number", required: true }],
-    bodyFields: [
+    fields: [
+      { name: "enrollment_id", label: "ID del enrollment", type: "number", required: true, isPathParam: true },
       { name: "new_package_id", label: "ID del paquete nuevo", type: "number", required: true },
       { name: "reset_classes_used", label: "Reiniciar clases usadas a 0", type: "checkbox" },
     ],
@@ -96,8 +120,8 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     category: "Cohortes",
     method: "post",
     buildUrl: v => `/god-mode/enrollments/${v.enrollment_id}/move-cohort`,
-    pathParams: [{ name: "enrollment_id", label: "ID del enrollment", type: "number", required: true }],
-    bodyFields: [
+    fields: [
+      { name: "enrollment_id", label: "ID del enrollment", type: "number", required: true, isPathParam: true },
       { name: "new_cohort_id", label: "ID de la cohorte destino (vacío = individual)", type: "number", optionalNumber: true },
       { name: "force", label: "Forzar aunque no haya cupo", type: "checkbox" },
       { name: "reset_classes_used", label: "Reiniciar clases usadas a 0", type: "checkbox" },
@@ -110,8 +134,8 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     category: "Cohortes",
     method: "patch",
     buildUrl: v => `/god-mode/cohorts/${v.cohort_id}`,
-    pathParams: [{ name: "cohort_id", label: "ID de la cohorte", type: "number", required: true }],
-    bodyFields: [
+    fields: [
+      { name: "cohort_id", label: "ID de la cohorte", type: "number", required: true, isPathParam: true },
       { name: "min_students", label: "Mínimo de alumnos", type: "number", optionalNumber: true },
       { name: "max_students", label: "Máximo de alumnos", type: "number", optionalNumber: true },
       { name: "start_date", label: "Fecha de inicio", type: "datetime" },
@@ -124,8 +148,8 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     category: "Cohortes",
     method: "post",
     buildUrl: v => `/god-mode/cohorts/${v.cohort_id}/reopen`,
-    pathParams: [{ name: "cohort_id", label: "ID de la cohorte", type: "number", required: true }],
-    bodyFields: [
+    fields: [
+      { name: "cohort_id", label: "ID de la cohorte", type: "number", required: true, isPathParam: true },
       { name: "new_status", label: "Nuevo estado", type: "select", options: [
         { value: "filling", label: "filling (vuelve a aceptar inscripciones)" },
         { value: "confirmed", label: "confirmed (fecha ya fija)" },
@@ -140,17 +164,16 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     category: "Clases",
     method: "post",
     buildUrl: () => `/god-mode/classes`,
-    pathParams: [],
-    bodyFields: [
-      { name: "teacher_id", label: "ID del profesor", type: "number", required: true },
-      { name: "student_id", label: "ID del alumno", type: "number", required: true },
-      { name: "start_time_utc", label: "Fecha y hora (UTC)", type: "datetime", required: true },
-      { name: "duration_minutes", label: "Duración (minutos)", type: "number", required: true },
+    fields: [
+      { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true },
+      { name: "student_id", label: "Alumno", type: "student-select", required: true, dependsOn: ["teacher_id"] },
+      { name: "enrollment_id", label: "Enrollment (opcional)", type: "enrollment-select", dependsOn: ["teacher_id", "student_id"] },
+      { name: "subject", label: "Materia / idioma", type: "subject-display", dependsOn: ["enrollment_id"] },
       { name: "class_type", label: "Tipo", type: "select", options: [
         { value: "regular", label: "regular" }, { value: "trial", label: "trial" },
       ] },
-      { name: "subject", label: "Materia (opcional)", type: "text" },
-      { name: "enrollment_id", label: "ID del enrollment (opcional)", type: "number", optionalNumber: true },
+      { name: "duration_minutes", label: "Duración (minutos)", type: "number", required: true },
+      { name: "start_time_utc", label: "Fecha y hora", type: "availability-picker", required: true, dependsOn: ["teacher_id", "duration_minutes", "class_type"] },
       { name: "status", label: "Estado inicial", type: "select", options: STATUS_CLASS_OPTIONS },
       { name: "notes", label: "Notas (opcional)", type: "text" },
       { name: "skip_conflict_check", label: "Saltar chequeo de choque de horario", type: "checkbox" },
@@ -163,10 +186,12 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     category: "Clases",
     method: "patch",
     buildUrl: v => `/god-mode/classes/${v.class_id}/reschedule`,
-    pathParams: [{ name: "class_id", label: "ID de la clase", type: "number", required: true }],
-    bodyFields: [
-      { name: "start_time_utc", label: "Nueva fecha y hora (UTC)", type: "datetime", required: true },
-      { name: "duration_minutes", label: "Nueva duración (opcional)", type: "number", optionalNumber: true },
+    fields: [
+      { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true, excludeFromPayload: true },
+      { name: "student_id", label: "Alumno", type: "student-select", required: true, dependsOn: ["teacher_id"], excludeFromPayload: true },
+      { name: "class_id", label: "Clase", type: "class-select", required: true, dependsOn: ["teacher_id", "student_id"], isPathParam: true },
+      { name: "duration_minutes", label: "Nueva duración (opcional, minutos)", type: "number", optionalNumber: true },
+      { name: "start_time_utc", label: "Nueva fecha y hora", type: "availability-picker", required: true, dependsOn: ["teacher_id", "duration_minutes"] },
       { name: "skip_conflict_check", label: "Saltar chequeo de choque de horario", type: "checkbox" },
     ],
   },
@@ -177,8 +202,10 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     category: "Clases",
     method: "patch",
     buildUrl: v => `/god-mode/classes/${v.class_id}/force-status`,
-    pathParams: [{ name: "class_id", label: "ID de la clase", type: "number", required: true }],
-    bodyFields: [
+    fields: [
+      { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true, excludeFromPayload: true },
+      { name: "student_id", label: "Alumno", type: "student-select", required: true, dependsOn: ["teacher_id"], excludeFromPayload: true },
+      { name: "class_id", label: "Clase", type: "class-select", required: true, dependsOn: ["teacher_id", "student_id"], isPathParam: true },
       { name: "status", label: "Nuevo estado", type: "select", required: true, options: STATUS_CLASS_OPTIONS },
       { name: "notes", label: "Notas (opcional)", type: "text" },
     ],
@@ -190,8 +217,11 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     category: "Clases",
     method: "delete",
     buildUrl: v => `/god-mode/classes/${v.class_id}`,
-    pathParams: [{ name: "class_id", label: "ID de la clase", type: "number", required: true }],
-    bodyFields: [],
+    fields: [
+      { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true, excludeFromPayload: true },
+      { name: "student_id", label: "Alumno", type: "student-select", required: true, dependsOn: ["teacher_id"], excludeFromPayload: true },
+      { name: "class_id", label: "Clase", type: "class-select", required: true, dependsOn: ["teacher_id", "student_id"], isPathParam: true },
+    ],
     destructive: true,
   },
   // ── Pagos ─────────────────────────────────────────────────────────
@@ -202,8 +232,8 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     category: "Pagos",
     method: "patch",
     buildUrl: v => `/god-mode/payments/${v.payment_id}`,
-    pathParams: [{ name: "payment_id", label: "ID del pago", type: "number", required: true }],
-    bodyFields: [
+    fields: [
+      { name: "payment_id", label: "ID del pago", type: "number", required: true, isPathParam: true },
       { name: "amount_total", label: "Monto total corregido", type: "number", optionalNumber: true },
       { name: "status", label: "Nuevo estado", type: "select", options: STATUS_PAYMENT_OPTIONS },
       { name: "rejection_reason", label: "Motivo de rechazo (si aplica)", type: "text" },
@@ -218,8 +248,8 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     category: "Alumnos",
     method: "post",
     buildUrl: v => `/god-mode/students/${v.student_id}/transfer-teacher`,
-    pathParams: [{ name: "student_id", label: "ID del alumno", type: "number", required: true }],
-    bodyFields: [
+    fields: [
+      { name: "student_id", label: "ID del alumno", type: "number", required: true, isPathParam: true },
       { name: "from_teacher_id", label: "ID del profesor actual", type: "number", required: true },
       { name: "to_teacher_id", label: "ID del profesor destino", type: "number", required: true },
       { name: "remove_old_link", label: "Eliminar vínculo con el profesor actual", type: "checkbox" },

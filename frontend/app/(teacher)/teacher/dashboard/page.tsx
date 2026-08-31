@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useTeacherClasses, useWallet, useTeacherProfile, type TeacherClass } from '@/hooks/useTeacherData'
 import ClassCard from '@/components/classes/ClassCard'
 import { RescheduleModal } from '@/components/classes/RescheduleModal'
@@ -15,6 +15,7 @@ import {
   Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   X,
   AlertTriangle,
   MessageSquare,
@@ -22,6 +23,7 @@ import {
   Loader2,
   Check,
   RefreshCw,
+  Users,
 } from 'lucide-react'
 import api from '@/lib/api'
 
@@ -136,6 +138,106 @@ function DatePickerCalendar({
           )
         })}
       </div>
+    </div>
+  )
+}
+
+function StudentFilterDropdown({
+  options,
+  value,
+  onChange,
+}: {
+  options: { name: string; avatar?: string | null }[]
+  value: string
+  onChange: (v: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const selected = value !== 'all' ? options.find(o => o.name === value) : null
+
+  return (
+    <div ref={ref} className="relative w-full sm:w-72">
+      <button
+        onClick={() => setOpen(p => !p)}
+        className={`w-full flex items-center gap-2.5 bg-white border-2 rounded-2xl px-4 py-3 text-left shadow-sm transition-all duration-200 ${
+          open
+            ? 'border-pink-400 ring-4 ring-pink-50'
+            : 'border-slate-100 hover:border-pink-200'
+        }`}
+      >
+        {selected ? (
+          selected.avatar ? (
+            <img src={selected.avatar} alt={selected.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 shadow-sm" />
+          ) : (
+            <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-pink-500 to-rose-400 text-white text-[11px] font-black shadow-sm">
+              {selected.name[0]?.toUpperCase()}
+            </div>
+          )
+        ) : (
+          <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 bg-pink-50 text-pink-400">
+            <Users className="w-3.5 h-3.5" />
+          </div>
+        )}
+        <span className={`flex-1 text-sm font-bold truncate ${selected ? 'text-slate-800' : 'text-slate-400'}`}>
+          {selected ? selected.name : 'Todos los estudiantes'}
+        </span>
+        <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180 text-pink-500' : 'text-slate-400'}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 bg-white rounded-2xl shadow-2xl shadow-slate-300/50 border border-slate-100 p-2 max-h-72 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-150">
+          <button
+            onClick={() => { onChange('all'); setOpen(false) }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors duration-150 ${
+              value === 'all'
+                ? 'bg-gradient-to-br from-pink-500 to-rose-400 text-white shadow-md'
+                : 'text-slate-600 hover:bg-pink-50 hover:text-pink-600'
+            }`}
+          >
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${value === 'all' ? 'bg-white/20' : 'bg-slate-100'}`}>
+              <Users className={`w-3.5 h-3.5 ${value === 'all' ? 'text-white' : 'text-slate-400'}`} />
+            </div>
+            Todos los estudiantes
+          </button>
+
+          {options.length > 0 && <div className="h-px bg-slate-100 my-1.5 mx-1" />}
+
+          {options.map(o => {
+            const isSelected = value === o.name
+            return (
+              <button
+                key={o.name}
+                onClick={() => { onChange(o.name); setOpen(false) }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors duration-150 ${
+                  isSelected
+                    ? 'bg-gradient-to-br from-pink-500 to-rose-400 text-white shadow-md'
+                    : 'text-slate-600 hover:bg-pink-50 hover:text-pink-600'
+                }`}
+              >
+                {o.avatar ? (
+                  <img src={o.avatar} alt={o.name} className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-black ${
+                    isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    {o.name[0]?.toUpperCase()}
+                  </div>
+                )}
+                <span className="truncate">{o.name}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -294,6 +396,7 @@ export default function TeacherDashboard() {
   const [showCalendar, setShowCalendar] = useState(false)
   const [tab, setTab] = useState<'upcoming' | 'history'>('upcoming')
   const [rescheduleTarget, setRescheduleTarget] = useState<TeacherClass | null>(null)
+  const [studentFilter, setStudentFilter] = useState<string>('all')
 
   const { classes, loading, isFetching, isError, refetch } = useTeacherClasses({ includeHistory: true })
   const { wallet, isFetching: walletFetching, refetch: refetchWallet } = useWallet()
@@ -329,6 +432,23 @@ export default function TeacherDashboard() {
       .sort((a, b) => new Date(b.start_time_utc).getTime() - new Date(a.start_time_utc).getTime())
   }, [safeClasses])
 
+  // Estudiantes únicos (nombre y avatar) para el selector de filtrado
+  const studentOptions = useMemo(() => {
+    const map = new Map<string, { name: string; avatar?: string | null }>()
+    safeClasses.forEach(c => {
+      const name = c.student_name?.trim()
+      if (name && !map.has(name)) {
+        map.set(name, { name, avatar: c.student_avatar })
+      }
+    })
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'))
+  }, [safeClasses])
+
+  const filterByStudent = useMemo(() => {
+    return (list: TeacherClass[]) =>
+      studentFilter === 'all' ? list : list.filter(c => c.student_name === studentFilter)
+  }, [studentFilter])
+
   const todayUpcoming = useMemo(
     () => upcomingAll.filter(c => c.start_time_utc.slice(0, 10) === todayStr),
     [upcomingAll, todayStr]
@@ -340,9 +460,16 @@ export default function TeacherDashboard() {
   )
 
   const selectedDateClasses = useMemo(() => {
-    if (!selectedDate) return upcomingAll
-    return upcomingAll.filter(c => c.start_time_utc.slice(0, 10) === selectedDate)
-  }, [upcomingAll, selectedDate])
+    const base = !selectedDate
+      ? upcomingAll
+      : upcomingAll.filter(c => c.start_time_utc.slice(0, 10) === selectedDate)
+    return filterByStudent(base)
+  }, [upcomingAll, selectedDate, filterByStudent])
+
+  const historyListFiltered = useMemo(
+    () => filterByStudent(historyList),
+    [historyList, filterByStudent]
+  )
 
   const availableBalance = wallet?.available_balance || 0
   const totalEarned = wallet?.total_earned || 0
@@ -538,27 +665,56 @@ export default function TeacherDashboard() {
 
         {/* Tabs y lista */}
         <div className="animate-fade-up animate-fade-up-delay-3">
-          <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-            <div className="flex gap-1 bg-slate-100/80 border border-slate-200/60 rounded-xl p-1.5 shadow-inner">
-              {[
-                { key: 'upcoming', label: 'Próximas' },
-                { key: 'history', label: 'Historial' },
-              ].map(t => (
-                <button
-                  key={t.key}
-                  onClick={() => setTab(t.key as any)}
-                  className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ${
-                    tab === t.key
-                      ? 'bg-white text-pink-600 shadow-sm border border-slate-100'
-                      : 'text-slate-500 hover:text-pink-500 hover:bg-white/50'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between mb-6 gap-4">
+            
+            {/* Contenedor Izquierdo: Pestañas + Selector de Estudiantes agrupados */}
+            <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+              
+              <div className="flex gap-1 bg-slate-100/80 border border-slate-200/60 rounded-xl p-1.5 shadow-inner">
+                {[
+                  { key: 'upcoming', label: 'Próximas' },
+                  { key: 'history', label: 'Historial' },
+                ].map(t => (
+                  <button
+                    key={t.key}
+                    onClick={() => setTab(t.key as any)}
+                    className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ${
+                      tab === t.key
+                        ? 'bg-white text-pink-600 shadow-sm border border-slate-100'
+                        : 'text-slate-500 hover:text-pink-500 hover:bg-white/50'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Selector de filtrado por estudiante: Esqueleto de carga o Selector real */}
+              {loading ? (
+                <Skeleton className="h-[52px] w-full sm:w-72 rounded-2xl" />
+              ) : studentOptions.length > 0 ? (
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <StudentFilterDropdown
+                    options={studentOptions}
+                    value={studentFilter}
+                    onChange={setStudentFilter}
+                  />
+                  {studentFilter !== 'all' && (
+                    <button
+                      onClick={() => setStudentFilter('all')}
+                      className="flex items-center gap-1 text-xs font-bold text-pink-500 hover:text-pink-600 bg-pink-50 hover:bg-pink-100 px-3 py-2 rounded-xl transition-colors flex-shrink-0"
+                    >
+                      <X className="w-3.5 h-3.5" /> Quitar filtro
+                    </button>
+                  )}
+                </div>
+              ) : null}
             </div>
 
-            {tab === 'upcoming' ? (
+            {/* Contenedor Derecho: Contador de estado (con esqueleto) */}
+            {loading ? (
+              <Skeleton className="h-8 w-36 rounded-full" />
+            ) : tab === 'upcoming' ? (
               <p className="text-sm font-medium text-slate-500 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
                 {selectedDate
                   ? `${selectedDateClasses.length} clase${selectedDateClasses.length !== 1 ? 's' : ''}`
@@ -566,7 +722,7 @@ export default function TeacherDashboard() {
               </p>
             ) : (
               <p className="text-sm font-medium text-slate-500 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
-                {historyList.length} en el historial
+                {historyListFiltered.length} en el historial
               </p>
             )}
           </div>
@@ -582,9 +738,11 @@ export default function TeacherDashboard() {
               <Card className="py-20 text-center bg-slate-50/50 border-dashed border-2 border-slate-200 rounded-3xl shadow-none">
                 <div className="text-5xl mb-4 drop-shadow-sm">🌸</div>
                 <p className="text-slate-500 font-medium text-lg">
-                  {selectedDate
-                    ? '¡Día libre! No tienes clases programadas ese día.'
-                    : '¡Sin clases próximas por ahora!'}
+                  {studentFilter !== 'all'
+                    ? 'No hay clases próximas con este estudiante.'
+                    : selectedDate
+                      ? '¡Día libre! No tienes clases programadas ese día.'
+                      : '¡Sin clases próximas por ahora!'}
                 </p>
               </Card>
             ) : (
@@ -601,16 +759,18 @@ export default function TeacherDashboard() {
               </div>
             )
           ) : (
-            historyList.length === 0 ? (
+            historyListFiltered.length === 0 ? (
               <Card className="py-20 text-center bg-slate-50/50 border-dashed border-2 border-slate-200 rounded-3xl shadow-none">
                 <div className="text-5xl mb-4 drop-shadow-sm">📋</div>
                 <p className="text-slate-500 font-medium text-lg">
-                  Aún no hay historial de clases.
+                  {studentFilter !== 'all'
+                    ? 'No hay clases en el historial con este estudiante.'
+                    : 'Aún no hay historial de clases.'}
                 </p>
               </Card>
             ) : (
               <div className="space-y-4">
-                {historyList.map(c => (
+                {historyListFiltered.map(c => (
                   <ClassCard
                     key={c.id}
                     class_={c}

@@ -1192,3 +1192,138 @@ def god_mode_transfer_student(
         "enrollments_transferred": len(enrollments),
         "future_classes_transferred": len(future_classes),
     }
+
+
+# ─── LOOKUP (selectores inteligentes del panel de Modo Dios) ──────────────
+#
+# Endpoints de solo lectura para que el frontend arme selectores en
+# cascada (profesor → alumno → enrollment/clase) en vez de pedir IDs a
+# mano, que es una fuente constante de errores humanos.
+
+@router.get("/lookup/teachers")
+def god_mode_lookup_teachers(
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    superadmin: todos los profesores aprobados.
+    teacher_admin: solo él mismo (coherente con el scope del resto del
+    Modo Dios: un teacher_admin únicamente crea/gestiona sobre sí mismo
+    como profesor).
+    """
+    query = db.query(TeacherProfile).filter(TeacherProfile.status == "approved")
+    if current_user.role == UserRole.teacher_admin:
+        query = query.filter(TeacherProfile.id == current_user.teacher_profile.id) if current_user.teacher_profile else query.filter(False)
+
+    teachers = query.order_by(TeacherProfile.user_username).all()
+    return [
+        {
+            "id": t.id,
+            "username": t.user_username,
+            "name": f"{t.user.name} {t.user.surname}" if t.user else t.user_username,
+            "subjects": t.subjects or [],
+        }
+        for t in teachers
+    ]
+
+
+@router.get("/lookup/teachers/{teacher_id}/students")
+def god_mode_lookup_teacher_students(
+    teacher_id: int,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == teacher_id).first()
+    if not teacher:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesor no encontrado")
+
+    if current_user.role == UserRole.teacher_admin:
+        teacher_profile = current_user.teacher_profile
+        if not teacher_profile or teacher_id != teacher_profile.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Como teacher_admin solo puedes ver tus propios alumnos.")
+
+    links = db.query(StudentTeacherLink).filter(StudentTeacherLink.teacher_id == teacher_id).all()
+    result = []
+    for link in links:
+        sp = link.student
+        if not sp or not sp.user:
+            continue
+        result.append({
+            "id": sp.id,
+            "name": f"{sp.user.name} {sp.user.surname}",
+            "username": sp.user_username,
+        })
+    result.sort(key=lambda s: s["name"])
+    return result
+
+
+@router.get("/lookup/students/{student_id}/enrollments")
+def god_mode_lookup_student_enrollments(
+    student_id: int,
+    teacher_id: Optional[int] = Query(None, description="Filtra solo enrollments con este profesor"),
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    student = db.query(StudentProfile).filter(StudentProfile.id == student_id).first()
+    if not student:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Estudiante no encontrado")
+
+    query = db.query(Enrollment).filter(Enrollment.student_id == student_id)
+    if teacher_id is not None:
+        query = query.filter(Enrollment.teacher_id == teacher_id)
+
+    if current_user.role == UserRole.teacher_admin:
+        teacher_profile = current_user.teacher_profile
+        if not teacher_profile:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "No tienes perfil de profesor.")
+        query = query.filter(Enrollment.teacher_id == teacher_profile.id)
+
+    enrollments = query.order_by(Enrollment.created_at.desc()).all()
+    return [
+        {
+            "id": e.id,
+            "package_name": e.package.name if e.package else "N/A",
+            "subject": e.package.subject if e.package else None,
+            "teacher_id": e.teacher_id,
+            "classes_used": e.classes_used,
+            "classes_total": e.classes_total,
+            "status": e.status.value if hasattr(e.status, "value") else e.status,
+            "is_group": bool(e.cohort_id),
+        }
+        for e in enrollments
+    ]
+
+
+@router.get("/lookup/teachers/{teacher_id}/students/{student_id}/classes")
+def god_mode_lookup_pair_classes(
+    teacher_id: int,
+    student_id: int,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    Clases existentes entre un profesor y un alumno puntuales — para
+    elegir cuál reagendar / forzar estado / eliminar sin escribir el ID
+    de la clase a mano. Ordenadas de más próxima a más lejana.
+    """
+    if current_user.role == UserRole.teacher_admin:
+        teacher_profile = current_user.teacher_profile
+        if not teacher_profile or teacher_id != teacher_profile.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Como teacher_admin solo puedes ver tus propias clases.")
+
+    classes = db.query(Class).filter(
+        Class.teacher_id == teacher_id,
+        Class.student_id == student_id,
+    ).order_by(Class.start_time_utc.desc()).limit(100).all()
+
+    return [
+        {
+            "id": c.id,
+            "subject": c.subject,
+            "start_time_utc": c.start_time_utc.isoformat() if c.start_time_utc else None,
+            "duration": c.duration,
+            "status": c.status,
+            "class_type": c.class_type.value if hasattr(c.class_type, "value") else c.class_type,
+        }
+        for c in classes
+    ]

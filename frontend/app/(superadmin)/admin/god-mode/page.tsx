@@ -43,34 +43,36 @@ export default function GodModePage() {
           : "Como teacher_admin, estas acciones solo aplican sobre tus propios alumnos y cohortes."}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
-        {/* Selector de categoría / acción */}
-        <div className="space-y-4">
-          <div className="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible pb-1">
-            {GOD_MODE_CATEGORIES.map(cat => (
-              <button
-                key={cat}
-                onClick={() => { setCategory(cat); setSelectedAction(null); }}
-                className={`flex-shrink-0 text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-colors whitespace-nowrap
-                  ${category === cat ? "bg-pink-500 text-white shadow-md shadow-pink-200" : "bg-white text-slate-500 border border-slate-100 hover:border-pink-200"}`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+      {/* Categorías: fila horizontal arriba, separadas visualmente de las acciones */}
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {GOD_MODE_CATEGORIES.map(cat => (
+          <button
+            key={cat}
+            onClick={() => { setCategory(cat); setSelectedAction(null); }}
+            className={`flex-shrink-0 px-4 py-2.5 rounded-full text-xs font-black uppercase tracking-wide transition-colors whitespace-nowrap
+              ${category === cat ? "bg-pink-500 text-white shadow-md shadow-pink-200" : "bg-white text-slate-500 border border-slate-200 hover:border-pink-200"}`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
 
-          <div className="space-y-1.5">
-            {actionsInCategory.map(action => (
-              <button
-                key={action.id}
-                onClick={() => setSelectedAction(action)}
-                className={`w-full text-left px-4 py-3 rounded-xl text-xs font-semibold transition-colors
-                  ${selectedAction?.id === action.id ? "bg-slate-800 text-white" : "bg-white text-slate-600 border border-slate-100 hover:border-pink-200"}`}
-              >
-                {action.label}
-              </button>
-            ))}
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
+        {/* Lista de acciones de la categoría elegida — estilo de lista con borde,
+            deliberadamente distinto a las píldoras de categoría de arriba */}
+        <div className="space-y-1.5">
+          {actionsInCategory.map(action => (
+            <button
+              key={action.id}
+              onClick={() => setSelectedAction(action)}
+              className={`w-full text-left px-4 py-3 rounded-xl text-xs font-semibold transition-colors border-l-[3px]
+                ${selectedAction?.id === action.id
+                  ? "bg-slate-800 text-white border-l-pink-400"
+                  : "bg-white text-slate-600 border-l-transparent border border-slate-100 hover:border-l-pink-300 hover:bg-pink-50/40"}`}
+            >
+              {action.label}
+            </button>
+          ))}
         </div>
 
         {/* Formulario de la acción seleccionada */}

@@ -61,6 +61,91 @@ export function useGodModeEntityHistory(entityType: string, entityId: number | u
   };
 }
 
+// ─── Lookup: selectores en cascada (profesor → alumno → enrollment/clase) ──
+// Reemplazan los inputs de ID escritos a mano en el panel de Modo Dios.
+
+export interface GodModeLookupTeacher {
+  id: number;
+  username: string;
+  name: string;
+  subjects: string[];
+}
+
+export interface GodModeLookupStudent {
+  id: number;
+  name: string;
+  username: string;
+}
+
+export interface GodModeLookupEnrollment {
+  id: number;
+  package_name: string;
+  subject: string | null;
+  teacher_id: number;
+  classes_used: number;
+  classes_total: number | null;
+  status: string;
+  is_group: boolean;
+}
+
+export interface GodModeLookupClass {
+  id: number;
+  subject: string | null;
+  start_time_utc: string;
+  duration: number;
+  status: string;
+  class_type: string;
+}
+
+export function useGodModeTeachers() {
+  const query = useQuery({
+    queryKey: ["god-mode", "lookup", "teachers"],
+    queryFn: async () => {
+      const res = await api.get("/god-mode/lookup/teachers");
+      return res.data as GodModeLookupTeacher[];
+    },
+  });
+  return { teachers: query.data ?? [], loading: query.isLoading };
+}
+
+export function useGodModeTeacherStudents(teacherId: number | undefined) {
+  const query = useQuery({
+    queryKey: ["god-mode", "lookup", "teacher-students", teacherId],
+    queryFn: async () => {
+      const res = await api.get(`/god-mode/lookup/teachers/${teacherId}/students`);
+      return res.data as GodModeLookupStudent[];
+    },
+    enabled: !!teacherId,
+  });
+  return { students: query.data ?? [], loading: query.isLoading };
+}
+
+export function useGodModeStudentEnrollments(studentId: number | undefined, teacherId: number | undefined) {
+  const query = useQuery({
+    queryKey: ["god-mode", "lookup", "student-enrollments", studentId, teacherId],
+    queryFn: async () => {
+      const res = await api.get(`/god-mode/lookup/students/${studentId}/enrollments`, {
+        params: teacherId ? { teacher_id: teacherId } : undefined,
+      });
+      return res.data as GodModeLookupEnrollment[];
+    },
+    enabled: !!studentId,
+  });
+  return { enrollments: query.data ?? [], loading: query.isLoading };
+}
+
+export function useGodModePairClasses(teacherId: number | undefined, studentId: number | undefined) {
+  const query = useQuery({
+    queryKey: ["god-mode", "lookup", "pair-classes", teacherId, studentId],
+    queryFn: async () => {
+      const res = await api.get(`/god-mode/lookup/teachers/${teacherId}/students/${studentId}/classes`);
+      return res.data as GodModeLookupClass[];
+    },
+    enabled: !!teacherId && !!studentId,
+  });
+  return { classes: query.data ?? [], loading: query.isLoading };
+}
+
 // ─── Ejecutar una acción del Modo Dios ─────────────────────────────────────
 // Un único mutator genérico: la URL/método/body vienen del registro de
 // acciones (lib/godModeActions.ts), no de 13 funciones distintas.
