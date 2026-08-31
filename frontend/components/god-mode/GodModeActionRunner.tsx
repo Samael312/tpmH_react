@@ -11,6 +11,9 @@ import {
   useGodModeStudentEnrollments,
   useGodModePairClasses,
   useGodModeClassDurations,
+  useGodModeTeacherPackages,
+  useGodModeTeacherCohorts,
+  useGodModePairPayments,
 } from "@/hooks/useGodMode";
 import { AvailableSlot } from "@/hooks/useStudentData";
 import { getMyDisplayTimezone, formatTimeTz } from "@/lib/tzFormat";
@@ -63,6 +66,9 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
   const { enrollments, loading: loadingEnrollments } = useGodModeStudentEnrollments(studentId, teacherId);
   const { classes, loading: loadingClasses } = useGodModePairClasses(teacherId, studentId);
   const { durations } = useGodModeClassDurations();
+  const { packages, loading: loadingPackages } = useGodModeTeacherPackages(teacherId);
+  const { cohorts, loading: loadingCohorts } = useGodModeTeacherCohorts(teacherId);
+  const { payments, loading: loadingPayments } = useGodModePairPayments(teacherId, studentId);
 
   const myTz = getMyDisplayTimezone();
 
@@ -113,23 +119,24 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
     }
 
     const pathValues: Record<string, string> = {};
-    action.fields.filter(f => f.isPathParam).forEach(f => { pathValues[f.name] = values[f.name] ?? ""; });
+    action.fields.filter(f => f.isPathParam).forEach(f => { pathValues[f.sendAs ?? f.name] = values[f.name] ?? ""; });
 
     const body: Record<string, unknown> = { reason: reason.trim() };
     action.fields.filter(f => !f.isPathParam && !f.excludeFromPayload).forEach(f => {
       const raw = values[f.name];
       if (raw === undefined || raw === "") return; // campo opcional sin valor: se omite (ajuste parcial en backend)
+      const key = f.sendAs ?? f.name;
 
-      if (["number", "enrollment-select", "class-select", "teacher-select", "student-select", "duration-select"].includes(f.type)) {
-        body[f.name] = Number(raw);
+      if (["number", "enrollment-select", "class-select", "teacher-select", "student-select", "duration-select", "package-select", "cohort-select", "payment-select"].includes(f.type)) {
+        body[key] = Number(raw);
       } else if (f.type === "checkbox" || f.type === "tri-bool-select") {
-        body[f.name] = raw === "true";
+        body[key] = raw === "true";
       } else if (f.type === "datetime") {
-        body[f.name] = new Date(raw).toISOString();
+        body[key] = new Date(raw).toISOString();
       } else if (f.type === "availability-picker") {
-        body[f.name] = raw; // ya viene en ISO UTC desde el picker
+        body[key] = raw; // ya viene en ISO UTC desde el picker
       } else {
-        body[f.name] = raw;
+        body[key] = raw;
       }
     });
 
@@ -153,12 +160,18 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
     const value = values[field.name] ?? "";
 
     switch (field.type) {
-      case "teacher-select":
+      case "teacher-select": {
+        // Solo el campo "teacher_id" dispara el reseteo en cascada
+        // (alumno/enrollment/clase dependen de él). Un segundo
+        // teacher-select con otro nombre (ej. "to_teacher_id" al
+        // transferir alumno) es independiente y no resetea nada.
+        const isPrimary = field.name === "teacher_id";
         return (
-          <SelectShell value={value} onChange={setTeacherId} placeholder="Elige un profesor">
+          <SelectShell value={value} onChange={isPrimary ? setTeacherId : (v => setValue(field.name, v))} placeholder="Elige un profesor">
             {teachers.map(t => <option key={t.id} value={t.id}>{t.name} (@{t.username})</option>)}
           </SelectShell>
         );
+      }
 
       case "student-select":
         return (
@@ -187,6 +200,42 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
             {classes.map(c => (
               <option key={c.id} value={c.id}>
                 #{c.id} · {new Date(c.start_time_utc).toLocaleString("es", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })} · {c.subject ?? "sin materia"} · {c.status}
+              </option>
+            ))}
+          </SelectShell>
+        );
+
+      case "package-select":
+        return (
+          <SelectShell value={value} onChange={v => setValue(field.name, v)} disabled={!teacherId} loading={loadingPackages}
+            placeholder={!teacherId ? "Elige un profesor primero" : "Elige el paquete"}>
+            {packages.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.name} · {p.subject} · {p.is_unlimited ? "ilimitado" : `${p.classes_count} clases`}
+              </option>
+            ))}
+          </SelectShell>
+        );
+
+      case "cohort-select":
+        return (
+          <SelectShell value={value} onChange={v => setValue(field.name, v)} disabled={!teacherId} loading={loadingCohorts}
+            placeholder={!teacherId ? "Elige un profesor primero" : "— sin cohorte (individual) —"}>
+            {cohorts.map(c => (
+              <option key={c.id} value={c.id}>
+                #{c.id} · {c.package_name} ({c.subject ?? "sin materia"}) · {c.current_students}/{c.max_students} · {c.status}
+              </option>
+            ))}
+          </SelectShell>
+        );
+
+      case "payment-select":
+        return (
+          <SelectShell value={value} onChange={v => setValue(field.name, v)} disabled={!studentId} loading={loadingPayments}
+            placeholder={!studentId ? "Elige profesor y alumno primero" : "Elige el pago"}>
+            {payments.map(p => (
+              <option key={p.id} value={p.id}>
+                #{p.id} · ${p.amount_total} · {p.payment_method} · {p.status} · {new Date(p.created_at).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" })}
               </option>
             ))}
           </SelectShell>
@@ -281,6 +330,32 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
         return (
           <div className="bg-pink-50/70 border border-pink-100 rounded-xl px-3 py-2.5 text-xs font-bold text-pink-700">
             {balance} · usadas {enr.classes_used}/{enr.classes_total ?? "∞"}
+          </div>
+        );
+      }
+
+      case "payment-info": {
+        const pay = payments.find(p => String(p.id) === values["payment_id"]);
+        if (!pay) return null;
+
+        const movesWallet = !pay.is_manual_grant && pay.payment_type !== "refund";
+        const newAmount = values["amount_total"];
+        const newStatus = values["status"];
+        const editingApprovedAmount = movesWallet && pay.status === "approved" && !!newAmount && Number(newAmount) !== pay.amount_total;
+        const togglingApproval = movesWallet && !!newStatus && newStatus !== pay.status && (pay.status === "approved" || newStatus === "approved");
+        const willMoveWallet = editingApprovedAmount || togglingApproval;
+
+        return (
+          <div className="space-y-1.5">
+            <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-600">
+              Actual: ${pay.amount_total} total · ${pay.amount_teacher} para el profesor · estado <span className="lowercase">{pay.status}</span>
+            </div>
+            {willMoveWallet && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs font-bold text-amber-700 flex items-start gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                Este cambio va a ajustar la billetera del profesor de inmediato (no solo el registro del pago).
+              </div>
+            )}
           </div>
         );
       }

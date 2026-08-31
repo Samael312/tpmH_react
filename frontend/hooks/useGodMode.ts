@@ -150,6 +150,72 @@ export function useGodModePairClasses(teacherId: number | undefined, studentId: 
   return { classes: query.data ?? [], loading: query.isLoading };
 }
 
+export interface GodModeLookupPackage {
+  id: number;
+  name: string;
+  subject: string;
+  classes_count: number | null;
+  price: number;
+  is_unlimited: boolean;
+}
+
+export function useGodModeTeacherPackages(teacherId: number | undefined) {
+  const query = useQuery({
+    queryKey: ["god-mode", "lookup", "teacher-packages", teacherId],
+    queryFn: async () => {
+      const res = await api.get(`/god-mode/lookup/teachers/${teacherId}/packages`);
+      return res.data as GodModeLookupPackage[];
+    },
+    enabled: !!teacherId,
+  });
+  return { packages: query.data ?? [], loading: query.isLoading };
+}
+
+export interface GodModeLookupCohort {
+  id: number;
+  package_name: string;
+  subject: string | null;
+  status: string;
+  current_students: number;
+  max_students: number;
+  start_date: string | null;
+}
+
+export function useGodModeTeacherCohorts(teacherId: number | undefined) {
+  const query = useQuery({
+    queryKey: ["god-mode", "lookup", "teacher-cohorts", teacherId],
+    queryFn: async () => {
+      const res = await api.get(`/god-mode/lookup/teachers/${teacherId}/cohorts`);
+      return res.data as GodModeLookupCohort[];
+    },
+    enabled: !!teacherId,
+  });
+  return { cohorts: query.data ?? [], loading: query.isLoading };
+}
+
+export interface GodModeLookupPayment {
+  id: number;
+  amount_total: number;
+  amount_teacher: number;
+  status: string;
+  payment_method: string;
+  payment_type: string | null;
+  is_manual_grant: boolean;
+  created_at: string;
+}
+
+export function useGodModePairPayments(teacherId: number | undefined, studentId: number | undefined) {
+  const query = useQuery({
+    queryKey: ["god-mode", "lookup", "pair-payments", teacherId, studentId],
+    queryFn: async () => {
+      const res = await api.get(`/god-mode/lookup/teachers/${teacherId}/students/${studentId}/payments`);
+      return res.data as GodModeLookupPayment[];
+    },
+    enabled: !!teacherId && !!studentId,
+  });
+  return { payments: query.data ?? [], loading: query.isLoading };
+}
+
 export interface GodModeClassDurations {
   allowed_class_durations: number[];
   trial_duration_minutes: number;

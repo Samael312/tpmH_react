@@ -40,7 +40,12 @@ from app.core.class_logic import (
 from app.models.payment import Payment, TeacherWallet
 from app.models.student_teacher_link import StudentTeacherLink
 from app.core.teacher_students import link_student_to_teacher
-from app.schemas.payments import GodModeEditPaymentRequest, GodModeEditPaymentResponse, PaymentResponse
+from app.schemas.payments import (
+    GodModeEditPaymentRequest,
+    GodModeCreatePaymentRequest,
+    GodModeEditPaymentResponse,
+    PaymentResponse,
+)
 from app.api.v1.endpoints.payments import _apply_commission, _credit_wallet
 from app.models.group_cohort import GroupCohort, CohortStatus
 from app.schemas.cohorts import (
@@ -1003,6 +1008,93 @@ def god_mode_hard_delete_class(
 
 # ─── PAGOS ─────────────────────────────────────────────────────────────────
 
+@router.post("/payments", response_model=GodModeEditPaymentResponse, status_code=status.HTTP_201_CREATED)
+def god_mode_create_payment(
+    data: GodModeCreatePaymentRequest,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    Registra un pago que se hizo por fuera del sistema (transferencia,
+    efectivo, WhatsApp) y nunca quedó cargado. Solo crea el registro del
+    Payment — no activa ni modifica ningún enrollment automáticamente.
+
+    Ejemplo de uso: el alumno pagó por transferencia bancaria hace dos
+    semanas, el profesor lo confirma, pero nunca se cargó el pago en el
+    sistema y ahora las estadísticas de ingresos no lo reflejan.
+    """
+    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == data.teacher_id).first()
+    if not teacher:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesor no encontrado")
+
+    if current_user.role == UserRole.teacher_admin:
+        teacher_profile = current_user.teacher_profile
+        if not teacher_profile or teacher.id != teacher_profile.id:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Como teacher_admin solo puedes registrar pagos para ti mismo como profesor.",
+            )
+
+    student = db.query(StudentProfile).filter(StudentProfile.id == data.student_id).first()
+    if not student:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Estudiante no encontrado")
+
+    if data.enrollment_id is not None:
+        enrollment = db.query(Enrollment).filter(Enrollment.id == data.enrollment_id).first()
+        if not enrollment:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado")
+        if enrollment.teacher_id != data.teacher_id or enrollment.student_id != data.student_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "El enrollment indicado no corresponde a este alumno y profesor.",
+            )
+
+    moves_wallet = not data.is_manual_grant
+
+    if moves_wallet:
+        amount_teacher, amount_platform = _apply_commission(data.amount_total, teacher)
+    else:
+        amount_teacher, amount_platform = 0.0, 0.0
+
+    payment = Payment(
+        enrollment_id=data.enrollment_id,
+        teacher_id=data.teacher_id,
+        student_id=data.student_id,
+        amount_total=data.amount_total,
+        amount_teacher=amount_teacher,
+        amount_platform=amount_platform,
+        payment_method=data.payment_method,
+        payment_type=data.payment_type,
+        transaction_id=data.transaction_id,
+        status=data.status,
+        is_manual_grant=data.is_manual_grant,
+    )
+    db.add(payment)
+    db.flush()
+
+    if data.status == "approved":
+        payment.validated_by = current_user.id
+        payment.validated_at = utc_now()
+        if moves_wallet:
+            _credit_wallet(payment.teacher_id, amount_teacher, db)
+
+    log_god_mode_action(
+        db,
+        actor=current_user,
+        action="payment.create",
+        entity_type="payment",
+        entity_id=payment.id,
+        reason=data.reason,
+        before=None,
+        after=_payment_snapshot(payment),
+    )
+
+    db.commit()
+    db.refresh(payment)
+
+    return {"message": "Pago registrado por Modo Dios.", "payment": PaymentResponse.model_validate(payment)}
+
+
 @router.patch("/payments/{payment_id}", response_model=GodModeEditPaymentResponse)
 def god_mode_edit_payment(
     payment_id: int,
@@ -1285,6 +1377,46 @@ def god_mode_lookup_teacher_students(
     return result
 
 
+@router.get("/lookup/teachers/{teacher_id}/packages")
+def god_mode_lookup_teacher_packages(
+    teacher_id: int,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    Paquetes individuales (no grupales) activos de un profesor — para el
+    selector de "cambiar de paquete" del Modo Dios, en vez de escribir
+    el ID del paquete a mano y arriesgarse a asignar uno de otro
+    profesor o uno grupal (que no aplica por esa vía).
+    """
+    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == teacher_id).first()
+    if not teacher:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesor no encontrado")
+
+    if current_user.role == UserRole.teacher_admin:
+        teacher_profile = current_user.teacher_profile
+        if not teacher_profile or teacher_id != teacher_profile.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Como teacher_admin solo puedes ver tus propios paquetes.")
+
+    packages = db.query(Package).filter(
+        Package.teacher_id == teacher_id,
+        Package.is_group.is_(False),
+        Package.is_active.is_(True),
+    ).order_by(Package.name).all()
+
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+            "subject": p.subject,
+            "classes_count": p.classes_count,
+            "price": p.price,
+            "is_unlimited": p.classes_count is None,
+        }
+        for p in packages
+    ]
+
+
 @router.get("/lookup/students/{student_id}/enrollments")
 def god_mode_lookup_student_enrollments(
     student_id: int,
@@ -1377,4 +1509,71 @@ def god_mode_lookup_pair_classes(
             "class_type": c.class_type.value if hasattr(c.class_type, "value") else c.class_type,
         }
         for c in classes
+    ]
+
+
+@router.get("/lookup/teachers/{teacher_id}/cohorts")
+def god_mode_lookup_teacher_cohorts(
+    teacher_id: int,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    Cohortes de un profesor — para los selectores de "mover a cohorte",
+    "editar cupos" y "reabrir cohorte" del Modo Dios, en vez de escribir
+    el ID de la cohorte a mano.
+    """
+    if current_user.role == UserRole.teacher_admin:
+        teacher_profile = current_user.teacher_profile
+        if not teacher_profile or teacher_id != teacher_profile.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Como teacher_admin solo puedes ver tus propias cohortes.")
+
+    cohorts = db.query(GroupCohort).filter(GroupCohort.teacher_id == teacher_id).order_by(GroupCohort.created_at.desc()).all()
+    return [
+        {
+            "id": c.id,
+            "package_name": c.package.name if c.package else "N/A",
+            "subject": c.package.subject if c.package else None,
+            "status": c.status.value if hasattr(c.status, "value") else c.status,
+            "current_students": get_cohort_active_count(c.id, db),
+            "max_students": c.max_students,
+            "start_date": c.start_date.isoformat() if c.start_date else None,
+        }
+        for c in cohorts
+    ]
+
+
+@router.get("/lookup/teachers/{teacher_id}/students/{student_id}/payments")
+def god_mode_lookup_pair_payments(
+    teacher_id: int,
+    student_id: int,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    Pagos registrados entre un profesor y un alumno puntuales — para el
+    selector de "editar pago" del Modo Dios.
+    """
+    if current_user.role == UserRole.teacher_admin:
+        teacher_profile = current_user.teacher_profile
+        if not teacher_profile or teacher_id != teacher_profile.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Como teacher_admin solo puedes ver tus propios pagos.")
+
+    payments = db.query(Payment).filter(
+        Payment.teacher_id == teacher_id,
+        Payment.student_id == student_id,
+    ).order_by(Payment.created_at.desc()).limit(100).all()
+
+    return [
+        {
+            "id": p.id,
+            "amount_total": p.amount_total,
+            "amount_teacher": p.amount_teacher,
+            "status": p.status,
+            "payment_method": p.payment_method,
+            "payment_type": p.payment_type,
+            "is_manual_grant": p.is_manual_grant,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        }
+        for p in payments
     ]

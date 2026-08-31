@@ -218,6 +218,44 @@ class GodModeEditPaymentRequest(GodModeActionBase):
         return v
 
 
+class GodModeCreatePaymentRequest(GodModeActionBase):
+    """
+    Crea un Payment desde cero — para un pago que se hizo por fuera del
+    sistema (transferencia, efectivo, WhatsApp) y nunca quedó registrado.
+    A diferencia de /payments/manual-grant, esto NO activa ni modifica
+    ningún enrollment por su cuenta; solo registra el pago. Si además
+    hay que activar un paquete o sumar créditos, usa por separado
+    "Ajustar créditos" o "Cambiar de paquete".
+    """
+    teacher_id: int
+    student_id: int
+    enrollment_id: Optional[int] = None
+    amount_total: float = Field(..., gt=0)
+    payment_method: str
+    payment_type: str = "package"
+    status: str = "approved"
+    transaction_id: Optional[str] = None
+    # No genera comisión ni mueve la billetera del profesor, sin importar
+    # el monto — para casos como becas, cortesías, o correcciones donde
+    # el profesor no debe recibir ese dinero.
+    is_manual_grant: bool = False
+
+    @field_validator("status")
+    @classmethod
+    def validate_create_status(cls, v):
+        if v not in PAYMENT_STATUS_OPTIONS:
+            raise ValueError(f"status debe ser uno de: {PAYMENT_STATUS_OPTIONS}")
+        return v
+
+    @field_validator("payment_type")
+    @classmethod
+    def validate_payment_type(cls, v):
+        allowed = ("package", "single_class", "unlimited_recharge", "manual")
+        if v not in allowed:
+            raise ValueError(f"payment_type debe ser uno de: {allowed}")
+        return v
+
+
 class GodModeEditPaymentResponse(BaseModel):
     message: str
     payment: PaymentResponse

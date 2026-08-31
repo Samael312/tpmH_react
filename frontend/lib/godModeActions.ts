@@ -21,7 +21,11 @@ export type GodModeFieldType =
   | "availability-picker" // depende de teacher_id (+ duration_minutes del mismo form) — abre el modal de disponibilidad real
   | "duration-select"     // duraciones permitidas configuradas por el superadmin (PlatformConfig), no un número libre
   | "credit-info"         // muestra créditos disponibles del enrollment elegido (solo informativo, no se envía)
-  | "tri-bool-select";    // "automático" (omitido) / "sí" (true) / "no" (false) — para consume_credit
+  | "tri-bool-select"     // "automático" (omitido) / "sí" (true) / "no" (false) — para consume_credit
+  | "package-select"      // paquetes individuales del profesor elegido, para cambiar de paquete
+  | "cohort-select"       // cohortes del profesor elegido
+  | "payment-select"      // pagos entre el profesor y alumno elegidos
+  | "payment-info";       // muestra estado/monto del pago elegido + aviso si el cambio moverá la billetera del profesor
 
 export interface GodModeField {
   name: string;
@@ -45,6 +49,13 @@ export interface GodModeField {
    * identifica todo (ej: class_id).
    */
   excludeFromPayload?: boolean;
+  /**
+   * Si está presente, el valor se envía en el body/URL bajo ESTE nombre
+   * en vez de `name`. Útil cuando el campo necesita el nombre "teacher_id"
+   * para activar el selector en cascada (profesor → alumno) pero el
+   * backend espera otro nombre (ej. "from_teacher_id").
+   */
+  sendAs?: string;
 }
 
 export interface GodModeAction {
@@ -90,7 +101,10 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     method: "patch",
     buildUrl: v => `/god-mode/enrollments/${v.enrollment_id}/adjust`,
     fields: [
-      { name: "enrollment_id", label: "ID del enrollment", type: "number", required: true, isPathParam: true },
+      { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true, excludeFromPayload: true },
+      { name: "student_id", label: "Alumno", type: "student-select", required: true, dependsOn: ["teacher_id"], excludeFromPayload: true },
+      { name: "enrollment_id", label: "Enrollment", type: "enrollment-select", required: true, dependsOn: ["teacher_id", "student_id"], isPathParam: true },
+      { name: "credit_info", label: "", type: "credit-info", dependsOn: ["enrollment_id"], excludeFromPayload: true },
       { name: "unlocked_credits", label: "Créditos disponibles", type: "number", optionalNumber: true },
       { name: "classes_used", label: "Clases usadas", type: "number", optionalNumber: true },
       { name: "classes_total", label: "Clases totales del paquete", type: "number", optionalNumber: true },
@@ -110,8 +124,11 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     method: "post",
     buildUrl: v => `/god-mode/enrollments/${v.enrollment_id}/change-package`,
     fields: [
-      { name: "enrollment_id", label: "ID del enrollment", type: "number", required: true, isPathParam: true },
-      { name: "new_package_id", label: "ID del paquete nuevo", type: "number", required: true },
+      { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true, excludeFromPayload: true },
+      { name: "student_id", label: "Alumno", type: "student-select", required: true, dependsOn: ["teacher_id"], excludeFromPayload: true },
+      { name: "enrollment_id", label: "Enrollment", type: "enrollment-select", required: true, dependsOn: ["teacher_id", "student_id"], isPathParam: true },
+      { name: "credit_info", label: "", type: "credit-info", dependsOn: ["enrollment_id"], excludeFromPayload: true },
+      { name: "new_package_id", label: "Paquete nuevo", type: "package-select", required: true, dependsOn: ["teacher_id"] },
       { name: "reset_classes_used", label: "Reiniciar clases usadas a 0", type: "checkbox" },
     ],
   },
@@ -124,9 +141,12 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     method: "post",
     buildUrl: v => `/god-mode/enrollments/${v.enrollment_id}/move-cohort`,
     fields: [
-      { name: "enrollment_id", label: "ID del enrollment", type: "number", required: true, isPathParam: true },
-      { name: "new_cohort_id", label: "ID de la cohorte destino (vacío = individual)", type: "number", optionalNumber: true },
-      { name: "force", label: "Forzar aunque no haya cupo", type: "checkbox" },
+      { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true, excludeFromPayload: true },
+      { name: "student_id", label: "Alumno", type: "student-select", required: true, dependsOn: ["teacher_id"], excludeFromPayload: true },
+      { name: "enrollment_id", label: "Enrollment del alumno", type: "enrollment-select", required: true, dependsOn: ["teacher_id", "student_id"], isPathParam: true },
+      { name: "credit_info", label: "", type: "credit-info", dependsOn: ["enrollment_id"], excludeFromPayload: true },
+      { name: "new_cohort_id", label: "Cohorte destino (vacío = individual)", type: "cohort-select", dependsOn: ["teacher_id"] },
+      { name: "force", label: "Forzar aunque la cohorte destino no tenga cupo", type: "checkbox" },
       { name: "reset_classes_used", label: "Reiniciar clases usadas a 0", type: "checkbox" },
     ],
   },
@@ -138,7 +158,8 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     method: "patch",
     buildUrl: v => `/god-mode/cohorts/${v.cohort_id}`,
     fields: [
-      { name: "cohort_id", label: "ID de la cohorte", type: "number", required: true, isPathParam: true },
+      { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true, excludeFromPayload: true },
+      { name: "cohort_id", label: "Cohorte", type: "cohort-select", required: true, dependsOn: ["teacher_id"], isPathParam: true },
       { name: "min_students", label: "Mínimo de alumnos", type: "number", optionalNumber: true },
       { name: "max_students", label: "Máximo de alumnos", type: "number", optionalNumber: true },
       { name: "start_date", label: "Fecha de inicio", type: "datetime" },
@@ -152,7 +173,8 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     method: "post",
     buildUrl: v => `/god-mode/cohorts/${v.cohort_id}/reopen`,
     fields: [
-      { name: "cohort_id", label: "ID de la cohorte", type: "number", required: true, isPathParam: true },
+      { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true, excludeFromPayload: true },
+      { name: "cohort_id", label: "Cohorte", type: "cohort-select", required: true, dependsOn: ["teacher_id"], isPathParam: true },
       { name: "new_status", label: "Nuevo estado", type: "select", options: [
         { value: "filling", label: "filling (vuelve a aceptar inscripciones)" },
         { value: "confirmed", label: "confirmed (fecha ya fija)" },
@@ -236,6 +258,37 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
   },
   // ── Pagos ─────────────────────────────────────────────────────────
   {
+    id: "payment.create",
+    label: "Añadir un pago",
+    description: "Registra un pago hecho por fuera del sistema (transferencia, efectivo, WhatsApp) que nunca quedó cargado. No activa ningún enrollment por su cuenta.",
+    category: "Pagos",
+    method: "post",
+    buildUrl: () => `/god-mode/payments`,
+    fields: [
+      { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true },
+      { name: "student_id", label: "Alumno", type: "student-select", required: true, dependsOn: ["teacher_id"] },
+      { name: "enrollment_id", label: "Enrollment relacionado (opcional)", type: "enrollment-select", dependsOn: ["teacher_id", "student_id"] },
+      { name: "amount_total", label: "Monto total", type: "number", required: true },
+      { name: "payment_method", label: "Método de pago", type: "select", required: true, options: [
+        { value: "bank_transfer", label: "Transferencia bancaria" },
+        { value: "mobile_payment", label: "Pago móvil" },
+        { value: "card", label: "Tarjeta" },
+        { value: "cash", label: "Efectivo" },
+        { value: "other", label: "Otro" },
+      ] },
+      { name: "payment_type", label: "Tipo de pago", type: "select", options: [
+        { value: "package", label: "package" },
+        { value: "single_class", label: "single_class" },
+        { value: "unlimited_recharge", label: "unlimited_recharge" },
+        { value: "manual", label: "manual" },
+      ] },
+      { name: "status", label: "Estado", type: "select", options: STATUS_PAYMENT_OPTIONS,
+        helpText: "Por defecto queda 'approved' — ya se acredita a la billetera del profesor si corresponde." },
+      { name: "transaction_id", label: "ID de transacción (opcional)", type: "text" },
+      { name: "is_manual_grant", label: "Otorgamiento manual (no genera comisión, no mueve la billetera del profesor)", type: "checkbox" },
+    ],
+  },
+  {
     id: "payment.edit",
     label: "Editar un pago registrado",
     description: "Corrige monto y/o estado de un Payment ya cargado. Ajusta la billetera del profesor automáticamente si el pago ya estaba aprobado.",
@@ -243,7 +296,10 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     method: "patch",
     buildUrl: v => `/god-mode/payments/${v.payment_id}`,
     fields: [
-      { name: "payment_id", label: "ID del pago", type: "number", required: true, isPathParam: true },
+      { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true, excludeFromPayload: true },
+      { name: "student_id", label: "Alumno", type: "student-select", required: true, dependsOn: ["teacher_id"], excludeFromPayload: true },
+      { name: "payment_id", label: "Pago", type: "payment-select", required: true, dependsOn: ["teacher_id", "student_id"], isPathParam: true },
+      { name: "payment_info", label: "", type: "payment-info", dependsOn: ["payment_id"], excludeFromPayload: true },
       { name: "amount_total", label: "Monto total corregido", type: "number", optionalNumber: true },
       { name: "status", label: "Nuevo estado", type: "select", options: STATUS_PAYMENT_OPTIONS },
       { name: "rejection_reason", label: "Motivo de rechazo (si aplica)", type: "text" },
@@ -259,9 +315,9 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     method: "post",
     buildUrl: v => `/god-mode/students/${v.student_id}/transfer-teacher`,
     fields: [
-      { name: "student_id", label: "ID del alumno", type: "number", required: true, isPathParam: true },
-      { name: "from_teacher_id", label: "ID del profesor actual", type: "number", required: true },
-      { name: "to_teacher_id", label: "ID del profesor destino", type: "number", required: true },
+      { name: "teacher_id", label: "Profesor actual", type: "teacher-select", required: true, sendAs: "from_teacher_id" },
+      { name: "student_id", label: "Alumno a transferir", type: "student-select", required: true, dependsOn: ["teacher_id"], isPathParam: true },
+      { name: "to_teacher_id", label: "Profesor destino", type: "teacher-select", required: true },
       { name: "remove_old_link", label: "Eliminar vínculo con el profesor actual", type: "checkbox" },
     ],
     destructive: true,
