@@ -322,6 +322,13 @@ export default function ClassCard({
     // reagendar su propia falta (no está en STUDENT_RESCHEDULABLE).
     ? !["completed", "cancelled"].includes(class_.status)
     : STUDENT_RESCHEDULABLE.includes(class_.status) && !isGroup;
+  // Nota sobre antelación mínima (min_reschedule_hours_student): el botón
+  // "Reagendar" se deja visible aunque falte poco tiempo — ocultarlo sin
+  // avisar sería más confuso que útil (el alumno no entendería por qué
+  // desapareció). En su lugar, RescheduleModal muestra un aviso claro con
+  // las horas restantes en cuanto se abre, antes de dejar elegir horario
+  // (ver `blockedByMinNotice` ahí) — así el mensaje llega con contexto en
+  // vez de como un 400 genérico al final del flujo.
   // Un alumno SÍ puede cancelar una sesión grupal — pero a diferencia de una
   // clase individual, "Cancelar" para un grupo significa salir de TODA la
   // cohorte (POST /cohorts/{cohort_id}/leave, con confirmación explícita en

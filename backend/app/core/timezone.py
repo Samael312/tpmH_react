@@ -277,14 +277,28 @@ def get_all_slots_utc(
     return sorted(slots.items())
 
 
-def is_slot_in_past(slot_utc: datetime, buffer_minutes: int = 60) -> bool:
+def is_slot_in_past(slot_utc: datetime) -> bool:
     """
-    Verifica si un slot ya pasó.
-    buffer_minutes: margen mínimo desde ahora para poder agendar.
+    Verifica si un slot ya ocurrió de verdad (su hora de inicio ya quedó
+    atrás). NO tiene en cuenta el margen mínimo de antelación para
+    reservar — eso es un concepto distinto, ver `is_slot_too_soon`.
+    """
+    return slot_utc < utc_now()
+
+
+def is_slot_too_soon(slot_utc: datetime, buffer_minutes: int = 60) -> bool:
+    """
+    Verifica si un slot, aunque todavía NO haya pasado, está demasiado
+    próximo para poder reservarlo según el margen mínimo de antelación
+    (buffer_minutes, configurable por el superadmin vía min_booking_hours).
+
     Por defecto no puedes agendar una clase que empieza en menos de 1 hora.
+    Un slot puede ser "too soon" sin ser "past" (start >= ahora pero
+    < ahora + buffer) — el frontend debe distinguirlos: un slot futuro
+    bloqueado por antelación NO es lo mismo que uno que ya pasó.
     """
     now = utc_now()
-    return slot_utc < now + timedelta(minutes=buffer_minutes)
+    return now <= slot_utc < now + timedelta(minutes=buffer_minutes)
 
 
 def validate_timezone(tz_str: str) -> bool:

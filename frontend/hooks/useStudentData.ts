@@ -50,6 +50,10 @@ export interface AvailableSlot {
   is_preferred: boolean;
   is_available: boolean;
   is_past?: boolean;
+  // Horario futuro (todavía no ocurrió) pero demasiado próximo para
+  // reservarlo según el margen mínimo de antelación configurado. Distinto
+  // de is_past: NO debe mostrarse como "Pasado" en la UI.
+  too_soon?: boolean;
   // Margen de preparación (min) reservado después de end_time_utc, y hasta
   // cuándo queda ocupada la agenda del profesor incluyéndolo. Informativo
   // — lo que se reserva/guarda siempre es start/end_time_utc (sin margen).
@@ -240,12 +244,18 @@ export function useAvailableSlots(
   duration: number,
   teacherUsername: string | null,
   classType: "trial" | "regular" | "group" = "regular",
+  // Solo tiene efecto real para staff (superadmin/teacher_admin); el
+  // backend responde 403 si lo pide alguien sin permisos. Se usa desde
+  // God Mode para poder reagendar/crear clases sin la antelación mínima
+  // normal (ver GodModeAvailabilityPicker).
+  bypassMinNotice: boolean = false,
 ) {
   const query = useQuery({
-    queryKey: ["student", "available-slots", teacherUsername, date, duration, classType],
+    queryKey: ["student", "available-slots", teacherUsername, date, duration, classType, bypassMinNotice],
     queryFn: async () => {
       const res = await api.get(
-        `/availability/${teacherUsername}/slots?date=${date}&duration=${duration}&class_type=${classType}`
+        `/availability/${teacherUsername}/slots?date=${date}&duration=${duration}&class_type=${classType}` +
+        (bypassMinNotice ? `&bypass_min_notice=true` : "")
       );
       return res.data as AvailableSlot[];
     },

@@ -25,7 +25,7 @@ export default function GodModeAvailabilityPicker({
   const [date, setDate] = useState("");
   const [selected, setSelected] = useState<AvailableSlot | null>(null);
 
-  const { slots, loading } = useAvailableSlots(date, duration, teacherUsername || null, classType);
+  const { slots, loading } = useAvailableSlots(date, duration, teacherUsername || null, classType, true);
 
   const myTz = getMyDisplayTimezone();
   const formatTimeLocal = (utc: string) => formatTimeTz(utc, myTz);
@@ -103,7 +103,7 @@ export default function GodModeAvailabilityPicker({
                   <div className="grid grid-cols-2 gap-2 h-[240px] overflow-y-auto pr-1">
                     {slots.map((slot, i) => {
                       const isSelected = selected?.start_time_utc === slot.start_time_utc;
-                      const blocked = !slot.is_available || slot.is_past;
+                      const blocked = !slot.is_available || slot.is_past || slot.too_soon;
                       return (
                         <button
                           key={i}
@@ -120,7 +120,7 @@ export default function GodModeAvailabilityPicker({
                           </span>
                           {blocked && (
                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-0.5">
-                              {slot.is_past ? "Pasado" : "Ocupado"}
+                              {slot.is_past ? "Pasado" : slot.too_soon ? "Muy pronto" : "Ocupado"}
                             </span>
                           )}
                         </button>

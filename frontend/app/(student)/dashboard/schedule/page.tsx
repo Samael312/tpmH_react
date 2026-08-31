@@ -285,7 +285,7 @@ function StepSelectSlot({
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-[400px] overflow-y-auto pr-1 pt-3">
             {slots.map((slot, i) => {
               const preferred = isPreferredSlot(slot);
-              const blocked = !slot.is_available || slot.is_past;
+              const blocked = !slot.is_available || slot.is_past || slot.too_soon;
 
               return (
                 <button
@@ -310,7 +310,7 @@ function StepSelectSlot({
                   )}
                   {blocked && (
                     <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-slate-400 text-white text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm">
-                      {slot.is_past ? "Pasado" : "Ocupado"}
+                      {slot.is_past ? "Pasado" : slot.too_soon ? "Muy pronto" : "Ocupado"}
                     </div>
                   )}
                   <Clock className={`w-4 h-4 mx-auto mb-1.5 ${blocked ? "text-slate-300" : preferred ? "text-purple-500" : "text-slate-400"}`} />

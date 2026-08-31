@@ -743,6 +743,7 @@ def god_mode_create_class(
             teacher_id=data.teacher_id,
             student_id=data.student_id,
             db=db,
+            enforce_min_notice=False,
         )
         if not can_book:
             raise HTTPException(
@@ -831,6 +832,7 @@ def god_mode_reschedule_class(
             student_id=class_.student_id,
             db=db,
             exclude_class_id=class_id,
+            enforce_min_notice=False,
         )
         if not can_book:
             raise HTTPException(

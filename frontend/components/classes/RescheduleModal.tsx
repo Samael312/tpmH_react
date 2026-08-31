@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAvailableSlots } from "@/hooks/useStudentData";
+import { useBusinessRules } from "@/hooks/useBusinessRules";
 import { getMyDisplayTimezone, formatTimeTz } from "@/lib/tzFormat";
 
 // ─── Mini calendario inline para reagendar ────────────────────────────────────
@@ -128,6 +129,14 @@ export interface RescheduleModalClassItem {
    * booleano, así que se asume "regular" por defecto).
    */
   classType?: "trial" | "regular" | "group";
+  /**
+   * Estado actual de la clase. Solo se usa para replicar en el frontend
+   * la misma excepción que aplica el backend en can_reschedule_class: una
+   * clase 'finalized' se puede reagendar sin restricción de antelación.
+   * Si no se pasa, se asume que la restricción de antelación SÍ aplica
+   * (comportamiento seguro por defecto).
+   */
+  status?: string;
 }
 
 interface RescheduleModalProps {
@@ -157,6 +166,23 @@ export function RescheduleModal({
   const currentDuration = classItem?.duration_minutes || 60;
   const resolvedClassType = classItem?.classType ?? (classItem?.isGroup ? "group" : "regular");
   const { slots, loading } = useAvailableSlots(date, currentDuration, teacherUsername ?? null, resolvedClassType);
+
+  // Este modal se comparte entre el flujo del estudiante y el del profesor
+  // (ver `endpoint`, distinto según quién reagenda). El backend
+  // (can_reschedule_class) solo exige antelación mínima al ESTUDIANTE, y
+  // no se la exige al profesor ni cuando la clase quedó 'finalized'. Antes
+  // el frontend no replicaba este chequeo: dejaba elegir fecha/hora
+  // libremente y recién al confirmar llegaba un 400 genérico, después de
+  // que el usuario ya había hecho todo el trabajo de elegir horario.
+  const { rules: businessRules } = useBusinessRules();
+  const isStudentFlow = !endpoint.includes("/teacher/");
+  const isFinalized = classItem?.status === "finalized";
+  const hoursUntilCurrentClass = classItem
+    ? (new Date(classItem.start_time_utc).getTime() - Date.now()) / (1000 * 60 * 60)
+    : Infinity;
+  const blockedByMinNotice =
+    isStudentFlow && !isFinalized && hoursUntilCurrentClass < businessRules.min_reschedule_hours_student;
+  const hoursLeftLabel = Math.max(0, Math.floor(hoursUntilCurrentClass));
 
   // Formateador coherente en la hora local DE QUIEN REAGENDA (no del dispositivo)
   const myTz = getMyDisplayTimezone();
@@ -246,6 +272,21 @@ export function RescheduleModal({
           ) : (
             <div className="space-y-4">
 
+              {blockedByMinNotice ? (
+                <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex flex-col items-center text-center gap-2">
+                  <AlertCircle className="w-9 h-9 text-amber-500 mb-1" />
+                  <p className="text-sm font-black text-slate-800">
+                    Ya no puedes reagendar esta clase
+                  </p>
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-sm">
+                    Solo se puede reagendar con al menos {businessRules.min_reschedule_hours_student}h
+                    de antelación, y ya quedan {hoursLeftLabel}h para esta clase.
+                    Si necesitas cambiarla igual, contacta a soporte.
+                  </p>
+                </div>
+              ) : (
+              <>
+
               {classItem.isGroup && (
                 <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex gap-3 items-start">
                   <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
@@ -319,7 +360,7 @@ export function RescheduleModal({
                                     overflow-y-auto pr-1">
                       {slots.map((slot, i) => {
                         const isSelected = selected?.start_time_utc === slot.start_time_utc;
-                        const blocked = !slot.is_available || slot.is_past;
+                        const blocked = !slot.is_available || slot.is_past || slot.too_soon;
                         return (
                           <button
                             key={i}
@@ -344,7 +385,7 @@ export function RescheduleModal({
                             </span>
                             {blocked ? (
                               <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-0.5">
-                                {slot.is_past ? "Pasado" : "Ocupado"}
+                                {slot.is_past ? "Pasado" : slot.too_soon ? "Muy pronto" : "Ocupado"}
                               </span>
                             ) : slot.is_preferred && (
                               <span className="text-[9px] font-black text-purple-600 uppercase tracking-wider mt-0.5">
@@ -373,6 +414,8 @@ export function RescheduleModal({
                     </div>
                   </div>
                 </div>
+              )}
+              </>
               )}
             </div>
           )}

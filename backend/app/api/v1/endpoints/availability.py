@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, time
 from zoneinfo import ZoneInfo
 from app.db.base import get_db
 from app.auth.dependencies import get_current_user, get_current_teacher
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.teacher import TeacherProfile, TeacherStatus
 from app.models.availability import TeacherAvailability, TeacherAvailabilityException
 from app.models.class_ import Class
@@ -26,6 +26,7 @@ from app.core.timezone import (
     build_weekly_range_utc,
     get_all_slots_utc,
     is_slot_in_past,
+    is_slot_too_soon,
     validate_timezone,
 )
 from app.core.google_calendar import get_teacher_busy_ranges
@@ -280,6 +281,12 @@ def get_teacher_available_slots(
         "regular",
         description="'trial' | 'regular' | 'group' — determina el margen de preparación aplicado",
     ),
+    bypass_min_notice: bool = Query(
+        False,
+        description="Solo staff (superadmin/teacher_admin): ignora el margen mínimo de "
+                     "antelación para reagendar/crear clases desde God Mode, sin afectar "
+                     "el chequeo normal de choques ni de horarios ya ocurridos.",
+    ),
     current_user: Optional[User] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -415,8 +422,24 @@ def get_teacher_available_slots(
     if not all_slots:
         return []
 
-    # 7b. Margen mínimo de reserva configurado por el superadmin (en minutos)
-    min_booking_buffer_minutes = business_rules["min_booking_hours"] * 60
+    # 7b. Margen mínimo de reserva configurado por el superadmin (en minutos).
+    # God Mode (superadmin/teacher_admin) puede saltárselo explícitamente
+    # via bypass_min_notice — pero eso NO afecta is_past (un horario ya
+    # ocurrido sigue bloqueado siempre) ni is_available (los choques con
+    # otras clases se siguen respetando).
+    if bypass_min_notice:
+        is_staff = current_user is not None and current_user.role in (
+            UserRole.superadmin,
+            UserRole.teacher_admin,
+        )
+        if not is_staff:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permisos para saltar la antelación mínima de reserva",
+            )
+        min_booking_buffer_minutes = 0
+    else:
+        min_booking_buffer_minutes = business_rules["min_booking_hours"] * 60
 
     # 7. Obtener preferencias del estudiante si está autenticado
     student_preferences = []
@@ -451,7 +474,8 @@ def get_teacher_available_slots(
             start_time_utc=slot_start,
             end_time_utc=slot_start + duration_td,
             duration_minutes=duration,
-            is_past=is_slot_in_past(slot_start, buffer_minutes=min_booking_buffer_minutes),
+            is_past=is_slot_in_past(slot_start),
+            too_soon=is_slot_too_soon(slot_start, buffer_minutes=min_booking_buffer_minutes),
             is_preferred=is_preferred_slot(slot_start, student_preferences),
             is_available=not is_busy,
             buffer_minutes=prep_buffer_minutes,

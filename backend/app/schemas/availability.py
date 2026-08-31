@@ -105,7 +105,13 @@ class AvailableSlotResponse(BaseModel):
     start_time_utc: datetime    # "2025-04-14T13:00:00Z"
     end_time_utc: datetime      # "2025-04-14T14:00:00Z" — fin REAL de la clase (sin margen)
     duration_minutes: int       # duración real de la clase
-    is_past: bool = False       # True si el slot ya pasó
+    is_past: bool = False       # True SOLO si el slot ya ocurrió de verdad (start < ahora)
+    # True si el slot todavía no pasó, pero cae dentro del margen mínimo de
+    # antelación configurado (min_booking_hours) — es un horario futuro,
+    # simplemente demasiado próximo para reservarlo. Distinto de is_past:
+    # el frontend no debe mostrar "Pasado" para esto (BUG: antes se
+    # marcaban como "Pasado" horarios futuros, confundiendo al estudiante).
+    too_soon: bool = False
     is_preferred: bool = False   # True si el slot coincide con la preferencia del estudiante
     is_available: bool = True      # True si el slot está disponible para reservar
     # Margen de preparación (minutos) que este slot reserva después de

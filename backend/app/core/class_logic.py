@@ -173,11 +173,19 @@ def can_book_slot(
     student_id: int,
     db: Session,
     exclude_class_id: int = None,
+    # God Mode (staff) reagenda/crea clases "sin restricciones normales",
+    # lo cual incluye saltarse la antelación mínima — pero eso es un
+    # concepto totalmente distinto a permitir doble-booking real
+    # (skip_conflict_check). Antes ambos vivían detrás del mismo flag y
+    # el endpoint de God Mode no podía ofrecer uno sin el otro, pese a
+    # prometerlo en su propio docstring. Con enforce_min_notice=False se
+    # salta SOLO el chequeo de antelación; el de choques sigue aplicando.
+    enforce_min_notice: bool = True,
 ) -> tuple[bool, str]:
     now = utc_now()
     rules = get_business_rules(db)
 
-    if start_time_utc < now + timedelta(hours=rules["min_booking_hours"]):
+    if enforce_min_notice and start_time_utc < now + timedelta(hours=rules["min_booking_hours"]):
         return False, f"Debes agendar con al menos {rules['min_booking_hours']} hora(s) de antelación"
 
     # Prefiltro amplio en SQL (3h cubre de sobra cualquier duración+margen
