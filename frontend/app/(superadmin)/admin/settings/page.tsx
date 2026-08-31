@@ -1108,6 +1108,39 @@ export default function SettingsPage() {
               />
             </div>
           </div>
+
+          <div className="pt-2 border-t border-slate-100">
+            <div className="flex items-center gap-3 mb-4 mt-2">
+              <div className="w-1.5 h-6 bg-amber-400 rounded-full" />
+              <div>
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                  Videollamada
+                </h3>
+                <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                  Si el profesor no cargó un link manualmente, el sistema genera uno automático
+                  (Google Meet) esta cantidad de minutos antes del inicio de la clase.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">
+                  Minutos antes de la clase
+                </label>
+                <input
+                  type="number"
+                  min={5}
+                  max={180}
+                  value={businessRules.meet_link_autogen_minutes ?? 30}
+                  onChange={e => updateBusinessRules({
+                    ...businessRules,
+                    meet_link_autogen_minutes: Math.max(5, Math.min(180, parseInt(e.target.value, 10) || 30)),
+                  })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold"
+                />
+              </div>
+            </div>
+          </div>
           <Button
             variant="primary"
             loading={rulesSaving}

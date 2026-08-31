@@ -245,6 +245,20 @@ def get_teacher_busy_ranges(
 # Escritura — crear/actualizar/borrar eventos
 # ─────────────────────────────────────────────────────────────────────────
 
+def _build_attendees(attendee_emails: Optional[List[str]]) -> Optional[List[dict]]:
+    """
+    Arma la lista de `attendees` para el body del evento. Se usa para que
+    el profesor quede explícitamente como invitado del evento (además de
+    ser el dueño del calendario), de forma que Google Meet lo reconozca
+    como participante autorizado y no le pida "Pedir unirme" al entrar.
+    Siempre se combina con sendUpdates="none" en la llamada a la API para
+    no disparar el correo de invitación de Google Calendar.
+    """
+    if not attendee_emails:
+        return None
+    return [{"email": email, "responseStatus": "accepted"} for email in attendee_emails]
+
+
 def create_calendar_event(
     service,
     calendar_id: str,
@@ -253,6 +267,7 @@ def create_calendar_event(
     end_utc: datetime,
     description: str = "",
     meet_link: Optional[str] = None,
+    attendee_emails: Optional[List[str]] = None,
 ) -> Optional[str]:
     event_body = {
         "summary": title,
@@ -265,9 +280,15 @@ def create_calendar_event(
         event_body["location"] = meet_link
         event_body["description"] += f"\n\nGoogle Meet: {meet_link}"
 
+    attendees = _build_attendees(attendee_emails)
+    if attendees:
+        event_body["attendees"] = attendees
+
     try:
         event = _with_retries(
-            service.events().insert(calendarId=calendar_id, body=event_body).execute
+            service.events()
+            .insert(calendarId=calendar_id, body=event_body, sendUpdates="none")
+            .execute
         )
         return event.get("id")
     except HttpError as e:
@@ -293,6 +314,7 @@ def create_calendar_event_with_meet(
     start_utc: datetime,
     end_utc: datetime,
     description: str = "",
+    attendee_emails: Optional[List[str]] = None,
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Crea un evento en Google Calendar generando de una vez un link de
@@ -313,10 +335,14 @@ def create_calendar_event_with_meet(
         },
     }
 
+    attendees = _build_attendees(attendee_emails)
+    if attendees:
+        event_body["attendees"] = attendees
+
     try:
         event = _with_retries(
             service.events()
-            .insert(calendarId=calendar_id, body=event_body, conferenceDataVersion=1)
+            .insert(calendarId=calendar_id, body=event_body, conferenceDataVersion=1, sendUpdates="none")
             .execute
         )
         return event.get("id"), _extract_meet_link(event)
@@ -329,6 +355,7 @@ def add_meet_conference_to_event(
     service,
     calendar_id: str,
     event_id: str,
+    attendee_emails: Optional[List[str]] = None,
 ) -> Optional[str]:
     """
     Agrega un link de Google Meet real a un evento ya existente
@@ -364,10 +391,14 @@ def add_meet_conference_to_event(
         }
     }
 
+    attendees = _build_attendees(attendee_emails)
+    if attendees:
+        event["attendees"] = attendees
+
     try:
         updated = _with_retries(
             service.events()
-            .update(calendarId=calendar_id, eventId=event_id, body=event, conferenceDataVersion=1)
+            .update(calendarId=calendar_id, eventId=event_id, body=event, conferenceDataVersion=1, sendUpdates="none")
             .execute
         )
         return _extract_meet_link(updated)
@@ -383,6 +414,7 @@ def update_calendar_event(
     start_utc: Optional[datetime] = None,
     end_utc: Optional[datetime] = None,
     meet_link: Optional[str] = None,
+    attendee_emails: Optional[List[str]] = None,
 ) -> bool:
     try:
         event = _with_retries(
@@ -410,6 +442,10 @@ def update_calendar_event(
     if meet_link:
         event["location"] = meet_link
 
+    attendees = _build_attendees(attendee_emails)
+    if attendees:
+        event["attendees"] = attendees
+
     # FIX: sin conferenceDataVersion=1 la API ignora (y puede no persistir)
     # el conferenceData que ya trae el evento en `event` (traído por el GET
     # de arriba) — Google lo documenta explícitamente para "todo request
@@ -421,7 +457,7 @@ def update_calendar_event(
     try:
         _with_retries(
             service.events()
-            .update(calendarId=calendar_id, eventId=event_id, body=event, conferenceDataVersion=1)
+            .update(calendarId=calendar_id, eventId=event_id, body=event, conferenceDataVersion=1, sendUpdates="none")
             .execute
         )
         return True

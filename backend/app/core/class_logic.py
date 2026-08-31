@@ -20,6 +20,7 @@ MIN_CANCEL_HOURS = 12
 MIN_RESCHEDULE_HOURS_STUDENT = 12
 MIN_RESCHEDULE_HOURS_STAFF = 0
 DEFAULT_TRIAL_DURATION_MINUTES = 25
+DEFAULT_MEET_LINK_AUTOGEN_MINUTES = 30
 
 def is_within_teacher_availability(
     teacher_id: int,
@@ -103,6 +104,7 @@ def get_business_rules(db: Session) -> dict:
             "buffer_trial_minutes": DEFAULT_BUFFER_MINUTES["trial"],
             "buffer_regular_minutes": DEFAULT_BUFFER_MINUTES["regular"],
             "buffer_group_minutes": DEFAULT_BUFFER_MINUTES["group"],
+            "meet_link_autogen_minutes": DEFAULT_MEET_LINK_AUTOGEN_MINUTES,
         }
     return {
         "min_booking_hours": config.min_booking_hours or MIN_BOOKING_HOURS,
@@ -124,6 +126,10 @@ def get_business_rules(db: Session) -> dict:
         "buffer_group_minutes": (
             config.buffer_group_minutes if config.buffer_group_minutes is not None
             else DEFAULT_BUFFER_MINUTES["group"]
+        ),
+        "meet_link_autogen_minutes": (
+            config.meet_link_autogen_minutes if config.meet_link_autogen_minutes is not None
+            else DEFAULT_MEET_LINK_AUTOGEN_MINUTES
         ),
     }
 

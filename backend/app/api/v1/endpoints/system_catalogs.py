@@ -81,6 +81,11 @@ def get_business_rules(db: Session = Depends(get_db)):
             if config.buffer_group_minutes is not None
             else DEFAULT_BUFFER_MINUTES["group"]
         ),
+        meet_link_autogen_minutes=(
+            config.meet_link_autogen_minutes
+            if config.meet_link_autogen_minutes is not None
+            else 30
+        ),
     )
 
 

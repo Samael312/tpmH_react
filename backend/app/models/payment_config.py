@@ -47,6 +47,11 @@ class PlatformConfig(Base):
     buffer_regular_minutes = Column(Integer, default=lambda: DEFAULT_BUFFER_MINUTES["regular"])
     buffer_group_minutes = Column(Integer, default=lambda: DEFAULT_BUFFER_MINUTES["group"])
 
+    # Minutos antes del inicio de la clase en los que el job automático
+    # (core/scheduler.py::generate_upcoming_meet_links) genera el Meet
+    # link si todavía no tiene uno asignado. Ver core/class_logic.py.
+    meet_link_autogen_minutes = Column(Integer, default=30)
+
 # backend/app/models/payment_config.py
 class PaymentConfig(Base):
     __tablename__ = "payment_config"

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Video, X, Check, AlertCircle, Link2 } from "lucide-react";
 import api from "@/lib/api";
+import { useBusinessRules } from "@/hooks/useBusinessRules";
 
 export interface MeetLinkModalClassItem {
   id: number;
@@ -27,6 +28,7 @@ export function MeetLinkModal({ classItem, onClose, onSaved }: MeetLinkModalProp
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
+  const { rules } = useBusinessRules();
 
   // El modal se monta vía portal directamente en <body>: ClassCard usa
   // backdrop-blur/transform, que crean un "containing block" para elementos
@@ -85,7 +87,7 @@ export function MeetLinkModal({ classItem, onClose, onSaved }: MeetLinkModalProp
               <p className="text-xs text-slate-500 font-medium">
                 {classItem.meet_link
                   ? "Puedes editarlo cuando quieras"
-                  : "Si no cargas uno, se genera automáticamente 30 min antes de la clase"}
+                  : `Si no cargas uno, se genera automáticamente ${rules.meet_link_autogen_minutes} min antes de la clase`}
               </p>
             </div>
           </div>

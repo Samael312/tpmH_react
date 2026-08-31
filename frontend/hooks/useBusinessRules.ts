@@ -16,6 +16,9 @@ export interface BusinessRules {
   buffer_trial_minutes: number;
   buffer_regular_minutes: number;
   buffer_group_minutes: number;
+  // Minutos antes del inicio de la clase en los que se auto-genera el
+  // Meet link si todavía no tiene uno — ver backend core/scheduler.py.
+  meet_link_autogen_minutes: number;
 }
 
 // Pool fijo del que se eligen las duraciones de clase (regulares/paquetes)
@@ -34,6 +37,7 @@ const FALLBACK: BusinessRules = {
   buffer_trial_minutes: 5,
   buffer_regular_minutes: 10,
   buffer_group_minutes: 10,
+  meet_link_autogen_minutes: 30,
 };
 
 let cache: BusinessRules | null = null;

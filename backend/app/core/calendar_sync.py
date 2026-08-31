@@ -39,6 +39,19 @@ def _get_teacher_calendar_service(teacher_id: int, db: Session):
     return service, (token.calendar_id or "primary")
 
 
+def _teacher_attendee_emails(class_: Class) -> list[str]:
+    """
+    El profesor queda como invitado explícito del evento (sin correo de
+    invitación, ver sendUpdates="none" en core/google_calendar.py) para
+    que Google Meet lo reconozca siempre como participante autorizado y
+    pueda entrar a la videollamada sin pedir permiso — incluso si abre
+    el link desde una cuenta/sesión de Google distinta a la que tiene
+    conectada como Calendar. El alumno NO se agrega como invitado.
+    """
+    email = class_.teacher.user.email if class_.teacher and class_.teacher.user else None
+    return [email] if email else []
+
+
 def sync_class_created(class_: Class, db: Session) -> Optional[str]:
     service, calendar_id = _get_teacher_calendar_service(class_.teacher_id, db)
     if not service:
@@ -54,6 +67,7 @@ def sync_class_created(class_: Class, db: Session) -> Optional[str]:
             start_utc=class_.start_time_utc, end_utc=class_.end_time_utc,
             description=f"Clase de {class_.subject or 'General'}\nDuración: {class_.duration} minutos",
             meet_link=class_.meet_link,
+            attendee_emails=_teacher_attendee_emails(class_),
         )
     except Exception as e:
         logger.warning(f"Error en sync Calendar para clase {class_.id}: {e}")
@@ -71,6 +85,7 @@ def sync_class_updated(class_: Class, google_event_id: str, db: Session) -> bool
             service=service, calendar_id=calendar_id, event_id=google_event_id,
             start_utc=class_.start_time_utc, end_utc=class_.end_time_utc,
             meet_link=class_.meet_link,
+            attendee_emails=_teacher_attendee_emails(class_),
         )
     except Exception as e:
         logger.warning(f"Error actualizando Calendar clase {class_.id}: {e}")
@@ -94,8 +109,11 @@ def generate_meet_link_for_class(class_: Class, db: Session) -> Optional[str]:
         return None
 
     try:
+        attendee_emails = _teacher_attendee_emails(class_)
         if class_.google_event_id:
-            link = add_meet_conference_to_event(service, calendar_id, class_.google_event_id)
+            link = add_meet_conference_to_event(
+                service, calendar_id, class_.google_event_id, attendee_emails=attendee_emails
+            )
             if link:
                 return link
             # El evento ya no existe en Google (borrado externamente) —
@@ -114,6 +132,7 @@ def generate_meet_link_for_class(class_: Class, db: Session) -> Optional[str]:
             service=service, calendar_id=calendar_id, title=title,
             start_utc=class_.start_time_utc, end_utc=class_.end_time_utc,
             description=description,
+            attendee_emails=attendee_emails,
         )
         if event_id:
             class_.google_event_id = event_id

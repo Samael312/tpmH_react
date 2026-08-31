@@ -17,10 +17,6 @@ from app.core.google_calendar import run_calendar_sync_for_all_teachers
 from app.core.calendar_sync import generate_meet_link_for_class
 from app.core.email import send_class_reminder_email, send_class_reminder_teacher_email
 
-# Ventana antes del inicio de la clase en la que se auto-genera el
-# Meet link, si todavía no tiene uno asignado.
-MEET_LINK_AUTOGEN_MINUTES_BEFORE = 30
-
 logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
@@ -166,8 +162,10 @@ async def generate_upcoming_meet_links():
     """
     Job que se ejecuta cada 5 minutos.
     Genera automáticamente el link de videollamada (Google Meet, vía el
-    Calendar del profesor) para las clases confirmadas que empiezan en
-    los próximos 30 minutos y todavía NO tienen un link asignado.
+    Calendar del profesor) para las clases confirmadas que empiezan
+    dentro de la ventana configurada por el superadmin
+    (meet_link_autogen_minutes en PlatformConfig, default 30 min) y
+    todavía NO tienen un link asignado.
 
     Si la clase ya tiene un meet_link (cargado manualmente por el
     profesor o generado en una corrida anterior) no se toca — el
@@ -181,7 +179,8 @@ async def generate_upcoming_meet_links():
     db: Session = SessionLocal()
     now = utc_now()
     try:
-        window_end = now + timedelta(minutes=MEET_LINK_AUTOGEN_MINUTES_BEFORE)
+        autogen_minutes = get_business_rules(db)["meet_link_autogen_minutes"]
+        window_end = now + timedelta(minutes=autogen_minutes)
 
         upcoming = db.query(Class).filter(
             Class.status == "confirmed",

@@ -347,11 +347,15 @@ export default function ClassCard({
 
   // El link de la videollamada es 100% opcional: el profesor puede
   // cargarlo/editarlo solo mientras la clase está 'confirmed' (mismo
-  // estado en el que el backend se lo empieza a mostrar al alumno). El
-  // alumno solo ve el botón de unirse si efectivamente hay un link cargado.
+  // estado en el que el backend se lo empieza a mostrar al alumno).
+  // Tanto alumno como profesor ven el botón de unirse en cuanto hay un
+  // link cargado (el profesor además conserva el de editar).
   const canManageMeetLink = (role === "teacher" || role === "teacher_admin")
     && class_.status === "confirmed" && !readOnly;
-  const canJoinMeetLink = role === "student" && !!class_.meet_link;
+  // El profesor también puede unirse (no solo editar) una vez que hay
+  // link cargado — antes solo el alumno tenía botón de "Unirse".
+  const canJoinMeetLink = !!class_.meet_link
+    && (role === "student" || role === "teacher" || role === "teacher_admin");
 
   // BUG-05/17 fix: antes 'showTeacherActions' exigía !isPast, lo que ocultaba
   // los botones de Completar/No asistió justo cuando más se necesitan (después
