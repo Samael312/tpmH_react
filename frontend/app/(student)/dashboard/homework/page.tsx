@@ -13,6 +13,8 @@ import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 const STATUS_CONFIG: Record<string, {
   label: string;
@@ -54,6 +56,7 @@ function SubmitModal({
   const [sending, setSending] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError]     = useState("");
+  const toast = useToast();
 
   const dueDate = new Date(hw.homework.due_date_utc);
   const isOverdue = dueDate < new Date();
@@ -71,9 +74,10 @@ function SubmitModal({
         submission: text,
       });
       setSuccess(true);
+      toast.success("Tarea entregada correctamente");
       setTimeout(() => { onSaved(); onClose(); }, 1200);
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "Error enviando la tarea");
+    } catch (e) {
+      setError(getErrorMessage(e, "Error enviando la tarea"));
     } finally {
       setSending(false);
     }

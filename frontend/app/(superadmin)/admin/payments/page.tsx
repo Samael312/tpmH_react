@@ -11,6 +11,8 @@ import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
 import { usePageTopBar } from '@/lib/mobileTopBar'
+import { useToast } from '@/hooks/useToast'
+import { getErrorMessage } from '@/lib/errorMessage'
 
 const TYPE_BADGE: Record<string, { label: (p: any) => string; cls: string }> = {
   package: {
@@ -48,6 +50,7 @@ const TYPE_BADGE: Record<string, { label: (p: any) => string; cls: string }> = {
 }
 
 export default function PaymentsPage() {
+  const toast = useToast()
   const [activeTab, setActiveTab] = useState<'payments' | 'withdrawals' | 'teachers' | 'history'>('payments')
   const [validating, setValidating] = useState<number | null>(null)
   const [processing, setProcessing] = useState<number | null>(null)
@@ -92,8 +95,9 @@ export default function PaymentsPage() {
         action: 'approve',
       })
       refetchPayments()
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error aprobando el pago')
+      toast.success('Pago aprobado correctamente')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudo aprobar el pago'))
     } finally {
       setValidating(null)
     }
@@ -112,8 +116,9 @@ export default function PaymentsPage() {
     try {
       await api.post(`/payments/admin/withdrawals/${id}/process`, { action: 'complete' })
       refetchWithdrawals()
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error procesando retiro')
+      toast.success('Retiro procesado correctamente')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudo procesar el retiro'))
     } finally {
       setProcessing(null)
     }
@@ -148,9 +153,10 @@ export default function PaymentsPage() {
         })
         refetchWithdrawals()
       }
+      toast.success(rejectTarget.kind === 'payment' ? 'Pago rechazado correctamente' : 'Retiro rechazado correctamente')
       setRejectTarget(null)
-    } catch (e: any) {
-      alert(e.response?.data?.detail || `Error rechazando ${rejectTarget.kind === 'payment' ? 'el pago' : 'el retiro'}`)
+    } catch (e) {
+      toast.error(getErrorMessage(e, `No se pudo rechazar ${rejectTarget.kind === 'payment' ? 'el pago' : 'el retiro'}`))
     } finally {
       setValidating(null)
       setProcessing(null)

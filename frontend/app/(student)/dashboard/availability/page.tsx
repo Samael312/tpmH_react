@@ -13,6 +13,8 @@ import { useStudentPreferences } from "@/hooks/useStudentData";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 const DAYS = [
   { value: 0, label: "Lunes", short: "Lun" },
@@ -40,6 +42,7 @@ export default function StudentPreferencesPage() {
     refetch: refetchPreferences,
   } = useStudentPreferences();
   const [saving, setSaving] = useState(false);
+  const toast = useToast();
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
@@ -169,18 +172,12 @@ export default function StudentPreferencesPage() {
         slots: blocks,
       });
       setSuccessMsg("¡Preferencias actualizadas con éxito!");
+      toast.success("Preferencias de horario actualizadas correctamente");
       refetchPreferences();
-    } catch (e: any) {
-      const detail = e.response?.data?.detail;
-      let errorMessage = "Error guardando las preferencias";
-      if (typeof detail === "string") {
-        errorMessage = detail;
-      } else if (Array.isArray(detail)) {
-        errorMessage = detail.map((err: any) => err.msg || JSON.stringify(err)).join(", ");
-      } else if (typeof detail === "object" && detail !== null) {
-        errorMessage = detail.msg || JSON.stringify(detail);
-      }
+    } catch (e) {
+      const errorMessage = getErrorMessage(e, "Error guardando las preferencias");
       setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setSaving(false);
     }

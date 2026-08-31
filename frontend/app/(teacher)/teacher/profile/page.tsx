@@ -21,6 +21,8 @@ import { COUNTRY_OPTIONS, DEFAULT_COUNTRY, parsePhoneNumber, CountryInfo, TIMEZO
 import { NATIONALITIES, getFlagForNationality } from "@/lib/nationalities";
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 const MAX_VIDEO_SIZE_MB = 100;
 const ALLOWED_VIDEO_MIME_TYPES = ["video/mp4", "video/quicktime"];
@@ -308,6 +310,7 @@ function VideoUploadSection({
     if (!confirm("¿Eliminar tu video de presentación?")) return;
     try {
       await api.delete("/teachers/me/video");
+      setFeedback({ msg: "Video eliminado correctamente", type: "success" });
       onUploaded();
     } catch (e: any) {
       setFeedback({ msg: e.response?.data?.detail || "Error eliminando el video", type: "error" });
@@ -516,6 +519,7 @@ export default function TeacherProfilePage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const toast = useToast();
 
   usePageTopBar({
     title: "Mi Perfil",
@@ -658,7 +662,8 @@ export default function TeacherProfilePage() {
       await api.delete("/users/me");
       logout();
       window.location.href = "/";
-    } catch {
+    } catch (e) {
+      toast.error(getErrorMessage(e, "No se pudo eliminar la cuenta"));
       setDeleting(false);
     }
   };

@@ -17,6 +17,8 @@ import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 const STATUS_CONFIG: Record<string, {
   label: string;
@@ -56,6 +58,7 @@ function CancelModal({
   const [error, setError]           = useState("");
   const [left, setLeft]             = useState(false);
   const router = useRouter();
+  const toast = useToast();
 
   const cancel = async () => {
     setCancelling(true);
@@ -66,14 +69,16 @@ function CancelModal({
         // liberando su cupo en todas las sesiones futuras de la cohorte.
         await api.post(`/cohorts/${cohortId}/leave`);
         setLeft(true);
+        toast.success("Has salido del grupo correctamente");
         onSaved();
       } else {
         await api.delete(`/classes/${classId}`);
+        toast.success("Clase cancelada correctamente");
         onSaved();
         onClose();
       }
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "Error cancelando la clase");
+    } catch (e) {
+      setError(getErrorMessage(e, "Error cancelando la clase"));
     } finally {
       setCancelling(false);
     }

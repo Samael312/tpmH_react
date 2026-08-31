@@ -9,6 +9,8 @@ import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
 import { usePageTopBar } from '@/lib/mobileTopBar'
+import { useToast } from '@/hooks/useToast'
+import { getErrorMessage } from '@/lib/errorMessage'
 
 const CATEGORY_CONFIG: Record<string, { label: string; icon: React.ReactNode }> = {
   bug: { label: 'Bug', icon: <Bug className="w-3.5 h-3.5" /> },
@@ -40,6 +42,7 @@ function ResolveModal({
   const [response, setResponse] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const toast = useToast()
 
   const submit = async () => {
     if (!response.trim()) return
@@ -47,10 +50,11 @@ function ResolveModal({
     setError('')
     try {
       await api.patch(`/admin/support-tickets/${ticket.id}/resolve`, { admin_response: response.trim() })
+      toast.success('Ticket respondido correctamente')
       onResolved()
       onClose()
-    } catch (e: any) {
-      setError(e.response?.data?.detail || 'Error respondiendo el ticket')
+    } catch (e) {
+      setError(getErrorMessage(e, 'Error respondiendo el ticket'))
     } finally {
       setSending(false)
     }

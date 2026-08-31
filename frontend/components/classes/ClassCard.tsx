@@ -7,6 +7,8 @@ import api from "@/lib/api";
 import { getFlagForNationality } from "@/lib/nationalities";
 import { formatTimeTz, formatWeekdayShortTz, formatMonthShortTz, getDayOfMonthTz, getMyDisplayTimezone } from "@/lib/tzFormat";
 import { MeetLinkModal } from "./MeetLinkModal";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 export interface ClassCardData {
   id: number;
@@ -156,6 +158,7 @@ export default function ClassCard({
   class_, role, readOnly = false, onUpdate, onReschedule, onCancel,
 }: ClassCardProps) {
   const [updating, setUpdating] = useState(false);
+  const toast = useToast();
   const [showInlineReschedule, setShowInlineReschedule] = useState(false);
   const [newDate, setNewDate] = useState("");
   const [newTime, setNewTime] = useState("");
@@ -251,8 +254,13 @@ export default function ClassCard({
     setUpdating(true); setError("");
     try {
       await api.patch(`/classes/${class_.id}/status`, { status: newStatus });
+      toast.success(
+        newStatus === "completed" ? "Clase marcada como completada" :
+        newStatus === "no_show" ? "Clase marcada como no asistida" :
+        "Estado de la clase actualizado"
+      );
       onUpdate?.();
-    } catch (e: any) { setError(e.response?.data?.detail || "Error actualizando"); } 
+    } catch (e) { const msg = getErrorMessage(e, "Error actualizando la clase"); setError(msg); toast.error(msg); } 
     finally { setUpdating(false); }
   };
 
@@ -269,8 +277,9 @@ export default function ClassCard({
       
       await api.patch(endpoint, { start_time_utc: startUtc, end_time_utc: endUtc });
       setShowInlineReschedule(false); setNewDate(""); setNewTime("");
+      toast.success("Clase reagendada correctamente");
       onUpdate?.();
-    } catch (e: any) { setError(e.response?.data?.detail || "Error reagendando"); } 
+    } catch (e) { const msg = getErrorMessage(e, "Error reagendando"); setError(msg); toast.error(msg); } 
     finally { setUpdating(false); }
   };
 
@@ -289,8 +298,9 @@ export default function ClassCard({
       } else {
         await api.delete(`/classes/${class_.id}`);
       }
+      toast.success("Clase cancelada correctamente");
       onUpdate?.();
-    } catch (e: any) { setError(e.response?.data?.detail || "Error al cancelar"); } 
+    } catch (e) { const msg = getErrorMessage(e, "Error al cancelar"); setError(msg); toast.error(msg); } 
     finally { setUpdating(false); }
   };
 
@@ -298,8 +308,9 @@ export default function ClassCard({
     setUpdating(true); setError("");
     try {
       await api.delete(`/classes/teacher/${class_.id}`);
+      toast.success("Clase cancelada correctamente");
       onUpdate?.();
-    } catch (e: any) { setError(e.response?.data?.detail || "Error al cancelar"); } 
+    } catch (e) { const msg = getErrorMessage(e, "Error al cancelar"); setError(msg); toast.error(msg); } 
     finally { setUpdating(false); }
   };
 

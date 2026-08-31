@@ -17,6 +17,7 @@ import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
 import { usePageTopBar } from '@/lib/mobileTopBar'
+import { useToast } from '@/hooks/useToast'
 
 function BanStudentModal({
   student,
@@ -30,6 +31,7 @@ function BanStudentModal({
   const [reason, setReason] = useState('')
   const [banning, setBanning] = useState(false)
   const [error, setError] = useState('')
+  const toast = useToast()
 
   const confirmBan = async () => {
     if (!reason.trim()) {
@@ -40,6 +42,7 @@ function BanStudentModal({
     setError('')
     try {
       await api.post(`/admin/students/${student.id}/ban`, { reason: reason.trim() })
+      toast.success('Estudiante expulsado correctamente')
       onBanned()
       onClose()
     } catch (e: any) {

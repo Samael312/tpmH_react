@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Check, X, Loader2 } from "lucide-react";
 import api from "@/lib/api";
 import PaymentMethodsInfo from "./PaymentMethodsInfo";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 interface BuyCreditsModalProps {
   enrollmentId: number;
@@ -21,6 +23,7 @@ export default function BuyCreditsModal({
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  const toast = useToast();
 
   const amount = Math.round(creditsRequested * pricePerClass * 100) / 100;
 
@@ -35,9 +38,10 @@ export default function BuyCreditsModal({
         transaction_reference: reference.trim() || undefined,
       });
       setDone(true);
+      toast.success("Solicitud de recarga enviada correctamente");
       setTimeout(() => { onDone(); onClose(); }, 1500);
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "Error notificando el pago");
+    } catch (e) {
+      setError(getErrorMessage(e, "Error notificando el pago"));
     } finally {
       setSending(false);
     }

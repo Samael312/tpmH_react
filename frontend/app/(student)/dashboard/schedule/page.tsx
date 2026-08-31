@@ -23,6 +23,8 @@ import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import RejectedPaymentNotice from "@/components/payments/RejectedPaymentNotice";
 import type { RejectedPaymentInfo } from "@/hooks/useStudentData";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 type BookingStage =
   | "loading"
@@ -349,6 +351,7 @@ function StepConfirmTrial({
   const [booking, setBooking] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  const toast = useToast();
 
   const myTz = getMyDisplayTimezone();
   const fmtDate = formatDateHumanTz(date + "T00:00:00", myTz); 
@@ -369,9 +372,10 @@ function StepConfirmTrial({
         subject,
       });
       setDone(true);
+      toast.success("Clase de prueba reservada correctamente");
       setTimeout(onBooked, 2000);
-    } catch (e: any) {
-      setError(extractErrorMessage(e, "Error reservando la clase de prueba"));
+    } catch (e) {
+      setError(getErrorMessage(e, "Error reservando la clase de prueba"));
     } finally {
       setBooking(false);
     }
@@ -467,6 +471,7 @@ function StepPayment({
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
   const [noCredits, setNoCredits] = useState(false);
+  const toast = useToast();
 
   const myTz = getMyDisplayTimezone();
   const fmtDate = formatDateHumanTz(date + "T00:00:00", myTz);
@@ -487,12 +492,14 @@ function StepPayment({
       });
       if (res.data.status === "confirmed") {
         setDone(true);
+        toast.success("Clase reservada correctamente");
         setTimeout(onSuccess, 1500);
         return;
       }
       // No debería ocurrir (book_class ya no devuelve otro estado), pero por
       // seguridad tratamos cualquier otro resultado como éxito silencioso.
       setDone(true);
+      toast.success("Clase reservada correctamente");
       setTimeout(onSuccess, 1500);
     } catch (e: any) {
       const detail = e?.response?.data?.detail;
@@ -698,6 +705,7 @@ function GroupPackagesBrowser({
   // pedir referencia de comprobante (a diferencia del checkout individual).
   const [confirming, setConfirming] = useState<{ pkg: GroupPackageLite; cohort: CohortLite } | null>(null);
   const [reference, setReference] = useState("");
+  const toast = useToast();
 
   useEffect(() => {
     if (!groupPackages.length) { setLoadingCohorts(false); return; }
@@ -722,10 +730,11 @@ function GroupPackagesBrowser({
         transaction_reference: reference.trim() || undefined,
       });
       setJoined(true);
+      toast.success("Inscripción al grupo enviada correctamente");
       setTimeout(onEnrolled, 1200);
     } catch (e) {
-      const err = e as { response?: { data?: { detail?: string } } };
-      setError(err.response?.data?.detail || "Error al inscribirte en la cohorte");
+      const msg = getErrorMessage(e, "Error al inscribirte en la cohorte");
+      setError(msg);
     } finally {
       setJoining(false);
     }

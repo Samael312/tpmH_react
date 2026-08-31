@@ -12,6 +12,8 @@ import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 interface TeacherBrowseData {
   teacher: PublicProfileTeacher;
@@ -34,6 +36,7 @@ export default function TeacherBrowsePage() {
   const [choosing, setChoosing] = useState(false);
   const [chooseError, setChooseError] = useState("");
   const [chosen, setChosen] = useState(false);
+  const toast = useToast();
 
   const {
     data,
@@ -82,10 +85,11 @@ export default function TeacherBrowsePage() {
     try {
       await api.post(`/users/me/teachers/${username}`);
       setChosen(true);
+      toast.success("Profesor añadido correctamente");
       refetchMyTeachers();
       setTimeout(() => setChosen(false), 3000);
-    } catch (e: any) {
-      setChooseError(e.response?.data?.detail || "Error añadiendo profesor");
+    } catch (e) {
+      setChooseError(getErrorMessage(e, "Error añadiendo profesor"));
     } finally {
       setChoosing(false);
     }
@@ -96,9 +100,10 @@ export default function TeacherBrowsePage() {
     setUnlinkError("");
     try {
       await api.delete(`/users/me/teachers/${username}`);
+      toast.success("Profesor eliminado de tu lista correctamente");
       refetchMyTeachers();
-    } catch (e: any) {
-      setUnlinkError(e.response?.data?.detail || "No se pudo terminar la relación");
+    } catch (e) {
+      setUnlinkError(getErrorMessage(e, "No se pudo terminar la relación"));
     } finally {
       setUnlinking(false);
     }
@@ -125,8 +130,9 @@ export default function TeacherBrowsePage() {
       setShowReviewForm(false);
       setReviewRating(0);
       setReviewComment("");
-    } catch (e: any) {
-      setReviewError(e.response?.data?.detail || "Error al enviar tu reseña.");
+      toast.success("Reseña enviada correctamente");
+    } catch (e) {
+      setReviewError(getErrorMessage(e, "Error al enviar tu reseña."));
     } finally {
       setSubmittingReview(false);
     }

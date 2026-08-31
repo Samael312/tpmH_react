@@ -11,6 +11,8 @@ import api from "@/lib/api";
 import { getMyDisplayTimezone } from "@/lib/tzFormat";
 import { useCalendarStatus, type CalendarStatus } from "@/hooks/useTeacherData";
 import Skeleton from "@/components/ui/Skeleton";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 interface SyncResult {
   new_count:     number;
@@ -22,6 +24,7 @@ interface SyncResult {
 export default function CalendarSync() {
   const { status, loading, isError, refetch } = useCalendarStatus();
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   // Sincronización
   const [syncing, setSyncing]       = useState(false);
@@ -45,7 +48,8 @@ export default function CalendarSync() {
       const res = await api.get("/calendar/auth-url");
       // Redirigir al flujo OAuth de Google
       window.location.href = res.data.auth_url;
-    } catch {
+    } catch (e) {
+      toast.error(getErrorMessage(e, "No se pudo iniciar la conexión con Google Calendar"));
       setConnecting(false);
     }
   };
@@ -57,7 +61,9 @@ export default function CalendarSync() {
       await api.post("/calendar/disconnect");
       await refetch();
       setConfirm(false);
-    } catch {
+      toast.success("Google Calendar desconectado correctamente");
+    } catch (e) {
+      toast.error(getErrorMessage(e, "No se pudo desconectar el calendario"));
     } finally {
       setDisconnecting(false);
     }
@@ -75,7 +81,9 @@ export default function CalendarSync() {
         ["teacher", "calendar", "status"],
         (prev) => (prev ? { ...prev, sync_enabled: !prev.sync_enabled } : prev)
       );
-    } catch {
+      toast.success(!status.sync_enabled ? "Sincronización automática activada" : "Sincronización automática desactivada");
+    } catch (e) {
+      toast.error(getErrorMessage(e, "No se pudo cambiar la sincronización automática"));
     } finally {
       setTogglingSync(false);
     }
@@ -93,8 +101,11 @@ export default function CalendarSync() {
         ["teacher", "calendar", "status"],
         (prev) => (prev ? { ...prev, last_sync_at: new Date().toISOString() } : prev)
       );
-    } catch (e: any) {
-      setSyncError(e.response?.data?.detail || "Error al sincronizar");
+      toast.success("Calendario sincronizado correctamente");
+    } catch (e) {
+      const msg = getErrorMessage(e, "Error al sincronizar");
+      setSyncError(msg);
+      toast.error(msg);
     } finally {
       setSyncing(false);
     }

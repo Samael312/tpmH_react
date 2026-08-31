@@ -13,6 +13,8 @@ import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 import {
   useTeacherHomework,
   useHomeworkSubmissions,
@@ -197,6 +199,7 @@ function GradeModal({
   const [feedback, setFeedback] = useState(submission.feedback ?? "");
   const [saving, setSaving]     = useState(false);
   const [success, setSuccess]   = useState(false);
+  const toast = useToast();
 
   const hasSubmission = Boolean(submission.submission);
 
@@ -209,9 +212,10 @@ function GradeModal({
         { score, feedback }
       );
       setSuccess(true);
+      toast.success("Tarea calificada correctamente");
       setTimeout(() => { onSaved(); onClose(); }, 1000);
-    } catch (e: any) {
-      alert(e.response?.data?.detail || "Error calificando");
+    } catch (e) {
+      toast.error(getErrorMessage(e, "No se pudo calificar la tarea"));
     } finally { setSaving(false); }
   };
 
@@ -354,6 +358,7 @@ function EditHomeworkModal({
   const [due, setDue] = useState(hw.due_date_utc.slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const toast = useToast();
 
   const save = async () => {
     setSaving(true); setError("");
@@ -363,10 +368,11 @@ function EditHomeworkModal({
         description: content,
         due_date_utc: new Date(`${due}T23:59:59`).toISOString(),
       });
+      toast.success("Tarea actualizada correctamente");
       onSaved();
       onClose();
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "Error actualizando la tarea");
+    } catch (e) {
+      setError(getErrorMessage(e, "Error actualizando la tarea"));
     } finally { setSaving(false); }
   };
 
@@ -435,16 +441,18 @@ function DeleteHomeworkModal({
 }: { hw: Homework; onClose: () => void; onDeleted: () => void }) {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const toast = useToast();
 
   const confirmDelete = async () => {
     setDeleting(true);
     setError("");
     try {
       await api.delete(`/homework/${hw.id}`);
+      toast.success("Tarea eliminada correctamente");
       onDeleted();
       onClose();
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "Error eliminando la tarea");
+    } catch (e) {
+      setError(getErrorMessage(e, "Error eliminando la tarea"));
     } finally {
       setDeleting(false);
     }
@@ -520,6 +528,7 @@ function DeleteHomeworkModal({
 export default function HomeworkPage() {
   const { homeworks, loading, isFetching: hwFetching, isError: hwError, refetch: refetchHomework } = useTeacherHomework();
   const { students, isFetching: stuFetching, isError: stuError, refetch: refetchStudents } = useTeacherStudentsBasic();
+  const toast = useToast();
   const [tab, setTab]                 = useState<"create" | "review">("review");
   const [activeHw, setActiveHw]       = useState<number | null>(null);
   const [gradeTarget, setGradeTarget] = useState<Submission | null>(null);
@@ -592,6 +601,7 @@ export default function HomeworkPage() {
       setStudentSearch("");
       refetchHomework();
       setTab("review");
+      toast.success("Tarea creada correctamente");
     } catch (e: any) {
       const detail = e.response?.data?.detail;
       setCreateError(

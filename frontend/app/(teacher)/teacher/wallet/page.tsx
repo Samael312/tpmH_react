@@ -9,6 +9,8 @@ import ChipiWidget from '@/components/chipi/ChipiWidget'
 import { Wallet as WalletIcon, TrendingUp, CheckCircle2, X, Loader2, ArrowDownLeft, ArrowUpRight, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS, PAYMENT_METHODS as FALLBACK_WITHDRAWAL } from "@/lib/teacherOptions";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 const STATUS_BADGE: Record<string, 'warning' | 'success' | 'danger' | 'info'> = {
   pending: 'warning',
@@ -46,6 +48,7 @@ function RequestWithdrawalModal({
   const [paymentInfo, setPaymentInfo] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const toast = useToast()
 
   const amountNum = parseFloat(amount)
   const valid = amountNum >= 10 && amountNum <= available && paymentInfo.trim().length > 0
@@ -60,10 +63,11 @@ function RequestWithdrawalModal({
         destination_method: method,
         payment_info: paymentInfo.trim(),
       })
+      toast.success('Solicitud de retiro enviada correctamente')
       onDone()
       onClose()
-    } catch (e: any) {
-      setError(e.response?.data?.detail || 'Error solicitando el retiro')
+    } catch (e) {
+      setError(getErrorMessage(e, 'Error solicitando el retiro'))
     } finally {
       setSending(false)
     }

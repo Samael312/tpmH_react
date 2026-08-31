@@ -22,6 +22,8 @@ import { useStudentProfileData } from "@/hooks/useStudentData";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 // ─── Helpers & Formateadores de Errores ──────────────────────────────────────
 function formatErrorMessage(error: any, fallbackMessage: string): string {
@@ -147,6 +149,7 @@ function ProfileSkeleton() {
 export default function StudentProfilePage() {
   const { catalogs } = useSystemCatalogs();
   const { user, setUser, logout } = useAuthStore();
+  const toast = useToast();
   const [nationality, setNationality] = useState("");
   const [profile, setProfile] = useState<any>(null);
   const {
@@ -379,7 +382,8 @@ export default function StudentProfilePage() {
       await api.delete("/users/me");
       logout();
       window.location.href = "/";
-    } catch {
+    } catch (e) {
+      toast.error(getErrorMessage(e, "No se pudo eliminar la cuenta"));
       setDeleting(false);
     }
   }, [deleteInput, username, user?.username, logout]);
@@ -405,6 +409,7 @@ export default function StudentProfilePage() {
         setUser({ ...user, avatar_url: newAvatarUrl });
       }
       refetchProfile();
+      toast.success("Foto de perfil actualizada correctamente");
     } catch (e: any) {
       setInfoFeedback({
         msg: formatErrorMessage(e, "Error al subir la imagen"),

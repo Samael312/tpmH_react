@@ -9,6 +9,8 @@ import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 const TYPE_BADGE: Record<string, { label: (p: any) => string; cls: string }> = {
   package:            { label: p => p.installment_total ? `Cuota ${p.installment_index}/${p.installment_total}` : "Paquete", cls: "bg-pink-100 text-pink-700" },
@@ -44,6 +46,7 @@ export default function TeacherPaymentsPage() {
   } = useTeacherPaymentsHistory(!isPendingTab);
 
   const [processing, setProcessing] = useState<number | null>(null);
+  const toast = useToast();
 
   // Datos/estado de la tab activa
   const list = isPendingTab ? payments : history;
@@ -68,8 +71,9 @@ export default function TeacherPaymentsPage() {
         action: "approve",
       });
       refetchPending();
-    } catch (e: any) {
-      alert(e.response?.data?.detail || "Error aprobando");
+      toast.success("Pago aprobado correctamente");
+    } catch (e) {
+      toast.error(getErrorMessage(e, "Error aprobando el pago"));
     } finally { setProcessing(null); }
   };
 
@@ -80,8 +84,9 @@ export default function TeacherPaymentsPage() {
     try {
       await api.patch(`/payments/${p.payment_id}/validate`, { action: "reject", rejection_reason: reason });
       refetchPending();
-    } catch (e: any) {
-      alert(e.response?.data?.detail || "Error rechazando");
+      toast.success("Pago rechazado correctamente");
+    } catch (e) {
+      toast.error(getErrorMessage(e, "Error rechazando el pago"));
     } finally { setProcessing(null); }
   };
 

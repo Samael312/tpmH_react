@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { Video, X, Check, AlertCircle, Link2 } from "lucide-react";
 import api from "@/lib/api";
 import { useBusinessRules } from "@/hooks/useBusinessRules";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 export interface MeetLinkModalClassItem {
   id: number;
@@ -29,6 +31,7 @@ export function MeetLinkModal({ classItem, onClose, onSaved }: MeetLinkModalProp
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
   const { rules } = useBusinessRules();
+  const toast = useToast();
 
   // El modal se monta vía portal directamente en <body>: ClassCard usa
   // backdrop-blur/transform, que crean un "containing block" para elementos
@@ -48,9 +51,10 @@ export function MeetLinkModal({ classItem, onClose, onSaved }: MeetLinkModalProp
         meet_link: link.trim() || null,
       });
       setSuccess(true);
+      toast.success("Link de la clase guardado correctamente");
       setTimeout(() => { onSaved(); onClose(); }, 900);
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "Error guardando el link");
+    } catch (e) {
+      setError(getErrorMessage(e, "Error guardando el link"));
     } finally {
       setSaving(false);
     }

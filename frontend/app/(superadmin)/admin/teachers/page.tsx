@@ -11,6 +11,8 @@ import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
 import { usePageTopBar } from '@/lib/mobileTopBar'
+import { useToast } from '@/hooks/useToast'
+import { getErrorMessage } from '@/lib/errorMessage'
 
 const STATUS_TABS = [
   { key: undefined,   label: 'Todos' },
@@ -48,6 +50,7 @@ function TeacherDetailModal({
   const [actioning, setActioning] = useState(false)
   const [resolvingAppealId, setResolvingAppealId] = useState<number | null>(null)
   const [adminResponse, setAdminResponse] = useState('')
+  const toast = useToast()
 
   const updateStatus = async (newStatus: string) => {
     setActioning(true)
@@ -59,10 +62,15 @@ function TeacherDetailModal({
         body.reason = reason
       }
       await api.patch(`/admin/teachers/${teacher.id}/status`, body)
+      toast.success(
+        newStatus === 'approved' ? 'Profesor aprobado correctamente' :
+        newStatus === 'rejected' ? 'Profesor rechazado correctamente' :
+        'Estado del profesor actualizado'
+      )
       onActioned()
       onClose()
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudo actualizar el estado del profesor'))
     } finally {
       setActioning(false)
     }
@@ -77,9 +85,10 @@ function TeacherDetailModal({
       })
       setAdminResponse('')
       await refetchAppeals()
+      toast.success(action === 'approve' ? 'Apelación aprobada correctamente' : 'Apelación rechazada correctamente')
       onActioned()
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error resolviendo la apelación')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudo resolver la apelación'))
     } finally {
       setResolvingAppealId(null)
     }
@@ -255,6 +264,7 @@ export default function TeachersPage() {
   const [commissionValue, setCommissionValue] = useState('')
   const [detailTarget, setDetailTarget] = useState<any | null>(null)
   const { teachers, loading, isFetching, isError, refetch } = useTeachers(activeTab)
+  const toast = useToast()
 
   usePageTopBar({
     title: 'Directorio de Profesores',
@@ -272,9 +282,14 @@ export default function TeachersPage() {
         body.reason = reason
       }
       await api.patch(`/admin/teachers/${teacherId}/status`, body)
+      toast.success(
+        newStatus === 'approved' ? 'Profesor aprobado correctamente' :
+        newStatus === 'rejected' ? 'Profesor rechazado correctamente' :
+        'Estado del profesor actualizado'
+      )
       refetch()
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudo actualizar el estado del profesor'))
     } finally {
       setActioning(null)
     }
@@ -283,7 +298,7 @@ export default function TeachersPage() {
   const updateCommission = async (teacherId: number) => {
     const rate = parseFloat(commissionValue)
     if (isNaN(rate) || rate < 0 || rate > 1) {
-      alert('Introduce un valor entre 0 y 1 (ej: 0.15 = 15%)')
+      toast.warning('Introduce un valor entre 0 y 1 (ej: 0.15 = 15%)')
       return
     }
     try {
@@ -291,9 +306,10 @@ export default function TeachersPage() {
         commission_rate: rate
       })
       setCommissionEdit(null)
+      toast.success('Comisión del profesor actualizada correctamente')
       refetch()
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudo actualizar la comisión'))
     }
   }
 

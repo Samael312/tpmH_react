@@ -9,6 +9,8 @@ import api from "@/lib/api";
 import { useAvailableSlots } from "@/hooks/useStudentData";
 import { useBusinessRules } from "@/hooks/useBusinessRules";
 import { getMyDisplayTimezone, formatTimeTz } from "@/lib/tzFormat";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 // ─── Mini calendario inline para reagendar ────────────────────────────────────
 // Compartido entre el flujo de estudiante y el de profesor: ambos deben
@@ -162,6 +164,7 @@ export function RescheduleModal({
   const [success, setSuccess] = useState(false);
   const [error, setError]     = useState("");
   const [selected, setSelected] = useState<any>(null);
+  const toast = useToast();
 
   const currentDuration = classItem?.duration_minutes || 60;
   const resolvedClassType = classItem?.classType ?? (classItem?.isGroup ? "group" : "regular");
@@ -212,9 +215,10 @@ export function RescheduleModal({
         end_time_utc:   selected.end_time_utc,
       });
       setSuccess(true);
+      toast.success("Clase reagendada correctamente");
       setTimeout(() => { onSaved(); onClose(); }, 1200);
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "Error reagendando la clase");
+    } catch (e) {
+      setError(getErrorMessage(e, "Error reagendando la clase"));
     } finally {
       setSaving(false);
     }

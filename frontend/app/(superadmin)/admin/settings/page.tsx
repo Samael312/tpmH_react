@@ -15,6 +15,8 @@ import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
 import { usePageTopBar } from '@/lib/mobileTopBar'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { useToast } from '@/hooks/useToast'
+import { getErrorMessage } from '@/lib/errorMessage'
 
 function CatalogEditor({ catalogKey, label, items, onSave }: {
   catalogKey: string; label: string; items: string[]; onSave: (v: string[]) => Promise<void>;
@@ -333,6 +335,7 @@ const TABS = [
 type TabKey = typeof TABS[number]['key']
 
 export default function SettingsPage() {
+  const toast = useToast()
   const { paymentConfig: remotePaymentConfig, loading: pcLoading, isFetching: pcFetching, isError: pcError, refetch: refetchPaymentConfig } = useAdminPaymentConfig()
   const { platformConfig: remotePlatformConfig, loading: plLoading, isFetching: plFetching, isError: plError, refetch: refetchPlatformConfig } = useAdminPlatformConfig()
     const { catalogs, loading: catLoading, isFetching: catFetching, isError: catError, refetch: refetchCatalogs } = useSystemCatalogs()
@@ -398,8 +401,13 @@ export default function SettingsPage() {
   }
 
   const saveCatalog = async (key: string, value: any) => {
-    await api.patch(`/system-catalogs/${key}`, { value })
-    await refetchCatalogs()
+    try {
+      await api.patch(`/system-catalogs/${key}`, { value })
+      await refetchCatalogs()
+      toast.success('Catálogo actualizado correctamente')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudo guardar el catálogo'))
+    }
   }
 
   const saveBusinessRules = async (patch: any) => {
@@ -417,8 +425,9 @@ export default function SettingsPage() {
       // después de guardar, aunque el backend sí había guardado el cambio
       // (por eso al refrescar la página manualmente se veía correcto).
       await refetchBusinessRules()
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error guardando')
+      toast.success('Reglas de negocio guardadas correctamente')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudieron guardar las reglas de negocio'))
     } finally {
       setRulesSaving(false)
     }
@@ -432,9 +441,10 @@ export default function SettingsPage() {
       setPaymentDirty(false)
       await refetchPaymentConfig()
       setSaved(true)
+      toast.success('Configuración de pagos guardada correctamente')
       setTimeout(() => setSaved(false), 2000)
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error guardando')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudo guardar la configuración de pagos'))
     } finally {
       setSaving(false)
     }
@@ -452,9 +462,10 @@ export default function SettingsPage() {
       setPlatformDirty(false)
       await refetchPlatformConfig()
       setSaved(true)
+      toast.success('Configuración de la plataforma guardada correctamente')
       setTimeout(() => setSaved(false), 2000)
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error guardando')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudo guardar la configuración de la plataforma'))
     } finally {
       setSaving(false)
     }

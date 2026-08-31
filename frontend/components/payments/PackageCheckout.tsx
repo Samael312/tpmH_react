@@ -6,6 +6,8 @@ import { useState } from "react";
 import { Check, X, Loader2, CreditCard, Split } from "lucide-react";
 import api from "@/lib/api";
 import PaymentMethodsInfo from "./PaymentMethodsInfo";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 export interface PackageLite {
   id: number;
@@ -61,6 +63,7 @@ export default function PackageCheckout({
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  const toast = useToast();
 
   const alreadyMidInstallments = installmentsPaid > 0;
   const nextIndex = installmentsPaid + 1;
@@ -152,12 +155,13 @@ export default function PackageCheckout({
         transaction_reference: reference.trim() || undefined,
       });
       setDone(true);
+      toast.success("Solicitud de pago enviada correctamente");
       setTimeout(() => {
         onDone();
         onClose();
       }, 1500);
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "Error notificando el pago");
+    } catch (e) {
+      setError(getErrorMessage(e, "Error notificando el pago"));
     } finally {
       setSending(false);
     }

@@ -11,6 +11,8 @@ import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
 import { usePageTopBar } from '@/lib/mobileTopBar'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
+import { useToast } from '@/hooks/useToast'
+import { getErrorMessage } from '@/lib/errorMessage'
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -252,6 +254,7 @@ function RejectionFeedbackBanner({ profile, onRefetch }: { profile: any; onRefet
 
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const toast = useToast()
 
   if (profile?.status !== 'rejected') return null
 
@@ -260,7 +263,9 @@ function RejectionFeedbackBanner({ profile, onRefetch }: { profile: any; onRefet
     try {
       await api.patch('/teachers/me/feedback-seen')
       onRefetch()
-    } catch { } finally { setDismissing(false) }
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudo descartar el aviso'))
+    } finally { setDismissing(false) }
   }
 
   const submitAppeal = async () => {
@@ -270,10 +275,11 @@ function RejectionFeedbackBanner({ profile, onRefetch }: { profile: any; onRefet
     try {
       await api.post('/teachers/me/appeal', { message: appealMessage.trim() })
       setAppealSent(true)
+      toast.success('Apelación enviada correctamente')
       setAppealMessage('')
       onRefetch()
-    } catch (e: any) {
-      setAppealError(e.response?.data?.detail || 'Error enviando la apelación')
+    } catch (e) {
+      setAppealError(getErrorMessage(e, 'Error enviando la apelación'))
     } finally {
       setSubmittingAppeal(false)
     }
@@ -290,9 +296,10 @@ function RejectionFeedbackBanner({ profile, onRefetch }: { profile: any; onRefet
       await api.post('/teachers/me/video', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
+      toast.success('Video subido correctamente')
       onRefetch()
-    } catch (e: any) {
-      setUploadError(e.response?.data?.detail || 'Error subiendo el video')
+    } catch (e) {
+      setUploadError(getErrorMessage(e, 'Error subiendo el video'))
     } finally {
       setUploading(false)
     }

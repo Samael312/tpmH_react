@@ -12,10 +12,13 @@ import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
 import { usePageTopBar } from '@/lib/mobileTopBar'
+import { useToast } from '@/hooks/useToast'
+import { getErrorMessage } from '@/lib/errorMessage'
 
 export default function BannedStudentsPage() {
   const { students, loading, isFetching, isError, refetch } = useBannedStudents()
   const [revertingId, setRevertingId] = useState<number | null>(null)
+  const toast = useToast()
 
   usePageTopBar({
     title: 'Estudiantes Baneados',
@@ -29,8 +32,9 @@ export default function BannedStudentsPage() {
     try {
       await api.post(`/admin/students/${id}/unban`)
       refetch()
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error revirtiendo el baneo')
+      toast.success('Estudiante reactivado correctamente')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudo revertir el baneo del estudiante'))
     } finally {
       setRevertingId(null)
     }

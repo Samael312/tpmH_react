@@ -14,6 +14,8 @@ import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
 import { usePageTopBar } from '@/lib/mobileTopBar'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
+import { useToast } from '@/hooks/useToast'
+import { getErrorMessage } from '@/lib/errorMessage'
 import {
   Bell, CheckCheck, Video, MessageSquare, UserPlus,
   ChevronRight, Clock, CreditCard, Users, GraduationCap,
@@ -28,19 +30,25 @@ const NOTIF_ICON: Record<string, React.ReactNode> = {
 // ─── Sección de notificaciones (independiente, arriba de todo) ─────────────
 function NotificationsSection() {
   const { notifications, loading, isError, refetch } = useNotifications(true)
+  const toast = useToast()
 
   const markRead = async (id: number) => {
     try {
       await api.patch(`/admin/notifications/${id}/read`)
       refetch()
-    } catch {}
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudo marcar la notificación como leída'))
+    }
   }
 
   const markAllRead = async () => {
     try {
       await api.post('/admin/notifications/mark-all-read')
       refetch()
-    } catch {}
+      toast.success('Todas las notificaciones marcadas como leídas')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudieron marcar las notificaciones como leídas'))
+    }
   }
 
   return (
@@ -134,6 +142,7 @@ function NotificationsSection() {
 function PendingPaymentsSection() {
   const { payments, loading, isError, refetch } = usePendingPayments()
   const [validating, setValidating] = useState<number | null>(null)
+  const toast = useToast()
 
   // BUG-04/12 fix: se eliminó "single_class" y el requisito de link de Meet
   // al aprobar (antes este widget ni siquiera dejaba aprobar sin meetLink,
@@ -143,8 +152,9 @@ function PendingPaymentsSection() {
     try {
       await api.patch(`/payments/${paymentId}/validate`, { action: 'approve' })
       refetch()
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error aprobando pago')
+      toast.success('Pago aprobado correctamente')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudo aprobar el pago'))
     } finally {
       setValidating(null)
     }
@@ -157,8 +167,9 @@ function PendingPaymentsSection() {
     try {
       await api.patch(`/payments/${paymentId}/validate`, { action: 'reject', rejection_reason: reason })
       refetch()
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Error rechazando pago')
+      toast.success('Pago rechazado correctamente')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudo rechazar el pago'))
     } finally {
       setValidating(null)
     }

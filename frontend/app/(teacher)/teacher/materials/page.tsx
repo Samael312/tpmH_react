@@ -18,6 +18,8 @@ import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 interface ExpandableDescriptionProps {
   text: string;
@@ -124,6 +126,7 @@ function AssignModal({
   const [search, setSearch]     = useState("");
   const [cohorts, setCohorts] = useState<TeacherCohort[]>([]);
   const [cohortId, setCohortId] = useState<number | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     api.get<TeacherCohort[]>("/cohorts/teacher")
@@ -153,9 +156,10 @@ function AssignModal({
         cohort_id: cohortId,
       });
       setSuccess(true);
+      toast.success("Material asignado correctamente");
       setTimeout(onClose, 1200);
-    } catch (e: any) {
-      alert(e.response?.data?.detail || "Error asignando");
+    } catch (e) {
+      toast.error(getErrorMessage(e, "No se pudo asignar el material"));
     } finally { setAssigning(false); }
   };
 
@@ -346,6 +350,7 @@ function VocabModal({
   const [list, setList]       = useState<string[]>(words);
   const [input, setInput]     = useState("");
   const [saving, setSaving]   = useState(false);
+  const toast = useToast();
 
   const addWord = () => {
     const w = input.trim();
@@ -360,10 +365,11 @@ function VocabModal({
     setSaving(true);
     try {
       await api.post(`/materials/${material.id}/vocabulary`, { words: list });
+      toast.success("Vocabulario guardado correctamente");
       onSaved();
       onClose();
-    } catch (e: any) {
-      alert(e.response?.data?.detail || "Error guardando");
+    } catch (e) {
+      toast.error(getErrorMessage(e, "No se pudo guardar el vocabulario"));
     } finally { setSaving(false); }
   };
 
@@ -469,6 +475,7 @@ function EditMaterialModal({
   const [level, setLevel]             = useState(material.level ?? LEVELS[0]);
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState("");
+  const toast = useToast();
 
   const materialIsVocab = isVocab(material);
 
@@ -486,10 +493,11 @@ function EditMaterialModal({
         category: materialIsVocab ? material.category : category,
         level,
       });
+      toast.success("Material actualizado correctamente");
       onSaved(res.data);
       onClose();
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "Error guardando los cambios");
+    } catch (e) {
+      setError(getErrorMessage(e, "Error guardando los cambios"));
     } finally {
       setSaving(false);
     }
@@ -664,16 +672,18 @@ function DeleteMaterialModal({
 }) {
   const [deleting, setDeleting] = useState(false);
   const [error, setError]       = useState("");
+  const toast = useToast();
 
   const confirmDelete = async () => {
     setDeleting(true);
     setError("");
     try {
       await api.delete(`/materials/${material.id}`);
+      toast.success("Material eliminado correctamente");
       onDeleted();
       onClose();
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "Error eliminando el material");
+    } catch (e) {
+      setError(getErrorMessage(e, "Error eliminando el material"));
     } finally {
       setDeleting(false);
     }
@@ -756,6 +766,7 @@ export default function MaterialsPage() {
   
   const { materials, loading, isFetching, isError, refetch } = useTeacherMaterials();
   const queryClient = useQueryClient();
+  const toast = useToast();
   
   const [search, setSearch]         = useState("");
   const [tab, setTab]               = useState<"files" | "vocab">("files");
@@ -804,8 +815,9 @@ export default function MaterialsPage() {
       setTitle(""); setDescription(""); setFile(null); setCategory(CATEGORIES[0]);
       if (fileRef.current) fileRef.current.value = "";
       refetch();
-    } catch (e: any) {
-      const errorMsg = e.response?.data?.detail || "Error subiendo el archivo";
+      toast.success("Material subido correctamente");
+    } catch (e) {
+      const errorMsg = getErrorMessage(e, "Error subiendo el archivo");
       setFileError(errorMsg);
     } finally { setUploading(false); }
   };
@@ -849,8 +861,9 @@ export default function MaterialsPage() {
       setVocabWords([]);
       setVocabWordInput("");
       refetch();
-    } catch (e: any) {
-      alert(e.response?.data?.detail || "Error creando vocabulario");
+      toast.success("Vocabulario creado correctamente");
+    } catch (e) {
+      toast.error(getErrorMessage(e, "Error creando vocabulario"));
     } finally {
       setUploading(false);
     }

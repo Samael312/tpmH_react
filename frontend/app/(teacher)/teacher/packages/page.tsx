@@ -25,6 +25,8 @@ import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useBusinessRules } from "@/hooks/useBusinessRules";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 const emptyForm = {
   name: "", subject: "", description: "",
@@ -62,6 +64,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function TeacherPackagesPage() {
   const { catalogs } = useSystemCatalogs();
+  const toast = useToast();
   
   // Catálogos dinámicos con fallbacks seguros
   const SUBJECTS = catalogs?.subjects?.length ? catalogs.subjects : FALLBACK_SUBJECTS;
@@ -211,9 +214,10 @@ export default function TeacherPackagesPage() {
       setUnlimited(false);
       await fetchAll();
       setSavedOk(true);
+      toast.success(editingId ? "Paquete actualizado correctamente" : "Paquete creado correctamente");
       setTimeout(() => setSavedOk(false), 3000);
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "Error guardando el paquete");
+    } catch (e) {
+      setError(getErrorMessage(e, "Error guardando el paquete"));
     } finally {
       setSaving(false);
     }
@@ -224,8 +228,9 @@ export default function TeacherPackagesPage() {
     try {
       await api.delete(`/packages/${id}`);
       fetchAll();
-    } catch (e: any) {
-      alert(e.response?.data?.detail || "Error desactivando el paquete");
+      toast.success("Paquete desactivado correctamente");
+    } catch (e) {
+      toast.error(getErrorMessage(e, "Error desactivando el paquete"));
     }
   };
 
@@ -235,8 +240,9 @@ export default function TeacherPackagesPage() {
     try {
       await api.post("/payments/manual-grant", { type: "package", enrollment_id: enrollmentId });
       fetchAll();
-    } catch (e: any) {
-      alert(e.response?.data?.detail || "Error otorgando acceso");
+      toast.success("Acceso otorgado correctamente");
+    } catch (e) {
+      toast.error(getErrorMessage(e, "Error otorgando acceso"));
     } finally {
       setApprovingId(null);
     }

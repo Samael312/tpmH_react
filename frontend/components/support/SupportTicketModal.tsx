@@ -4,6 +4,8 @@ import { useState } from "react";
 import { CheckCircle, Bug, AlertTriangle, HelpCircle, MoreHorizontal } from "lucide-react";
 import FullScreenModal from "@/components/ui/FullScreenModal";
 import { createSupportTicket, SupportCategory } from "@/hooks/useSupport";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 const CATEGORY_OPTIONS: { key: SupportCategory; label: string; icon: React.ReactNode }[] = [
   { key: "bug", label: "Bug", icon: <Bug className="w-4 h-4" /> },
@@ -33,6 +35,7 @@ export default function SupportTicketModal({
   const [sending, setSending] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const toast = useToast();
 
   const reset = () => {
     setCategory("question");
@@ -60,10 +63,11 @@ export default function SupportTicketModal({
         screen_context: screenContext,
       });
       setSuccess(true);
+      toast.success("Ticket enviado correctamente");
       onSent?.();
       setTimeout(handleClose, 1400);
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "No pudimos enviar tu ticket. Inténtalo de nuevo.");
+    } catch (e) {
+      setError(getErrorMessage(e, "No pudimos enviar tu ticket. Inténtalo de nuevo."));
     } finally {
       setSending(false);
     }

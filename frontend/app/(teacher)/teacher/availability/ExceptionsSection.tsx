@@ -10,6 +10,8 @@ import api from "@/lib/api";
 import CalendarPicker from "@/components/layout/CalendarPicker";
 import { getMyDisplayTimezone } from "@/lib/tzFormat";
 import Skeleton from "@/components/ui/Skeleton";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 interface Exception {
   id: number;
@@ -50,6 +52,7 @@ export default function ExceptionsSection() {
   const [endTime, setEndTime] = useState("13:00");
   const [mode, setMode] = useState<"block" | "extra">("block");
   const [reason, setReason] = useState("");
+  const toast = useToast();
 
   const invalidateExceptions = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["teacher", "availability", "exceptions"] });
@@ -110,11 +113,15 @@ export default function ExceptionsSection() {
         reason: reason.trim() || null,
       });
       const count = Array.isArray(res.data) ? res.data.length : 1;
-      setSuccess(`${count} excepción${count !== 1 ? "es" : ""} guardada${count !== 1 ? "s" : ""} correctamente`);
+      const msg = `${count} excepción${count !== 1 ? "es" : ""} guardada${count !== 1 ? "s" : ""} correctamente`;
+      setSuccess(msg);
+      toast.success(msg);
       resetForm();
       invalidateExceptions();
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "Error guardando la excepción");
+    } catch (e) {
+      const msg = getErrorMessage(e, "Error guardando la excepción");
+      setError(msg);
+      toast.error(msg);
     } finally {
       setSaving(false);
       setTimeout(() => setSuccess(""), 3000);
@@ -130,8 +137,10 @@ export default function ExceptionsSection() {
       await api.delete(`/availability/me/exceptions/${id}`);
       invalidateExceptions();
       setSuccess("Excepción eliminada correctamente");
+      toast.success("Excepción eliminada correctamente");
     } catch {
       setError("Error eliminando la excepción");
+      toast.error("Error eliminando la excepción");
     } finally {
       setDeletingId(null);
       setTimeout(() => setSuccess(""), 3000);

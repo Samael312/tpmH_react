@@ -19,6 +19,8 @@ import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 type Material = MaterialAssignment["material"];
 
@@ -70,6 +72,7 @@ function ExpandableDescription({ text }: { text: string }) {
 export default function StudentMaterialsPage() {
   const { catalogs } = useSystemCatalogs();
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const {
     materials,
@@ -113,7 +116,7 @@ export default function StudentMaterialsPage() {
       setAudioCache(prev => ({ ...prev, [material.id]: urls }));
       return urls;
     } catch (e) {
-      console.error("Error generando audio de vocabulario", e);
+      toast.error(getErrorMessage(e, "No se pudo generar el audio del vocabulario"));
       return {};
     } finally {
       setLoadingVocabAudio(prev => ({ ...prev, [material.id]: false }));
@@ -186,8 +189,9 @@ export default function StudentMaterialsPage() {
       queryClient.setQueryData<MaterialAssignment[]>(["student", "materials"], (prev) =>
         (prev ?? []).map(item => (item.id === assignmentId ? res.data : item))
       );
-    } catch (e: any) {
-      alert(e.response?.data?.detail || "Error actualizando el progreso");
+      toast.success(newProgress === "completed" ? "Material marcado como completado" : "Material marcado como pendiente");
+    } catch (e) {
+      toast.error(getErrorMessage(e, "No se pudo actualizar el progreso del material"));
     } finally {
       setUpdatingId(null);
     }

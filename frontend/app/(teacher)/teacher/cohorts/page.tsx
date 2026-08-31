@@ -17,6 +17,8 @@ import {
   type TeacherPackage as Package,
 } from "@/hooks/useTeacherData";
 import { useBusinessRules } from "@/hooks/useBusinessRules";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 interface Session {
   id: number;
@@ -98,6 +100,7 @@ export default function TeacherCohortsPage() {
   const [schedulingCohort, setSchedulingCohort] = useState<Cohort | null>(null);
   const { rules } = useBusinessRules();
   const [sessionForm, setSessionForm] = useState({ date: "", time: "", duration: "50" });
+  const toast = useToast();
 
   // La duración por defecto del form depende del catálogo configurado por
   // el superadmin, que llega async — se sincroniza cuando esté disponible.
@@ -139,8 +142,9 @@ export default function TeacherCohortsPage() {
       setShowCreate(false);
       setForm({ package_id: "", min_students: "3", max_students: "6" });
       await loadData();
-    } catch (err: any) {
-      alert(err?.response?.data?.detail || "No se pudo crear la cohorte");
+      toast.success("Cohorte creada correctamente");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "No se pudo crear la cohorte"));
     } finally {
       setCreating(false);
     }
@@ -163,8 +167,9 @@ export default function TeacherCohortsPage() {
       setClosingCohort(null);
       setCloseDate("");
       await loadData();
-    } catch (err: any) {
-      alert(err?.response?.data?.detail || "No se pudo cerrar la cohorte");
+      toast.success("Cohorte cerrada e iniciada correctamente");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "No se pudo cerrar la cohorte"));
     } finally {
       setActionLoading(false);
     }
@@ -177,8 +182,9 @@ export default function TeacherCohortsPage() {
     try {
       await api.post(`/cohorts/${cohort.id}/cancel`);
       await loadData();
-    } catch (err: any) {
-      alert(err?.response?.data?.detail || "No se pudo cancelar la cohorte");
+      toast.success("Cohorte cancelada correctamente");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "No se pudo cancelar la cohorte"));
     }
   };
 
@@ -191,9 +197,9 @@ export default function TeacherCohortsPage() {
     try {
       await api.post(`/cohorts/${cohort.id}/complete`);
       await loadData();
+      toast.success("Cohorte finalizada correctamente");
     } catch (err) {
-      const e = err as { response?: { data?: { detail?: string } } };
-      alert(e?.response?.data?.detail || "No se pudo finalizar la cohorte");
+      toast.error(getErrorMessage(err, "No se pudo finalizar la cohorte"));
     }
   };
 
@@ -210,8 +216,9 @@ export default function TeacherCohortsPage() {
       setSessionsByCohort((prev) => ({ ...prev, [schedulingCohort.id]: res.data }));
       setSchedulingCohort(null);
       setSessionForm({ date: "", time: "", duration: String(rules.allowed_class_durations?.[0] ?? 50) });
-    } catch (err: any) {
-      alert(err?.response?.data?.detail || "No se pudo agendar la sesión");
+      toast.success("Sesión agendada correctamente");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "No se pudo agendar la sesión"));
     } finally {
       setActionLoading(false);
     }
@@ -542,6 +549,7 @@ function AttendanceModal({ session, onClose }: { session: Session; onClose: () =
   const [participants, setParticipants] = useState<SessionParticipant[] | null>(null);
   const [error, setError] = useState("");
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     api.get<SessionParticipant[]>(`/cohorts/sessions/${session.id}/participants`)
@@ -558,6 +566,7 @@ function AttendanceModal({ session, onClose }: { session: Session; onClose: () =
       setParticipants(prev =>
         prev ? prev.map(p => p.student_id === studentId ? { ...p, attendance_status: status } : p) : prev
       );
+      toast.success(status === "confirmed" ? "Asistencia marcada como confirmada" : "Asistencia marcada como ausente");
     } catch (e) {
       const err = e as { response?: { data?: { detail?: string } } };
       setError(err?.response?.data?.detail || "No se pudo actualizar la asistencia");

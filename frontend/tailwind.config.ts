@@ -37,9 +37,14 @@ const config: Config = {
           from: { opacity: '0', transform: 'translateY(16px)' },
           to:   { opacity: '1', transform: 'translateY(0)' },
         },
+        'toast-in': {
+          from: { opacity: '0', transform: 'translateY(-8px) scale(0.98)' },
+          to:   { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
       },
       animation: {
         'fade-up': 'fade-up 0.4s ease-out both',
+        'toast-in': 'toast-in 0.2s ease-out both',
       },
     },
   },
