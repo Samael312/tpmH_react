@@ -86,10 +86,14 @@ export interface GodModeLookupEnrollment {
   classes_total: number | null;
   status: string;
   is_group: boolean;
+  is_unlimited: boolean;
+  unlocked_credits: number;
+  prepaid_unlimited_credits: number;
 }
 
 export interface GodModeLookupClass {
   id: number;
+  enrollment_id: number | null;
   subject: string | null;
   start_time_utc: string;
   duration: number;
@@ -146,6 +150,22 @@ export function useGodModePairClasses(teacherId: number | undefined, studentId: 
   return { classes: query.data ?? [], loading: query.isLoading };
 }
 
+export interface GodModeClassDurations {
+  allowed_class_durations: number[];
+  trial_duration_minutes: number;
+}
+
+export function useGodModeClassDurations() {
+  const query = useQuery({
+    queryKey: ["god-mode", "lookup", "class-durations"],
+    queryFn: async () => {
+      const res = await api.get("/god-mode/lookup/class-durations");
+      return res.data as GodModeClassDurations;
+    },
+  });
+  return { durations: query.data ?? { allowed_class_durations: [], trial_duration_minutes: 25 }, loading: query.isLoading };
+}
+
 // ─── Ejecutar una acción del Modo Dios ─────────────────────────────────────
 // Un único mutator genérico: la URL/método/body vienen del registro de
 // acciones (lib/godModeActions.ts), no de 13 funciones distintas.
@@ -170,7 +190,12 @@ export function useRunGodModeAction() {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["god-mode", "audit-log"] });
+      // Invalida TODO lo que empieza con "god-mode": el historial de
+      // auditoría, pero también los lookups en cascada (créditos de un
+      // enrollment, clases de un par profesor-alumno, etc). Sin esto,
+      // después de ajustar créditos o crear una clase, los selectores
+      // seguían mostrando los datos viejos hasta refrescar la página.
+      queryClient.invalidateQueries({ queryKey: ["god-mode"] });
     },
   });
 }

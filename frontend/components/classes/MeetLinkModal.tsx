@@ -83,7 +83,9 @@ export function MeetLinkModal({ classItem, onClose, onSaved }: MeetLinkModalProp
                 Link de la clase
               </h2>
               <p className="text-xs text-slate-500 font-medium">
-                Opcional — solo si quieres compartir tu propio link de videollamada
+                {classItem.meet_link
+                  ? "Puedes editarlo cuando quieras"
+                  : "Si no cargas uno, se genera automáticamente 30 min antes de la clase"}
               </p>
             </div>
           </div>

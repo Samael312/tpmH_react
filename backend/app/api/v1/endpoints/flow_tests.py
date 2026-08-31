@@ -112,9 +112,35 @@ def _run_pytest_in_background(state: _RunState):
             timeout=600,
         )
         state.return_code = result.returncode
-        if result.returncode not in (0, 1):  # 1 = "hubo tests fallidos", normal
-            state.stderr_tail = (result.stderr or "")[-MAX_MESSAGE_CHARS:]
-            logger.warning("flow-tests terminó con código %s: %s", result.returncode, state.stderr_tail)
+
+        # BUG real encontrado en producción: un returncode == 1 normalmente
+        # significa "corrieron tests y alguno falló", así que antes NO
+        # capturábamos stderr en ese caso — pero `python -m pytest` también
+        # devuelve exactamente 1 cuando el módulo `pytest` ni siquiera está
+        # instalado en el intérprete que corre el servidor (p. ej. no se
+        # corrió `pip install -r requirements.txt` en ese entorno después
+        # de actualizar). Eso daba "0 tests, sin error" en la UI: el peor
+        # resultado posible, silencioso. Ahora: si el report-log terminó
+        # vacío (0 tests reales), SIEMPRE mostramos la salida del proceso,
+        # sin importar el returncode.
+        tests_found = len(_parse_report_log(state.log_path))
+        looks_broken = result.returncode not in (0, 1) or tests_found == 0
+
+        if looks_broken:
+            combined = (result.stdout or "") + (result.stderr or "")
+            if not combined.strip():
+                combined = (
+                    f"pytest terminó con código {result.returncode} sin collectar "
+                    "ningún test y sin salida — revisa que 'tests/flow' exista en "
+                    f"{BACKEND_DIR} y que el intérprete {sys.executable} tenga "
+                    "instalado backend/requirements.txt (incluye pytest, "
+                    "pytest-order y pytest-reportlog)."
+                )
+            state.stderr_tail = combined[-MAX_MESSAGE_CHARS:]
+            logger.warning(
+                "flow-tests sospechoso: código=%s tests_encontrados=%s -> %s",
+                result.returncode, tests_found, state.stderr_tail,
+            )
     except subprocess.TimeoutExpired:
         state.stderr_tail = "La corrida superó el límite de 10 minutos y fue cancelada."
         state.return_code = -1

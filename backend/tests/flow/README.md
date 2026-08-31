@@ -134,6 +134,24 @@ FLOW_TEST_STUDENT_EMAIL=...
 | `test_admin_staff.py` | Regresión directa del bug original: staff (`superadmin`/`teacher_admin`) vs. no-staff en endpoints de admin |
 | `test_support.py` | Crear ticket, listar, resolver (superadmin y teacher_admin) |
 
+## Diagnóstico de "0 tests" en la UI sin ningún error visible
+
+Si `/admin/flow-tester` muestra "TODO VERDE" con **0 tests** y termina casi
+instantáneo (unos pocos cientos de ms), casi seguro es esto: el Python que
+corre el servidor (`sys.executable` dentro de `flow_tests.py`) **no tiene
+pytest instalado** — típicamente porque se actualizó el código pero no se
+volvió a correr `pip install -r backend/requirements.txt` en el entorno
+donde vive el proceso del backend (venv, contenedor, etc.). `python -m
+pytest` en ese caso imprime `No module named pytest` y sale con código 1
+— el mismo código que usa pytest para "corrieron tests y alguno falló", así
+que versiones de esta suite anteriores al fix de abajo se lo tragaban en
+silencio.
+
+**Ya está corregido**: ahora, si el `--report-log` terminó con 0 tests
+reales (sin importar el código de salida), la UI siempre muestra la salida
+completa del proceso en el panel rojo "Salida de error del proceso" —
+incluyendo ese mensaje exacto, para que quede obvio qué instalar y dónde.
+
 ## Limitaciones conocidas / próximos pasos
 
 - **Modo single-tenant**: `POST /payments/book` ignora `teacher_username`

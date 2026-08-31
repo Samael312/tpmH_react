@@ -18,7 +18,10 @@ export type GodModeFieldType =
   | "enrollment-select"   // depende de teacher_id + student_id
   | "class-select"        // depende de teacher_id + student_id
   | "subject-display"     // depende de enrollment_id — autocompleta desde el paquete, editable si no hay enrollment
-  | "availability-picker"; // depende de teacher_id (+ duration_minutes del mismo form) — abre el modal de disponibilidad real
+  | "availability-picker" // depende de teacher_id (+ duration_minutes del mismo form) — abre el modal de disponibilidad real
+  | "duration-select"     // duraciones permitidas configuradas por el superadmin (PlatformConfig), no un número libre
+  | "credit-info"         // muestra créditos disponibles del enrollment elegido (solo informativo, no se envía)
+  | "tri-bool-select";    // "automático" (omitido) / "sí" (true) / "no" (false) — para consume_credit
 
 export interface GodModeField {
   name: string;
@@ -169,14 +172,18 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
       { name: "student_id", label: "Alumno", type: "student-select", required: true, dependsOn: ["teacher_id"] },
       { name: "enrollment_id", label: "Enrollment (opcional)", type: "enrollment-select", dependsOn: ["teacher_id", "student_id"] },
       { name: "subject", label: "Materia / idioma", type: "subject-display", dependsOn: ["enrollment_id"] },
+      { name: "credit_info", label: "", type: "credit-info", dependsOn: ["enrollment_id"], excludeFromPayload: true },
+      { name: "consume_credit", label: "¿Esta clase resta un crédito del enrollment?", type: "tri-bool-select", dependsOn: ["enrollment_id"],
+        helpText: "Automático = sigue la regla normal (solo resta si el estado elegido cuenta contra el paquete, ej. 'completed')." },
       { name: "class_type", label: "Tipo", type: "select", options: [
         { value: "regular", label: "regular" }, { value: "trial", label: "trial" },
       ] },
-      { name: "duration_minutes", label: "Duración (minutos)", type: "number", required: true },
+      { name: "duration_minutes", label: "Duración", type: "duration-select", required: true, dependsOn: ["class_type"] },
       { name: "start_time_utc", label: "Fecha y hora", type: "availability-picker", required: true, dependsOn: ["teacher_id", "duration_minutes", "class_type"] },
       { name: "status", label: "Estado inicial", type: "select", options: STATUS_CLASS_OPTIONS },
-      { name: "notes", label: "Notas (opcional)", type: "text" },
-      { name: "skip_conflict_check", label: "Saltar chequeo de choque de horario", type: "checkbox" },
+      { name: "notes", label: "Nota visible en la clase (opcional)", type: "text",
+        helpText: "Se muestra en cursiva en la tarjeta de la clase, visible para el profesor y el alumno." },
+      { name: "skip_conflict_check", label: "Permitir doble-booking", type: "checkbox"}
     ],
   },
   {
@@ -190,9 +197,9 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
       { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true, excludeFromPayload: true },
       { name: "student_id", label: "Alumno", type: "student-select", required: true, dependsOn: ["teacher_id"], excludeFromPayload: true },
       { name: "class_id", label: "Clase", type: "class-select", required: true, dependsOn: ["teacher_id", "student_id"], isPathParam: true },
-      { name: "duration_minutes", label: "Nueva duración (opcional, minutos)", type: "number", optionalNumber: true },
+      { name: "duration_minutes", label: "Nueva duración (opcional)", type: "duration-select", dependsOn: ["class_id"] },
       { name: "start_time_utc", label: "Nueva fecha y hora", type: "availability-picker", required: true, dependsOn: ["teacher_id", "duration_minutes"] },
-      { name: "skip_conflict_check", label: "Saltar chequeo de choque de horario", type: "checkbox" },
+      { name: "skip_conflict_check", label: "Permitir doble-booking", type: "checkbox"}
     ],
   },
   {
@@ -207,13 +214,14 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
       { name: "student_id", label: "Alumno", type: "student-select", required: true, dependsOn: ["teacher_id"], excludeFromPayload: true },
       { name: "class_id", label: "Clase", type: "class-select", required: true, dependsOn: ["teacher_id", "student_id"], isPathParam: true },
       { name: "status", label: "Nuevo estado", type: "select", required: true, options: STATUS_CLASS_OPTIONS },
-      { name: "notes", label: "Notas (opcional)", type: "text" },
+      { name: "notes", label: "Nota visible en la clase (opcional)", type: "text",
+        helpText: "Se muestra en cursiva en la tarjeta de la clase, visible para el profesor y el alumno." },
     ],
   },
   {
     id: "class.hard_delete",
     label: "Eliminar clase permanentemente",
-    description: "Borra la clase por completo (no es una cancelación). No reembolsa crédito automáticamente. No aplica a sesiones grupales.",
+    description: "Borra la clase por completo (no es una cancelación). No aplica a sesiones grupales.",
     category: "Clases",
     method: "delete",
     buildUrl: v => `/god-mode/classes/${v.class_id}`,
@@ -221,6 +229,8 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
       { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true, excludeFromPayload: true },
       { name: "student_id", label: "Alumno", type: "student-select", required: true, dependsOn: ["teacher_id"], excludeFromPayload: true },
       { name: "class_id", label: "Clase", type: "class-select", required: true, dependsOn: ["teacher_id", "student_id"], isPathParam: true },
+      { name: "credit_info", label: "", type: "credit-info", dependsOn: ["class_id"], excludeFromPayload: true },
+      { name: "refund_credit", label: "Devolver 1 crédito al eliminar (si esta clase ya lo consumía)", type: "checkbox" },
     ],
     destructive: true,
   },

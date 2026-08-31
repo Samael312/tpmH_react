@@ -772,6 +772,22 @@ def god_mode_create_class(
     db.add(new_class)
     db.flush()
 
+    # Consumo de crédito: si el staff no especificó consume_credit
+    # explícitamente, se sigue la misma regla que el resto de la app
+    # (el estado inicial determina si "cuenta" contra el paquete). Si sí
+    # lo especificó, se respeta esa decisión sin importar el estado.
+    if class_type_enum == ClassType.regular and enrollment is not None:
+        min_cancel_hours = get_business_rules(db)["min_cancel_hours"]
+        if data.consume_credit is None:
+            should_consume = class_counts_towards_package(
+                data.status, data.start_time_utc, min_cancel_hours=min_cancel_hours,
+            )
+        else:
+            should_consume = data.consume_credit
+
+        if should_consume:
+            update_enrollment_counter(enrollment.id, delta=1, db=db)
+
     log_god_mode_action(
         db,
         actor=current_user,
@@ -924,6 +940,7 @@ def god_mode_force_class_status(
 def god_mode_hard_delete_class(
     class_id: int,
     reason: str = Query(..., min_length=5, max_length=500),
+    refund_credit: bool = Query(False, description="Si la clase ya consumía un crédito del enrollment, devuélvelo al eliminarla"),
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db),
 ):
@@ -932,9 +949,9 @@ def god_mode_hard_delete_class(
     cambia el status). Pensado para clases creadas por error que nunca
     debieron existir — no un reemplazo de la cancelación normal.
 
-    No reembolsa crédito automáticamente ni ajusta el enrollment: si la
-    clase ya contaba contra el paquete del alumno, ajusta el crédito por
-    separado con PATCH /god-mode/enrollments/{id}/adjust.
+    Por defecto NO reembolsa crédito. Usa refund_credit=true si la clase
+    sí estaba consumiendo un crédito del enrollment (ej. estaba en
+    'completed') y quieres devolvérselo al alumno al borrarla.
 
     No permite eliminar sesiones grupales (class_type='group') por esta
     vía — una sesión grupal tiene participantes de varios alumnos con su
@@ -955,6 +972,12 @@ def god_mode_hard_delete_class(
 
     before = _class_snapshot(class_)
     class_id_captured = class_.id
+    enrollment_id_captured = class_.enrollment_id
+
+    refunded = False
+    if refund_credit and enrollment_id_captured and class_.class_type == ClassType.regular:
+        update_enrollment_counter(enrollment_id_captured, delta=-1, db=db)
+        refunded = True
 
     log_god_mode_action(
         db,
@@ -964,13 +987,16 @@ def god_mode_hard_delete_class(
         entity_id=class_id_captured,
         reason=reason,
         before=before,
-        after=None,
+        after={"refunded_credit": refunded},
     )
 
     db.delete(class_)
     db.commit()
 
-    return {"message": f"Clase #{class_id_captured} eliminada permanentemente por Modo Dios."}
+    msg = f"Clase #{class_id_captured} eliminada permanentemente por Modo Dios."
+    if refunded:
+        msg += " Se devolvió 1 crédito al enrollment."
+    return {"message": msg}
 
 
 # ─── PAGOS ─────────────────────────────────────────────────────────────────
@@ -1289,9 +1315,31 @@ def god_mode_lookup_student_enrollments(
             "classes_total": e.classes_total,
             "status": e.status.value if hasattr(e.status, "value") else e.status,
             "is_group": bool(e.cohort_id),
+            "is_unlimited": e.package.classes_count is None if e.package else False,
+            "unlocked_credits": e.unlocked_credits,
+            "prepaid_unlimited_credits": e.prepaid_unlimited_credits,
         }
         for e in enrollments
     ]
+
+
+@router.get("/lookup/class-durations")
+def god_mode_lookup_class_durations(
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    Duraciones de clase permitidas, configuradas por el superadmin en
+    /admin/settings (PlatformConfig.allowed_class_durations). El panel
+    de Modo Dios las usa para el selector de duración en vez de un
+    input numérico libre, que podía terminar en una clase de una
+    duración que la plataforma ni siquiera ofrece normalmente.
+    """
+    rules = get_business_rules(db)
+    return {
+        "allowed_class_durations": rules["allowed_class_durations"],
+        "trial_duration_minutes": rules["trial_duration_minutes"],
+    }
 
 
 @router.get("/lookup/teachers/{teacher_id}/students/{student_id}/classes")
@@ -1319,6 +1367,7 @@ def god_mode_lookup_pair_classes(
     return [
         {
             "id": c.id,
+            "enrollment_id": c.enrollment_id,
             "subject": c.subject,
             "start_time_utc": c.start_time_utc.isoformat() if c.start_time_utc else None,
             "duration": c.duration,

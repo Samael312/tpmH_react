@@ -7,7 +7,6 @@ from app.core.email import send_package_expiring_email
 from app.models.package import Enrollment, EnrollmentStatus
 from datetime import timedelta
 import logging
-from app.models.payment import Payment
 from app.db.base import SessionLocal
 from app.models.class_ import Class
 from app.models.student import StudentProfile
@@ -15,7 +14,12 @@ from app.models.user import User
 from app.core.timezone import utc_now, format_local_datetime
 from app.core.class_logic import finalize_past_classes, get_business_rules
 from app.core.google_calendar import run_calendar_sync_for_all_teachers
+from app.core.calendar_sync import generate_meet_link_for_class
 from app.core.email import send_class_reminder_email, send_class_reminder_teacher_email
+
+# Ventana antes del inicio de la clase en la que se auto-genera el
+# Meet link, si todavía no tiene uno asignado.
+MEET_LINK_AUTOGEN_MINUTES_BEFORE = 30
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +28,7 @@ scheduler = AsyncIOScheduler()
 
 async def finalize_expired_classes():
     """
-    Job que se ejecuta cada 15 minutos.
+    Job que se ejecuta cada 10 minutos.
     Marca como 'finalized' las clases confirmadas cuyo horario ya pasó.
     """
     db: Session = SessionLocal()
@@ -158,6 +162,54 @@ async def send_class_reminders():
     finally:
         db.close()
 
+async def generate_upcoming_meet_links():
+    """
+    Job que se ejecuta cada 5 minutos.
+    Genera automáticamente el link de videollamada (Google Meet, vía el
+    Calendar del profesor) para las clases confirmadas que empiezan en
+    los próximos 30 minutos y todavía NO tienen un link asignado.
+
+    Si la clase ya tiene un meet_link (cargado manualmente por el
+    profesor o generado en una corrida anterior) no se toca — el
+    profesor puede seguir editándolo a mano cuando quiera, incluso
+    después de que se haya generado automáticamente.
+
+    Si el profesor no tiene Google Calendar conectado, no hay forma de
+    generar un link real: se deja sin asignar y la clase sigue
+    funcionando igual (el profesor puede cargarlo manualmente).
+    """
+    db: Session = SessionLocal()
+    now = utc_now()
+    try:
+        window_end = now + timedelta(minutes=MEET_LINK_AUTOGEN_MINUTES_BEFORE)
+
+        upcoming = db.query(Class).filter(
+            Class.status == "confirmed",
+            Class.meet_link.is_(None),
+            Class.start_time_utc > now,
+            Class.start_time_utc <= window_end,
+        ).all()
+
+        generated = 0
+        for class_ in upcoming:
+            try:
+                link = generate_meet_link_for_class(class_, db)
+                if link:
+                    class_.meet_link = link
+                    generated += 1
+                db.commit()  # persiste el link y/o el google_event_id nuevo aunque no haya link
+            except Exception as e:
+                logger.error(f"Error generando meet link automático para clase {class_.id}: {e}")
+                db.rollback()
+
+        if generated:
+            logger.info(f"Meet links generados automáticamente: {generated}")
+
+    except Exception as e:
+        logger.error(f"Error en job de generación automática de meet links: {e}")
+    finally:
+        db.close()
+
 # BUG-04/12 fix: se eliminó expire_pending_class_payments() — el estado
 # 'pending_payment'/'expired' para clases regulares ya no puede producirse,
 # porque el flujo de "reservar y notificar el pago después" fue eliminado
@@ -232,6 +284,7 @@ def start_scheduler():
     scheduler.add_job(send_class_reminders, trigger=IntervalTrigger(hours=1), id="class_reminders", replace_existing=True)
     scheduler.add_job(finalize_expired_classes, trigger=IntervalTrigger(minutes=10), id="finalize_expired_classes", replace_existing=True)
     scheduler.add_job(sync_all_teacher_calendars, trigger=IntervalTrigger(hours=1), id="sync_teacher_calendars", replace_existing=True)
+    scheduler.add_job(generate_upcoming_meet_links, trigger=IntervalTrigger(minutes=5), id="generate_meet_links", replace_existing=True)
     scheduler.add_job(notify_low_credit_packages, trigger=IntervalTrigger(days=7), id="notify_low_credit_packages", replace_existing=True)
     scheduler.start()
 

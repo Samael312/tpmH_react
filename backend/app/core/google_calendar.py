@@ -1,6 +1,7 @@
 import os
 import logging
 import time
+import uuid
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
@@ -274,6 +275,107 @@ def create_calendar_event(
         return None
 
 
+def _extract_meet_link(event: dict) -> Optional[str]:
+    """Saca el link de Google Meet de un evento con conferenceData."""
+    hangout = event.get("hangoutLink")
+    if hangout:
+        return hangout
+    for entry_point in event.get("conferenceData", {}).get("entryPoints", []):
+        if entry_point.get("entryPointType") == "video":
+            return entry_point.get("uri")
+    return None
+
+
+def create_calendar_event_with_meet(
+    service,
+    calendar_id: str,
+    title: str,
+    start_utc: datetime,
+    end_utc: datetime,
+    description: str = "",
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Crea un evento en Google Calendar generando de una vez un link de
+    Google Meet real (conferenceData). Devuelve (event_id, meet_link);
+    cualquiera de los dos puede venir None si falló ese paso puntual.
+    """
+    event_body = {
+        "summary": title,
+        "description": description,
+        "start": {"dateTime": start_utc.isoformat(), "timeZone": "UTC"},
+        "end": {"dateTime": end_utc.isoformat(), "timeZone": "UTC"},
+        "extendedProperties": {"private": {"tpmh_managed": "true"}},
+        "conferenceData": {
+            "createRequest": {
+                "requestId": uuid.uuid4().hex,
+                "conferenceSolutionKey": {"type": "hangoutsMeet"},
+            }
+        },
+    }
+
+    try:
+        event = _with_retries(
+            service.events()
+            .insert(calendarId=calendar_id, body=event_body, conferenceDataVersion=1)
+            .execute
+        )
+        return event.get("id"), _extract_meet_link(event)
+    except HttpError as e:
+        logger.error(f"Error creando evento con Meet en Google Calendar: {e}")
+        return None, None
+
+
+def add_meet_conference_to_event(
+    service,
+    calendar_id: str,
+    event_id: str,
+) -> Optional[str]:
+    """
+    Agrega un link de Google Meet real a un evento ya existente
+    (conferenceData). Devuelve el link generado, o None si el evento ya
+    no existe (fue borrado externamente) o si la generación falla —
+    en ambos casos el llamador debe manejarlo sin romper el flujo.
+    """
+    try:
+        event = _with_retries(
+            service.events().get(calendarId=calendar_id, eventId=event_id).execute
+        )
+    except HttpError as e:
+        if getattr(e.resp, "status", None) == 404:
+            logger.info(f"Evento {event_id} ya no existe en Google (borrado externamente)")
+        else:
+            logger.warning(f"Error obteniendo evento {event_id} para agregar Meet: {e}")
+        return None
+
+    if event.get("status") == "cancelled":
+        logger.info(f"Evento {event_id} está en la papelera de Google, no se le agrega Meet")
+        return None
+
+    # Si el evento ya tiene un Meet armado (p. ej. lo generó otra corrida
+    # del job), lo reutilizamos en vez de pedir uno nuevo.
+    existing_link = _extract_meet_link(event)
+    if existing_link:
+        return existing_link
+
+    event["conferenceData"] = {
+        "createRequest": {
+            "requestId": uuid.uuid4().hex,
+            "conferenceSolutionKey": {"type": "hangoutsMeet"},
+        }
+    }
+
+    try:
+        updated = _with_retries(
+            service.events()
+            .update(calendarId=calendar_id, eventId=event_id, body=event, conferenceDataVersion=1)
+            .execute
+        )
+        return _extract_meet_link(updated)
+    except HttpError as e:
+        logger.warning(f"Error agregando Meet al evento {event_id}: {e}")
+        return None
+
+
 def update_calendar_event(
     service,
     calendar_id: str,
@@ -308,9 +410,19 @@ def update_calendar_event(
     if meet_link:
         event["location"] = meet_link
 
+    # FIX: sin conferenceDataVersion=1 la API ignora (y puede no persistir)
+    # el conferenceData que ya trae el evento en `event` (traído por el GET
+    # de arriba) — Google lo documenta explícitamente para "todo request
+    # de modificación de evento", no solo cuando uno cambia el Meet a
+    # propósito. Sin esto, un evento con Meet autogenerado (ver
+    # add_meet_conference_to_event / create_calendar_event_with_meet)
+    # podía perder su conferenceData en la próxima sync horaria o el
+    # próximo PATCH de horario/link.
     try:
         _with_retries(
-            service.events().update(calendarId=calendar_id, eventId=event_id, body=event).execute
+            service.events()
+            .update(calendarId=calendar_id, eventId=event_id, body=event, conferenceDataVersion=1)
+            .execute
         )
         return True
     except HttpError as e:

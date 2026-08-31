@@ -10,6 +10,7 @@ import {
   useGodModeTeacherStudents,
   useGodModeStudentEnrollments,
   useGodModePairClasses,
+  useGodModeClassDurations,
 } from "@/hooks/useGodMode";
 import { AvailableSlot } from "@/hooks/useStudentData";
 import { getMyDisplayTimezone, formatTimeTz } from "@/lib/tzFormat";
@@ -61,6 +62,7 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
   const { students, loading: loadingStudents } = useGodModeTeacherStudents(teacherId);
   const { enrollments, loading: loadingEnrollments } = useGodModeStudentEnrollments(studentId, teacherId);
   const { classes, loading: loadingClasses } = useGodModePairClasses(teacherId, studentId);
+  const { durations } = useGodModeClassDurations();
 
   const myTz = getMyDisplayTimezone();
 
@@ -118,9 +120,9 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
       const raw = values[f.name];
       if (raw === undefined || raw === "") return; // campo opcional sin valor: se omite (ajuste parcial en backend)
 
-      if (f.type === "number" || f.type === "enrollment-select" || f.type === "class-select" || f.type === "teacher-select" || f.type === "student-select") {
+      if (["number", "enrollment-select", "class-select", "teacher-select", "student-select", "duration-select"].includes(f.type)) {
         body[f.name] = Number(raw);
-      } else if (f.type === "checkbox") {
+      } else if (f.type === "checkbox" || f.type === "tri-bool-select") {
         body[f.name] = raw === "true";
       } else if (f.type === "datetime") {
         body[f.name] = new Date(raw).toISOString();
@@ -193,9 +195,7 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
       case "subject-display": {
         const hasEnrollment = !!values["enrollment_id"];
         if (hasEnrollment) {
-          return (
-            <input disabled value={value || "—"} className={baseInputClasses} />
-          );
+          return <input disabled value={value || "—"} className={baseInputClasses} />;
         }
         return (
           <input
@@ -242,6 +242,49 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
         );
       }
 
+      case "duration-select": {
+        const classType = values["class_type"] || classes.find(c => String(c.id) === values["class_id"])?.class_type || "regular";
+        const options = classType === "trial"
+          ? [durations.trial_duration_minutes]
+          : durations.allowed_class_durations;
+        return (
+          <SelectShell value={value} onChange={v => setValue(field.name, v)} placeholder="Elige la duración">
+            {options.map(d => <option key={d} value={d}>{d} minutos</option>)}
+          </SelectShell>
+        );
+      }
+
+      case "tri-bool-select":
+        return (
+          <SelectShell value={value} onChange={v => setValue(field.name, v)} placeholder="Automático (según el estado)">
+            <option value="true">Sí — resta 1 crédito</option>
+            <option value="false">No — no resta crédito</option>
+          </SelectShell>
+        );
+
+      case "credit-info": {
+        let enr = enrollments.find(e => String(e.id) === values["enrollment_id"]);
+        if (!enr) {
+          const cls = classes.find(c => String(c.id) === values["class_id"]);
+          if (cls?.enrollment_id) enr = enrollments.find(e => e.id === cls.enrollment_id);
+        }
+        if (!enr) {
+          return (
+            <p className="text-xs text-slate-400 italic bg-slate-50 rounded-xl px-3 py-2.5">
+              Sin enrollment asociado — no hay créditos que mostrar.
+            </p>
+          );
+        }
+        const balance = enr.is_unlimited
+          ? `${enr.prepaid_unlimited_credits} créditos ilimitados prepagados`
+          : `${enr.unlocked_credits} créditos disponibles`;
+        return (
+          <div className="bg-pink-50/70 border border-pink-100 rounded-xl px-3 py-2.5 text-xs font-bold text-pink-700">
+            {balance} · usadas {enr.classes_used}/{enr.classes_total ?? "∞"}
+          </div>
+        );
+      }
+
       case "select":
         return (
           <SelectShell value={value} onChange={v => setValue(field.name, v)} placeholder="— sin cambio —">
@@ -251,14 +294,14 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
 
       case "checkbox":
         return (
-          <label className="flex items-center gap-2 text-sm text-slate-700 font-medium cursor-pointer">
+          <label className="flex items-start gap-2.5 text-xs font-semibold text-slate-700 cursor-pointer bg-white border border-slate-200 rounded-xl px-3 py-2.5">
             <input
               type="checkbox"
               checked={value === "true"}
               onChange={e => setValue(field.name, e.target.checked ? "true" : "")}
-              className="w-4 h-4 rounded accent-pink-500"
+              className="w-4 h-4 mt-0.5 rounded accent-pink-500 flex-shrink-0"
             />
-            Sí
+            <span>{field.label}</span>
           </label>
         );
 
@@ -304,16 +347,25 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {action.fields.map(field => (
-          <div key={field.name} className={field.type === "checkbox" ? "flex items-end pb-1" : ""}>
-            {field.type !== "checkbox" && (
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
-                {field.label} {field.required && <span className="text-rose-400">*</span>}
-              </label>
-            )}
-            {renderField(field)}
-          </div>
-        ))}
+        {action.fields.map(field => {
+          // Los checkboxes muestran su propio label inline; "credit-info"
+          // tiene label vacío a propósito (es solo un panel informativo).
+          // Ocultar la etiqueta superior en ambos casos evita duplicarla.
+          const showLabelRow = field.type !== "checkbox" && field.type !== "credit-info" && field.label !== "";
+          return (
+            <div key={field.name} className={field.type === "checkbox" ? "flex items-end pb-1" : ""}>
+              {showLabelRow && (
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                  {field.label} {field.required && <span className="text-rose-400">*</span>}
+                </label>
+              )}
+              {renderField(field)}
+              {field.helpText && (
+                <p className="text-[10px] text-slate-400 mt-1">{field.helpText}</p>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div className="pt-2 border-t border-slate-100">

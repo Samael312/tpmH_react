@@ -175,6 +175,9 @@ class GodModeCreateClassRequest(GodModeActionBase):
     enrollment_id: Optional[int] = None
     status: str = "confirmed"
     notes: Optional[str] = None
+    # None = sigue la regla normal (el estado inicial decide si consume);
+    # True/False = el staff decide explícitamente, sin importar el estado.
+    consume_credit: Optional[bool] = None
     # Si es True, se salta can_book_slot por completo (permite doble-booking
     # real). Por defecto False: igual se valida que no choque con otra
     # clase, para no crear inconsistencias por accidente.

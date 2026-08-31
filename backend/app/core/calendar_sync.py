@@ -7,6 +7,8 @@ from app.models.class_ import Class
 from app.core.google_calendar import (
     get_calendar_service_for_token,
     create_calendar_event,
+    create_calendar_event_with_meet,
+    add_meet_conference_to_event,
     update_calendar_event,
     delete_calendar_event,
 )
@@ -73,6 +75,52 @@ def sync_class_updated(class_: Class, google_event_id: str, db: Session) -> bool
     except Exception as e:
         logger.warning(f"Error actualizando Calendar clase {class_.id}: {e}")
         return True
+
+
+def generate_meet_link_for_class(class_: Class, db: Session) -> Optional[str]:
+    """
+    Genera automáticamente un link de Google Meet real para la clase,
+    usando el Google Calendar del profesor. Se usa desde el job
+    programado que corre ~30 minutos antes del inicio de cada clase
+    (ver core/scheduler.py::generate_upcoming_meet_links).
+
+    Devuelve el link generado, o None si el profesor no tiene Calendar
+    conectado o si la generación falla por cualquier motivo — en ese
+    caso la clase sigue funcionando igual y el profesor puede cargar un
+    link manualmente en cualquier momento (PATCH /classes/{id}/meet-link).
+    """
+    service, calendar_id = _get_teacher_calendar_service(class_.teacher_id, db)
+    if not service:
+        return None
+
+    try:
+        if class_.google_event_id:
+            link = add_meet_conference_to_event(service, calendar_id, class_.google_event_id)
+            if link:
+                return link
+            # El evento ya no existe en Google (borrado externamente) —
+            # caemos a crear uno nuevo con Meet incluido, igual que hace
+            # sync_calendar_logic cuando update_calendar_event falla.
+            class_.google_event_id = None
+
+        student_name = (
+            f"{class_.student.user.name} {class_.student.user.surname}"
+            if class_.student and class_.student.user else "Estudiante"
+        )
+        title = f"Clase: {student_name} — {class_.subject or 'General'}"
+        description = f"Clase de {class_.subject or 'General'}\nDuración: {class_.duration} minutos"
+
+        event_id, link = create_calendar_event_with_meet(
+            service=service, calendar_id=calendar_id, title=title,
+            start_utc=class_.start_time_utc, end_utc=class_.end_time_utc,
+            description=description,
+        )
+        if event_id:
+            class_.google_event_id = event_id
+        return link
+    except Exception as e:
+        logger.warning(f"Error generando Meet link automático para clase {class_.id}: {e}")
+        return None
 
 
 def sync_class_cancelled(teacher_id: int, google_event_id: str, db: Session) -> bool:
