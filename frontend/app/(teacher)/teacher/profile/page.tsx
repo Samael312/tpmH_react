@@ -70,6 +70,16 @@ const YoutubeIcon = () => (
     <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="currentColor" stroke="none" />
   </svg>
 );
+const LinkedinIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+    <path d="M20.45 20.45h-3.55v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45z" />
+  </svg>
+);
+const TiktokIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+    <path d="M16.6 5.82c-.9-.9-1.4-2.13-1.4-3.5h-3.15v13.86a2.58 2.58 0 1 1-1.83-2.47V10.6a5.75 5.75 0 1 0 4.98 5.71V9.4a7.35 7.35 0 0 0 4.4 1.45V7.7a4.85 4.85 0 0 1-3-1.88z" />
+  </svg>
+);
 
 // ─── UI base ──────────────────────────────────────────────────────────────
 function Toast({ msg, type }: { msg: React.ReactNode; type: "success" | "error" }) {
@@ -502,7 +512,7 @@ export default function TeacherProfilePage() {
   const [subjects, setSubjects] = useState<string[]>([]);
   const [skills, setSkills] = useState<string[]>([]);
   const [certificates, setCertificates] = useState<{ title: string; year: string }[]>([]);
-  const [socialLinks, setSocialLinks] = useState({ instagram: "", youtube: "", whatsapp: "", website: "" });
+  const [socialLinks, setSocialLinks] = useState({ instagram: "", youtube: "", whatsapp: "", website: "", linkedin: "", tiktok: "" });
 
   const initializedRef = useRef(false);
 
@@ -545,6 +555,8 @@ export default function TeacherProfilePage() {
       youtube: prof.social_links?.youtube ?? "",
       whatsapp: prof.social_links?.whatsapp ?? "",
       website: prof.social_links?.website ?? "",
+      linkedin: prof.social_links?.linkedin ?? "",
+      tiktok: prof.social_links?.tiktok ?? "",
     });
   }, []);
 
@@ -861,6 +873,8 @@ export default function TeacherProfilePage() {
                           {socialLinks.whatsapp && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">WA: {socialLinks.whatsapp}</span>}
                           {socialLinks.youtube && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">YouTube</span>}
                           {socialLinks.website && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">Web</span>}
+                          {socialLinks.linkedin && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">LinkedIn</span>}
+                          {socialLinks.tiktok && <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">TikTok: {socialLinks.tiktok}</span>}
                         </div>
                       ) : (
                         <p className="text-xs text-slate-400 font-bold">Sin enlaces configurados</p>
@@ -1074,6 +1088,8 @@ export default function TeacherProfilePage() {
                         { key: "youtube" as const, label: "YouTube", placeholder: "https://youtube.com/@canal", icon: <YoutubeIcon /> },
                         { key: "whatsapp" as const, label: "WhatsApp", placeholder: "+58 412 000 0000", icon: <MessageCircle className="w-4 h-4" /> },
                         { key: "website" as const, label: "Sitio web", placeholder: "https://tuweb.com", icon: <Globe className="w-4 h-4" /> },
+                        { key: "linkedin" as const, label: "LinkedIn", placeholder: "https://linkedin.com/in/tuperfil", icon: <LinkedinIcon /> },
+                        { key: "tiktok" as const, label: "TikTok", placeholder: "@tuprofe", icon: <TiktokIcon /> },
                       ].map(field => (
                         <div key={field.key} className="group">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{field.label}</label>

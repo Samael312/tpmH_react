@@ -23,6 +23,20 @@ function YoutubeIcon() {
     </svg>
   );
 }
+function LinkedinIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+      <path d="M20.45 20.45h-3.55v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45z" />
+    </svg>
+  );
+}
+function TiktokIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+      <path d="M16.6 5.82c-.9-.9-1.4-2.13-1.4-3.5h-3.15v13.86a2.58 2.58 0 1 1-1.83-2.47V10.6a5.75 5.75 0 1 0 4.98 5.71V9.4a7.35 7.35 0 0 0 4.4 1.45V7.7a4.85 4.85 0 0 1-3-1.88z" />
+    </svg>
+  );
+}
 
 export interface PublicProfileTeacher {
   user_username: string;
@@ -97,7 +111,7 @@ export default function PublicProfileView({
   const name = displayTeacherName(teacher);
 
   /** Arma el href correcto para cada red social a partir de lo cargado por el profesor. */
-  const getSocialHref = (key: "instagram" | "youtube" | "whatsapp" | "website", value: string): string | null => {
+  const getSocialHref = (key: "instagram" | "youtube" | "whatsapp" | "website" | "linkedin" | "tiktok", value: string): string | null => {
     if (!value) return null;
     if (key === "whatsapp") {
       const digits = value.replace(/\D/g, "");
@@ -108,15 +122,22 @@ export default function PublicProfileView({
       const handle = value.replace(/^@/, "");
       return handle ? `https://instagram.com/${handle}` : null;
     }
+    if (key === "tiktok") {
+      if (value.startsWith("http")) return value;
+      const handle = value.replace(/^@/, "");
+      return handle ? `https://tiktok.com/@${handle}` : null;
+    }
     return value.startsWith("http") ? value : `https://${value}`;
   };
 
   // Íconos simplificados sin forzar color, tomarán el color blanco del contenedor principal en el hero
-  const socialButtons: { key: "instagram" | "youtube" | "whatsapp" | "website"; label: string; icon: React.ReactNode }[] = [
+  const socialButtons: { key: "instagram" | "youtube" | "whatsapp" | "website" | "linkedin" | "tiktok"; label: string; icon: React.ReactNode }[] = [
     { key: "instagram", label: "Instagram", icon: <InstagramIcon /> },
     { key: "youtube", label: "YouTube", icon: <YoutubeIcon /> },
     { key: "whatsapp", label: "WhatsApp", icon: <MessageCircle className="w-4 h-4" /> },
     { key: "website", label: "Sitio web", icon: <Globe className="w-4 h-4" /> },
+    { key: "linkedin", label: "LinkedIn", icon: <LinkedinIcon /> },
+    { key: "tiktok", label: "TikTok", icon: <TiktokIcon /> },
   ];
 
   return (
