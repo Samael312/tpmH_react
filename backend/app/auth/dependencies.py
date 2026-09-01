@@ -1,6 +1,7 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from typing import Optional
 from app.db.base import get_db
 from app.auth.jwt import decode_access_token
 from app.models.user import User, UserRole
@@ -8,6 +9,8 @@ from app.models.teacher import TeacherStatus
 
 # Extrae el token del header "Authorization: Bearer <token>"
 security = HTTPBearer()
+# Igual, pero no rechaza la request si no viene token (auto_error=False)
+optional_security = HTTPBearer(auto_error=False)
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -41,6 +44,27 @@ def get_current_user(
         )
 
     return user
+
+def get_current_user_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+    db: Session = Depends(get_db),
+) -> Optional[User]:
+    """
+    Igual que get_current_user pero devuelve None en vez de lanzar 401
+    cuando no hay token o es inválido. Se usa en endpoints que aceptan
+    reportes tanto de usuarios logueados como anónimos (ej. reporte de
+    errores de frontend, que puede ocurrir antes de loguearse).
+    """
+    if not credentials:
+        return None
+    payload = decode_access_token(credentials.credentials)
+    if not payload:
+        return None
+    user = db.query(User).filter(User.id == int(payload["sub"])).first()
+    if not user or not user.is_active:
+        return None
+    return user
+
 
 def get_current_teacher(current_user: User = Depends(get_current_user)) -> User:
     """Permite acceso a profesores y a teacher_admin (actúan como profesores)"""

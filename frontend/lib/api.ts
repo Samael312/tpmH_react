@@ -1,6 +1,7 @@
 import axios from "axios";
 import Cookies from "js-cookie";
 import { useAuthStore } from "@/store/authStore";
+import { reportFrontendError } from "@/lib/errorReporting";
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1",
@@ -59,7 +60,26 @@ api.interceptors.response.use(
       useAuthStore.getState().logout();
       window.location.href = "/login";
     }
-    
+
+    // Reportamos a la pantalla de Logs cualquier otro fallo de API
+    // (4xx/5xx). El 401 se excluye a propósito: es parte del flujo
+    // normal de sesión vencida, no un error a investigar.
+    if (typeof window !== "undefined" && err.response?.status !== 401) {
+      const status = err.response?.status;
+      reportFrontendError({
+        message: err.response?.data?.detail
+          ? String(err.response.data.detail)
+          : err.message || "Error de red al llamar a la API",
+        screen: window.location.pathname,
+        level: status && status < 500 ? "warning" : "error",
+        status_code: status,
+        extra: {
+          url: err.config?.url,
+          method: err.config?.method,
+        },
+      });
+    }
+
     return Promise.reject(err);
   }
 );

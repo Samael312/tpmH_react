@@ -63,8 +63,7 @@ backend/alembic/versions/__pycache__/
 
 # Logs
 *.log
-logs/
-backend/logs/
+/backend/logs/
 
 # Base de datos local SQLite (respaldo local)
 *.sqlite

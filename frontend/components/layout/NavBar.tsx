@@ -7,7 +7,7 @@ import { useAuthStore } from "@/store/authStore";
 import { 
   LayoutDashboard, Users, GraduationCap, Calendar, Settings, LogOut, 
   MonitorPlay, UserCircle, ClipboardEdit, CreditCard, Book, BarChart, ChevronLeft,
-  CheckCheck, Package as PackageIcon, MoreHorizontal, Users2, LifeBuoy, Crown
+  CheckCheck, Package as PackageIcon, MoreHorizontal, Users2, LifeBuoy, Crown, AlertOctagon
 } from "lucide-react";
 import { useUnreadNotificationCount } from "@/hooks/useAdminData";
 import { useUnreadSupportCount } from "@/hooks/useSupport";
@@ -58,6 +58,7 @@ const ADMIN_MORE: TabItem[] = [
   { href: "/admin/god-mode", label: "Modo Dios", icon: <Crown size={20} /> },
   { href: "/admin/package-requests", label: "Solicitudes", icon: <PackageIcon size={20} /> },
   { href: "/admin/support", label: "Soporte", icon: <LifeBuoy size={20} /> },
+  { href: "/admin/logs", label: "Logs", icon: <AlertOctagon size={20} /> },
   { href: "/admin/settings", label: "Configuración", icon: <Settings size={20} /> },
 ];
 
@@ -292,6 +293,7 @@ export default function DashboardSidebar() {
                 <NavItem href="/admin/god-mode" icon={<Crown size={20} />} label="Modo Dios" active={isActive("/admin/god-mode")} collapsed={collapsed} />
                 <NavItem href="/admin/payments" icon={<CreditCard size={20} />} label="Pagos y Facturas" active={isActive("/admin/payments")} collapsed={collapsed} />
                 <NavItem href="/admin/support" icon={<LifeBuoy size={20} />} label="Soporte" active={isActive("/admin/support")} collapsed={collapsed} />
+                <NavItem href="/admin/logs" icon={<AlertOctagon size={20} />} label="Logs" active={isActive("/admin/logs")} collapsed={collapsed} />
                 <NavItem href="/admin/settings" icon={<Settings size={20} />} label="Configuración" active={isActive("/admin/settings")} collapsed={collapsed} />
                 <NavItem href="/admin/flow-tester" icon={<CheckCheck size={20} />} label="Flow Tester" active={isActive("/admin/flow-tester")} collapsed={collapsed} />
               </nav>
