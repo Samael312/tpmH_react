@@ -42,10 +42,12 @@ def list_approved_teachers(
     """
     Lista profesores aprobados.
     Filtrable por materia e idioma.
-    Endpoint público.
+    Endpoint público. Excluye cuentas fijas de la suite de tests
+    (is_test_account=True) — no deben aparecer en el marketplace real.
     """
-    teachers = db.query(TeacherProfile).filter(
-        TeacherProfile.status == TeacherStatus.approved
+    teachers = db.query(TeacherProfile).join(User, TeacherProfile.user_id == User.id).filter(
+        TeacherProfile.status == TeacherStatus.approved,
+        User.is_test_account.is_(False),
     ).all()
 
     # Filtrar por materia

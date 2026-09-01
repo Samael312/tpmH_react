@@ -97,6 +97,22 @@ def clean_slate(db, fixed_users, volatile):
 def test_full_trial_to_active_package_flow(
     client, db, teacher_token, student_token, superadmin_token, fixed_users, volatile, clean_slate,
 ):
+    """
+    Técnico: el flujo de negocio más largo de la app, verificado a nivel
+    HTTP **y** BD en cada paso — disponibilidad semanal → reserva de
+    prueba gratuita (primera clase con un profesor es siempre trial) →
+    forzar "completada" vía god-mode → crear paquete → notificar pago →
+    aprobar pago (verifica comisión calculada y billetera acreditada
+    exactamente por amount_teacher) → reservar clase regular con el
+    enrollment activo. Cada entidad creada (Class, Package, Payment,
+    Enrollment) se verifica directo contra la BD, no solo por la respuesta
+    del endpoint.
+    UX: es el recorrido completo de un estudiante nuevo — probar gratis
+    con un profesor, decidir comprar un paquete de clases, esperar que el
+    equipo confirme el pago, y agendar su primera clase de verdad. Si
+    cualquier eslabón de esta cadena se rompe, la plataforma no genera
+    ingresos.
+    """
     teacher_username = fixed_users["teacher"].username
     resolved = _resolve_teacher_for_booking(db, teacher_username)
     if resolved != teacher_username:
@@ -148,6 +164,17 @@ def test_full_trial_to_active_package_flow(
     assert r_force.status_code == 200, r_force.text
     assert r_force.json()["status"] == "completed"
 
+    # Verificación a nivel BD (no solo la respuesta del endpoint): la
+    # clase de prueba existe de verdad, con el profesor/estudiante/tipo
+    # correctos.
+    db.expire_all()
+    trial_db = db.query(Class).filter(Class.id == trial_class_id).first()
+    assert trial_db is not None, "La clase de prueba debería existir en la BD"
+    assert trial_db.status == "completed"
+    assert trial_db.class_type.value == "trial"
+    assert trial_db.teacher_id == clean_slate["teacher_id"]
+    assert trial_db.student_id == clean_slate["student_id"]
+
     # 4) Ahora el estudiante necesita un paquete. El profesor crea uno.
     r_pkg = client.post("/api/v1/packages/", json={
         "name": "Flow-test package", "subject": "English", "price": 100.0,
@@ -156,6 +183,12 @@ def test_full_trial_to_active_package_flow(
     assert r_pkg.status_code == 201, r_pkg.text
     package_id = r_pkg.json()["id"]
     clean_slate["package_ids"].append(package_id)
+
+    package_db = db.query(Package).filter(Package.id == package_id).first()
+    assert package_db is not None
+    assert package_db.teacher_id == clean_slate["teacher_id"]
+    assert package_db.classes_count == 4
+    assert package_db.price == 100.0
 
     # Reservar clase regular ANTES de tener paquete debe fallar con "needs_package".
     r_needs_pkg = client.post("/api/v1/payments/book", json={
@@ -167,17 +200,48 @@ def test_full_trial_to_active_package_flow(
     assert r_needs_pkg.status_code == 400
 
     # 5) El estudiante "compra" el paquete (notifica el pago).
+    wallet_before = db.query(TeacherWallet).filter(TeacherWallet.teacher_id == clean_slate["teacher_id"]).first()
+    balance_before = wallet_before.available_balance if wallet_before else 0.0
+
     r_notify = client.post("/api/v1/payments/notify-payment", json={
         "type": "package", "package_id": package_id, "transaction_reference": "flow-tests-ref",
     }, headers=auth_headers(student_token))
     assert r_notify.status_code == 200, r_notify.text
     payment_id = r_notify.json()["payment_id"]
 
+    # Verificación BD: el Payment se creó de verdad, apuntando al par
+    # profesor-estudiante correcto, en estado pendiente de revisión.
+    db.expire_all()
+    payment_db = db.query(Payment).filter(Payment.id == payment_id).first()
+    assert payment_db is not None, "El Payment debería existir en la BD"
+    assert payment_db.student_id == clean_slate["student_id"]
+    assert payment_db.teacher_id == clean_slate["teacher_id"]
+    assert payment_db.amount_total == 100.0
+    assert payment_db.status == "pending_review"
+
     # 6) Staff aprueba el pago -> el enrollment queda activo con créditos.
     r_validate = client.patch(f"/api/v1/payments/{payment_id}/validate", json={
         "action": "approve",
     }, headers=auth_headers(superadmin_token))
     assert r_validate.status_code == 200, r_validate.text
+
+    # Verificación BD: el pago quedó aprobado, con comisión calculada
+    # según TeacherProfile.commission_rate (15% por defecto), y la
+    # billetera del profesor se acreditó exactamente por amount_teacher.
+    db.expire_all()
+    payment_db = db.query(Payment).filter(Payment.id == payment_id).first()
+    assert payment_db.status == "approved"
+    teacher_profile = db.query(TeacherProfile).filter(TeacherProfile.id == clean_slate["teacher_id"]).first()
+    expected_commission = round(100.0 * teacher_profile.commission_rate, 2)
+    expected_teacher_amount = round(100.0 - expected_commission, 2)
+    assert payment_db.amount_platform == expected_commission
+    assert payment_db.amount_teacher == expected_teacher_amount
+
+    wallet_after = db.query(TeacherWallet).filter(TeacherWallet.teacher_id == clean_slate["teacher_id"]).first()
+    assert wallet_after is not None, "Debería haberse creado/actualizado la billetera del profesor"
+    assert round(wallet_after.available_balance - balance_before, 2) == expected_teacher_amount, (
+        "La billetera del profesor debería haberse acreditado exactamente por amount_teacher"
+    )
 
     r_enrollments = client.get("/api/v1/packages/my-enrollments", headers=auth_headers(student_token))
     assert r_enrollments.status_code == 200
@@ -186,6 +250,17 @@ def test_full_trial_to_active_package_flow(
     enrollment = enrollments[0]
     assert enrollment["status"] == "active"
     enrollment_id = enrollment["id"]
+
+    # Verificación BD del enrollment: pertenece al par correcto, con los
+    # créditos totales del paquete y ninguno usado todavía, y pagado.
+    enrollment_db = db.query(Enrollment).filter(Enrollment.id == enrollment_id).first()
+    assert enrollment_db is not None
+    assert enrollment_db.student_id == clean_slate["student_id"]
+    assert enrollment_db.teacher_id == clean_slate["teacher_id"]
+    assert enrollment_db.package_id == package_id
+    assert enrollment_db.classes_total == 4
+    assert enrollment_db.classes_used == 0
+    assert enrollment_db.payment_status == "paid"
 
     # 7) Con el paquete activo, ya se puede reservar una clase regular.
     r_book_regular = client.post("/api/v1/payments/book", json={
@@ -196,6 +271,28 @@ def test_full_trial_to_active_package_flow(
     }, headers=auth_headers(student_token))
     assert r_book_regular.status_code == 201, r_book_regular.text
     assert r_book_regular.json()["status"] in ("pending", "confirmed")
+    regular_class_id = r_book_regular.json()["class_id"]
+
+    # Verificación BD final: la clase regular existe, ligada al enrollment
+    # correcto, y el enrollment descontó exactamente 1 crédito.
+    db.expire_all()
+    regular_class_db = db.query(Class).filter(Class.id == regular_class_id).first()
+    assert regular_class_db is not None
+    assert regular_class_db.class_type.value == "regular"
+    assert regular_class_db.enrollment_id == enrollment_id
+    assert regular_class_db.teacher_id == clean_slate["teacher_id"]
+    assert regular_class_db.student_id == clean_slate["student_id"]
+
+    enrollment_db = db.query(Enrollment).filter(Enrollment.id == enrollment_id).first()
+    # Nota: esta app NO incrementa `classes_used` al reservar (solo se
+    # actualiza al cancelar/completar, ver core/class_logic.py) — el
+    # cupo disponible se calcula dinámicamente contando clases activas
+    # del enrollment (ver book_class en payments.py). Verificamos eso.
+    occupied_slots = db.query(Class).filter(
+        Class.enrollment_id == enrollment_id,
+        Class.status.notin_(["cancelled", "expired"]),
+    ).count()
+    assert occupied_slots == 1, "Debería haber exactamente 1 clase activa consumiendo un cupo del enrollment"
 
     # El resto de la limpieza (clases, enrollment, payment, package) ya
     # quedó registrado en el fixture `clean_slate` desde el principio.

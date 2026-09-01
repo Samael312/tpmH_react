@@ -123,6 +123,26 @@ FLOW_TEST_TEACHER_EMAIL=...
 FLOW_TEST_STUDENT_EMAIL=...
 ```
 
+### Convención de docstrings (Técnico / UX)
+
+Todo test nuevo debería llevar un docstring con este formato exacto, para
+que `/flow-tests/manifest` lo pueda partir automáticamente en los dos
+campos que muestra la UI:
+
+```python
+def test_algo(...):
+    """
+    Técnico: qué hace el test a nivel API/BD, qué endpoint(s) golpea y qué
+    verifica exactamente.
+    UX: qué significa esto para la experiencia real de un usuario —
+    qué pantalla o flujo se rompería si este test fallara.
+    """
+```
+
+Si un test no sigue el formato, el manifiesto igual funciona (cae de
+vuelta al docstring completo como "technical_description" y
+"ux_description" en `null`), pero no se benefician del desplegable dividido.
+
 ## Qué cubre hoy
 
 | Archivo | Qué prueba |
@@ -170,18 +190,38 @@ incluyendo ese mensaje exacto, para que quede obvio qué instalar y dónde.
   para que añadir estos casos sea sencillo — seguir el patrón de
   `test_materials_homework.py` o `test_purchase_flow.py` según la
   complejidad del flujo.
-- `/admin/flow-tester` (Next.js) ahora **sí** dispara esta suite de verdad,
-  con feedback visual en vivo (progreso test-por-test, agrupado por módulo,
-  mensajes de error expandibles). Ver `backend/app/api/v1/endpoints/
-  flow_tests.py`: expone `POST /api/v1/flow-tests/run` (lanza pytest como
-  subproceso en background, no bloquea) y `GET /api/v1/flow-tests/{run_id}`
-  (polling; lee un `--report-log` de pytest que se va escribiendo test a
-  test, así el progreso se ve en tiempo real sin esperar a que termine la
-  corrida completa). Acceso: cualquier staff (`superadmin` o
-  `teacher_admin`), igual que el resto del panel admin. El endpoint se
-  niega a correr si `ENVIRONMENT=production`. Los tests marcados
-  `destructive` (el flujo completo de compra) requieren marcar
-  explícitamente el toggle correspondiente en la UI — no corren por
-  defecto.
+- `/admin/flow-tester` (Next.js) dispara esta suite de verdad, con
+  feedback visual en vivo. Capacidades actuales:
+  - **Enumeración previa**: al cargar la página, `GET /flow-tests/manifest`
+    corre `pytest --collect-only` (sin tocar la BD, milisegundos) y trae la
+    lista exacta de tests — así la barra de progreso durante una corrida es
+    precisa (`completados/total conocido de antemano`), no una animación
+    genérica.
+  - **Descripción técnica + UX por test**: cada test tiene un docstring con
+    el formato `Técnico: ... UX: ...`; el backend lo parte en dos campos
+    (`technical_description` / `ux_description`) y la UI los muestra en un
+    desplegable por fila (ícono de info), disponible siempre, no solo
+    cuando falla.
+  - **Ejecución granular**: se puede correr un test individual (▶ en la
+    fila), un módulo/bloque completo (▶ en el header del módulo, o
+    checkbox "seleccionar todo" del módulo), una selección arbitraria de
+    tests marcados con checkbox ("Ejecutar seleccionados"), o la suite
+    completa ("Ejecutar todo"). Una selección explícita de tests corre
+    exactamente esos, **incluso si alguno es destructivo** — el toggle de
+    "incluir destructivos" solo se aplica automáticamente cuando se corre
+    todo o un módulo/bloque sin selección manual de esos tests puntuales;
+    los checkboxes de tests destructivos están deshabilitados mientras el
+    toggle esté apagado.
+  - Progreso en vivo vía polling (`GET /flow-tests/{run_id}`), que lee un
+    `--report-log` de pytest escrito test a test.
+  - Acceso: cualquier staff (`superadmin` o `teacher_admin`). El backend se
+    niega a correr si `ENVIRONMENT=production`.
   `frontend/public/flow-tester.html` se eliminó por estar duplicado y
   obsoleto frente a esta suite.
+- **Cuentas de prueba ocultas de la UI real**: `users.is_test_account=True`
+  para los 4 usuarios fijos — el profesor fijo, aunque esté `approved`, no
+  aparece en `GET /teachers/` (el marketplace público), pero sigue siendo
+  accesible por username directo (perfil, slots, reservas), que es lo que
+  el resto de la suite necesita. Solo se filtró la superficie pública
+  explícitamente señalada; los listados de staff en `/admin` siguen
+  mostrando estas cuentas (útil para depurar).

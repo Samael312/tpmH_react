@@ -39,6 +39,15 @@ class User(Base):
     ban_reason = Column(String, nullable=True)
     banned_at = Column(DateTime(timezone=True), nullable=True)
 
+    # ─── Cuentas fijas de la suite backend/tests/flow ───
+    # Marca las 4 cuentas de prueba (superadmin/teacher_admin/teacher/
+    # student) que se reutilizan entre corridas. Se usa para ocultarlas de
+    # superficies públicas/de cara al usuario (p. ej. el marketplace de
+    # profesores en /teachers/) sin tener que borrarlas ni afectar accesos
+    # directos por username (perfil, disponibilidad, reservas), que los
+    # propios tests necesitan seguir pudiendo hacer.
+    is_test_account = Column(Boolean, default=False, nullable=False, server_default="false")
+
     # Relaciones
     teacher_profile = relationship("TeacherProfile", back_populates="user", uselist=False)
     student_profile = relationship("StudentProfile", back_populates="user", uselist=False)

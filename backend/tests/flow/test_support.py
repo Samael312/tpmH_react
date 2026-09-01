@@ -26,6 +26,15 @@ def _register_ticket_cleanup(volatile, ticket_id: int):
 def test_student_creates_ticket_and_staff_resolves_it(
     client, student_token, superadmin_token, volatile,
 ):
+    """
+    Técnico: flujo completo de un ticket — el estudiante lo crea (201,
+    status "pending"), aparece en su propio listado y en el listado de
+    staff filtrado por pendientes, y el superadmin lo resuelve (status
+    pasa a "answered").
+    UX: es "Ayuda y soporte" de punta a punta — un estudiante con una
+    duda escribe al equipo, y ese equipo puede verla y responderla desde
+    el panel de administración.
+    """
     r_create = client.post("/api/v1/support/tickets", json={
         "category": "question", "subject": "Flow-test ticket",
         "message": "Ticket creado por la suite automática de flow-tests.",
@@ -56,6 +65,13 @@ def test_student_creates_ticket_and_staff_resolves_it(
 
 
 def test_teacher_admin_can_also_resolve_tickets(client, student_token, teacher_admin_token, volatile):
+    """
+    Técnico: el mismo flujo de resolución de tickets, pero con token de
+    teacher_admin en vez de superadmin — confirma que get_current_staff
+    también cubre este endpoint para ambos roles de staff.
+    UX: cualquier miembro del equipo de soporte (no solo el dueño de la
+    plataforma) debe poder cerrar tickets de estudiantes.
+    """
     r_create = client.post("/api/v1/support/tickets", json={
         "category": "bug", "subject": "Flow-test ticket 2",
         "message": "Segundo ticket de la suite automática.",
@@ -73,7 +89,13 @@ def test_teacher_admin_can_also_resolve_tickets(client, student_token, teacher_a
 
 
 def test_superadmin_cannot_create_ticket(client, superadmin_token):
-    """Solo student/teacher pueden abrir tickets — un superadmin no."""
+    """
+    Técnico: POST /support/tickets con token de superadmin espera 403 —
+    solo student/teacher pueden abrir tickets.
+    UX: el formulario de "Ayuda y soporte" es para usuarios finales
+    (estudiantes/profesores) con una duda, no para el propio staff que
+    los atiende.
+    """
     r = client.post("/api/v1/support/tickets", json={
         "category": "question", "subject": "No debería crearse", "message": "x",
     }, headers=auth_headers(superadmin_token))

@@ -58,6 +58,7 @@ def _get_or_create_user(db: Session, spec: dict) -> User:
     user.ban_reason = None
     user.banned_at = None
     user.onboarding_completed = True
+    user.is_test_account = True
     db.flush()
     return user
 

@@ -41,6 +41,53 @@ def pytest_addoption(parser):
         default=False,
         help="Habilita la suite backend/tests/flow (crea y borra datos reales).",
     )
+    parser.addoption(
+        "--emit-manifest",
+        action="store",
+        default=None,
+        help=(
+            "Ruta de archivo: si se pasa, al terminar la colección se escribe un "
+            "JSON con node_id/módulo/nombre/docstring/markers de cada test "
+            "recolectado (sin ejecutar nada). Pensado para que la UI enumere los "
+            "tests antes de correrlos y arme una barra de progreso precisa."
+        ),
+    )
+
+
+def pytest_collection_finish(session):
+    """
+    Si se pasó --emit-manifest=<path>, vuelca la lista de tests recolectados
+    (ya expandidos con sus parametrize) a un JSON y no hace nada más — la
+    ejecución real sigue su curso normal (se usa junto con --collect-only
+    desde flow_tests.py, así que en la práctica nunca llega a ejecutar nada).
+    """
+    manifest_path = session.config.getoption("--emit-manifest")
+    if not manifest_path:
+        return
+
+    import json
+
+    tests = []
+    for item in session.items:
+        node_id = item.nodeid
+        parts = node_id.split("::", 1)
+        module = parts[0].rsplit("/", 1)[-1]
+        name = parts[1] if len(parts) > 1 else node_id
+        doc = ""
+        func = getattr(item, "function", None)
+        if func is not None and func.__doc__:
+            doc = func.__doc__.strip()
+        markers = sorted({m.name for m in item.iter_markers()})
+        tests.append({
+            "node_id": node_id,
+            "module": module,
+            "name": name,
+            "docstring": doc,
+            "markers": markers,
+        })
+
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump({"tests": tests}, f, ensure_ascii=False, indent=2)
 
 
 def pytest_collection_modifyitems(config, items):

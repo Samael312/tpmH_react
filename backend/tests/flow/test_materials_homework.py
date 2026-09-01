@@ -75,6 +75,14 @@ def linked_student(db, fixed_users, volatile):
 
 
 def test_teacher_creates_and_lists_material(client, teacher_token, volatile):
+    """
+    Técnico: POST /materials/ (multipart, sin archivo) crea un material de
+    vocabulario, y GET /materials/my-materials lo incluye en la lista del
+    profesor.
+    UX: es la pantalla "Mis materiales" del profesor — crear una ficha de
+    estudio (aunque sea solo texto/vocabulario, sin documento adjunto) y
+    verla listada.
+    """
     r = client.post(
         "/api/v1/materials/",
         data={"title": "Flow-test material", "category": "vocabulary", "level": "A1"},
@@ -92,6 +100,12 @@ def test_teacher_creates_and_lists_material(client, teacher_token, volatile):
 
 
 def test_only_teacher_can_create_material(client, student_token):
+    """
+    Técnico: POST /materials/ con token de estudiante espera 403 (solo
+    get_current_teacher puede crear materiales).
+    UX: un estudiante no debería poder crear/publicar material educativo
+    como si fuera un profesor.
+    """
     r = client.post(
         "/api/v1/materials/",
         data={"title": "No debería crearse", "category": "vocabulary"},
@@ -100,7 +114,62 @@ def test_only_teacher_can_create_material(client, student_token):
     assert r.status_code == 403
 
 
+# Un PDF mínimo pero sintácticamente válido — Cloudinary no valida el
+# contenido más allá del content-type declarado, pero mejor no mandar
+# basura arbitraria.
+_MINIMAL_PDF_BYTES = (
+    b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+    b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\n"
+    b"trailer<</Root 1 0 R>>"
+)
+
+
+def test_material_with_uploaded_document_is_volatile(client, teacher_token, volatile):
+    """
+    Técnico: sube un documento real (PDF) a Cloudinary vía POST
+    /materials/ con multipart file, y confirma que DELETE /materials/{id}
+    borra tanto la fila en BD como el archivo en Cloudinary (ver
+    delete_material, que ya llama a delete_file internamente). Se salta si
+    este entorno no tiene credenciales de Cloudinary configuradas.
+    UX: un profesor puede adjuntar un PDF/Word/imagen real a un material,
+    no solo texto — y si lo borra, el archivo no debe quedar huérfano
+    consumiendo espacio de almacenamiento indefinidamente.
+    """
+    from app.core.config import settings
+    if not settings.CLOUDINARY_CLOUD_NAME:
+        pytest.skip("CLOUDINARY_CLOUD_NAME no configurado en este entorno — se salta la subida real de documentos.")
+
+    r = client.post(
+        "/api/v1/materials/",
+        data={"title": "Flow-test documento", "category": "other"},
+        files={"file": ("flow-test.pdf", _MINIMAL_PDF_BYTES, "application/pdf")},
+        headers=auth_headers(teacher_token),
+    )
+    assert r.status_code == 201, r.text
+    material = r.json()
+    assert material["file_url"], "El material debería tener un archivo real subido a Cloudinary"
+    material_id = material["id"]
+    _register_material_cleanup(volatile, teacher_token, material_id)
+
+    r_del = client.delete(f"/api/v1/materials/{material_id}", headers=auth_headers(teacher_token))
+    assert r_del.status_code == 200, r_del.text
+    # delete_material ya llamó a delete_file(...) internamente antes de
+    # responder — si eso lanzara, el endpoint hubiera devuelto 500 en vez
+    # de 200, así que un 200 aquí ya confirma que el borrado en Cloudinary
+    # se intentó sin errores.
+
+
 def test_material_vocabulary_and_assignment(client, teacher_token, student_token, linked_student, volatile):
+    """
+    Técnico: crea un material, le agrega una lista de vocabulario
+    (verificando normalización de mayúsculas y deduplicado), lo asigna a
+    un estudiante vinculado, y confirma que aparece en la vista del
+    estudiante (GET /materials/student/my-materials).
+    UX: es el flujo completo "el profesor prepara una ficha de vocabulario
+    y se la asigna a su alumno" — y ese alumno debe poder verla en su
+    propio panel de materiales.
+    """
     r = client.post(
         "/api/v1/materials/",
         data={"title": "Vocab flow-test", "category": "vocabulary"},
@@ -133,6 +202,15 @@ def test_material_vocabulary_and_assignment(client, teacher_token, student_token
 
 
 def test_homework_create_assign_and_delete(client, teacher_token, linked_student, volatile):
+    """
+    Técnico: crea una tarea con fecha de entrega y la asigna a un
+    estudiante vinculado, confirma que aparece en el listado del profesor,
+    y la borra (soft-delete real vía DELETE /homework/{id}; el hard-delete
+    de limpieza queda registrado aparte en `volatile`).
+    UX: es la pantalla "Asignar tarea" del profesor — crear una tarea con
+    fecha límite para un alumno específico, verla en su propio listado, y
+    poder eliminarla si se creó por error.
+    """
     due = (datetime.now(tz.utc) + timedelta(days=7)).isoformat()
     r = client.post("/api/v1/homework/", json={
         "title": "Flow-test homework",
@@ -154,6 +232,12 @@ def test_homework_create_assign_and_delete(client, teacher_token, linked_student
 
 
 def test_homework_requires_approved_teacher_role(client, student_token):
+    """
+    Técnico: POST /homework/ con token de estudiante espera 403 (solo
+    get_current_teacher puede crear tareas).
+    UX: un estudiante no debería poder asignarse tareas a sí mismo ni a
+    otros como si fuera un profesor.
+    """
     due = (datetime.now(tz.utc) + timedelta(days=7)).isoformat()
     r = client.post("/api/v1/homework/", json={
         "title": "No debería crearse", "description": "x", "due_date_utc": due, "student_ids": [],

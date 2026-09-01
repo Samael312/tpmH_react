@@ -45,9 +45,10 @@ MAX_MESSAGE_CHARS = 4000
 # de desarrollo, no pensado para producción.
 
 class _RunState:
-    def __init__(self, run_id: str, include_destructive: bool):
+    def __init__(self, run_id: str, include_destructive: bool, node_ids: Optional[list[str]] = None):
         self.run_id = run_id
         self.include_destructive = include_destructive
+        self.node_ids = node_ids or None
         self.status = "running"  # running | completed | error_starting
         self.started_at = datetime.utcnow()
         self.finished_at: Optional[datetime] = None
@@ -96,12 +97,19 @@ def _require_dev_environment():
 
 def _run_pytest_in_background(state: _RunState):
     cmd = [
-        sys.executable, "-m", "pytest", "tests/flow", "-v",
+        sys.executable, "-m", "pytest", "-v",
         "--run-flow-tests",
         "--report-log", str(state.log_path),
     ]
-    if not state.include_destructive:
-        cmd += ["-m", "not destructive"]
+    if state.node_ids:
+        # Selección explícita (test individual o bloque/módulo elegido en
+        # la UI): corre exactamente esos node_ids, ignorando el filtro de
+        # destructivos — si el usuario los eligió a mano, sabe lo que hace.
+        cmd += state.node_ids
+    else:
+        cmd += ["tests/flow"]
+        if not state.include_destructive:
+            cmd += ["-m", "not destructive"]
 
     try:
         result = subprocess.run(
@@ -236,6 +244,10 @@ def _parse_report_log(log_path: Path) -> list[dict]:
 
 class FlowTestRunRequest(BaseModel):
     include_destructive: bool = False
+    # Selección explícita: lista de node_ids exactos (tal como vienen del
+    # manifiesto de /flow-tests/manifest) para correr un test individual o
+    # un bloque/módulo entero. None o [] = correr la suite completa.
+    node_ids: Optional[list[str]] = None
 
 
 class FlowTestResult(BaseModel):
@@ -258,12 +270,27 @@ class FlowTestRunResponse(BaseModel):
     run_id: str
     status: str  # running | completed
     include_destructive: bool
+    node_ids: Optional[list[str]] = None
     started_at: datetime
     finished_at: Optional[datetime] = None
     return_code: Optional[int] = None
     stderr_tail: Optional[str] = None
     tests: list[FlowTestResult]
     summary: FlowTestSummary
+
+
+class FlowTestManifestEntry(BaseModel):
+    node_id: str
+    module: str
+    name: str
+    is_destructive: bool
+    technical_description: Optional[str] = None
+    ux_description: Optional[str] = None
+
+
+class FlowTestManifestResponse(BaseModel):
+    modules: list[str]
+    tests: list[FlowTestManifestEntry]
 
 
 def _build_response(state: _RunState) -> FlowTestRunResponse:
@@ -278,6 +305,7 @@ def _build_response(state: _RunState) -> FlowTestRunResponse:
         run_id=state.run_id,
         status=state.status,
         include_destructive=state.include_destructive,
+        node_ids=state.node_ids,
         started_at=state.started_at,
         finished_at=state.finished_at,
         return_code=state.return_code,
@@ -287,7 +315,81 @@ def _build_response(state: _RunState) -> FlowTestRunResponse:
     )
 
 
+def _split_technical_ux(docstring: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    """
+    Los docstrings de los tests siguen la convención:
+        Técnico: ...
+        UX: ...
+    (pueden ocupar varias líneas cada uno). Esto separa ambas partes; si el
+    docstring no sigue la convención (tests viejos sin actualizar, o
+    ninguno), devuelve (docstring completo, None) como fallback razonable.
+    """
+    if not docstring:
+        return None, None
+
+    text = docstring.strip()
+    marker = "\n    UX:" if "\n    UX:" in text else ("\nUX:" if "\nUX:" in text else None)
+    if "Técnico:" not in text or marker is None:
+        return text, None
+
+    technical_part, _, ux_part = text.partition(marker)
+    technical = technical_part.replace("Técnico:", "", 1).strip()
+    technical = " ".join(line.strip() for line in technical.splitlines()).strip()
+    ux = ux_part.replace("UX:", "", 1).strip()
+    ux = " ".join(line.strip() for line in ux.splitlines()).strip()
+    return technical or None, ux or None
+
+
 # ─── Endpoints ──────────────────────────────────────────────────────────────
+
+@router.get("/manifest", response_model=FlowTestManifestResponse)
+def get_flow_tests_manifest(
+    current_user: User = Depends(get_current_staff),
+):
+    """
+    Enumera todos los tests de backend/tests/flow SIN ejecutarlos (usa
+    `pytest --collect-only`, no toca la BD, tarda milisegundos), con su
+    descripción técnica/UX (extraída del docstring de cada test) y si son
+    destructivos. Pensado para que la UI arme la lista de tests y una
+    barra de progreso precisa ANTES de arrancar una corrida.
+    """
+    _require_dev_environment()
+
+    manifest_path = Path(gettempdir()) / f"flow-tests-manifest-{uuid.uuid4().hex[:8]}.json"
+    cmd = [
+        sys.executable, "-m", "pytest", "tests/flow", "--collect-only", "-q",
+        "--run-flow-tests", "--emit-manifest", str(manifest_path),
+    ]
+    try:
+        result = subprocess.run(cmd, cwd=str(BACKEND_DIR), capture_output=True, text=True, timeout=60)
+        if not manifest_path.exists():
+            combined = ((result.stdout or "") + (result.stderr or ""))[-MAX_MESSAGE_CHARS:]
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"No se pudo enumerar los tests (pytest salió con código {result.returncode}): {combined}",
+            )
+        with manifest_path.open("r", encoding="utf-8") as f:
+            raw = json.load(f)
+    finally:
+        manifest_path.unlink(missing_ok=True)
+
+    tests = []
+    modules_seen: list[str] = []
+    for t in raw.get("tests", []):
+        technical, ux = _split_technical_ux(t.get("docstring"))
+        if t["module"] not in modules_seen:
+            modules_seen.append(t["module"])
+        tests.append(FlowTestManifestEntry(
+            node_id=t["node_id"],
+            module=t["module"],
+            name=t["name"],
+            is_destructive="destructive" in (t.get("markers") or []),
+            technical_description=technical,
+            ux_description=ux,
+        ))
+
+    return FlowTestManifestResponse(modules=modules_seen, tests=tests)
+
 
 @router.post("/run", response_model=FlowTestRunResponse, status_code=status.HTTP_202_ACCEPTED)
 def start_flow_tests_run(
@@ -296,7 +398,10 @@ def start_flow_tests_run(
 ):
     """
     Lanza backend/tests/flow en background y devuelve de inmediato un
-    run_id para hacer polling con GET /flow-tests/{run_id}.
+    run_id para hacer polling con GET /flow-tests/{run_id}. Si `node_ids`
+    viene con contenido, corre exactamente esos tests (individual o
+    bloque/módulo); si no, corre la suite completa respetando
+    `include_destructive`.
     """
     _require_dev_environment()
 
@@ -305,7 +410,7 @@ def start_flow_tests_run(
         return _build_response(already_running)
 
     run_id = uuid.uuid4().hex[:12]
-    state = _RunState(run_id, data.include_destructive)
+    state = _RunState(run_id, data.include_destructive, data.node_ids)
     _store_run(state)
 
     thread = threading.Thread(target=_run_pytest_in_background, args=(state,), daemon=True)
