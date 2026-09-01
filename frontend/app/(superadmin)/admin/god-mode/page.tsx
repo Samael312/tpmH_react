@@ -30,7 +30,7 @@ export default function GodModePage() {
         <div>
           <h1 className="text-lg font-black">Modo Dios</h1>
           <p className="text-xs text-slate-300 mt-1 max-w-2xl">
-            Acciones que se saltan las reglas normales de negocio: créditos, paquetes, cohortes, clases y pagos.
+            Acciones que se saltan las reglas normales de negocio: créditos, paquetes, cohortes, clases, pagos y reseñas.
             Cada acción queda registrada con tu usuario y el motivo que escribas — no se puede deshacer desde acá.
           </p>
         </div>

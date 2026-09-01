@@ -142,10 +142,18 @@ def get_teacher_reviews(
         Review.teacher_id == teacher.id
     ).order_by(Review.created_at.desc()).all()
 
-    # Enriquecer con datos del estudiante
+    # Enriquecer con datos del estudiante. Las reseñas legacy cargadas
+    # vía Modo Dios pueden no tener student_id (alumno sin cuenta en
+    # este sistema) — en ese caso se muestra legacy_student_name.
     result = []
     for review in reviews:
-        student_user = review.student.user
+        if review.student_id and review.student and review.student.user:
+            student_user = review.student.user
+            student_name = f"{student_user.name} {student_user.surname}"
+            student_username = student_user.username
+        else:
+            student_name = review.legacy_student_name
+            student_username = None
         r = ReviewResponse(
             id=review.id,
             teacher_id=review.teacher_id,
@@ -153,8 +161,10 @@ def get_teacher_reviews(
             rating=review.rating,
             comment=review.comment,
             created_at=review.created_at,
-            student_name=f"{student_user.name} {student_user.surname}",
-            student_username=student_user.username,
+            student_name=student_name,
+            student_username=student_username,
+            is_legacy=review.is_legacy,
+            legacy_student_name=review.legacy_student_name,
         )
         result.append(r)
 

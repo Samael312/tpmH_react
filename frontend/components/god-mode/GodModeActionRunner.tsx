@@ -14,6 +14,8 @@ import {
   useGodModeTeacherPackages,
   useGodModeTeacherCohorts,
   useGodModePairPayments,
+  useGodModeReviewableStudents,
+  useGodModeTeacherReviews,
 } from "@/hooks/useGodMode";
 import { AvailableSlot } from "@/hooks/useStudentData";
 import { getMyDisplayTimezone, formatTimeTz } from "@/lib/tzFormat";
@@ -69,6 +71,8 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
   const { packages, loading: loadingPackages } = useGodModeTeacherPackages(teacherId);
   const { cohorts, loading: loadingCohorts } = useGodModeTeacherCohorts(teacherId);
   const { payments, loading: loadingPayments } = useGodModePairPayments(teacherId, studentId);
+  const { students: reviewableStudents, loading: loadingReviewableStudents } = useGodModeReviewableStudents(teacherId);
+  const { reviews, loading: loadingReviews } = useGodModeTeacherReviews(teacherId);
 
   const myTz = getMyDisplayTimezone();
 
@@ -80,7 +84,7 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
   // Elegir un profesor distinto invalida todo lo que dependía de él.
   const setTeacherId = (v: string) => {
     setValuesState(prev => ({
-      ...prev, teacher_id: v, student_id: "", enrollment_id: "", subject: "", class_id: "", start_time_utc: "",
+      ...prev, teacher_id: v, student_id: "", enrollment_id: "", subject: "", class_id: "", start_time_utc: "", review_id: "",
     }));
     setResult(null);
   };
@@ -127,7 +131,7 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
       if (raw === undefined || raw === "") return; // campo opcional sin valor: se omite (ajuste parcial en backend)
       const key = f.sendAs ?? f.name;
 
-      if (["number", "enrollment-select", "class-select", "teacher-select", "student-select", "duration-select", "package-select", "cohort-select", "payment-select"].includes(f.type)) {
+      if (["number", "enrollment-select", "class-select", "teacher-select", "student-select", "duration-select", "package-select", "cohort-select", "payment-select", "review-student-select", "review-select"].includes(f.type)) {
         body[key] = Number(raw);
       } else if (f.type === "checkbox" || f.type === "tri-bool-select") {
         body[key] = raw === "true";
@@ -236,6 +240,26 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
             {payments.map(p => (
               <option key={p.id} value={p.id}>
                 #{p.id} · ${p.amount_total} · {p.payment_method} · {p.status} · {new Date(p.created_at).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" })}
+              </option>
+            ))}
+          </SelectShell>
+        );
+
+      case "review-student-select":
+        return (
+          <SelectShell value={value} onChange={v => setValue(field.name, v)} disabled={!teacherId} loading={loadingReviewableStudents}
+            placeholder={!teacherId ? "Elige un profesor primero" : "— sin cuenta / no encontrado —"}>
+            {reviewableStudents.map(s => <option key={s.id} value={s.id}>{s.name} (@{s.username})</option>)}
+          </SelectShell>
+        );
+
+      case "review-select":
+        return (
+          <SelectShell value={value} onChange={v => setValue(field.name, v)} disabled={!teacherId} loading={loadingReviews}
+            placeholder={!teacherId ? "Elige un profesor primero" : "Elige la reseña"}>
+            {reviews.map(r => (
+              <option key={r.id} value={r.id}>
+                #{r.id} · {r.student_name} · {r.rating}★ · {r.is_legacy ? "legacy" : "normal"} · {new Date(r.created_at).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" })}
               </option>
             ))}
           </SelectShell>
@@ -356,6 +380,19 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
                 Este cambio va a ajustar la billetera del profesor de inmediato (no solo el registro del pago).
               </div>
             )}
+          </div>
+        );
+      }
+
+      case "review-info": {
+        const rev = reviews.find(r => String(r.id) === values["review_id"]);
+        if (!rev) return null;
+        return (
+          <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-600 space-y-0.5">
+            <div>
+              {rev.student_name} · {rev.rating}★ · {rev.is_legacy ? "legacy" : "normal"} · {new Date(rev.created_at).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" })}
+            </div>
+            {rev.comment && <div className="text-slate-400 font-semibold italic">&quot;{rev.comment}&quot;</div>}
           </div>
         );
       }

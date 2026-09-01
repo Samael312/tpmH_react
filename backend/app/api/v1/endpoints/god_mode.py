@@ -57,8 +57,17 @@ from app.schemas.cohorts import (
     CohortResponse,
 )
 from app.core.group_cohort_logic import get_cohort_active_count, release_cohort_seat
+from app.models.review import Review
+from app.models.class_participant import ClassParticipant
+from app.schemas.reviews import (
+    GodModeCreateReviewRequest,
+    GodModeEditReviewRequest,
+    GodModeReviewActionResponse,
+    ReviewResponse,
+)
 from app.core.god_mode_audit import log_god_mode_action
 from app.core.timezone import utc_now
+from app.api.v1.endpoints.public import invalidate_landing_cache
 
 router = APIRouter()
 
@@ -73,6 +82,49 @@ def _payment_snapshot(payment: Payment) -> dict:
         "status": payment.status,
         "transaction_id": payment.transaction_id,
     }
+
+
+def _require_review_scope(review: Review, current_user: User) -> None:
+    if current_user.role == UserRole.teacher_admin:
+        teacher_profile = current_user.teacher_profile
+        if not teacher_profile or review.teacher_id != teacher_profile.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Como teacher_admin solo puedes usar el Modo Dios sobre tus propias reseñas.",
+            )
+
+
+def _review_snapshot(review: Review) -> dict:
+    return {
+        "student_id": review.student_id,
+        "legacy_student_name": review.legacy_student_name,
+        "is_legacy": review.is_legacy,
+        "rating": review.rating,
+        "comment": review.comment,
+        "created_at": review.created_at.isoformat() if review.created_at else None,
+    }
+
+
+def _to_review_response(review: Review) -> ReviewResponse:
+    if review.student_id and review.student and review.student.user:
+        student_name = f"{review.student.user.name} {review.student.user.surname}"
+        student_username = review.student.user.username
+    else:
+        student_name = review.legacy_student_name
+        student_username = None
+
+    return ReviewResponse(
+        id=review.id,
+        teacher_id=review.teacher_id,
+        student_id=review.student_id,
+        rating=review.rating,
+        comment=review.comment,
+        created_at=review.created_at,
+        student_name=student_name,
+        student_username=student_username,
+        is_legacy=review.is_legacy,
+        legacy_student_name=review.legacy_student_name,
+    )
 
 
 def _require_class_scope(class_: Class, current_user: User) -> None:
@@ -1213,6 +1265,177 @@ def god_mode_edit_payment(
     return {"message": "Pago editado por Modo Dios.", "payment": PaymentResponse.model_validate(payment)}
 
 
+# ─── RESEÑAS ───────────────────────────────────────────────────────────────
+
+@router.post("/reviews", response_model=GodModeReviewActionResponse, status_code=status.HTTP_201_CREATED)
+def god_mode_create_review(
+    data: GodModeCreateReviewRequest,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    Carga manual de una reseña que un alumno ya dejó en la plataforma
+    anterior, para no perderla al migrar. Pensado sobre todo para
+    alumnos que ya no están activos en este sistema.
+
+    Si la cuenta del alumno todavía existe acá, ligala con student_id
+    (recomendado — la reseña queda igual que una hecha por el flujo
+    normal, solo que marcada is_legacy=True). Si la cuenta no existe,
+    usa legacy_student_name: la reseña queda sin student_id, mostrando
+    únicamente ese nombre.
+    """
+    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == data.teacher_id).first()
+    if not teacher:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesor no encontrado")
+
+    if current_user.role == UserRole.teacher_admin:
+        teacher_profile = current_user.teacher_profile
+        if not teacher_profile or teacher.id != teacher_profile.id:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Como teacher_admin solo puedes cargar reseñas para ti mismo como profesor.",
+            )
+
+    student = None
+    if data.student_id is not None:
+        student = db.query(StudentProfile).filter(StudentProfile.id == data.student_id).first()
+        if not student:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Estudiante no encontrado")
+
+        existing = db.query(Review).filter(
+            Review.teacher_id == teacher.id,
+            Review.student_id == student.id,
+        ).first()
+        if existing:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Este alumno ya tiene una reseña registrada para este profesor.",
+            )
+
+    review = Review(
+        teacher_id=teacher.id,
+        student_id=student.id if student else None,
+        rating=data.rating,
+        comment=data.comment,
+        is_legacy=True,
+        legacy_student_name=data.legacy_student_name,
+    )
+    if data.review_date is not None:
+        review.created_at = data.review_date
+
+    db.add(review)
+    db.flush()
+
+    log_god_mode_action(
+        db,
+        actor=current_user,
+        action="review.create_legacy",
+        entity_type="review",
+        entity_id=review.id,
+        reason=data.reason,
+        before=None,
+        after=_review_snapshot(review),
+    )
+
+    db.commit()
+    db.refresh(review)
+    invalidate_landing_cache()
+
+    return {"message": "Reseña legacy cargada por Modo Dios.", "review": _to_review_response(review)}
+
+
+@router.patch("/reviews/{review_id}", response_model=GodModeReviewActionResponse)
+def god_mode_edit_review(
+    review_id: int,
+    data: GodModeEditReviewRequest,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    Corrige rating, comentario, nombre mostrado o fecha de una reseña ya
+    cargada (legacy o no). No permite reasignar a qué alumno pertenece
+    — si el vínculo quedó mal, elimínala y vuelve a cargarla.
+    """
+    review = db.query(Review).filter(Review.id == review_id).first()
+    if not review:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Reseña no encontrada")
+
+    _require_review_scope(review, current_user)
+
+    before = _review_snapshot(review)
+
+    if data.rating is not None:
+        review.rating = data.rating
+    if data.comment is not None:
+        review.comment = data.comment
+    if data.legacy_student_name is not None:
+        if review.student_id is not None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Esta reseña está ligada a una cuenta (student_id) — no corresponde "
+                "cambiarle legacy_student_name.",
+            )
+        review.legacy_student_name = data.legacy_student_name
+    if data.review_date is not None:
+        review.created_at = data.review_date
+
+    after = _review_snapshot(review)
+    if before == after:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No se envió ningún cambio real.")
+
+    log_god_mode_action(
+        db,
+        actor=current_user,
+        action="review.edit",
+        entity_type="review",
+        entity_id=review.id,
+        reason=data.reason,
+        before=before,
+        after=after,
+    )
+
+    db.commit()
+    db.refresh(review)
+    invalidate_landing_cache()
+
+    return {"message": "Reseña editada por Modo Dios.", "review": _to_review_response(review)}
+
+
+@router.delete("/reviews/{review_id}")
+def god_mode_delete_review(
+    review_id: int,
+    reason: str = Query(..., min_length=5, max_length=500),
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """Elimina una reseña por completo (legacy o no)."""
+    review = db.query(Review).filter(Review.id == review_id).first()
+    if not review:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Reseña no encontrada")
+
+    _require_review_scope(review, current_user)
+
+    before = _review_snapshot(review)
+    review_id_captured = review.id
+
+    log_god_mode_action(
+        db,
+        actor=current_user,
+        action="review.delete",
+        entity_type="review",
+        entity_id=review_id_captured,
+        reason=reason,
+        before=before,
+        after=None,
+    )
+
+    db.delete(review)
+    db.commit()
+    invalidate_landing_cache()
+
+    return {"message": f"Reseña #{review_id_captured} eliminada permanentemente por Modo Dios."}
+
+
 # ─── RELACIONES PROFESOR-ALUMNO ───────────────────────────────────────────
 
 @router.post("/students/{student_id}/transfer-teacher", response_model=GodModeTransferStudentResponse)
@@ -1577,3 +1800,93 @@ def god_mode_lookup_pair_payments(
         }
         for p in payments
     ]
+
+
+@router.get("/lookup/teachers/{teacher_id}/students/reviewable")
+def god_mode_lookup_reviewable_students(
+    teacher_id: int,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    Candidatos para 'Añadir reseña legacy': a diferencia del selector de
+    alumnos normal (solo vínculo vigente), acá se incluye a cualquier
+    alumno que haya tenido alguna clase con este profesor —individual o
+    grupal— aunque el vínculo (StudentTeacherLink) ya se haya borrado
+    por no estar más activo. Es justamente el caso de uso: alumnos que
+    ya no están, pero sí tuvieron clases y dejaron una reseña en la
+    plataforma anterior.
+    """
+    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == teacher_id).first()
+    if not teacher:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesor no encontrado")
+
+    if current_user.role == UserRole.teacher_admin:
+        teacher_profile = current_user.teacher_profile
+        if not teacher_profile or teacher_id != teacher_profile.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Como teacher_admin solo puedes ver tus propios alumnos.")
+
+    linked_ids = {
+        row[0] for row in db.query(StudentTeacherLink.student_id)
+        .filter(StudentTeacherLink.teacher_id == teacher_id).all()
+    }
+    individual_ids = {
+        row[0] for row in db.query(Class.student_id)
+        .filter(Class.teacher_id == teacher_id, Class.student_id.isnot(None))
+        .distinct().all()
+    }
+    group_ids = {
+        row[0] for row in db.query(ClassParticipant.student_id)
+        .join(Class, Class.id == ClassParticipant.class_id)
+        .filter(Class.teacher_id == teacher_id)
+        .distinct().all()
+    }
+
+    all_ids = linked_ids | individual_ids | group_ids
+    if not all_ids:
+        return []
+
+    students = db.query(StudentProfile).filter(StudentProfile.id.in_(all_ids)).all()
+    result = [
+        {
+            "id": sp.id,
+            "name": f"{sp.user.name} {sp.user.surname}",
+            "username": sp.user_username,
+        }
+        for sp in students if sp.user
+    ]
+    result.sort(key=lambda s: s["name"])
+    return result
+
+
+@router.get("/lookup/teachers/{teacher_id}/reviews")
+def god_mode_lookup_teacher_reviews(
+    teacher_id: int,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """Reseñas de un profesor — para los selectores de editar/eliminar."""
+    if current_user.role == UserRole.teacher_admin:
+        teacher_profile = current_user.teacher_profile
+        if not teacher_profile or teacher_id != teacher_profile.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Como teacher_admin solo puedes ver tus propias reseñas.")
+
+    reviews = db.query(Review).filter(
+        Review.teacher_id == teacher_id
+    ).order_by(Review.created_at.desc()).limit(200).all()
+
+    result = []
+    for r in reviews:
+        if r.student_id and r.student and r.student.user:
+            student_name = f"{r.student.user.name} {r.student.user.surname}"
+        else:
+            student_name = r.legacy_student_name or "Sin nombre"
+        result.append({
+            "id": r.id,
+            "student_name": student_name,
+            "rating": r.rating,
+            "comment": r.comment,
+            "is_legacy": r.is_legacy,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        })
+    return result

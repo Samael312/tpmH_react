@@ -216,6 +216,41 @@ export function useGodModePairPayments(teacherId: number | undefined, studentId:
   return { payments: query.data ?? [], loading: query.isLoading };
 }
 
+// ─── Reseñas ────────────────────────────────────────────────────────────────
+
+export function useGodModeReviewableStudents(teacherId: number | undefined) {
+  const query = useQuery({
+    queryKey: ["god-mode", "lookup", "reviewable-students", teacherId],
+    queryFn: async () => {
+      const res = await api.get(`/god-mode/lookup/teachers/${teacherId}/students/reviewable`);
+      return res.data as GodModeLookupStudent[];
+    },
+    enabled: !!teacherId,
+  });
+  return { students: query.data ?? [], loading: query.isLoading };
+}
+
+export interface GodModeLookupReview {
+  id: number;
+  student_name: string;
+  rating: number;
+  comment: string | null;
+  is_legacy: boolean;
+  created_at: string;
+}
+
+export function useGodModeTeacherReviews(teacherId: number | undefined) {
+  const query = useQuery({
+    queryKey: ["god-mode", "lookup", "teacher-reviews", teacherId],
+    queryFn: async () => {
+      const res = await api.get(`/god-mode/lookup/teachers/${teacherId}/reviews`);
+      return res.data as GodModeLookupReview[];
+    },
+    enabled: !!teacherId,
+  });
+  return { reviews: query.data ?? [], loading: query.isLoading };
+}
+
 export interface GodModeClassDurations {
   allowed_class_durations: number[];
   trial_duration_minutes: number;

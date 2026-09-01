@@ -5,7 +5,7 @@ import { History, ChevronDown, ChevronUp } from "lucide-react";
 import { Card, Badge, Skeleton } from "@/components/ui";
 import { useGodModeAuditLog, GodModeAuditLogEntry } from "@/hooks/useGodMode";
 
-const ENTITY_TYPES = ["enrollment", "cohort", "class", "payment", "student"];
+const ENTITY_TYPES = ["enrollment", "cohort", "class", "payment", "student", "review"];
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("es-ES", {

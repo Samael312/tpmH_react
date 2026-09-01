@@ -133,7 +133,16 @@ def _build_landing_response(db: Session) -> LandingResponse:
             .all()
         )
         for r in reviews:
-            student_user = r.student.user
+            # Reseñas legacy cargadas vía Modo Dios pueden no tener
+            # student_id (el alumno no tiene cuenta en este sistema) —
+            # en ese caso se muestra legacy_student_name en su lugar.
+            if r.student_id and r.student and r.student.user:
+                student_user = r.student.user
+                student_name = f"{student_user.name} {student_user.surname}"
+                student_username = student_user.username
+            else:
+                student_name = r.legacy_student_name
+                student_username = None
             reviews_out.append(LandingReviewOut(
                 id=r.id,
                 teacher_id=r.teacher_id,
@@ -141,8 +150,10 @@ def _build_landing_response(db: Session) -> LandingResponse:
                 rating=r.rating,
                 comment=r.comment,
                 created_at=r.created_at,
-                student_name=f"{student_user.name} {student_user.surname}",
-                student_username=student_user.username,
+                student_name=student_name,
+                student_username=student_username,
+                is_legacy=r.is_legacy,
+                legacy_student_name=r.legacy_student_name,
                 teacher_username=teacher_by_id[r.teacher_id].user_username,
             ))
 

@@ -25,7 +25,10 @@ export type GodModeFieldType =
   | "package-select"      // paquetes individuales del profesor elegido, para cambiar de paquete
   | "cohort-select"       // cohortes del profesor elegido
   | "payment-select"      // pagos entre el profesor y alumno elegidos
-  | "payment-info";       // muestra estado/monto del pago elegido + aviso si el cambio moverá la billetera del profesor
+  | "payment-info"        // muestra estado/monto del pago elegido + aviso si el cambio moverá la billetera del profesor
+  | "review-student-select" // depende de teacher_id — a diferencia de student-select, incluye alumnos sin vínculo vigente (ya no activos)
+  | "review-select"       // reseñas del profesor elegido, para editar/eliminar
+  | "review-info";        // muestra el detalle de la reseña elegida (solo informativo, no se envía)
 
 export interface GodModeField {
   name: string;
@@ -62,7 +65,7 @@ export interface GodModeAction {
   id: string;
   label: string;
   description: string;
-  category: "Créditos y Paquetes" | "Cohortes" | "Clases" | "Pagos" | "Alumnos";
+  category: "Créditos y Paquetes" | "Cohortes" | "Clases" | "Pagos" | "Alumnos" | "Reseñas";
   method: "patch" | "post" | "delete";
   /** Construye la URL a partir de los valores de los campos marcados isPathParam */
   buildUrl: (v: Record<string, string>) => string;
@@ -322,8 +325,59 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
     ],
     destructive: true,
   },
+  // ── Reseñas ───────────────────────────────────────────────────────
+  {
+    id: "review.create_legacy",
+    label: "Añadir reseña legacy",
+    description: "Carga una reseña que un alumno ya dejó en la plataforma anterior. Si su cuenta sigue existiendo acá, elígela abajo; si no, escribe su nombre en 'Alumno sin cuenta'. Completa solo uno de los dos.",
+    category: "Reseñas",
+    method: "post",
+    buildUrl: () => `/god-mode/reviews`,
+    fields: [
+      { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true },
+      { name: "student_id", label: "Alumno con cuenta en el sistema (opcional)", type: "review-student-select", dependsOn: ["teacher_id"],
+        helpText: "Incluye alumnos aunque ya no tengan vínculo activo con el profesor." },
+      { name: "legacy_student_name", label: "Alumno sin cuenta (opcional)", type: "text", placeholder: "Nombre y apellido",
+        helpText: "Solo si el alumno no eligió arriba — no tiene cuenta en este sistema." },
+      { name: "rating", label: "Rating (1 a 5, acepta medios puntos)", type: "number", required: true, placeholder: "4.5" },
+      { name: "comment", label: "Comentario (opcional)", type: "textarea", placeholder: "Texto de la reseña" },
+      { name: "review_date", label: "Fecha original de la reseña (opcional)", type: "datetime",
+        helpText: "Si la dejas vacía, queda con la fecha de hoy." },
+    ],
+  },
+  {
+    id: "review.edit",
+    label: "Editar una reseña",
+    description: "Corrige rating, comentario, nombre mostrado o fecha de una reseña ya cargada (legacy o no).",
+    category: "Reseñas",
+    method: "patch",
+    buildUrl: v => `/god-mode/reviews/${v.review_id}`,
+    fields: [
+      { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true, excludeFromPayload: true },
+      { name: "review_id", label: "Reseña", type: "review-select", required: true, dependsOn: ["teacher_id"], isPathParam: true },
+      { name: "review_info", label: "", type: "review-info", dependsOn: ["review_id"], excludeFromPayload: true },
+      { name: "rating", label: "Rating corregido (opcional)", type: "number", optionalNumber: true },
+      { name: "comment", label: "Comentario corregido (opcional)", type: "textarea" },
+      { name: "legacy_student_name", label: "Nombre mostrado (opcional, solo si no tiene cuenta)", type: "text" },
+      { name: "review_date", label: "Fecha corregida (opcional)", type: "datetime" },
+    ],
+  },
+  {
+    id: "review.delete",
+    label: "Eliminar una reseña",
+    description: "Borra una reseña por completo (legacy o no). No se puede deshacer.",
+    category: "Reseñas",
+    method: "delete",
+    buildUrl: v => `/god-mode/reviews/${v.review_id}`,
+    fields: [
+      { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true, excludeFromPayload: true },
+      { name: "review_id", label: "Reseña", type: "review-select", required: true, dependsOn: ["teacher_id"], isPathParam: true },
+      { name: "review_info", label: "", type: "review-info", dependsOn: ["review_id"], excludeFromPayload: true },
+    ],
+    destructive: true,
+  },
 ];
 
 export const GOD_MODE_CATEGORIES = [
-  "Créditos y Paquetes", "Cohortes", "Clases", "Pagos", "Alumnos",
+  "Créditos y Paquetes", "Cohortes", "Clases", "Pagos", "Alumnos", "Reseñas",
 ] as const;
