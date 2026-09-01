@@ -627,6 +627,37 @@ export function useTeacherCohorts() {
   }
 }
 
+// Integrantes de una cohorte (funciona incluso mientras está "filling",
+// antes de que exista ninguna sesión agendada) — para mostrar en vivo
+// quién se va uniendo al grupo a medida que se llena.
+export interface CohortMember {
+  enrollment_id: number
+  student_id: number
+  student_name: string
+  student_avatar: string | null
+  payment_status: string
+  joined_at: string
+}
+
+export function useCohortMembers(cohortId: number | null) {
+  const query = useQuery({
+    queryKey: ["teacher", "cohort-members", cohortId],
+    queryFn: async () => {
+      const res = await api.get(`/cohorts/${cohortId}/members`)
+      return res.data as CohortMember[]
+    },
+    enabled: cohortId !== null,
+  })
+
+  return {
+    members: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
+
 // ─── Reseñas del propio profesor (para la vista previa pública) ─────────────
 export function useTeacherOwnReviews(username: string | undefined) {
   const query = useQuery({

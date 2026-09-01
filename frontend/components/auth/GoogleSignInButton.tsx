@@ -119,15 +119,30 @@ const TEXT_LABELS = {
   signin: "Ingresar con Google",
 };
 
+// Google's GSI button is rendered inside an iframe whose *internal* canvas
+// is drawn at a fixed pixel width (the `width` option below) — it cannot be
+// stretched responsively with CSS after the fact. Forcing `[&_iframe]:!w-full`
+// on a fixed 400px-wide iframe just scales/crops the fixed-size content, so
+// the real clickable Google button never actually matches the width of the
+// visual white button behind it (which is a real `w-full`). Wrapping it in a
+// `max-w-sm` (384px) container also caps it below most form widths, so on
+// desktop the button sits noticeably short of the input fields above it.
+// Fix: measure the actual rendered width of the wrapper with ResizeObserver
+// and re-render the Google button at that exact pixel width whenever it
+// changes, so the invisible iframe always matches the visible button 1:1.
+const GOOGLE_MAX_WIDTH = 400; // hard cap documented by Google's Identity Services
+
 export default function GoogleSignInButton({
   onCredential,
   onError,
   text = "continue_with",
   className = "",
 }: GoogleSignInButtonProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [buttonWidth, setButtonWidth] = useState<number | null>(null);
 
   // Guardar callbacks en refs para evitar re-ejecutar el useEffect si cambian en cada render
   const onCredentialRef = useRef(onCredential);
@@ -138,6 +153,28 @@ export default function GoogleSignInButton({
     onErrorRef.current = onError;
   }, [onCredential, onError]);
 
+  // Medir el ancho real del contenedor y mantenerlo actualizado si cambia
+  // (resize de ventana, cambios de layout, etc.)
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+
+    const updateWidth = (width: number) => {
+      const clamped = Math.max(1, Math.min(Math.round(width), GOOGLE_MAX_WIDTH));
+      setButtonWidth((prev) => (prev === clamped ? prev : clamped));
+    };
+
+    updateWidth(el.getBoundingClientRect().width);
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) updateWidth(entry.contentRect.width);
+    });
+    observer.observe(el);
+
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     if (!clientId) {
@@ -146,6 +183,10 @@ export default function GoogleSignInButton({
       onErrorRef.current?.(msg);
       return;
     }
+
+    // Esperar a tener una medición real del ancho antes de pedirle a Google
+    // que dibuje el botón con ese ancho exacto.
+    if (!buttonWidth) return;
 
     let cancelled = false;
 
@@ -176,7 +217,7 @@ export default function GoogleSignInButton({
           size: "large",
           text,
           shape: "rectangular",
-          width: 400, // Ancho suficiente para cubrir el contenedor
+          width: buttonWidth, // Ancho medido en vivo, igual al del botón visual
         });
 
         setReady(true);
@@ -191,7 +232,7 @@ export default function GoogleSignInButton({
       cancelled = true;
       if (activeHandler === handler) activeHandler = null;
     };
-  }, [text]); // Solo depende de 'text', evita renderizados en bucle
+  }, [text, buttonWidth]); // Re-renderiza si cambia el texto o el ancho medido
 
   if (errorMessage) {
     return (
@@ -202,7 +243,7 @@ export default function GoogleSignInButton({
   }
 
   return (
-    <div className={`relative w-full max-w-sm ${className}`}>
+    <div ref={wrapperRef} className={`relative w-full ${className}`}>
       {/* Botón blanco visual */}
       <button
         type="button"
@@ -213,12 +254,12 @@ export default function GoogleSignInButton({
         <span>{TEXT_LABELS[text] || TEXT_LABELS.continue_with}</span>
       </button>
 
-      {/* Capa invisible del iframe de Google perfectamente superpuesta */}
+      {/* Capa invisible del iframe de Google, renderizado al ancho exacto medido */}
       <div
         ref={containerRef}
-        className={`absolute inset-0 z-10 overflow-hidden transition-opacity duration-300 ${
+        className={`absolute inset-0 z-10 overflow-hidden flex items-center justify-center transition-opacity duration-300 ${
           ready ? "opacity-[0.0001]" : "opacity-0 pointer-events-none"
-        } [&_iframe]:!w-full [&_iframe]:!h-full [&_iframe]:!min-w-full [&_iframe]:!min-h-full [&_iframe]:!top-0 [&_iframe]:!left-0 [&_iframe]:!cursor-pointer`}
+        } [&_iframe]:!cursor-pointer`}
       />
 
       {/* Skeleton de carga */}

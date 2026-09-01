@@ -153,6 +153,7 @@ vuelta al docstring completo como "technical_description" y
 | `test_purchase_flow.py` | El flujo completo: prueba gratuita → completarla (god-mode) → crear paquete → notificar pago → aprobar pago → clase regular con crédito |
 | `test_admin_staff.py` | Regresión directa del bug original: staff (`superadmin`/`teacher_admin`) vs. no-staff en endpoints de admin |
 | `test_support.py` | Crear ticket, listar, resolver (superadmin y teacher_admin) |
+| `test_cohorts.py` | Integrantes de una cohorte en vivo mientras se llena (`GET /cohorts/{id}/members`); regresión del bug de migración grupo → paquete individual ilimitado que dejaba `cohort_id` colgado; cierre y cancelación de cohorte; rechazo de un pago pendiente de inscripción grupal |
 
 ## Diagnóstico de "0 tests" en la UI sin ningún error visible
 
@@ -183,13 +184,13 @@ incluyendo ese mensaje exacto, para que quede obvio qué instalar y dónde.
   por qué. Para que corra de verdad, o pon
   `FEATURED_TEACHER_USERNAME=flowtest_teacher` en tu `.env` local, o
   configura `PlatformConfig.is_single_tenant=False`.
-- No cubre todavía: cohortes/clases grupales, calendario de Google
-  (requiere credenciales OAuth reales), TTS/Chipi (llaman a APIs externas
-  reales), reviews, ni renovación/cambio de paquete. El framework
-  (`conftest.py`: `volatile`, `fixed_users`, tokens por rol) está pensado
-  para que añadir estos casos sea sencillo — seguir el patrón de
-  `test_materials_homework.py` o `test_purchase_flow.py` según la
-  complejidad del flujo.
+- No cubre todavía: calendario de Google (requiere credenciales OAuth
+  reales), TTS/Chipi (llaman a APIs externas reales), reviews, ni
+  renovación de paquete (sí cubre migración grupo → individual, ver
+  `test_cohorts.py`). El framework (`conftest.py`: `volatile`,
+  `fixed_users`, tokens por rol) está pensado para que añadir estos
+  casos sea sencillo — seguir el patrón de `test_materials_homework.py`
+  o `test_purchase_flow.py` según la complejidad del flujo.
 - `/admin/flow-tester` (Next.js) dispara esta suite de verdad, con
   feedback visual en vivo. Capacidades actuales:
   - **Enumeración previa**: al cargar la página, `GET /flow-tests/manifest`

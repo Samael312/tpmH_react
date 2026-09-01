@@ -144,6 +144,25 @@ class GroupSessionResponse(BaseModel):
         from_attributes = True
 
 
+class CohortMemberResponse(BaseModel):
+    """
+    Un alumno inscrito en la cohorte (aplica también mientras está
+    'filling', antes de que exista ninguna sesión/Class agendada — a
+    diferencia de SessionParticipantResponse, que solo existe una vez
+    que hay sesiones creadas). Se usa para que el profesor vea en vivo
+    quién se va uniendo al grupo a medida que se llena.
+    """
+    enrollment_id: int
+    student_id: int
+    student_name: str
+    student_avatar: Optional[str] = None
+    payment_status: str
+    joined_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class SessionParticipantResponse(BaseModel):
     """Un integrante de una sesión grupal puntual, con su asistencia."""
     student_id: int

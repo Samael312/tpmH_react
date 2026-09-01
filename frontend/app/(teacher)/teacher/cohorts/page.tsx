@@ -13,6 +13,7 @@ import { usePageTopBar } from "@/lib/mobileTopBar";
 import {
   useTeacherCohorts,
   useTeacherPackages,
+  useCohortMembers,
   type TeacherCohortItem as Cohort,
   type TeacherPackage as Package,
 } from "@/hooks/useTeacherData";
@@ -92,6 +93,14 @@ export default function TeacherCohortsPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [sessionsByCohort, setSessionsByCohort] = useState<Record<number, Session[]>>({});
   const [attendanceSession, setAttendanceSession] = useState<Session | null>(null);
+  // Integrantes de la cohorte expandida — se recargan cada vez que se
+  // abre una cohorte distinta, así se ve en vivo quién se va uniendo
+  // mientras el grupo todavía está "filling".
+  const {
+    members: expandedMembers,
+    loading: loadingMembers,
+    refetch: refetchMembers,
+  } = useCohortMembers(expandedId);
 
   const [closingCohort, setClosingCohort] = useState<Cohort | null>(null);
   const [closeDate, setCloseDate] = useState("");
@@ -337,6 +346,53 @@ export default function TeacherCohortsPage() {
                 <Button size="sm" variant="danger" onClick={() => handleCancel(cohort)}>
                   <Ban className="w-3.5 h-3.5" /> Cancelar cohorte
                 </Button>
+              </div>
+            )}
+
+            {/* Integrantes (expandible) — quiénes se van uniendo al grupo */}
+            {expandedId === cohort.id && (
+              <div className="mt-4 pt-4 border-t border-slate-100">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                    Integrantes ({cohort.current_students}/{cohort.max_students})
+                  </p>
+                  <button
+                    onClick={() => refetchMembers()}
+                    disabled={loadingMembers}
+                    className="w-6 h-6 rounded-lg hover:bg-slate-100 flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+                    title="Actualizar lista de integrantes"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-slate-400 ${loadingMembers ? "animate-spin" : ""}`} />
+                  </button>
+                </div>
+                {loadingMembers ? (
+                  <div className="space-y-1.5">
+                    {[1, 2].map(i => <Skeleton key={i} className="h-9 rounded-xl" />)}
+                  </div>
+                ) : expandedMembers.length === 0 ? (
+                  <p className="text-xs text-slate-400">
+                    Todavía no hay ningún alumno inscrito en este grupo.
+                  </p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {expandedMembers.map((m) => (
+                      <li key={m.enrollment_id} className="flex items-center gap-2.5 bg-slate-50 rounded-xl px-3 py-2">
+                        {m.student_avatar ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={m.student_avatar} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center text-[11px] font-black flex-shrink-0">
+                            {m.student_name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <span className="text-sm font-bold text-slate-700 truncate flex-1">{m.student_name}</span>
+                        {m.payment_status !== "paid" && (
+                          <Badge variant="warning">Pago pendiente</Badge>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
 

@@ -210,6 +210,18 @@ def _apply_instant_switch_to_unlimited(
     enrollment.prepaid_unlimited_credits = (enrollment.prepaid_unlimited_credits or 0) + available_credits
     enrollment.change_requested_package_id = None
     enrollment.status = EnrollmentStatus.active
+    # BUG fix: esta era la única rama de cambio instantáneo de paquete que
+    # NO liberaba el cupo de la cohorte al migrar de grupal -> individual
+    # (a diferencia de _apply_instant_package_change, que sí lo hacía).
+    # El enrollment quedaba con cohort_id todavía seteado aunque ya fuera
+    # un paquete individual ilimitado: el alumno seguía contando como
+    # integrante del grupo (get_cohort_active_count) y el banner del
+    # estudiante seguía mostrando el panel de espera grupal en vez del de
+    # paquete individual. Un alumno no puede tener un paquete individual
+    # y seguir figurando dentro de una cohorte al mismo tiempo.
+    if enrollment.cohort_id and not new_package.is_group:
+        from app.core.group_cohort_logic import release_cohort_seat
+        release_cohort_seat(enrollment, db)
     db.commit()
 
 
@@ -1051,6 +1063,15 @@ def manual_grant_payment(
         enrollment.status = EnrollmentStatus.active
         enrollment.renewal_requested_package_id = None
         enrollment.change_requested_package_id = None
+        # Mismo fix que en notify_payment/_apply_instant_*: si este
+        # otorgamiento manual resuelve una migración grupal -> individual
+        # (enrollment.cohort_id seteado y el paquete destino ya no es
+        # grupal), hay que liberar el cupo de la cohorte acá también —
+        # este endpoint es otra vía por la que un enrollment
+        # 'pending_package_change' puede terminar confirmado.
+        if enrollment.cohort_id and not package.is_group:
+            from app.core.group_cohort_logic import release_cohort_seat
+            release_cohort_seat(enrollment, db)
 
     enrollment.installments_paid = package.installment_count or 1
     enrollment.unlocked_credits = package.classes_count if package.classes_count is not None else 0

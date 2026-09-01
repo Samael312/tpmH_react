@@ -27,6 +27,7 @@ from app.models.user import User
 from app.schemas.cohorts import (
     CohortCloseRequest,
     CohortCreate,
+    CohortMemberResponse,
     CohortResponse,
     GroupEnrollRequest,
     GroupSessionCreate,
@@ -96,6 +97,49 @@ def get_my_cohorts(
         GroupCohort.teacher_id == current_user.teacher_profile.id
     ).order_by(GroupCohort.created_at.desc()).all()
     return [_to_cohort_response(c, db) for c in cohorts]
+
+
+@router.get("/{cohort_id}/members", response_model=List[CohortMemberResponse])
+def get_cohort_members(
+    cohort_id: int,
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Integrantes actuales de la cohorte (Enrollments activos, no
+    cancelados), sin importar su status ('filling', 'confirmed', etc).
+    A diferencia de /sessions/{class_id}/participants, esto funciona
+    incluso ANTES de que exista ninguna sesión agendada — es lo que
+    permite mostrar en vivo, mientras el grupo se está llenando, quién
+    se va uniendo (ver GroupCohort.status == 'filling').
+    """
+    cohort = db.query(GroupCohort).filter(
+        GroupCohort.id == cohort_id,
+        GroupCohort.teacher_id == current_user.teacher_profile.id,
+    ).first()
+    if not cohort:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+
+    enrollments = db.query(Enrollment).filter(
+        Enrollment.cohort_id == cohort.id,
+        Enrollment.status.notin_(["cancelled"]),
+    ).order_by(Enrollment.created_at.asc()).all()
+
+    members = []
+    for e in enrollments:
+        student = e.student
+        user = student.user if student else None
+        if not user:
+            continue
+        members.append(CohortMemberResponse(
+            enrollment_id=e.id,
+            student_id=e.student_id,
+            student_name=f"{user.name} {user.surname}".strip(),
+            student_avatar=user.avatar or (student.profile_photo_url if student else None),
+            payment_status=e.payment_status,
+            joined_at=e.created_at,
+        ))
+    return members
 
 
 @router.post("/{cohort_id}/close", response_model=CohortResponse)
