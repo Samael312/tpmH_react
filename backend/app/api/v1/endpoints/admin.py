@@ -43,6 +43,8 @@ from app.schemas.support import (
     SupportTicketWithUserResponse,
 )
 from app.models.payment_config import PlatformConfig
+from app.core.platform_config import get_or_create_platform_config, serialize_platform_config
+from app.api.v1.endpoints.public import invalidate_landing_cache
 
 
 router = APIRouter()
@@ -368,6 +370,7 @@ def update_teacher_status(
         teacher.appeal_exhausted = False
 
     db.commit()
+    invalidate_landing_cache()
 
     action_map = {
         TeacherStatus.approved: "aprobado",
@@ -955,35 +958,8 @@ def get_platform_config(db: Session = Depends(get_db)):
     Configuración pública de la plataforma.
     Endpoint público — el frontend lo consulta al cargar.
     """
-    config = db.query(PlatformConfig).first()
-
-    if not config:
-        config = PlatformConfig()
-        db.add(config)
-        db.commit()
-        db.refresh(config)
-
-    featured_teacher = None
-    if config.featured_teacher_id:
-        teacher = db.query(TeacherProfile).filter(
-            TeacherProfile.id == config.featured_teacher_id
-        ).first()
-        if teacher:
-            featured_teacher = {
-                "username": teacher.user_username,
-                "name": f"{teacher.user.name} {teacher.user.surname}",
-                "title": teacher.title,
-                "bio": teacher.bio,
-                "avatar": teacher.user.avatar,
-                "subjects": teacher.subjects,
-            }
-
-    return {
-        "platform_name": config.platform_name,
-        "platform_tagline": config.platform_tagline,
-        "is_single_tenant": config.is_single_tenant,
-        "featured_teacher": featured_teacher,
-    }
+    config = get_or_create_platform_config(db)
+    return serialize_platform_config(db, config)
 
 
 @router.patch("/platform-config")
@@ -1067,6 +1043,7 @@ def update_platform_config(
                     )
 
     db.commit()
+    invalidate_landing_cache()
     return {"message": "Configuración actualizada"}
 
 @router.patch("/users/{user_id}")

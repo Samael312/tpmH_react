@@ -1,6 +1,7 @@
 "use client";
 
 import { Clock, Languages, BookOpen } from "lucide-react";
+import Image from "next/image";
 import Carousel from "./Carousel";
 import { LANGUAGES } from "@/lib/teacherOptions";
 import type { LandingPackage } from "@/hooks/useLandingData";
@@ -9,9 +10,11 @@ import { priceLabelSuffix } from "@/lib/packageThemes";
 function TeacherMiniAvatar({ name, url }: { name: string; url?: string | null }) {
   if (url) {
     return (
-      <img
+      <Image
         src={url}
         alt={name}
+        width={24}
+        height={24}
         className="w-6 h-6 rounded-full object-cover border border-white shadow-sm flex-shrink-0"
       />
     );

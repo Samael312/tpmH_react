@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
 from app.core.email import send_new_review_received_email
+from app.api.v1.endpoints.public import invalidate_landing_cache
 from app.db.base import get_db
 from app.auth.dependencies import get_current_student, get_current_user
 from app.models.user import User
@@ -98,6 +99,7 @@ def create_review(
     db.add(review)
     db.commit()
     db.refresh(review)
+    invalidate_landing_cache()
 
     # Añadir datos del estudiante a la respuesta
     review.student_name = f"{current_user.name} {current_user.surname}"
@@ -229,5 +231,6 @@ def delete_review(
 
     db.delete(review)
     db.commit()
+    invalidate_landing_cache()
 
     return {"message": "Reseña eliminada"}

@@ -143,6 +143,9 @@ def update_my_teacher_profile(
     db.commit()
     db.refresh(profile)
 
+    from app.api.v1.endpoints.public import invalidate_landing_cache
+    invalidate_landing_cache()
+
     return TeacherProfileResponse.model_validate(profile).model_dump()
 
 @router.get("/me/students")
@@ -335,6 +338,9 @@ async def upload_teacher_video(
     )
     db.commit()
 
+    from app.api.v1.endpoints.public import invalidate_landing_cache
+    invalidate_landing_cache()
+
     return {
         "message": "Video subido correctamente. Tu perfil está en revisión por el equipo.",
         "video_url": profile.video_url,
@@ -360,6 +366,9 @@ def delete_teacher_video(
     profile.video_url = None
     profile.video_public_id = None
     db.commit()
+
+    from app.api.v1.endpoints.public import invalidate_landing_cache
+    invalidate_landing_cache()
 
     return {"message": "Video eliminado"}
 

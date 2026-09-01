@@ -15,6 +15,7 @@ from app.auth.dependencies import (
 from app.models.class_ import Class, ClassType 
 from app.core.timezone import utc_now             
 from app.core.class_logic import get_business_rules, validate_package_duration
+from app.api.v1.endpoints.public import invalidate_landing_cache
 from app.models.user import User
 from app.models.package import Package, Enrollment, EnrollmentStatus
 from app.models.teacher import TeacherProfile
@@ -98,6 +99,7 @@ def create_package(
     db.add(package)
     db.commit()
     db.refresh(package)
+    invalidate_landing_cache()
     return package
 
 
@@ -162,6 +164,7 @@ def update_package(
 
     db.commit()
     db.refresh(package)
+    invalidate_landing_cache()
     return package
 
 
@@ -185,6 +188,7 @@ def deactivate_package(
 
     package.is_active = False
     db.commit()
+    invalidate_landing_cache()
     return {"message": "Paquete desactivado"}
 
 

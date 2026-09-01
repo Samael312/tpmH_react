@@ -5,7 +5,7 @@ from app.api.v1.endpoints import (
     materials, homework,
     admin, payments, reviews,
     chipi, tts, calendar, ai_debug, system_catalogs,
-    cohorts, support, god_mode, flow_tests,
+    cohorts, support, god_mode, flow_tests, public,
 )
 
 api_router = APIRouter()
@@ -30,3 +30,4 @@ api_router.include_router(support.router, prefix="/support", tags=["Soporte"])
 api_router.include_router(system_catalogs.router, prefix="/system-catalogs", tags=["Catálogos del Sistema"])
 api_router.include_router(god_mode.router, prefix="/god-mode", tags=["Modo Dios"])
 api_router.include_router(flow_tests.router, prefix="/flow-tests", tags=["Flow Tests (dev)"])
+api_router.include_router(public.router, prefix="/public", tags=["Landing pública"])

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Star, Globe, ArrowRight } from "lucide-react";
 import { getFlagForNationality } from "@/lib/nationalities";
 
@@ -51,10 +52,12 @@ export default function TeacherCard({
       {/* Foto hero */}
       <div className="relative w-full aspect-[4/5] overflow-hidden bg-gradient-to-br from-pink-400 via-rose-400 to-purple-400">
         {teacher.profile_photo_url ? (
-          <img
+          <Image
             src={teacher.profile_photo_url}
             alt={name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
+            className="object-cover group-hover:scale-105 transition-transform duration-500"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">

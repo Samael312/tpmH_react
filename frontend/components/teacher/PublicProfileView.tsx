@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import { Star, MessageCircle, Globe, Award, BookOpen, PlayCircle } from "lucide-react";
 import { shadeColor, DEFAULT_THEME_COLOR } from "@/lib/color";
 import { getFlagForNationality } from "@/lib/nationalities";
@@ -167,9 +168,9 @@ export default function PublicProfileView({
 
           <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
-              <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-[2rem] overflow-hidden border-4 border-white/30 shadow-2xl flex-shrink-0 bg-white/20 flex items-center justify-center">
+              <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-[2rem] overflow-hidden border-4 border-white/30 shadow-2xl flex-shrink-0 bg-white/20 flex items-center justify-center">
                 {teacher.profile_photo_url ? (
-                  <img src={teacher.profile_photo_url} alt={name} className="w-full h-full object-cover" />
+                  <Image src={teacher.profile_photo_url} alt={name} fill sizes="128px" className="object-cover" />
                 ) : (
                   <div
                     className="w-full h-full flex items-center justify-center"

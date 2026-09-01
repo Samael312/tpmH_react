@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { displayName } from "@/lib/displayName";
 
 export interface LandingTeacher {
   user_username: string;
@@ -41,20 +42,9 @@ export interface LandingPackage {
   teacher_username: string;
   teacher_name: string;
   teacher_avatar: string | null;
-}
-
-interface PlatformConfigResp {
-  platform_name: string;
-  platform_tagline: string | null;
-  is_single_tenant: boolean;
-  featured_teacher: {
-    username: string;
-    name: string;
-    title: string | null;
-    bio: string | null;
-    avatar: string | null;
-    subjects: string[];
-  } | null;
+  is_group: boolean;
+  min_students: number | null;
+  max_students: number | null;
 }
 
 interface LandingData {
@@ -66,122 +56,54 @@ interface LandingData {
   platformTagline: string | null;
 }
 
-const FALLBACK_USERNAME =
-  process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "mar12";
-
-function displayName(t: any): string {
-  const full = `${t?.name ?? ""} ${t?.surname ?? ""}`.trim();
-  return full || t?.user_username?.replace(/[_.]/g, " ") || "Profesor";
-}
-
 async function fetchLandingData(): Promise<LandingData> {
-  const cfgRes = await api.get("/admin/platform-config");
-  const cfg: PlatformConfigResp = cfgRes.data;
-  const platformName = cfg.platform_name || "TuProfeMaria";
-  const platformTagline = cfg.platform_tagline ?? null;
-  const isSingleTenant = cfg.is_single_tenant;
-
-  if (isSingleTenant) {
-    // ── Modo single-tenant: solo la profesora destacada ──
-    const username = cfg.featured_teacher?.username || FALLBACK_USERNAME;
-
-    const [tRes, rRes, pRes] = await Promise.all([
-      api.get(`/teachers/${username}`),
-      api.get(`/reviews/${username}`).catch(() => ({ data: [] })),
-      api.get(`/packages/teacher/${username}`).catch(() => ({ data: [] })),
-    ]);
-
-    const teacherName = displayName(tRes.data);
-    const teacherAvatar = tRes.data.profile_photo_url ?? null;
+  try {
+    const res = await api.get("/public/landing");
+    const data = res.data;
 
     return {
-      isSingleTenant,
-      platformName,
-      platformTagline,
-      teachers: [tRes.data],
-      reviews: rRes.data,
-      packages: (pRes.data || []).map((p: any) => ({
-        ...p,
-        teacher_username: username,
-        teacher_name: teacherName,
-        teacher_avatar: teacherAvatar,
-      })),
+      isSingleTenant: data.is_single_tenant,
+      platformName: data.platform_name || "TuProfeMaria",
+      platformTagline: data.platform_tagline ?? null,
+      teachers: data.teachers ?? [],
+      reviews: data.reviews ?? [],
+      packages: data.packages ?? [],
     };
+  } catch (err) {
+    // Antes esto se perdía en un .catch(() => []) silencioso por cada
+    // sub-request; ahora es un solo fetch, pero si falla igual queremos
+    // verlo en la consola (y, si el proyecto suma Sentry u otro APM más
+    // adelante, acá es donde se reportaría) en vez de que la landing
+    // se quede muda mostrando secciones vacías sin explicación.
+    console.error("[landing] fallo al traer /public/landing:", err);
+    throw err;
   }
-
-  // ── Modo multi-tenant: combinar hasta 5 profesores aprobados ──
-  const listRes = await api.get("/teachers/");
-  const list: LandingTeacher[] = (listRes.data || []).slice(0, 5);
-
-  if (list.length === 0) {
-    return {
-      isSingleTenant,
-      platformName,
-      platformTagline,
-      teachers: [],
-      reviews: [],
-      packages: [],
-    };
-  }
-
-  const [reviewArrays, packageArrays] = await Promise.all([
-    Promise.all(
-      list.map((t) =>
-        api
-          .get(`/reviews/${t.user_username}`)
-          .then((r) =>
-            (r.data || []).map((rev: any) => ({
-              ...rev,
-              teacher_username: t.user_username,
-            }))
-          )
-          .catch(() => [])
-      )
-    ),
-    Promise.all(
-      list.map((t) =>
-        api
-          .get(`/packages/teacher/${t.user_username}`)
-          .then((r) =>
-            (r.data || []).map((p: any) => ({
-              ...p,
-              teacher_username: t.user_username,
-              teacher_name: displayName(t),
-              teacher_avatar: t.profile_photo_url ?? null,
-            }))
-          )
-          .catch(() => [])
-      )
-    ),
-  ]);
-
-  const mergedReviews = reviewArrays
-    .flat()
-    .sort(
-      (a: any, b: any) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
-
-  return {
-    isSingleTenant,
-    platformName,
-    platformTagline,
-    teachers: list,
-    reviews: mergedReviews,
-    packages: packageArrays.flat(),
-  };
 }
 
-export function useLandingData() {
-  const { data, isLoading, isFetching, refetch } = useQuery({
+/**
+ * `initialData`, cuando viene provisto, es la respuesta que ya trajo el
+ * Server Component (`app/page.tsx` vía `getLandingDataServer`) en el
+ * primer render. Sembrar el cache de react-query con ella evita el
+ * parpadeo de skeleton en la carga inicial y, más importante, hace que
+ * el HTML que devuelve el servidor ya tenga el contenido real — no un
+ * shell vacío que solo se llena tras hidratar en el cliente.
+ */
+export function useLandingData(initialData?: LandingData | null) {
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ["landing-data"],
     queryFn: fetchLandingData,
     staleTime: 5 * 60 * 1000, // 5 min: contenido público, no urge revalidar en cada visita
+    ...(initialData ? { initialData } : {}),
   });
 
   return {
     loading: isLoading,
     isFetching,
+    // Solo interesa como "falló de verdad" cuando no hay ningún dato para
+    // mostrar (ni siquiera initialData de SSR) — si ya hay data previa,
+    // un refetch en background que falla no debería tirar abajo la página.
+    isError: isError && !data,
+    error,
     isSingleTenant: data?.isSingleTenant ?? true,
     teachers: data?.teachers ?? [],
     reviews: data?.reviews ?? [],
@@ -193,3 +115,4 @@ export function useLandingData() {
 }
 
 export { displayName };
+export type { LandingData };
