@@ -325,6 +325,7 @@ export interface CurrentUser {
   phone_number: string | null
   avatar: string | null
   nationality: string | null
+  is_google_account?: boolean
 }
 
 export function useCurrentUser() {

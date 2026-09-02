@@ -138,6 +138,11 @@ def update_profile(
             current_user.teacher_profile.user_username = data.username
 
     if data.email and data.email != current_user.email:
+        if current_user.google_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tu cuenta está vinculada con Google: el email no se puede editar aquí."
+            )
         existing = db.query(User).filter(
             User.email == data.email
         ).first()

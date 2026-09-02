@@ -494,6 +494,7 @@ export default function TeacherProfilePage() {
   const [infoFeedback, setInfoFeedback] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+  const [isGoogleAccount, setIsGoogleAccount] = useState(false);
   const photoRef = useRef<HTMLInputElement>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -570,6 +571,7 @@ export default function TeacherProfilePage() {
       if (currentUser.nationality) setNationality(currentUser.nationality);
       setUsername(currentUser.username ?? "");
       setEmail(currentUser.email ?? "");
+      setIsGoogleAccount(!!currentUser.is_google_account);
       initializedRef.current = true;
     }
   }, [profile, currentUser, populateFields]);
@@ -906,11 +908,16 @@ export default function TeacherProfilePage() {
                             type="email"
                             value={email}
                             onChange={e => setEmail(e.target.value)}
-                            disabled={saving}
+                            disabled={saving || isGoogleAccount}
                             placeholder="correo@ejemplo.com"
                             className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-10 pr-4 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
                           />
                         </div>
+                        {isGoogleAccount && (
+                          <p className="text-[10px] text-slate-400 font-bold mt-1">
+                            No editable: tu cuenta está vinculada a Google.
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div>

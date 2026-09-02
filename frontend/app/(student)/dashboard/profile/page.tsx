@@ -171,6 +171,7 @@ export default function StudentProfilePage() {
   const [name, setName]         = useState("");
   const [surname, setSurname]   = useState("");
   const [email, setEmail]       = useState("");
+  const [isGoogleAccount, setIsGoogleAccount] = useState(false);
   const [phoneCountry, setPhoneCountry] = useState<CountryInfo>(DEFAULT_COUNTRY);
   const [phoneRest, setPhoneRest] = useState("");
   const [timezone, setTz]       = useState("UTC");
@@ -230,6 +231,7 @@ export default function StudentProfilePage() {
     setName(userData.name ?? "");
     setSurname(userData.surname ?? "");
     setEmail(userData.email ?? "");
+    setIsGoogleAccount(!!userData.is_google_account);
 
     const rawPhone = userData.phone_number ?? userData.phone ?? "";
     const { country, rest } = parsePhoneNumber(rawPhone);
@@ -592,9 +594,14 @@ export default function StudentProfilePage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <Field label="Correo electrónico" icon={<Mail className="w-5 h-5" />}>
-                      <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputCls()} placeholder="correo@ejemplo.com" disabled={savingInfo} />
+                      <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputCls()} placeholder="correo@ejemplo.com" disabled={savingInfo || isGoogleAccount} />
                     </Field>
                   </div>
+                  {isGoogleAccount && (
+                    <p className="text-xs text-slate-400 font-bold -mt-2">
+                      No editable: tu cuenta está vinculada a Google.
+                    </p>
+                  )}
 
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">

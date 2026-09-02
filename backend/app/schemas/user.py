@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, Field, computed_field
 from typing import Optional, List
 from datetime import datetime
 
@@ -23,9 +23,23 @@ class UserResponse(UserBase):
     phone_number: Optional[str] = None
     nationality: Optional[str] = None
     onboarding_completed: bool = False
-    
+
+    # Se usa únicamente para calcular is_google_account (abajo); no se
+    # expone el id de Google en sí en la respuesta (exclude=True).
+    google_id: Optional[str] = Field(default=None, exclude=True)
+
     class Config:
         from_attributes = True
+
+    @computed_field
+    @property
+    def is_google_account(self) -> bool:
+        """
+        True si el usuario se registró/vinculó con Google. El frontend usa
+        esto para bloquear la edición del email: ese email viene de la
+        cuenta de Google y cambiarlo aquí lo desincronizaría del login.
+        """
+        return bool(self.google_id)
 
 class StudentProfileResponse(BaseModel):
     id: int

@@ -9,9 +9,13 @@ export async function generateMetadata(): Promise<Metadata> {
   const platformName = data?.platformName || "TuProfeMaria";
   const mainTeacher = data?.teachers?.[0];
 
-  const title = data?.isSingleTenant && mainTeacher
-    ? `${platformName} — Clases con ${displayName(mainTeacher)}`
-    : `${platformName} — Encuentra tu profesor ideal`;
+  // El tagline configurado por el superadmin (Settings → Tagline) tiene
+  // prioridad sobre los títulos genéricos por defecto.
+  const title = data?.platformTagline
+    ? `${platformName} — ${data.platformTagline}`
+    : data?.isSingleTenant && mainTeacher
+      ? `${platformName} — Clases con ${displayName(mainTeacher)}`
+      : `${platformName} — Encuentra tu profesor ideal`;
 
   const description =
     data?.platformTagline ||
