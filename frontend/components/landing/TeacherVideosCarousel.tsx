@@ -30,21 +30,19 @@ function VideoCard({
       onClick={onOpen}
       className={`text-left group ${
         isFeatured
-          ? "w-full max-w-sm mx-auto"
-          : "snap-start flex-shrink-0 w-[210px] sm:w-[230px]"
+          ? "w-full max-w-xl mx-auto"
+          : "snap-start flex-shrink-0 w-[280px] sm:w-[320px]"
       }`}
     >
       <div
-        className={`relative w-full overflow-hidden rounded-[1.75rem] border border-slate-100 shadow-lg shadow-slate-200/50 bg-slate-900 ${
-          isFeatured ? "aspect-[9/13]" : "aspect-[9/12]"
-        }`}
+        className={`relative w-full overflow-hidden rounded-[1.75rem] border border-slate-100 shadow-lg shadow-slate-200/50 bg-slate-900 aspect-video`}
       >
         {thumb ? (
           <Image
             src={thumb}
             alt={teacher.name}
             fill
-            sizes={isFeatured ? "384px" : "230px"}
+            sizes={isFeatured ? "576px" : "320px"}
             className="object-cover opacity-90 group-hover:scale-105 transition-transform duration-500"
             onError={(e) => {
               // Fallback si Cloudinary no puede generar el frame (video aún procesándose, etc.)
@@ -82,7 +80,7 @@ export default function TeacherVideosCarousel({ teachers }: { teachers: VideoTea
   return (
     <>
       {isSingle ? (
-        <div className="relative w-full max-w-sm mx-auto">
+        <div className="relative w-full max-w-xl mx-auto">
           {/* Resplandor detrás del video */}
           <div className="absolute -inset-6 bg-gradient-to-br from-pink-500/30 via-rose-500/20 to-purple-500/30 rounded-[3rem] blur-2xl scale-95 animate-pulse pointer-events-none" />
           {/* Anillo punteado decorativo, girando lento */}
@@ -111,7 +109,7 @@ export default function TeacherVideosCarousel({ teachers }: { teachers: VideoTea
           className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm"
           onClick={() => setActive(null)}
         >
-          <div className="relative w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="relative w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setActive(null)}
               className="absolute -top-11 right-0 w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors"
