@@ -618,6 +618,34 @@ def sync_student_lifetime_class_counter(
         synchronize_session=False,
     )
 
+
+def count_completed_classes_with_teacher(db: Session, teacher_id: int, student_id: int) -> int:
+    """
+    Cuántas clases completó un alumno con un profesor puntual (individuales
+    + grupales, status 'completed'). A diferencia del contador de por vida
+    de StudentProfile, este número es específico del par profesor-alumno
+    y no incluye 'no_show' — usa el mismo criterio que la elegibilidad
+    para dejar una reseña (ver create_review en reviews.py).
+    """
+    individual = db.query(Class).filter(
+        Class.teacher_id == teacher_id,
+        Class.student_id == student_id,
+        Class.status == "completed",
+    ).count()
+
+    from app.models.class_participant import ClassParticipant
+    group = db.query(Class).join(
+        ClassParticipant, ClassParticipant.class_id == Class.id
+    ).filter(
+        Class.teacher_id == teacher_id,
+        Class.status == "completed",
+        Class.class_type == ClassType.group,
+        ClassParticipant.student_id == student_id,
+        ClassParticipant.attendance_status != "cancelled",
+    ).count()
+
+    return individual + group
+
 def cancel_class_and_refund(
     class_: "Class",
     db: Session,

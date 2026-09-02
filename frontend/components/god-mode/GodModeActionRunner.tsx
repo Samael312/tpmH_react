@@ -392,6 +392,9 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
             <div>
               {rev.student_name} · {rev.rating}★ · {rev.is_legacy ? "legacy" : "normal"} · {new Date(rev.created_at).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" })}
             </div>
+            <div className="text-slate-400 font-semibold">
+              {rev.total_completed_classes ?? "—"} clases completadas con este profesor
+            </div>
             {rev.comment && <div className="text-slate-400 font-semibold italic">&quot;{rev.comment}&quot;</div>}
           </div>
         );

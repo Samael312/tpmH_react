@@ -37,6 +37,7 @@ from app.core.class_logic import (
     get_business_rules,
     get_buffer_minutes_for_type,
     sync_student_lifetime_class_counter,
+    count_completed_classes_with_teacher,
 )
 from app.models.payment import Payment, TeacherWallet
 from app.models.student_teacher_link import StudentTeacherLink
@@ -103,10 +104,24 @@ def _review_snapshot(review: Review) -> dict:
         "rating": review.rating,
         "comment": review.comment,
         "created_at": review.created_at.isoformat() if review.created_at else None,
+        "total_completed_classes": review.total_completed_classes,
     }
 
 
-def _to_review_response(review: Review) -> ReviewResponse:
+def _resolve_review_total_completed_classes(review: Review, db: Session) -> Optional[int]:
+    """
+    El override cargado a mano (Modo Dios) si existe; si no y hay
+    student_id, el conteo en vivo de clases completadas con ese profesor.
+    None si ninguna de las dos aplica (legacy sin student_id ni override).
+    """
+    if review.total_completed_classes is not None:
+        return review.total_completed_classes
+    if review.student_id:
+        return count_completed_classes_with_teacher(db, review.teacher_id, review.student_id)
+    return None
+
+
+def _to_review_response(review: Review, db: Session) -> ReviewResponse:
     if review.student_id and review.student and review.student.user:
         student_name = f"{review.student.user.name} {review.student.user.surname}"
         student_username = review.student.user.username
@@ -125,6 +140,7 @@ def _to_review_response(review: Review) -> ReviewResponse:
         student_username=student_username,
         is_legacy=review.is_legacy,
         legacy_student_name=review.legacy_student_name,
+        total_completed_classes=_resolve_review_total_completed_classes(review, db),
     )
 
 
@@ -1328,6 +1344,7 @@ def god_mode_create_review(
         comment=data.comment,
         is_legacy=True,
         legacy_student_name=data.legacy_student_name,
+        total_completed_classes=data.total_completed_classes,
     )
     if data.review_date is not None:
         review.created_at = data.review_date
@@ -1350,7 +1367,7 @@ def god_mode_create_review(
     db.refresh(review)
     invalidate_landing_cache()
 
-    return {"message": "Reseña legacy cargada por Modo Dios.", "review": _to_review_response(review)}
+    return {"message": "Reseña legacy cargada por Modo Dios.", "review": _to_review_response(review, db)}
 
 
 @router.patch("/reviews/{review_id}", response_model=GodModeReviewActionResponse)
@@ -1387,6 +1404,8 @@ def god_mode_edit_review(
         review.legacy_student_name = data.legacy_student_name
     if data.review_date is not None:
         review.created_at = data.review_date
+    if data.total_completed_classes is not None:
+        review.total_completed_classes = data.total_completed_classes
 
     after = _review_snapshot(review)
     if before == after:
@@ -1407,7 +1426,7 @@ def god_mode_edit_review(
     db.refresh(review)
     invalidate_landing_cache()
 
-    return {"message": "Reseña editada por Modo Dios.", "review": _to_review_response(review)}
+    return {"message": "Reseña editada por Modo Dios.", "review": _to_review_response(review, db)}
 
 
 @router.delete("/reviews/{review_id}")
@@ -1897,5 +1916,6 @@ def god_mode_lookup_teacher_reviews(
             "comment": r.comment,
             "is_legacy": r.is_legacy,
             "created_at": r.created_at.isoformat() if r.created_at else None,
+            "total_completed_classes": _resolve_review_total_completed_classes(r, db),
         })
     return result

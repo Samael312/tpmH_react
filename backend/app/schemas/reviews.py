@@ -37,6 +37,14 @@ class ReviewResponse(BaseModel):
     is_legacy: bool = False
     legacy_student_name: Optional[str] = None
 
+    # Clases completadas por el alumno CON ESTE PROFESOR (no el contador
+    # de por vida en todas las plataformas). Para reseñas no-legacy con
+    # student_id se calcula en vivo salvo que Modo Dios haya cargado un
+    # valor manual; para reseñas legacy sin student_id depende
+    # enteramente de que Modo Dios lo haya cargado, y puede quedar en
+    # None si nunca se indicó.
+    total_completed_classes: Optional[int] = None
+
     class Config:
         from_attributes = True
 
@@ -63,6 +71,11 @@ class GodModeCreateReviewRequest(GodModeActionBase):
     student_id: Optional[int] = None
     legacy_student_name: Optional[str] = Field(None, min_length=2, max_length=150)
     review_date: Optional[datetime] = None
+    # Clases completadas con este profesor. Casi siempre necesario acá:
+    # las clases de la plataforma anterior no están en esta base de
+    # datos, así que no hay forma de calcularlo en vivo. Si se deja
+    # vacío y hay student_id, se calculará en vivo (probablemente 0).
+    total_completed_classes: Optional[int] = Field(None, ge=0)
 
     @field_validator("rating")
     @classmethod
@@ -95,6 +108,8 @@ class GodModeEditReviewRequest(GodModeActionBase):
     comment: Optional[str] = None
     legacy_student_name: Optional[str] = Field(None, min_length=2, max_length=150)
     review_date: Optional[datetime] = None
+    # Corrige/carga el número de clases completadas con este profesor.
+    total_completed_classes: Optional[int] = Field(None, ge=0)
 
     @field_validator("rating")
     @classmethod

@@ -10,11 +10,26 @@ from app.models.user import User
 from app.models.review import Review
 from app.models.class_ import Class
 from app.models.teacher import TeacherProfile
+from app.core.class_logic import count_completed_classes_with_teacher
 from app.schemas.reviews import (
     CreateReviewRequest,
     ReviewResponse,
     TeacherRatingSummary,
 )
+
+
+def _resolve_total_completed_classes(review: Review, db: Session) -> int | None:
+    """
+    Valor a mostrar en la reseña: el override cargado manualmente (Modo
+    Dios) si existe, o si no y hay student_id, el conteo en vivo de
+    clases completadas con ese profesor. None si no hay ninguna de las
+    dos formas de saberlo (reseña legacy sin student_id y sin override).
+    """
+    if review.total_completed_classes is not None:
+        return review.total_completed_classes
+    if review.student_id:
+        return count_completed_classes_with_teacher(db, review.teacher_id, review.student_id)
+    return None
 
 router = APIRouter()
 
@@ -101,10 +116,6 @@ def create_review(
     db.refresh(review)
     invalidate_landing_cache()
 
-    # Añadir datos del estudiante a la respuesta
-    review.student_name = f"{current_user.name} {current_user.surname}"
-    review.student_username = current_user.username
-
     teacher_user = teacher.user if teacher else None
     if teacher_user:
         send_new_review_received_email(
@@ -113,7 +124,22 @@ def create_review(
             rating=data.rating, comment=data.comment,
         )
 
-    return review
+    # Construimos la respuesta a mano (en vez de devolver el objeto ORM
+    # directo) para no pisar la columna real total_completed_classes con
+    # el valor resuelto en vivo.
+    return ReviewResponse(
+        id=review.id,
+        teacher_id=review.teacher_id,
+        student_id=review.student_id,
+        rating=review.rating,
+        comment=review.comment,
+        created_at=review.created_at,
+        student_name=f"{current_user.name} {current_user.surname}",
+        student_username=current_user.username,
+        is_legacy=review.is_legacy,
+        legacy_student_name=review.legacy_student_name,
+        total_completed_classes=_resolve_total_completed_classes(review, db),
+    )
 
 
 @router.get(
@@ -165,6 +191,7 @@ def get_teacher_reviews(
             student_username=student_username,
             is_legacy=review.is_legacy,
             legacy_student_name=review.legacy_student_name,
+            total_completed_classes=_resolve_total_completed_classes(review, db),
         )
         result.append(r)
 

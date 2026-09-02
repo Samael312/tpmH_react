@@ -63,6 +63,7 @@ export interface PublicProfileReview {
   rating: number;
   comment: string;
   created_at: string;
+  total_completed_classes?: number | null;
 }
 
 export function displayTeacherName(t: PublicProfileTeacher): string {
@@ -432,6 +433,12 @@ export default function PublicProfileView({
                       </div>
                       <StarRating value={r.rating} />
                     </div>
+                    {r.total_completed_classes != null && (
+                      <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-100 rounded-full px-2.5 py-1 mb-3 text-[10px] font-black text-slate-500">
+                        <BookOpen className="w-3 h-3" />
+                        {r.total_completed_classes} {r.total_completed_classes === 1 ? "clase completada" : "clases completadas"} con este profesor
+                      </div>
+                    )}
                     <p className="text-sm text-slate-600 leading-relaxed italic">&ldquo;{r.comment}&rdquo;</p>
                   </div>
                 ))}

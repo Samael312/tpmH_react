@@ -39,6 +39,15 @@ class Review(Base):
     # y este campo queda como referencia/override opcional.
     legacy_student_name = Column(String, nullable=True)
 
+    # Cuántas clases completó el alumno CON ESTE PROFESOR (no el contador
+    # de por vida en todas las plataformas/profesores). NULL = calcularlo
+    # en vivo a partir de Class/ClassParticipant (solo posible si hay
+    # student_id). Para reseñas legacy este valor casi siempre hay que
+    # cargarlo a mano desde Modo Dios, porque las clases de la plataforma
+    # anterior no están en esta base de datos. También sirve para
+    # corregir el número en una reseña normal si hiciera falta.
+    total_completed_classes = Column(Integer, nullable=True)
+
     # Relaciones
     teacher = relationship("TeacherProfile", backref="reviews")
     student = relationship("StudentProfile", backref="reviews")

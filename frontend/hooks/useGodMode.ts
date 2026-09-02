@@ -237,6 +237,7 @@ export interface GodModeLookupReview {
   comment: string | null;
   is_legacy: boolean;
   created_at: string;
+  total_completed_classes: number | null;
 }
 
 export function useGodModeTeacherReviews(teacherId: number | undefined) {
