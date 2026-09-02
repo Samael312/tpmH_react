@@ -104,6 +104,7 @@ export interface TeacherStudentFull {
   created_at: string
   enrollments: StudentEnrollmentSummary[]
   materials: StudentMaterialSummary[]
+  total_completed_classes: number
 }
 
 export interface WithdrawalHistoryItem {

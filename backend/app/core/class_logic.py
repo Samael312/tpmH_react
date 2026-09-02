@@ -513,6 +513,7 @@ def finalize_past_classes(db: Session) -> int:
         Class.end_time_utc < now,
     ).all()
     for c in expired_pending:
+        sync_student_lifetime_class_counter(c, "pending_trial", "no_show", db=db)
         c.status = "no_show"
         count += 1
         if c.class_type == ClassType.regular and c.enrollment_id:
@@ -559,6 +560,64 @@ def class_counts_towards_package(
         return (start_time_utc - ref) < timedelta(hours=hours)
     return False
 
+
+# ─── Contador de por vida de clases completadas (StudentProfile) ────────────
+# A diferencia de classes_used (que vive en el Enrollment y se resetea con
+# cada renovación/cambio de paquete), este contador vive en el propio
+# StudentProfile y nunca se reinicia: es la suma histórica de todas las
+# clases (individuales, trial y grupales) que terminaron en 'completed' o
+# 'no_show' para ese alumno, sin importar de qué enrollment/paquete/cohorte
+# vinieron.
+LIFETIME_COUNTING_STATUSES = TERMINAL_COUNTING_STATUSES  # {"completed", "no_show"}
+
+
+def sync_student_lifetime_class_counter(
+    class_: "Class",
+    old_status: str,
+    new_status: str,
+    db: Session,
+) -> None:
+    """
+    Mantiene StudentProfile.total_completed_classes al día cada vez que el
+    status de una Class entra o sale de LIFETIME_COUNTING_STATUSES.
+
+    - Individual/trial: afecta a class_.student_id.
+    - Grupal: afecta a cada ClassParticipant activo (attendance_status !=
+      "cancelled") de esa sesión — una unidad por alumno participante, no
+      por sesión. (Un alumno que se salió de la sesión antes de que
+      ocurriera nunca llega a completed/no_show con su participación
+      activa, así que no hace falta reconciliar esa salida acá — ver
+      release_cohort_seat, que solo cancela participaciones FUTURAS.)
+
+    No hace commit — el caller decide cuándo. No-op si el status no cruzó
+    la frontera de "cuenta" / "no cuenta".
+    """
+    was_counting = old_status in LIFETIME_COUNTING_STATUSES
+    is_counting = new_status in LIFETIME_COUNTING_STATUSES
+    if was_counting == is_counting:
+        return
+
+    delta = 1 if is_counting else -1
+
+    if class_.class_type == ClassType.group:
+        from app.models.class_participant import ClassParticipant
+        student_ids = [
+            sid for (sid,) in db.query(ClassParticipant.student_id).filter(
+                ClassParticipant.class_id == class_.id,
+                ClassParticipant.attendance_status != "cancelled",
+            ).all()
+        ]
+    else:
+        student_ids = [class_.student_id] if class_.student_id else []
+
+    if not student_ids:
+        return
+
+    db.query(StudentProfile).filter(StudentProfile.id.in_(student_ids)).update(
+        {StudentProfile.total_completed_classes: StudentProfile.total_completed_classes + delta},
+        synchronize_session=False,
+    )
+
 def cancel_class_and_refund(
     class_: "Class",
     db: Session,
@@ -591,6 +650,7 @@ def cancel_class_and_refund(
         min_cancel_hours=min_cancel_hours,
     )
 
+    sync_student_lifetime_class_counter(class_, old_status, "cancelled", db=db)
     class_.status = "cancelled"
 
     counts_as_used = class_counts_towards_package(

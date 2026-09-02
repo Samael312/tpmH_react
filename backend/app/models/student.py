@@ -18,6 +18,13 @@ class StudentProfile(Base):
     profile_photo_url = Column(String, nullable=True)
     profile_photo_public_id = Column(String, nullable=True)
 
+    # Contador de por vida de clases completadas (individuales + grupales),
+    # independiente de enrollments/paquetes: no se resetea con renovaciones
+    # ni cambios de paquete. Se incrementa/decrementa cuando una clase
+    # entra/sale de {"completed", "no_show"} — ver
+    # app.core.class_logic.update_student_lifetime_class_counter.
+    total_completed_classes = Column(Integer, default=0, nullable=False, server_default="0")
+
     # Relaciones
     user = relationship("User", back_populates="student_profile")
     enrollments = relationship("Enrollment", back_populates="student")

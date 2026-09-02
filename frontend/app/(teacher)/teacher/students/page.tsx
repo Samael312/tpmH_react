@@ -150,6 +150,12 @@ function StudentCard({ student }: { student: TeacherStudentFull }) {
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Objetivo</p>
               <p className="text-xs font-bold text-slate-700 truncate">{student.goal ?? "No especificado"}</p>
             </div>
+            <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-100 sm:col-span-2">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                <GraduationCap className="w-3.5 h-3.5" /> Clases completadas en total
+              </p>
+              <p className="text-xs font-bold text-slate-700">{student.total_completed_classes}</p>
+            </div>
           </div>
 
           {/* Enrollments / paquetes */}

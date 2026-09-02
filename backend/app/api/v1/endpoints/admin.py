@@ -904,6 +904,7 @@ def get_student_detail(
             "timezone": None,
             "enrollments": [],
             "materials": [],
+            "total_completed_classes": 0,
         }
 
     enrollments = db.query(Enrollment).filter(
@@ -945,6 +946,10 @@ def get_student_detail(
         "timezone": student_profile.timezone,
         "enrollments": enrollment_list,
         "materials": materials_list,
+        # Contador de por vida (no ligado a un enrollment/paquete concreto):
+        # sobrevive a renovaciones, cambios de paquete y cuenta también
+        # clases grupales — ver app.core.class_logic.
+        "total_completed_classes": student_profile.total_completed_classes,
     }
 
 

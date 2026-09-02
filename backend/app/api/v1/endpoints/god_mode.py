@@ -36,6 +36,7 @@ from app.core.class_logic import (
     class_counts_towards_package,
     get_business_rules,
     get_buffer_minutes_for_type,
+    sync_student_lifetime_class_counter,
 )
 from app.models.payment import Payment, TeacherWallet
 from app.models.student_teacher_link import StudentTeacherLink
@@ -830,6 +831,11 @@ def god_mode_create_class(
     db.add(new_class)
     db.flush()
 
+    # Clase creada directamente ya en un estado terminal (ej. backfill de
+    # historial): "" nunca está en LIFETIME_COUNTING_STATUSES, así que esto
+    # es un no-op salvo que data.status sea 'completed'/'no_show'.
+    sync_student_lifetime_class_counter(new_class, "", data.status, db=db)
+
     # Consumo de crédito: si el staff no especificó consume_credit
     # explícitamente, se sigue la misma regla que el resto de la app
     # (el estado inicial determina si "cuenta" contra el paquete). Si sí
@@ -904,7 +910,9 @@ def god_mode_reschedule_class(
     class_.end_time_utc = data.start_time_utc + timedelta(minutes=duration)
     class_.duration = duration
     class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
-    class_.status = resolve_status_after_reschedule(class_)
+    new_status = resolve_status_after_reschedule(class_)
+    sync_student_lifetime_class_counter(class_, class_.status, new_status, db=db)
+    class_.status = new_status
 
     after = _class_snapshot(class_)
 
@@ -959,6 +967,7 @@ def god_mode_force_class_status(
         min_cancel_hours=min_cancel_hours,
     )
 
+    sync_student_lifetime_class_counter(class_, old_status, data.status, db=db)
     class_.status = data.status
     if data.notes:
         class_.notes = data.notes

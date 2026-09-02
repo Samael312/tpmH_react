@@ -129,13 +129,14 @@ export function useStudents(search?: string) {
       const params = new URLSearchParams({ role: 'student', is_banned: 'false' })
       if (search) params.append('search', search)
       const res = await api.get(`/admin/users?${params}`)
-      return res.data as Student[]
+      // BUG-10: /admin/users devuelve { total, users }, no un array plano.
+      return res.data as { total: number; users: Student[] }
     },
   })
 
   return {
-    students: query.data ?? [],
-    total: query.data?.length ?? 0,
+    students: query.data?.users ?? [],
+    total: query.data?.total ?? 0,
     loading: query.isLoading,
     isFetching: query.isFetching,
     isError: query.isError,
@@ -370,12 +371,14 @@ export function useBannedStudents() {
     queryKey: ["admin", "students", "banned"],
     queryFn: async () => {
       const res = await api.get('/admin/users?role=student&is_banned=true&limit=200')
-      return res.data as Student[]
+      // BUG-10: /admin/users devuelve { total, users }, no un array plano.
+      return res.data as { total: number; users: Student[] }
     },
   })
 
   return {
-    students: query.data ?? [],
+    students: query.data?.users ?? [],
+    total: query.data?.total ?? 0,
     loading: query.isLoading,
     isFetching: query.isFetching,
     isError: query.isError,
@@ -409,6 +412,7 @@ export interface StudentDetail {
   timezone: string | null
   enrollments: StudentDetailEnrollment[]
   materials: StudentDetailMaterial[]
+  total_completed_classes: number
 }
 
 export function fetchStudentDetail(userId: number) {

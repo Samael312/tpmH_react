@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation'
 import {
   Users, Search, X, UserCheck, UserX, Phone, Calendar, Loader2,
   Sparkles, SlidersHorizontal, ShieldAlert, ChevronDown,
-  Package as PackageIcon, AtSign, AlertTriangle, RefreshCw,
+  Package as PackageIcon, AtSign, AlertTriangle, RefreshCw, GraduationCap,
 } from 'lucide-react'
 import Link from 'next/link'
 import { getFlagForNationality } from '@/lib/nationalities'
@@ -206,6 +206,14 @@ function StudentRow({
               {detail?.goal && (
                 <div className="sm:col-span-2 text-slate-500 font-bold">
                   Objetivo: <span className="text-slate-700">{detail.goal}</span>
+                </div>
+              )}
+              {!loadingDetail && !detailError && (
+                <div className="flex items-center gap-2">
+                  <GraduationCap className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-slate-500 font-bold">
+                    {detail?.total_completed_classes ?? 0} clases completadas en total
+                  </span>
                 </div>
               )}
             </div>

@@ -311,6 +311,46 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
         </div>
       </section>
 
+      {/* ─── Videos de presentación (Estilo Dark Glassmorphism) ─── */}
+      {(loading || videoTeachers.length > 0) && (
+        <section id="videos" className="py-24 relative overflow-hidden bg-slate-900">
+          <div className="absolute inset-0 bg-gradient-to-b from-slate-900 via-slate-900 to-[#0B1120]" />
+          {/* Textura de puntos sutil para no dejar el fondo plano */}
+          <div
+            className="absolute inset-0 opacity-[0.06] pointer-events-none"
+            style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "26px 26px" }}
+          />
+          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-rose-900/20 rounded-full blur-[90px] pointer-events-none animate-blob" />
+          <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-cyan-900/20 rounded-full blur-[90px] pointer-events-none animate-blob" style={{ animationDelay: '3s' }} />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-purple-800/10 rounded-full blur-[110px] pointer-events-none" />
+          
+          <div className="relative max-w-6xl mx-auto px-4 sm:px-6 z-10">
+            <div className="text-center mb-12">
+              <p className="text-[10px] font-bold text-rose-400 uppercase tracking-widest mb-3 flex items-center justify-center gap-1.5">
+                <VideoIcon className="w-3.5 h-3.5" /> Presentaciones
+              </p>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tight mb-4">
+                {isSingleTenant ? "Escucha a tu profesora" : "Escucha a nuestros profesores"}
+              </h2>
+              <div className="w-20 h-1 bg-gradient-to-r from-rose-500 to-transparent rounded-full mx-auto my-4" />
+              <p className="text-slate-400 max-w-lg mx-auto text-lg font-light">
+                Antes de reservar tu clase, mira quién estará al otro lado de la pantalla.
+              </p>
+            </div>
+
+            {loading ? (
+              <div className="flex gap-5 overflow-hidden">
+                {[1,2,3].map(i => (
+                  <Skeleton key={i} className="w-[210px] aspect-[9/12] rounded-[1.75rem] flex-shrink-0 bg-slate-800/40 border border-white/5" />
+                ))}
+              </div>
+            ) : (
+              <TeacherVideosCarousel teachers={videoTeachers} />
+            )}
+          </div>
+        </section>
+      )}
+
       {/* ─── Sobre nosotros / equipo ─── */}
       <section id="about" className="py-24 relative overflow-hidden bg-white">
         <div className="absolute top-0 left-0 w-[400px] h-[400px] bg-rose-300/50 mix-blend-multiply rounded-full blur-[100px] pointer-events-none" />
@@ -321,7 +361,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
               {isSingleTenant ? "Sobre mí" : "Nuestro equipo"}
             </p>
             <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">
-              {isSingleTenant ? "Conoce a tu profesora" : "Conoce a nuestros profesores"}
+              {isSingleTenant ? "Conoceme un poco mejor" : "Conoce a nuestros profesores"}
             </h2>
             <p className="text-slate-500 max-w-xl mx-auto leading-relaxed text-lg">
               {isSingleTenant
@@ -418,45 +458,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
         </section>
       )}
 
-      {/* ─── Videos de presentación (Estilo Dark Glassmorphism) ─── */}
-      {(loading || videoTeachers.length > 0) && (
-        <section id="videos" className="py-24 relative overflow-hidden bg-slate-900">
-          <div className="absolute inset-0 bg-gradient-to-b from-slate-900 via-slate-900 to-[#0B1120]" />
-          {/* Textura de puntos sutil para no dejar el fondo plano */}
-          <div
-            className="absolute inset-0 opacity-[0.06] pointer-events-none"
-            style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "26px 26px" }}
-          />
-          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-rose-900/20 rounded-full blur-[90px] pointer-events-none animate-blob" />
-          <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-cyan-900/20 rounded-full blur-[90px] pointer-events-none animate-blob" style={{ animationDelay: '3s' }} />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-purple-800/10 rounded-full blur-[110px] pointer-events-none" />
-          
-          <div className="relative max-w-6xl mx-auto px-4 sm:px-6 z-10">
-            <div className="text-center mb-12">
-              <p className="text-[10px] font-bold text-rose-400 uppercase tracking-widest mb-3 flex items-center justify-center gap-1.5">
-                <VideoIcon className="w-3.5 h-3.5" /> Presentaciones
-              </p>
-              <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tight mb-4">
-                {isSingleTenant ? "Conoce a tu profesora" : "Conoce a nuestros profesores"}
-              </h2>
-              <div className="w-20 h-1 bg-gradient-to-r from-rose-500 to-transparent rounded-full mx-auto my-4" />
-              <p className="text-slate-400 max-w-lg mx-auto text-lg font-light">
-                Antes de reservar tu clase, mira quién estará al otro lado de la pantalla.
-              </p>
-            </div>
-
-            {loading ? (
-              <div className="flex gap-5 overflow-hidden">
-                {[1,2,3].map(i => (
-                  <Skeleton key={i} className="w-[210px] aspect-[9/12] rounded-[1.75rem] flex-shrink-0 bg-slate-800/40 border border-white/5" />
-                ))}
-              </div>
-            ) : (
-              <TeacherVideosCarousel teachers={videoTeachers} />
-            )}
-          </div>
-        </section>
-      )}
+      
 
       {/* ─── Chipi, el asistente IA ─── */}
       <ChipiSection />

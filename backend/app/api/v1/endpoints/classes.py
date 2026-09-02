@@ -35,6 +35,7 @@ from app.core.class_logic import (
     cancel_class_and_refund,
     get_business_rules,
     get_buffer_minutes_for_type,
+    sync_student_lifetime_class_counter,
 )
 from app.core.timezone import UTC, utc_now, format_local_datetime
 from app.db.base import get_db
@@ -439,7 +440,9 @@ def reschedule_class_student(
     # tal cual estaba; can_reschedule_class ya validó que es reagendable.
     # Excepción: 'finalized' → 'confirmed' (ver resolve_status_after_reschedule),
     # para que la clase reagendada a futuro vuelva a aparecer en "Próximas".
-    class_.status = resolve_status_after_reschedule(class_)
+    new_status = resolve_status_after_reschedule(class_)
+    sync_student_lifetime_class_counter(class_, class_.status, new_status, db=db)
+    class_.status = new_status
     db.commit()
     db.refresh(class_)
     
@@ -624,6 +627,7 @@ def update_class_status(
         min_cancel_hours=min_cancel_hours,
     )
 
+    sync_student_lifetime_class_counter(class_, old_status, data.status, db=db)
     class_.status = data.status
     new_counts = class_counts_towards_package(data.status, class_.start_time_utc, min_cancel_hours=min_cancel_hours)
 
@@ -780,7 +784,9 @@ def reschedule_class_teacher(
     # BUG fix: ver comentario equivalente en reschedule_class_student. El
     # profesor tampoco debe poder "desconfirmar" una clase ya paga/confirmada
     # por el simple hecho de reagendarla. Excepción: 'finalized' → 'confirmed'.
-    class_.status = resolve_status_after_reschedule(class_)
+    new_status = resolve_status_after_reschedule(class_)
+    sync_student_lifetime_class_counter(class_, class_.status, new_status, db=db)
+    class_.status = new_status
     db.commit()
     db.refresh(class_)
 
@@ -820,7 +826,9 @@ def reschedule_class_admin(
     class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
     # BUG fix: ver comentario equivalente en reschedule_class_student.
     # Excepción: 'finalized' → 'confirmed'.
-    class_.status = resolve_status_after_reschedule(class_)
+    new_status = resolve_status_after_reschedule(class_)
+    sync_student_lifetime_class_counter(class_, class_.status, new_status, db=db)
+    class_.status = new_status
     db.commit()
     db.refresh(class_)
 

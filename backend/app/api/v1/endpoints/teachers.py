@@ -267,6 +267,10 @@ def get_my_students_full(
             "created_at": u.created_at,
             "enrollments": enrollment_list,
             "materials": materials_list,
+            # Contador de por vida (no ligado a un enrollment/paquete
+            # concreto): sobrevive a renovaciones, cambios de paquete y
+            # cuenta también clases grupales — ver app.core.class_logic.
+            "total_completed_classes": sp.total_completed_classes,
         })
 
     return result
