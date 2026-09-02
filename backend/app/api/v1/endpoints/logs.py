@@ -12,6 +12,7 @@ from app.schemas.logs import (
     FrontendErrorReportRequest,
     ErrorLogResponse,
     PaginatedErrorLogResponse,
+    ErrorLogUserOption,
     ErrorLogStats,
 )
 
@@ -50,6 +51,7 @@ def list_error_logs(
     level: Optional[str] = Query(None, pattern="^(error|warning)$"),
     screen: Optional[str] = Query(None, description="Búsqueda parcial sobre la pantalla/endpoint"),
     user_id: Optional[int] = None,
+    user_name: Optional[str] = Query(None, description="Búsqueda parcial por nombre y apellido del usuario"),
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
     page: int = Query(1, ge=1),
@@ -68,6 +70,8 @@ def list_error_logs(
         query = query.filter(ErrorLog.screen.ilike(f"%{screen}%"))
     if user_id:
         query = query.filter(ErrorLog.user_id == user_id)
+    if user_name:
+        query = query.filter(ErrorLog.user_name.ilike(f"%{user_name}%"))
     if date_from:
         query = query.filter(ErrorLog.created_at >= date_from)
     if date_to:
@@ -87,6 +91,28 @@ def list_error_logs(
         page=page,
         page_size=page_size,
     )
+
+
+@router.get("/users", response_model=list[ErrorLogUserOption])
+def list_error_log_users(
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """
+    Usuarios que tienen al menos un error registrado, con su nombre y
+    apellido vigentes (se busca en `users`, no en el snapshot guardado
+    en el log, para que si el usuario cambió su nombre el filtro
+    siempre muestre el actual). Alimenta el <select> del filtro por
+    usuario en la pantalla de Logs.
+    """
+    rows = (
+        db.query(User.id, User.name, User.surname)
+        .join(ErrorLog, ErrorLog.user_id == User.id)
+        .distinct()
+        .order_by(User.name, User.surname)
+        .all()
+    )
+    return [ErrorLogUserOption(id=r.id, name=f"{r.name} {r.surname}") for r in rows]
 
 
 @router.get("/stats", response_model=ErrorLogStats)

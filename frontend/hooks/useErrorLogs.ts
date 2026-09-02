@@ -26,11 +26,17 @@ export interface ErrorLogStats {
   last_24h: number;
 }
 
+export interface ErrorLogUserOption {
+  id: number;
+  name: string;
+}
+
 export interface ErrorLogFilters {
   source?: "backend" | "frontend";
   level?: "error" | "warning";
   screen?: string;
   user_id?: number;
+  user_name?: string;
   page?: number;
   page_size?: number;
 }
@@ -75,5 +81,27 @@ export function useErrorLogStats() {
     loading: query.isLoading,
     isFetching: query.isFetching,
     refetch: query.refetch,
+  };
+}
+
+/**
+ * Usuarios con nombre y apellido vigentes que tienen al menos un log,
+ * para poblar el <select> del filtro por usuario (en vez de texto
+ * libre). Se cachea más tiempo: la lista de usuarios con errores no
+ * cambia tan seguido como los logs en sí.
+ */
+export function useErrorLogUsers() {
+  const query = useQuery({
+    queryKey: ["admin", "error-logs", "users"],
+    queryFn: async () => {
+      const res = await api.get("/logs/users");
+      return res.data as ErrorLogUserOption[];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  return {
+    users: query.data ?? [],
+    loading: query.isLoading,
   };
 }

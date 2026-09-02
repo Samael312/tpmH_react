@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AlertOctagon, ChevronDown, ChevronUp, Monitor, Server } from "lucide-react";
 import { Card, Badge, Skeleton, StatCard, RefreshButton } from "@/components/ui";
-import { useErrorLogs, useErrorLogStats, ErrorLogEntry } from "@/hooks/useErrorLogs";
+import { useErrorLogs, useErrorLogStats, useErrorLogUsers, ErrorLogEntry } from "@/hooks/useErrorLogs";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 
 function formatDate(iso: string) {
@@ -78,14 +78,18 @@ export default function ErrorLogsViewer() {
   const [source, setSource] = useState<string>("");
   const [level, setLevel] = useState<string>("");
   const [screen, setScreen] = useState("");
+  const [userId, setUserId] = useState<string>("");
   const [page, setPage] = useState(1);
   const pageSize = 30;
+
+  const { users } = useErrorLogUsers();
 
   const { stats, refetch: refetchStats, isFetching: statsFetching } = useErrorLogStats();
   const { items, total, loading, isFetching: logsFetching, refetch: refetchLogs } = useErrorLogs({
     source: source ? (source as "backend" | "frontend") : undefined,
     level: level ? (level as "error" | "warning") : undefined,
     screen: screen || undefined,
+    user_id: userId ? Number(userId) : undefined,
     page,
     page_size: pageSize,
   });
@@ -126,6 +130,16 @@ export default function ErrorLogsViewer() {
               placeholder="Buscar por pantalla/endpoint..."
               className="text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 w-56"
             />
+            <select
+              value={userId}
+              onChange={(e) => { setUserId(e.target.value); setPage(1); }}
+              className="text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 max-w-[180px]"
+            >
+              <option value="">Todos los usuarios</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
             <select
               value={source}
               onChange={(e) => { setSource(e.target.value); setPage(1); }}

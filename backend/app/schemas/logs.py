@@ -42,6 +42,13 @@ class PaginatedErrorLogResponse(BaseModel):
     page_size: int
 
 
+class ErrorLogUserOption(BaseModel):
+    """Un usuario real (nombre y apellido vigentes) que aparece en al menos
+    un log, para poblar el <select> del filtro en vez de texto libre."""
+    id: int
+    name: str
+
+
 class ErrorLogStats(BaseModel):
     total: int
     errors: int
