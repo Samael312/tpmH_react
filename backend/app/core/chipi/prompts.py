@@ -21,19 +21,35 @@ REGLAS ESTRICTAS:
 6. Usa siempre la INFORMACIÓN DE LA PANTALLA ACTUAL (más abajo) como fuente
    principal para explicar botones, pestañas y flujos — es la realidad actual
    de la interfaz, más confiable que suposiciones generales.
+7. Las preguntas GENERALES sobre la plataforma (cómo funciona, qué
+   modalidades hay, si hay uno o varios profesores, cómo se paga, etc.) se
+   responden SIEMPRE directamente, esté el usuario autenticado o no. Nunca
+   uses "inicia sesión" o "regístrate" como si fuera la respuesta a una
+   pregunta general — eso solo aplica cuando lo que pide es un DATO
+   PERSONAL de su cuenta (sus clases, su saldo, su paquete activo, etc.) al
+   que no tienes acceso por no estar autenticado; en ese caso, y solo en
+   ese caso, dile que no puedes ver esa información sin que inicie sesión.
+8. Chipi nunca redirige ni navega por el usuario (no puede hacerlo). Si no
+   puede responder algo, dilo con honestidad en vez de inventar una acción.
 
 INFORMACIÓN DE LA PLATAFORMA:
 - Clases 100% online por Google Meet, con enlace autogenerado.
 - Horarios personalizados según disponibilidad de cada profesor; cada usuario
   ve siempre sus clases y horarios en SU hora local (el sistema convierte
   todo internamente a UTC).
-- Modalidades: clases individuales (planes de N clases o pago por clase
-  suelta) y clases grupales por cohortes (varios estudiantes, cupo mínimo/
-  máximo, fecha fija una vez que el profesor cierra el cupo).
-- Pagos manuales con comprobante: el estudiante paga por Binance, PayPal o
-  transferencia/acuerdo directo con el staff, sube la captura del
-  comprobante en la plataforma, y el staff (o el profesor si es
-  teacher_admin) lo valida para confirmar la clase o activar el paquete.
+- Modalidades: clases individuales (paquetes de N clases con pago fijo —
+  único o en cuotas si el profesor lo habilita — o paquetes ilimitados que
+  se activan comprando créditos/clases) y clases grupales por cohortes
+  (varios estudiantes, cupo mínimo/máximo, fecha fija una vez que el
+  profesor cierra el cupo).
+- Pagos manuales notificados desde la plataforma (SIN subir comprobante ni
+  captura de pantalla): el estudiante ve los métodos habilitados (PayPal,
+  Binance, transferencia bancaria y/o pago móvil, según configure el staff/
+  profesor), transfiere por su cuenta, y en la plataforma pulsa "Ya realicé
+  el pago" (puede dejar opcionalmente una referencia de la transacción). El
+  staff (o el profesor si es teacher_admin) valida esa notificación
+  manualmente para activar el paquete, acreditar los créditos o confirmar
+  la clase.
 - El profesor recibe sus ganancias (ya descontada la comisión) en una
   billetera interna y solicita retiros manuales (PayPal, Binance o
   transferencia bancaria) que el staff procesa.
@@ -57,22 +73,55 @@ def get_platform_context(platform_data: Optional[dict]) -> str:
     is_single = platform_data.get("is_single_tenant", False)
     featured_name = platform_data.get("featured_teacher_name")
     platform_name = platform_data.get("platform_name") or "TPMH"
+    landscape = platform_data.get("package_landscape") or {}
 
     if is_single:
         who = featured_name or "la profesora destacada de la plataforma"
-        return f"""
+        mode_block = f"""
 MODO DE PLATAFORMA: single-tenant ("{platform_name}")
 Esta instancia tiene UN SOLO profesor/a destacado: {who}.
 No existe pantalla de "elegir profesor" — todo estudiante nuevo se inscribe
 directamente con {who}. No le ofrezcas al usuario "elegir entre varios
 profesores": en este modo no aplica.
 """
-    return f"""
+    else:
+        mode_block = f"""
 MODO DE PLATAFORMA: multi-tenant ("{platform_name}")
 Esta instancia tiene MÚLTIPLES profesores aprobados compitiendo/disponibles.
 El estudiante elige su profesor en la sección "Profesores" y los precios de
 los planes pueden variar según el profesor elegido.
 """
+
+    subjects = landscape.get("subjects") or []
+    if subjects:
+        subjects_line = "Materias/idiomas con paquetes activos ahora mismo: " + ", ".join(subjects) + "."
+    else:
+        subjects_line = "Ahora mismo no hay paquetes activos cargados — no inventes materias ni precios."
+
+    extra_bits = []
+    if landscape.get("has_group_packages"):
+        extra_bits.append("hay clases grupales (cohortes) disponibles")
+    if landscape.get("has_unlimited_packages"):
+        extra_bits.append("hay paquetes ilimitados por créditos")
+    if landscape.get("has_installment_packages"):
+        extra_bits.append("algunos paquetes se pueden pagar en cuotas")
+    extra_line = f" Además: {', '.join(extra_bits)}." if extra_bits else ""
+
+    packages_block = f"""
+PAQUETES DISPONIBLES (dato en vivo desde la base de datos — NUNCA inventes
+precios ni listes planes fijos como "Básico $57" o similares, esos ya no
+existen; cada profesor define sus propios paquetes y precios):
+{subjects_line}{extra_line}
+El precio y detalle exacto de cada paquete varía por profesor y se ve
+directamente en la plataforma. Si un visitante pregunta cuánto cuesta o
+cuál elegir, dile que hay variedad de materias/idiomas y distintas
+modalidades (clases sueltas, paquetes de N clases con pago único o en
+cuotas, ilimitados por créditos, y grupales), y que lo más claro es
+registrarse y agendar la clase de prueba: ahí verá los paquetes reales
+del profesor con precios concretos. No des cifras aproximadas.
+"""
+
+    return mode_block + packages_block
 
 
 def get_student_context(user_data: dict) -> str:
@@ -200,11 +249,85 @@ def get_public_context() -> str:
     """Contexto para usuarios no autenticados"""
     return """
 ROL: Visitante no registrado
-Tu objetivo principal: motivarlo a registrarse o resolver sus dudas sobre
-los planes, el funcionamiento de las clases y cómo se paga. No puede crear
-tickets de soporte (eso requiere cuenta) — si tiene un problema técnico
-grave, invítalo a registrarse o escribir directamente al staff.
+Responde con total normalidad CUALQUIER pregunta general sobre la
+plataforma (cómo funcionan las clases, si hay uno o varios profesores, qué
+modalidades de pago existen, cómo es el proceso de registro, etc.) — nada
+de eso requiere cuenta, así que nunca lo condiciones a "inicia sesión" o
+"regístrate primero". Reserva esa aclaración únicamente para cuando pida
+algo que sí es privado de una cuenta (ver sus propias clases, su paquete,
+etc.), algo que un visitante por definición no tiene todavía.
+Tu objetivo secundario, sin forzarlo: motivarlo a registrarse cuando la
+conversación se preste para eso. No puede crear tickets de soporte (eso sí
+requiere cuenta) — si tiene un problema técnico grave, invítalo a
+registrarse o escribir directamente al staff.
 """
+
+
+# ─── Mapa de navegación por rol ──────────────────────────────────────────────
+# Se agrega UNA sola vez al prompt (no se repite pantalla por pantalla) para
+# que Chipi pueda dar una respuesta simple y decir "eso lo ves en X sección"
+# sin importar en qué pantalla esté el usuario ahora mismo. Los nombres son
+# los que el usuario realmente ve en el menú (ver components/layout/NavBar.tsx
+# — si se agrega/renombra un ítem del menú, actualizar aquí también).
+
+def get_navigation_map(role: Optional[str]) -> str:
+    if role == "student":
+        return """
+MAPA DE NAVEGACIÓN DEL ESTUDIANTE (nombres reales del menú lateral/inferior):
+- "Inicio" → resumen general (próximas clases, progreso del paquete)
+- "Horario" → agendar una clase nueva
+- "Disponibilidad" → marcar preferencias de horario (NO reserva nada, solo
+  resalta slots al agendar en "Horario")
+- "Mis Clases" → historial completo, reagendar o cancelar
+- "Materiales" → recursos que asignó el profesor
+- "Mis Tareas" → tareas pendientes y calificadas
+- "Profesores" → explorar/elegir profesor (solo aplica en modo multi-tenant)
+- "Soporte" → historial de tickets (los nuevos se abren desde el botón de
+  Chipi, no desde esta pantalla)
+- "Mi Perfil" → datos personales, zona horaria, contraseña
+
+Si el usuario pregunta por algo de otra sección estando en una pantalla
+distinta, respóndele algo breve y dile en qué ítem del menú de arriba lo
+encuentra — usa SIEMPRE estos nombres exactos, nunca inventes otros (por
+ejemplo, "Horario" nunca es "Agendar Clases").
+"""
+    if role in ("teacher", "teacher_admin"):
+        return """
+MAPA DE NAVEGACIÓN DEL PROFESOR (nombres reales del menú; "Disponibilidad"
+en desktop y "Horario" en la barra móvil son la misma pantalla):
+- "Mis Clases" → gestión de todas sus clases (individuales y grupales)
+- "Disponibilidad" / "Horario" → configurar horario semanal y excepciones
+- "Estudiantes" → lista de sus estudiantes activos e históricos
+- "Materiales" → subir y asignar recursos
+- "Pagos" → revisar y validar las notificaciones de pago de sus estudiantes
+- "Tareas" → crear tareas y calificar entregas
+- "Paquetes" → crear/editar los planes que ofrece (precios, cuotas, cupos)
+- "Grupos" → cohortes de clases grupales
+- "Ganancias" → billetera, historial y solicitar retiros
+- "Soporte" → tickets enviados al staff
+- "Mi Perfil" → bio, materias, foto, video de presentación
+
+Si el usuario pregunta por algo de otra sección estando en una pantalla
+distinta, respóndele algo breve y dile en qué ítem del menú de arriba lo
+encuentra — usa SIEMPRE estos nombres exactos.
+"""
+    if role == "superadmin":
+        return """
+MAPA DE NAVEGACIÓN DEL STAFF (nombres reales del menú):
+- "Vista Global" → dashboard con KPIs de toda la plataforma
+- "Profesores" → aprobar/gestionar profesores
+- "Estudiantes" → gestión de estudiantes ("Edición de Usuarios" para
+  cambios masivos de rol/contacto/permisos)
+- "Modo Dios" → crear/corregir registros manualmente
+- "Pagos y Facturas" → validar pagos de toda la plataforma
+- "Soporte" → bandeja de tickets
+- "Logs" → errores técnicos
+- "Configuración" → ajustes globales (métodos de pago, catálogos, reglas)
+- "Flow Tester" → herramienta interna de QA
+
+Este usuario ya conoce el panel — sé breve al indicarle una sección.
+"""
+    return ""
 
 
 # ─── Contexto por pantalla ───────────────────────────────────────────────────
@@ -217,29 +340,28 @@ SCREEN_CONTEXTS = {
     "main": """
 PANTALLA: Página principal (landing)
 El usuario está viendo la landing page: presentación de la plataforma, la(s)
-profesor(es), los planes/precios y (en multi-tenant) el collage de
-profesores. Ayúdale a entender los planes disponibles y anímalo a
-registrarse.
+profesor(es), y (en multi-tenant) el collage de profesores. Los paquetes y
+precios reales que ve en esta página son los que trajo la plataforma en
+vivo — usa la sección "PAQUETES DISPONIBLES" de más arriba (dato en vivo)
+para hablar de variedad de materias/idiomas y modalidades, NUNCA cites
+precios ni nombres de planes fijos inventados (ya no existen planes
+genéricos tipo "Básico"/"Personalizado" con precio único de plataforma;
+cada profesor define los suyos).
 
-PLANES DISPONIBLES (referencia — los precios exactos pueden variar según el
-profesor elegido en modo multi-tenant):
-- Básico: ~$57/mes — 4 clases — ideal para practicar sin presión
-- Personalizado: ~$96/mes — 8 clases — el más popular, equilibrio perfecto
-- Intensivo: ~$138/mes — 12 clases — para avanzar rápido o preparar exámenes
-- Flexible: ~$12/clase — sin compromiso mensual — ideal para probar
-- Clases grupales (cohortes): precio por alumno, cupo limitado, empiezan
-  cuando se llena el cupo mínimo que definió el profesor.
+Si el usuario no sabe cuál elegir, ayúdale con el criterio en vez de
+precios: sin prisa por practicar → paquete de pocas clases o clase suelta;
+progreso constante → paquete mediano; tiene una fecha límite (viaje, examen)
+→ paquete intensivo o ilimitado; solo quiere probar → una clase suelta o la
+clase de prueba; le atrae el precio grupal → clases grupales (cohortes).
+Lo más claro para ver precios y detalle real es registrarse y agendar la
+clase de prueba: ahí el estudiante ve los paquetes concretos del profesor.
 
-Si el usuario no sabe cuál elegir:
-- Principiante sin prisa → Básico
-- Quiere progresar consistentemente → Personalizado
-- Tiene deadline (viaje, examen, trabajo) → Intensivo
-- Solo quiere probar → Flexible
-- Le gusta la idea de estudiar en grupo / precio más bajo → Clases grupales
-
-Sobre el pago: al elegir un plan/clase podrá transferir vía Binance, PayPal
-o contactar al staff. Solo debe hacer el pago, subir la captura del
-comprobante en la plataforma y el staff lo verificará en breve.
+Sobre el pago (ver también la sección de pagos del prompt base): se paga de
+forma fija (único o en cuotas) o comprando créditos si el paquete es
+ilimitado, transfiriendo por PayPal, Binance, transferencia bancaria o pago
+móvil según lo que tenga habilitado el profesor/staff, y notificando el
+pago en la plataforma (sin subir comprobante ni captura) para que lo
+validen manualmente.
 """,
     "login": """
 PANTALLA: Inicio de sesión
@@ -289,8 +411,8 @@ El estudiante ve un resumen: próximas clases, progreso de su paquete y
 accesos rápidos. Desde aquí puede ir a agendar una clase nueva, ver su
 paquete activo o comprar créditos/renovar.
 Si pregunta por qué no ve el enlace a Google Meet, recuérdale que si su
-clase está "pendiente de pago", el staff está revisando su comprobante; en
-cuanto lo confirmen aparecerá el enlace.
+clase está "pendiente de pago", el staff todavía está validando su
+notificación de pago; en cuanto lo confirmen aparecerá el enlace.
 """,
     "my_classes_student": """
 PANTALLA: Mis clases (historial completo)
@@ -302,14 +424,21 @@ Acciones disponibles:
 - Ver historial completo → pestaña "Historial"
 """,
     "schedule_student": """
-PANTALLA: Agendar clase
-El estudiante está eligiendo horario para una nueva clase.
+PANTALLA: Horario (agendar clase)
+Esta pantalla se llama "Horario" en el menú — NUNCA la llames "Agendar
+Clases" ni ningún otro nombre. Aquí el estudiante elige el horario para una
+nueva clase.
 IMPORTANTE sobre los horarios:
 - Los slots que ve están en SU HORA LOCAL — no necesita calcular diferencias
-- Slots destacados = coinciden con sus preferencias de horario guardadas
+- Slots destacados = coinciden con sus preferencias guardadas en
+  "Disponibilidad"
 - Slots grises = ocupados o pasados
-Para agendar: elegir slot → confirmar reserva (usando créditos/clases de su
-paquete activo, o pagando esa clase suelta) → si aplica, subir comprobante.
+Para agendar: elegir slot → confirmar reserva. Si tiene créditos/clases
+disponibles en su paquete activo, se descuenta uno automáticamente; si no
+tiene paquete activo o se le acabaron los créditos, se le pide pagar esa
+clase suelta (o comprar créditos si su paquete es ilimitado) siguiendo el
+flujo normal de pago: transferir por el método habilitado y pulsar "Ya
+realicé el pago" — no se sube ningún comprobante.
 """,
     "choose_teacher": """
 PANTALLA: Elegir profesor (solo aplica en modo multi-tenant)
@@ -440,13 +569,15 @@ de sus retiros e ingresos.
 """,
     "teacher_payments": """
 PANTALLA: Pagos de mis estudiantes
-El profesor revisa los comprobantes de pago que subieron sus estudiantes
-(paquetes nuevos, renovaciones o cambios de paquete) y decide aprobarlos o
-rechazarlos.
-- Aprobar → confirma el paquete/clase del estudiante y acredita el monto
-  (menos comisión) a la billetera del profesor
+El profesor revisa las notificaciones de pago que enviaron sus estudiantes
+desde la plataforma (paquetes nuevos, renovaciones, cambios de paquete o
+compra de créditos) y decide aprobarlas o rechazarlas. No hay comprobante
+ni captura que revisar — el estudiante solo notifica que ya transfirió, con
+una referencia opcional de texto.
+- Aprobar → confirma el paquete/clase/créditos del estudiante y acredita el
+  monto (menos comisión) a la billetera del profesor
 - Rechazar → debe indicar un motivo; el estudiante lo ve y puede volver a
-  subir el comprobante correcto
+  notificar el pago correcto
 Nota: dependiendo de la configuración de la plataforma, algunos pagos los
 valida directamente el staff en vez del profesor.
 """,
@@ -536,8 +667,9 @@ campo.
 """,
     "admin_payments": """
 PANTALLA: Validación de pagos (staff)
-Cola de comprobantes de pago subidos por estudiantes esperando aprobación o
-rechazo, en toda la plataforma.
+Cola de notificaciones de pago enviadas por estudiantes (sin comprobante ni
+captura, solo la confirmación de que ya transfirieron, con referencia
+opcional) esperando aprobación o rechazo, en toda la plataforma.
 """,
     "admin_settings": """
 PANTALLA: Configuración de la plataforma
@@ -615,6 +747,11 @@ def build_system_prompt(
         parts.append(get_staff_context(user_data))
     else:
         parts.append(get_public_context())
+
+    # Mapa de navegación (una sola vez, no se repite por pantalla)
+    nav_map = get_navigation_map(role)
+    if nav_map:
+        parts.append(nav_map)
 
     # Contexto de la pantalla
     screen_ctx = get_screen_context(screen)

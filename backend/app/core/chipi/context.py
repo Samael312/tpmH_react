@@ -14,11 +14,39 @@ from app.core.timezone import utc_now
 from datetime import timedelta
 
 
+def _get_package_landscape(db: Session) -> dict:
+    """
+    Resumen EN VIVO (sin precios) de los paquetes activos que existen hoy
+    en la plataforma, para que Chipi nunca hable de planes/precios
+    inventados o hardcodeados. Deliberadamente sin montos — solo variedad
+    (materias/idiomas, si hay grupales, si hay pago en cuotas) para que
+    Chipi anime a registrarse y tomar una clase de prueba para ver el
+    detalle real.
+    """
+    active_packages = db.query(Package).filter(Package.is_active == True).all()
+
+    subjects = sorted({p.subject for p in active_packages if p.subject})
+    has_group_packages = any(p.is_group for p in active_packages)
+    has_unlimited_packages = any(p.classes_count is None for p in active_packages)
+    has_installment_packages = any(p.allow_installments for p in active_packages)
+    teachers_with_packages = len({p.teacher_id for p in active_packages})
+
+    return {
+        "subjects": subjects,
+        "has_group_packages": has_group_packages,
+        "has_unlimited_packages": has_unlimited_packages,
+        "has_installment_packages": has_installment_packages,
+        "teachers_with_packages_count": teachers_with_packages,
+        "total_active_packages": len(active_packages),
+    }
+
+
 def get_platform_context_for_chipi(db: Session) -> dict:
     """
     Datos de configuración global de la plataforma (modo single/multi-tenant,
-    nombre, profesor destacado). Se agrega SIEMPRE al prompt, sin importar
-    el rol, porque cambia cómo Chipi debe explicar la home y los planes.
+    nombre, profesor destacado) + resumen en vivo de los paquetes activos.
+    Se agrega SIEMPRE al prompt, sin importar el rol, porque cambia cómo
+    Chipi debe explicar la home y los planes.
     """
     config = get_or_create_platform_config(db)
     featured_teacher_name = None
@@ -33,6 +61,7 @@ def get_platform_context_for_chipi(db: Session) -> dict:
         "platform_name": config.platform_name,
         "is_single_tenant": bool(config.is_single_tenant),
         "featured_teacher_name": featured_teacher_name,
+        "package_landscape": _get_package_landscape(db),
     }
 
 
