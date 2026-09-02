@@ -92,7 +92,17 @@ export function useLandingData(initialData?: LandingData | null) {
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ["landing-data"],
     queryFn: fetchLandingData,
-    staleTime: 5 * 60 * 1000, // 5 min: contenido público, no urge revalidar en cada visita
+    staleTime: 60 * 1000, // 60s: igual al TTL del cache en memoria del backend (ver public.py)
+    // Siempre revalida al montar, aunque el query-cache de react-query ya
+    // tenga una entrada "fresca": ese cache vive en memoria del browser y
+    // sobrevive a la navegación entre páginas, así que si un admin cambia
+    // single-tenant <-> multi-tenant y vuelve a "/", el SSR trae initialData
+    // nuevo pero react-query lo ignora (initialData solo se usa cuando no
+    // hay entrada previa para la queryKey) y seguía mostrando la config
+    // vieja hasta que venciera el staleTime. Con "always" el usuario ve
+    // initialData al instante y, en paralelo, se confirma/corrige contra
+    // el backend en vez de quedar pegado al estado anterior.
+    refetchOnMount: "always",
     ...(initialData ? { initialData } : {}),
   });
 

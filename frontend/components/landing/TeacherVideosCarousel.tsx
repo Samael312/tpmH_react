@@ -82,7 +82,22 @@ export default function TeacherVideosCarousel({ teachers }: { teachers: VideoTea
   return (
     <>
       {isSingle ? (
-        <VideoCard teacher={teachers[0]} onOpen={() => setActive(teachers[0])} size="featured" />
+        <div className="relative w-full max-w-sm mx-auto">
+          {/* Resplandor detrás del video */}
+          <div className="absolute -inset-6 bg-gradient-to-br from-pink-500/30 via-rose-500/20 to-purple-500/30 rounded-[3rem] blur-2xl scale-95 animate-pulse pointer-events-none" />
+          {/* Anillo punteado decorativo, girando lento */}
+          <div className="absolute -inset-3 rounded-[2.25rem] border-2 border-dashed border-pink-400/30 animate-spin-slow pointer-events-none" />
+
+          <VideoCard teacher={teachers[0]} onOpen={() => setActive(teachers[0])} size="featured" />
+
+          {/* Insignia flotante */}
+          <div className="absolute -bottom-4 -right-3 sm:-right-8 flex items-center gap-2 bg-white/95 backdrop-blur-sm rounded-2xl px-4 py-2.5 shadow-xl border border-slate-100 animate-float">
+            <div className="w-6 h-6 rounded-full bg-pink-100 flex items-center justify-center flex-shrink-0">
+              <Play className="w-3 h-3 text-pink-600 fill-pink-600" />
+            </div>
+            <span className="text-xs font-black text-slate-800 whitespace-nowrap">Video de presentación</span>
+          </div>
+        </div>
       ) : (
         <Carousel ariaLabel="Videos de presentación de profesores">
           {teachers.map((t) => (

@@ -12,6 +12,7 @@ import {
 import { useLandingData, displayName, type LandingData, type LandingTeacher } from "@/hooks/useLandingData";
 import { useIsMobileOrReducedMotion } from "@/lib/useIsMobileOrReducedMotion";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import ChipiSection from "@/components/landing/ChipiSection";
 import PackagesCarousel from "@/components/landing/PackagesCarousel";
 import TeacherVideosCarousel from "@/components/landing/TeacherVideosCarousel";
 import { priceLabelSuffix } from "@/lib/packageThemes";
@@ -98,11 +99,16 @@ function Navbar({ platformName, navItems }: { platformName: string; navItems: Na
 }
 
 // ─── Avatar con fallback a iniciales ──────────────────────────────────────────
-function TeacherAvatar({ teacher, className, sizes = "200px" }: { teacher: LandingTeacher | undefined; className?: string; sizes?: string }) {
+function TeacherAvatar({ teacher, className, sizes = "200px", priority = false }: { teacher: LandingTeacher | undefined; className?: string; sizes?: string; priority?: boolean }) {
   const name = displayName(teacher);
   const photo = teacher?.profile_photo_url;
   if (photo) {
-    return <Image src={photo} alt={name} fill sizes={sizes} className={className} />;
+    // `priority` marca la imagen como LCP candidate para Next/Image: la
+    // precarga (<link rel="preload">) y la sirve con loading="eager" +
+    // fetchPriority="high" en vez de lazy-load por defecto. Se usa solo en
+    // el hero (la foto que suele pintarse como Largest Contentful Paint),
+    // nunca en el resto de avatares de la página.
+    return <Image src={photo} alt={name} fill sizes={sizes} className={className} priority={priority} />;
   }
   return (
     <div className={`${className} bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center`}>
@@ -147,6 +153,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
   const navItems: NavItem[] = [
     { id: "about", label: "Sobre nosotros" },
     ...(videoTeachers.length > 0 ? [{ id: "videos", label: "Videos" }] : []),
+    { id: "chipi", label: "Chipi IA" },
     { id: "plans", label: "Planes" },
     ...(groupPackages.length > 0 ? [{ id: "group-plans", label: "Clases grupales" }] : []),
     { id: "reviews", label: "Reseñas" },
@@ -232,7 +239,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-br from-rose-300 to-pink-300 rounded-[3rem] blur-2xl opacity-40 scale-105" />
                 <div className="relative w-72 h-80 sm:w-80 sm:h-96 rounded-[3rem] overflow-hidden border-4 border-white shadow-2xl ring-1 ring-rose-200 bg-slate-200 rotate-3 hover:rotate-1 transition-transform duration-700">
-                  <TeacherAvatar teacher={mainTeacher} className="object-cover" sizes="(max-width: 640px) 288px, 320px" />
+                  <TeacherAvatar teacher={mainTeacher} className="object-cover" sizes="(max-width: 640px) 288px, 320px" priority />
                 </div>
 
                 <div className="absolute -bottom-4 -left-4 bg-white/95 backdrop-blur-sm rounded-2xl px-4 py-3 shadow-xl border border-slate-100 animate-[float_5s_ease-in-out_infinite]">
@@ -268,6 +275,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                           teacher={t}
                           className="object-cover group-hover:scale-110 transition-transform duration-700"
                           sizes="(max-width: 640px) 50vw, 220px"
+                          priority={i === 0}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/10 to-transparent" />
                         {isMoreTile ? (
@@ -414,8 +422,14 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
       {(loading || videoTeachers.length > 0) && (
         <section id="videos" className="py-24 relative overflow-hidden bg-slate-900">
           <div className="absolute inset-0 bg-gradient-to-b from-slate-900 via-slate-900 to-[#0B1120]" />
-          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-rose-900/20 rounded-full blur-[90px] pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-cyan-900/20 rounded-full blur-[90px] pointer-events-none" />
+          {/* Textura de puntos sutil para no dejar el fondo plano */}
+          <div
+            className="absolute inset-0 opacity-[0.06] pointer-events-none"
+            style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "26px 26px" }}
+          />
+          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-rose-900/20 rounded-full blur-[90px] pointer-events-none animate-blob" />
+          <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-cyan-900/20 rounded-full blur-[90px] pointer-events-none animate-blob" style={{ animationDelay: '3s' }} />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-purple-800/10 rounded-full blur-[110px] pointer-events-none" />
           
           <div className="relative max-w-6xl mx-auto px-4 sm:px-6 z-10">
             <div className="text-center mb-12">
@@ -444,6 +458,9 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
         </section>
       )}
 
+      {/* ─── Chipi, el asistente IA ─── */}
+      <ChipiSection />
+
       {/* ─── Planes / Paquetes reales de los profesores ─── */}
       <section id="plans" className="py-24 relative overflow-hidden bg-white">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-200/40 mix-blend-multiply rounded-full blur-[120px] pointer-events-none" />
@@ -465,7 +482,12 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
               <p className="text-slate-400 font-bold">Aún no hay paquetes disponibles</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            // flex-wrap + justify-center en vez de CSS grid: así, sin
+            // importar cuántos paquetes haya (1, 2, 3...), quedan repartidos
+            // simétricamente y centrados en vez de pegados a la izquierda
+            // con una fila incompleta. El ancho de cada tarjeta replica el
+            // que tendría en un grid de 2/4 columnas (mismo gap-8 = 2rem).
+            <div className="flex flex-wrap justify-center gap-8">
               {individualPackages.slice(0, 8).map(pkg => {
                 const accent = pkg.color || "#e11d48"; // Default a rose-600
                 const priceSuffix = priceLabelSuffix(pkg.classes_count);
@@ -484,7 +506,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                 return (
                   <div
                     key={pkg.id}
-                    className="relative bg-white/80 backdrop-blur-sm rounded-[2rem] border border-rose-100 shadow-xl flex flex-col p-8 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl bg-white"
+                    className="relative w-full sm:w-[calc(50%-1rem)] lg:w-[calc(25%-1.5rem)] bg-white/80 backdrop-blur-sm rounded-[2rem] border border-rose-100 shadow-xl flex flex-col p-8 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl bg-white"
                   >
                     <div className="mb-6">
                       <h3 className="text-xl font-bold mb-2" style={{ color: accent }}>

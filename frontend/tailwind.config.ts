@@ -41,10 +41,31 @@ const config: Config = {
           from: { opacity: '0', transform: 'translateY(-8px) scale(0.98)' },
           to:   { opacity: '1', transform: 'translateY(0) scale(1)' },
         },
+        float: {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%':      { transform: 'translateY(-10px)' },
+        },
+        blob: {
+          '0%, 100%': { transform: 'translate(0px, 0px) scale(1)' },
+          '33%':      { transform: 'translate(24px, -32px) scale(1.08)' },
+          '66%':      { transform: 'translate(-18px, 18px) scale(0.94)' },
+        },
+        'spin-slow': {
+          from: { transform: 'rotate(0deg)' },
+          to:   { transform: 'rotate(360deg)' },
+        },
+        'pop-in': {
+          '0%':   { opacity: '0', transform: 'scale(0.85) translateY(6px)' },
+          '100%': { opacity: '1', transform: 'scale(1) translateY(0)' },
+        },
       },
       animation: {
         'fade-up': 'fade-up 0.4s ease-out both',
         'toast-in': 'toast-in 0.2s ease-out both',
+        float: 'float 5s ease-in-out infinite',
+        blob: 'blob 9s ease-in-out infinite',
+        'spin-slow': 'spin-slow 14s linear infinite',
+        'pop-in': 'pop-in 0.35s ease-out both',
       },
     },
   },

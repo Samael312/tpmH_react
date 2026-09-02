@@ -14,16 +14,22 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1
  *     Twitter al generar la vista previa de un link) ya trae el contenido
  *     real en vez de un shell vacío a la espera de hidratación.
  *
- * `revalidate` en 5 min, igual al staleTime que ya usaba el hook en
- * cliente — así ambas capas quedan consistentes en cuánto toleran data
- * desactualizada. Si el backend no responde, devuelve null y tanto la
- * metadata como el render inicial caen a sus defaults (la página igual
- * funciona: el hook de cliente vuelve a intentar el fetch normal).
+ * `revalidate` en 60s, igual al TTL del cache en memoria que ya aplica el
+ * backend para este mismo endpoint (ver LANDING_CACHE_TTL_SECONDS en
+ * public.py) — así ninguna de las dos capas puede quedar más desactualizada
+ * que la otra. Antes esto estaba en 5 min mientras el backend cachea 60s
+ * y se invalida al instante ante cualquier cambio (ej. un admin alternando
+ * single-tenant/multi-tenant desde /admin/settings); esa diferencia hacía
+ * que un load fresco de la landing pudiera seguir sirviendo el HTML viejo
+ * hasta 5 minutos después del cambio, aunque el backend ya tuviera la data
+ * correcta. Si el backend no responde, devuelve null y tanto la metadata
+ * como el render inicial caen a sus defaults (la página igual funciona: el
+ * hook de cliente vuelve a intentar el fetch normal).
  */
 export const getLandingDataServer = cache(async (): Promise<LandingData | null> => {
   try {
     const res = await fetch(`${API_URL}/public/landing`, {
-      next: { revalidate: 300 },
+      next: { revalidate: 60 },
     });
     if (!res.ok) {
       console.error(
