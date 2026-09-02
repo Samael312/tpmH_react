@@ -7,6 +7,7 @@ import { usePageTopBar } from "@/lib/mobileTopBar";
 import { GOD_MODE_ACTIONS, GOD_MODE_CATEGORIES, GodModeAction } from "@/lib/godModeActions";
 import GodModeActionRunner from "@/components/god-mode/GodModeActionRunner";
 import GodModeAuditLogViewer from "@/components/god-mode/GodModeAuditLogViewer";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 export default function GodModePage() {
   const { user } = useAuthStore();
@@ -88,6 +89,8 @@ export default function GodModePage() {
       </div>
 
       <GodModeAuditLogViewer />
+
+      <ChipiWidget screenName="admin_god_mode" />
     </div>
   );
 }

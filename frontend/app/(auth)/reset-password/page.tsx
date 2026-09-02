@@ -195,7 +195,7 @@ export default function ResetPasswordPage() {
       </div>
 
       {/* Widget flotante de Chipi */}
-      <ChipiWidget screenName="forgot-password" />
+      <ChipiWidget screenName="reset-password" />
     </>
   );
 }

@@ -8,6 +8,7 @@ import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { usePlatformTenantMode } from "@/lib/platformTenantMode";
 import Skeleton from "@/components/ui/Skeleton";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 export default function GoogleCompleteSignupPage() {
   const router = useRouter();
@@ -240,6 +241,8 @@ export default function GoogleCompleteSignupPage() {
           </div>
         </div>
       </main>
+
+      <ChipiWidget screenName="register_google_complete" />
     </div>
   );
 }

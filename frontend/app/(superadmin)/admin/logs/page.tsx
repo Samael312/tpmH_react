@@ -2,6 +2,7 @@
 
 import { AlertOctagon } from "lucide-react";
 import ErrorLogsViewer from "@/components/admin/ErrorLogsViewer";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 
 export default function LogsPage() {
   return (
@@ -22,6 +23,8 @@ export default function LogsPage() {
       </div>
 
       <ErrorLogsViewer />
+
+      <ChipiWidget screenName="admin_logs" />
     </div>
   );
 }

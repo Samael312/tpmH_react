@@ -23,58 +23,94 @@ const QUICK_SUGGESTIONS = [
 ];
 
 // ─── Mapeo de ruta → screen_name (contexto para Chipi) ────────────────────────
+// IMPORTANTE: estas claves deben coincidir EXACTAMENTE con las que espera
+// `SCREEN_CONTEXTS` en el backend (backend/app/core/chipi/prompts.py). Si
+// agregas una pantalla nueva, agrégala en ambos lados con la misma clave.
+//
+// Nota: cuando una pantalla ya renderiza <ChipiWidget screenName="..." />
+// con un valor explícito, ese prop tiene prioridad y este mapeo automático
+// solo se usa como respaldo (por si algún día se agrega el widget a una
+// pantalla nueva sin pasar el prop a mano).
+//
+// Las rutas se ordenan por especificidad (más larga primero) para que un
+// prefijo genérico como "/admin" nunca "tape" a una ruta más específica
+// como "/admin/students/banned" — a diferencia del bug anterior, que
+// dependía del orden de inserción del objeto.
+const SCREEN_ROUTES: Array<[string, string]> = [
+  // Públicas
+  ["/", "main"],
+  ["/login", "login"],
+  ["/register/google-complete", "register_google_complete"],
+  ["/register", "register"],
+  ["/forgot-password", "forgot-password"],
+  ["/reset-password", "reset-password"],
+
+  // Estudiante
+  // Nota: "/dashboard/teachers" (lista) vs "/dashboard/teachers/[username]"
+  // (perfil individual) se resuelven con un caso especial en
+  // useScreenName(), porque comparten el mismo prefijo y necesitan
+  // distinguirse por igualdad exacta vs. sub-ruta dinámica.
+  ["/dashboard/onboarding", "onboarding_student"],
+  ["/dashboard/schedule", "schedule_student"],
+  ["/dashboard/classes", "my_classes_student"],
+  ["/dashboard/materials", "materials_student"],
+  ["/dashboard/homework", "homework_student"],
+  ["/dashboard/profile", "student_profile"],
+  ["/dashboard/availability", "student-preferences"],
+  ["/dashboard/support", "support_student"],
+  ["/dashboard", "student_home"],
+
+  // Profesor
+  ["/teacher/onboarding", "onboarding_teacher"],
+  ["/teacher/dashboard", "teacher_home"],
+  ["/teacher/materials", "materials_teacher"],
+  ["/teacher/homework", "homework_teacher"],
+  ["/teacher/profile/preview", "teacher-view"],
+  ["/teacher/profile", "teacher_profile"],
+  ["/teacher/wallet", "wallet_teacher"],
+  ["/teacher/availability", "teacher-availability"],
+  ["/teacher/packages", "teacher_packages"],
+  ["/teacher/cohorts", "teacher_cohorts"],
+  ["/teacher/students", "teacher_students"],
+  ["/teacher/support", "support_teacher"],
+  ["/teacher/payments", "teacher_payments"],
+  ["/teacher/calendar/callback", "teacher_calendar_callback"],
+
+  // Admin / staff
+  ["/admin/dashboard", "admin_home"],
+  ["/admin/flow-tester", "admin_flow_tester"],
+  ["/admin/god-mode", "admin_god_mode"],
+  ["/admin/logs", "admin_logs"],
+  ["/admin/students/banned", "admin_students_banned"],
+  ["/admin/students", "admin_students"],
+  ["/admin/teachers", "admin_teachers"],
+  ["/admin/payments", "admin_payments"],
+  ["/admin/settings", "admin_settings"],
+  ["/admin/support", "admin_support"],
+  ["/admin/users", "admin_users"],
+
+  // Fallbacks genéricos (solo se alcanzan si se agrega una pantalla nueva
+  // bajo /teacher o /admin sin registrarla arriba)
+  ["/teacher", "teacher_home"],
+  ["/admin", "admin_home"],
+].sort((a, b) => b[0].length - a[0].length);
+
 function useScreenName(): string {
-  const pathname = usePathname();
-  const { user }  = useAuthStore();
-  const role      = user?.role ?? "public";
+  const pathname = usePathname() || "/";
 
-  const MAP: Record<string, string> = {
-    "/":                            "main",
-    "/login":                       "login",
-    "/register":                    "signup",
-    "/forgot-password":             "forgot-password",
+  if (pathname === "/") return "main";
 
-    // Estudiante
-    "/dashboard":                              "student_home",
-    "/dashboard/schedule":                     "schedule_student",
-    "/dashboard/teachers":                     "choose_teacher",
-    "/dashboard/teachers/[username]":          "teacher_browse",
-    "/student/dashboard/onboarding":           "onboarding_student",
-    "/dashboard/classes":                      "my_classes_student",
-    "/dashboard/materials":                    "materials_student",
-    "/dashboard/homework":                     "homework_student",
-    "/dashboard/profile":                      "student_profile",
-    "/dashboard/availability":                 "student-preferences",
-    "/dashboard/support":                      "support_student",
+  // Caso especial: lista de profesores vs. perfil individual de un
+  // profesor. Comparten el mismo prefijo ("/dashboard/teachers"), así que
+  // no pueden distinguirse con el algoritmo genérico de más abajo.
+  if (pathname === "/dashboard/teachers") return "choose_teacher";
+  if (pathname.startsWith("/dashboard/teachers/")) return "teacher_browse";
 
-    // Profesor
-    "/teacher/dashboard":                      "teacher_home",
-    "/teacher/materials":                      "materials_teacher",
-    "/teacher/homework":                       "homework_teacher",
-    "/teacher/profile":                        "teacher_profile",
-    "/teacher/wallet":                         "wallet_teacher",
-    "/teacher/availability":                   "teacher-availability",
-    "/teacher/dashboard/onboarding":           "onboarding_teacher",
-    "/teacher/packages":                       "teacher_packages",
-    "/teacher/profile/preview":                "teacher-view",
-    "/teacher/students":                       "teacher_students", 
-    "/teacher/support":                        "support_teacher",
-
-    // Admin
-    "/admin":                       "admin_home",
-    "/admin/flow-tester":           "flow-tester",
-    "/admin/teachers":              "admin_teachers",
-    "/admin/students":              "admin_students",
-    "/admin/payments":              "admin_payments",
-    "/admin/settings":              "admin_settings",
-    "/admin/package-requests":      "admin_package_requests",
-    "/admin/students/bulk-edit":    "admin_edit_students",
-    "/admin/support":               "admin_support"
-  };
-
-  if (MAP[pathname]) return MAP[pathname];
-  for (const [key, val] of Object.entries(MAP)) {
-    if (pathname.startsWith(key) && key !== "/") return val;
+  for (const [key, val] of SCREEN_ROUTES) {
+    if (key === "/") continue;
+    if (pathname === key || pathname.startsWith(key + "/")) {
+      return val;
+    }
   }
   return "main";
 }

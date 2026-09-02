@@ -12,6 +12,8 @@ from app.core.chipi.prompts import build_system_prompt
 from app.core.chipi.context import (
     get_student_data_for_chipi,
     get_teacher_data_for_chipi,
+    get_staff_data_for_chipi,
+    get_platform_context_for_chipi,
 )
 from app.core.chipi.service import (
     get_chipi_response,
@@ -62,21 +64,30 @@ async def chat_with_chipi(
             user_data = get_student_data_for_chipi(current_user, db)
         elif role == "teacher":
             user_data = get_teacher_data_for_chipi(current_user, db)
+        elif role == "teacher_admin":
+            user_data = get_teacher_data_for_chipi(current_user, db, is_admin=True)
+        elif role == "superadmin":
+            user_data = get_staff_data_for_chipi(current_user, db)
 
-    # 2. Construir el prompt del sistema
+    # 2. Datos de configuración de plataforma (single/multi-tenant) —
+    # siempre se agregan, sin importar el rol.
+    platform_data = get_platform_context_for_chipi(db)
+
+    # 3. Construir el prompt del sistema
     system_prompt = build_system_prompt(
         role=role,
         screen=data.screen,
         user_data=user_data,
+        platform_data=platform_data,
     )
 
-    # 3. Convertir historial al formato de OpenAI
+    # 4. Convertir historial al formato de OpenAI
     history = [
         {"role": msg.role, "content": msg.content}
         for msg in data.history
     ]
 
-    # 4. Respuesta con streaming
+    # 5. Respuesta con streaming
     if data.stream:
         async def generate():
             """
@@ -108,7 +119,7 @@ async def chat_with_chipi(
             }
         )
 
-    # 5. Respuesta sin streaming (más simple)
+    # 6. Respuesta sin streaming (más simple)
     try:
         response = await get_chipi_response(
             message=data.message,

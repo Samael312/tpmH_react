@@ -9,6 +9,7 @@ import api from "@/lib/api";
 import { Card, Badge, Button, Skeleton, FullScreenModal } from "@/components/ui";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import {
   useTeacherCohorts,
@@ -593,6 +594,8 @@ export default function TeacherCohortsPage() {
           onClose={() => setAttendanceSession(null)}
         />
       )}
+
+      <ChipiWidget screenName="teacher_cohorts" />
     </div>
   );
 }

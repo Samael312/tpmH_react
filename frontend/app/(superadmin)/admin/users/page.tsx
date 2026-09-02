@@ -1059,7 +1059,7 @@ export default function BulkEditStudentsPage() {
         )}
       </div>
 
-      <ChipiWidget screenName="admin_edit_students" />
+      <ChipiWidget screenName="admin_users" />
     </>
   );
 }

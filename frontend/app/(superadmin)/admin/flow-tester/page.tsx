@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import { Card, Badge, Button } from "@/components/ui";
+import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 
 // ─── Tipos (calcan la respuesta de /api/v1/flow-tests) ────────────────────
@@ -532,6 +533,8 @@ export default function FlowTesterPage() {
           })}
         </div>
       )}
+
+      <ChipiWidget screenName="admin_flow_tester" />
     </div>
   );
 }
