@@ -1,5 +1,19 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
+
+// Prefijo de queryKey compartido por useAvailableSlots. Se expone acá para
+// que cualquier mutación que ocupe un horario (reservar clase, reagendar,
+// God Mode) pueda invalidar el cache de slots sin tener que reconstruir el
+// array de queryKey a mano ni importar detalles internos del hook.
+export const AVAILABLE_SLOTS_QUERY_PREFIX = ["student", "available-slots"] as const;
+
+export function invalidateAvailableSlots(queryClient: QueryClient, teacherUsername?: string | null) {
+  queryClient.invalidateQueries({
+    queryKey: teacherUsername
+      ? [...AVAILABLE_SLOTS_QUERY_PREFIX, teacherUsername]
+      : AVAILABLE_SLOTS_QUERY_PREFIX,
+  });
+}
 
 export type BookingStage =
   | "loading"
@@ -251,7 +265,7 @@ export function useAvailableSlots(
   bypassMinNotice: boolean = false,
 ) {
   const query = useQuery({
-    queryKey: ["student", "available-slots", teacherUsername, date, duration, classType, bypassMinNotice],
+    queryKey: [...AVAILABLE_SLOTS_QUERY_PREFIX, teacherUsername, date, duration, classType, bypassMinNotice],
     queryFn: async () => {
       const res = await api.get(
         `/availability/${teacherUsername}/slots?date=${date}&duration=${duration}&class_type=${classType}` +
@@ -260,6 +274,14 @@ export function useAvailableSlots(
       return res.data as AvailableSlot[];
     },
     enabled: !!date && !!teacherUsername,
+    // Los slots son datos de alta volatilidad: otro estudiante puede tomar
+    // el horario en cualquier momento. El staleTime global (60s, ver
+    // providers.tsx) es demasiado optimista acá — con eso, un slot recién
+    // tomado podía seguir mostrándose como disponible hasta por un minuto,
+    // y la reserva fallaba recién al confirmar. Lo bajamos a 10s como
+    // mitigación pasiva; la mitigación activa real es invalidar esta query
+    // explícitamente después de reservar (ver invalidateAvailableSlots).
+    staleTime: 10 * 1000,
   });
 
   return {

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Play, Loader2, CheckCircle2, XCircle, SkipForward, Circle,
   ChevronDown, ChevronRight, AlertTriangle, Clock, ListChecks,
@@ -89,10 +90,26 @@ function extractErrorMessage(e: unknown): string {
 }
 
 export default function FlowTesterPage() {
-  // Manifiesto (enumeración de tests, sin correr nada)
-  const [manifest, setManifest] = useState<FlowTestManifestEntry[] | null>(null);
-  const [manifestError, setManifestError] = useState<string | null>(null);
-  const [loadingManifest, setLoadingManifest] = useState(true);
+  const queryClient = useQueryClient();
+
+  // Manifiesto (enumeración de tests, sin correr nada). Es un GET estable
+  // sin parámetros dinámicos: candidato natural para react-query, con el
+  // staleTime/gcTime global (ver providers.tsx) en vez de re-pedirlo cada
+  // vez que se monta la pantalla.
+  const {
+    data: manifest,
+    isLoading: loadingManifest,
+    isError: manifestIsError,
+    error: manifestQueryError,
+    refetch: loadManifest,
+  } = useQuery({
+    queryKey: ["admin", "flow-tests", "manifest"],
+    queryFn: async () => {
+      const { data } = await api.get<FlowTestManifestResponse>("/flow-tests/manifest");
+      return data.tests;
+    },
+  });
+  const manifestError = manifestIsError ? extractErrorMessage(manifestQueryError) : null;
 
   // Selección / configuración
   const [includeDestructive, setIncludeDestructive] = useState(false);
@@ -102,50 +119,44 @@ export default function FlowTesterPage() {
   const [expandedFailure, setExpandedFailure] = useState<Set<string>>(new Set());
 
   // Corrida en curso / resultado
-  const [run, setRun] = useState<FlowTestRunResponse | null>(null);
+  const [runId, setRunId] = useState<string | null>(null);
   const [expectedNodeIds, setExpectedNodeIds] = useState<string[]>([]);
   const [starting, setStarting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [launchError, setLaunchError] = useState<string | null>(null);
 
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const loadManifest = useCallback(async () => {
-    setLoadingManifest(true);
-    setManifestError(null);
-    try {
-      const { data } = await api.get<FlowTestManifestResponse>("/flow-tests/manifest");
-      setManifest(data.tests);
-    } catch (e: unknown) {
-      setManifestError(extractErrorMessage(e));
-    } finally {
-      setLoadingManifest(false);
-    }
-  }, []);
-
-  useEffect(() => { loadManifest(); }, [loadManifest]);
-
-  const stopPolling = useCallback(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }, []);
-
-  const fetchRun = useCallback(async (runId: string) => {
-    try {
+  // Antes esto era un setInterval manual guardado en un useRef, con su
+  // propio cleanup en un useEffect de desmontaje. Con react-query,
+  // `refetchInterval` hace el polling solo mientras el status siga
+  // "running", y se detiene solo (sin fugas de interval) en cuanto la
+  // corrida termina, hay un error, o el componente se desmonta.
+  const {
+    data: run,
+    isError: runIsError,
+    error: runQueryError,
+  } = useQuery({
+    queryKey: ["admin", "flow-tests", "run", runId],
+    queryFn: async () => {
       const { data } = await api.get<FlowTestRunResponse>(`/flow-tests/${runId}`);
-      setRun(data);
-      if (data.status === "completed") stopPolling();
-    } catch (e: unknown) {
-      setError(extractErrorMessage(e));
-      stopPolling();
-    }
-  }, [stopPolling]);
+      return data;
+    },
+    enabled: !!runId,
+    refetchInterval: (query) => {
+      if (query.state.status === "error") return false;
+      return query.state.data?.status === "running" ? POLL_INTERVAL_MS : false;
+    },
+    // Cada corrida es un dato efímero e irrepetible (efectos secundarios
+    // reales sobre la BD real): no tiene sentido servir una versión
+    // "fresca por 60s" desde cache mientras está corriendo o recién
+    // terminó.
+    staleTime: 0,
+    retry: false,
+  });
+  const runError = runIsError ? extractErrorMessage(runQueryError) : null;
+  const error = launchError || runError;
 
   const launchRun = useCallback(async (nodeIds: string[] | null) => {
-    setError(null);
+    setLaunchError(null);
     setStarting(true);
-    stopPolling();
     setExpandedFailure(new Set());
     try {
       const total = nodeIds ?? (manifest ?? [])
@@ -157,18 +168,18 @@ export default function FlowTesterPage() {
         include_destructive: includeDestructive,
         node_ids: nodeIds,
       });
-      setRun(data);
-      if (data.status === "running") {
-        pollRef.current = setInterval(() => fetchRun(data.run_id), POLL_INTERVAL_MS);
-      }
+      // Sembramos el cache con la respuesta inicial del POST para pintar el
+      // resultado al instante (sin esperar el primer refetch); el
+      // refetchInterval de arriba retoma el polling solo apenas cambie el
+      // runId, si status === "running".
+      queryClient.setQueryData(["admin", "flow-tests", "run", data.run_id], data);
+      setRunId(data.run_id);
     } catch (e: unknown) {
-      setError(extractErrorMessage(e));
+      setLaunchError(extractErrorMessage(e));
     } finally {
       setStarting(false);
     }
-  }, [includeDestructive, manifest, fetchRun, stopPolling]);
-
-  useEffect(() => () => stopPolling(), [stopPolling]);
+  }, [includeDestructive, manifest, queryClient]);
 
   const isRunning = run?.status === "running";
 
@@ -325,7 +336,7 @@ export default function FlowTesterPage() {
               <p className="text-sm text-rose-600 mt-1 whitespace-pre-wrap">{error || manifestError}</p>
               {manifestError && (
                 <button
-                  onClick={loadManifest}
+                  onClick={() => loadManifest()}
                   className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-rose-700 hover:underline"
                 >
                   <RotateCcw className="w-3 h-3" /> Reintentar

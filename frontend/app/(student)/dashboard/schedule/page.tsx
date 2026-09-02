@@ -1,7 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAvailableSlots, useEnrollments, useMyTeachers, useStudentClasses, useBookingStatusFor } from "@/hooks/useStudentData";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useAvailableSlots,
+  useEnrollments,
+  useMyTeachers,
+  useStudentClasses,
+  useBookingStatusFor,
+  useTeacherPackagesFor,
+  invalidateAvailableSlots,
+} from "@/hooks/useStudentData";
 import {
   Calendar, Clock, CreditCard,
   Check, X, ChevronLeft,
@@ -352,6 +361,7 @@ function StepConfirmTrial({
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
   const toast = useToast();
+  const queryClient = useQueryClient();
 
   const myTz = getMyDisplayTimezone();
   const fmtDate = formatDateHumanTz(date + "T00:00:00", myTz); 
@@ -371,6 +381,9 @@ function StepConfirmTrial({
         duration_minutes: durationMinutes,
         subject,
       });
+      // El horario que acabamos de tomar no debe seguir apareciendo como
+      // disponible para este profesor (ver hooks/useStudentData.ts).
+      invalidateAvailableSlots(queryClient, teacherUsername);
       setDone(true);
       toast.success("Clase de prueba reservada correctamente");
       setTimeout(onBooked, 2000);
@@ -472,6 +485,7 @@ function StepPayment({
   const [error, setError] = useState("");
   const [noCredits, setNoCredits] = useState(false);
   const toast = useToast();
+  const queryClient = useQueryClient();
 
   const myTz = getMyDisplayTimezone();
   const fmtDate = formatDateHumanTz(date + "T00:00:00", myTz);
@@ -490,6 +504,9 @@ function StepPayment({
         end_time_utc: slot.end_time_utc,
         duration_minutes: duration,
       });
+      // El horario que acabamos de tomar no debe seguir apareciendo como
+      // disponible para este profesor (ver hooks/useStudentData.ts).
+      invalidateAvailableSlots(queryClient, teacherUsername);
       if (res.data.status === "confirmed") {
         setDone(true);
         toast.success("Clase reservada correctamente");
@@ -870,18 +887,13 @@ function NeedsPackageScreen({
   onSelected: () => void;
   lastRejectedPayment: RejectedPaymentInfo | null;
 }) {
-  const [packages, setPackages] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Antes esto era un fetch manual duplicado (useEffect + api.get) que
+  // pegaba al mismo endpoint que useTeacherPackagesFor, sin compartir cache
+  // con el resto de la app (ej. si el profesor ya se cargó en otra
+  // pantalla, acá se volvía a pedir desde cero).
+  const { packages, loading } = useTeacherPackagesFor(teacherUsername ?? undefined, true);
   const [error, setError] = useState("");
   const [checkoutTarget, setCheckoutTarget] = useState<{ pkg: any; enrollmentId: number | null } | null>(null);
-
-  useEffect(() => {
-    if (!teacherUsername) { setLoading(false); return; }
-    api.get(`/packages/teacher/${teacherUsername}`)
-      .then(res => setPackages(res.data))
-      .catch(() => setPackages([]))
-      .finally(() => setLoading(false));
-  }, [teacherUsername]);
 
   const choose = (pkg: any) => {
     setError("");
@@ -1026,26 +1038,16 @@ function NeedsRenewalScreen({
   onRequested: () => void;
   lastRejectedPayment: RejectedPaymentInfo | null;
 }) {
-  const [packages, setPackages] = useState<any[]>([]);
-  const [lastEnrollmentId, setLastEnrollmentId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Igual que en NeedsPackageScreen: esto era un Promise.all con dos fetches
+  // manuales que duplicaban useTeacherPackagesFor y useEnrollments (ya
+  // existentes en hooks/useStudentData.ts), sin cache compartido.
+  const { packages, loading: packagesLoading } = useTeacherPackagesFor(teacherUsername ?? undefined, true);
+  const { enrollments, loading: enrollmentsLoading } = useEnrollments();
+  const loading = packagesLoading || enrollmentsLoading;
+  const lastEnrollmentId = enrollments[0]?.id ?? null;
   const [requesting] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [checkoutTarget, setCheckoutTarget] = useState<any>(null);
-
-  useEffect(() => {
-    if (!teacherUsername) { setLoading(false); return; }
-    Promise.all([
-      api.get(`/packages/teacher/${teacherUsername}`),
-      api.get("/packages/my-enrollments"),
-    ])
-      .then(([pkgRes, enrRes]) => {
-        setPackages(pkgRes.data);
-        setLastEnrollmentId(enrRes.data?.[0]?.id ?? null);
-      })
-      .catch(() => { setPackages([]); setLastEnrollmentId(null); })
-      .finally(() => setLoading(false));
-  }, [teacherUsername]);
 
   const requestRenewal = (pkg: any) => {
     if (!lastEnrollmentId) return;
