@@ -1,8 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles, Zap, Clock, MessageCircle, Bot } from "lucide-react";
-import ChipiMascot from "@/components/landing/ChipiMascot";
+import dynamic from "next/dynamic";
+import { Sparkles, Zap, Clock, MessageCircle, Bot, Loader2 } from "lucide-react";
+
+// Three.js necesita `window`, así que este chunk se carga solo en cliente.
+// Mientras se descarga (o mientras el .glb todavía está bajando dentro del
+// componente) se muestra el mismo spinner, para no dejar la columna vacía.
+const ChipiMascot3D = dynamic(() => import("@/components/landing/ChipiMascot3D"), {
+  ssr: false,
+  loading: () => (
+    <div className="relative w-full max-w-[280px] mx-auto h-[420px] flex items-center justify-center">
+      <div className="absolute -inset-8 bg-gradient-to-br from-pink-500/30 via-rose-500/20 to-purple-500/30 rounded-full blur-2xl scale-90 animate-pulse pointer-events-none" />
+      <Loader2 className="w-8 h-8 text-pink-300 animate-spin" />
+    </div>
+  ),
+});
 
 // ─── Conversación de ejemplo, en loop ──────────────────────────────────────
 const DEMO_EXCHANGES: { question: string; answer: string }[] = [
@@ -95,7 +108,7 @@ export default function ChipiSection() {
       <div className="relative max-w-6xl mx-auto px-4 sm:px-6 z-10 grid grid-cols-1 lg:grid-cols-[0.85fr_1.15fr] gap-14 lg:gap-10 items-center">
         {/* Mascota, sola en su columna */}
         <div className="flex justify-center lg:justify-start">
-          <ChipiMascot />
+          <ChipiMascot3D />
         </div>
 
         {/* Texto + mockup de chat, juntos en la otra columna */}
