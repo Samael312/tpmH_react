@@ -237,7 +237,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
               {[
                 { icon: <Users className="w-4 h-4" />, label: isSingleTenant ? "Estudiantes satisfechos" : "Profesores activos", value: isSingleTenant ? "100+" : `${teachers.length}` },
                 { icon: <Globe className="w-4 h-4" />, label: "Idiomas", value: `${combinedLanguages.length || 1}+` },
-                { icon: <Clock className="w-4 h-4" />, label: "Horas de clase", value: "800+" },
+                { icon: <Clock className="w-4 h-4" />, label: "Horas de clase", value: "1000+" },
               ].map(stat => (
                 <div key={stat.label} className="text-center">
                   <p className="text-2xl font-black text-slate-900">{stat.value}</p>
@@ -418,7 +418,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                 {[
                   { value: "100%", label: "Online", sub: "Desde cualquier lugar", icon: <Globe className="w-6 h-6 text-rose-500" />, bg: "bg-rose-50 border-rose-100" },
                   { value: avgRating.toFixed(1), label: "Rating", sub: `${reviews.length} reseñas`, icon: <Star className="w-6 h-6 text-amber-500 fill-amber-500" />, bg: "bg-amber-50 border-amber-100" },
-                  { value: `${combinedLanguages.length || 2}+`, label: "Idiomas", sub: combinedLanguages.slice(0,2).join(" · ") || "Inglés · Español", icon: <BookOpen className="w-6 h-6 text-purple-500" />, bg: "bg-purple-50 border-purple-100" },
+                  { value: `${combinedLanguages.length || 2}+`, label: "Idiomas", sub: combinedLanguages.slice(0,2).join(" · ") || "Inglés · Español · Italiano", icon: <BookOpen className="w-6 h-6 text-purple-500" />, bg: "bg-purple-50 border-purple-100" },
                   { value: "50+", label: "Estudiantes", sub: "De 10+ países", icon: <Users className="w-6 h-6 text-emerald-500" />, bg: "bg-emerald-50 border-emerald-100" },
                 ].map((stat, idx) => (
                   <Reveal key={stat.label} delay={idx * 90} className={`${stat.bg} border rounded-[1.5rem] p-6 flex flex-col items-center text-center shadow-sm`}>

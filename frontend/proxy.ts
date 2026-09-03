@@ -26,16 +26,19 @@ export function proxy(request: NextRequest) {
 
   // ── 2. Protección Estudiantes ────────────────────────────────────────────
   if (pathname.startsWith("/dashboard")) {
-    if (isExpired || role !== "student")
-      return NextResponse.redirect(new URL("/login", request.url));
+    // Sin sesión → login. Sesión válida pero con rol incorrecto → unauthorized.
+    if (isExpired) return NextResponse.redirect(new URL("/login", request.url));
+    if (role !== "student")
+      return NextResponse.redirect(new URL("/unauthorized", request.url));
     return NextResponse.next();
   }
 
   // ── 3. Protección Profesores ─────────────────────────────────────────────
   if (pathname.startsWith("/teacher")) {
-    // Sin sesión o rol incorrecto → login
-    if (isExpired || !["teacher", "teacher_admin"].includes(role))
-      return NextResponse.redirect(new URL("/login", request.url));
+    // Sin sesión → login. Sesión válida pero con rol incorrecto → unauthorized.
+    if (isExpired) return NextResponse.redirect(new URL("/login", request.url));
+    if (!["teacher", "teacher_admin"].includes(role))
+      return NextResponse.redirect(new URL("/unauthorized", request.url));
 
     // El onboarding es siempre accesible para profesores autenticados
     if (pathname.startsWith("/teacher/onboarding"))
@@ -49,8 +52,9 @@ export function proxy(request: NextRequest) {
 
   // ── 4. Protección Admin ──────────────────────────────────────────────────
   if (pathname.startsWith("/admin")) {
-    if (isExpired || !["superadmin", "teacher_admin"].includes(role))
-      return NextResponse.redirect(new URL("/login", request.url));
+    if (isExpired) return NextResponse.redirect(new URL("/login", request.url));
+    if (!["superadmin", "teacher_admin"].includes(role))
+      return NextResponse.redirect(new URL("/unauthorized", request.url));
     return NextResponse.next();
   }
 
