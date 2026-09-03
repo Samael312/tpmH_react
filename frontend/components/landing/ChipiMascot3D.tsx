@@ -173,11 +173,15 @@ export default function ChipiMascot3D() {
     window.addEventListener("mousemove", handleMouseMove);
 
     // ─── Loop de animación ───
-    const clock = new THREE.Clock();
+    // Delta manual con performance.now() en vez de THREE.Clock (deprecado
+    // desde r180 a favor de THREE.Timer). Mismo patrón que HeroScene.tsx.
+    let lastTime = performance.now();
     let frameId: number;
 
     const animate = () => {
-      const delta = clock.getDelta();
+      const now = performance.now();
+      const delta = (now - lastTime) / 1000;
+      lastTime = now;
       mixer?.update(delta);
 
       if (actionA && actionB && loopDuration > 0) {

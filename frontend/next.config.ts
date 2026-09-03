@@ -39,8 +39,13 @@ function buildCsp(): string {
     `media-src 'self' https://res.cloudinary.com`,
     `font-src 'self' data:`,
     // 'self' + el backend (dominio distinto en producción) + Google (el
-    // script de GSI hace sus propias requests de auth)
-    `connect-src 'self' ${backend} https://accounts.google.com`,
+    // script de GSI hace sus propias requests de auth) + blob: (Three.js
+    // usa THREE.ImageBitmapLoader para las texturas embebidas en los .glb,
+    // que hace fetch() sobre URLs blob: creadas con URL.createObjectURL;
+    // ese fetch() lo rige connect-src, no img-src, así que sin blob: acá
+    // el navegador lo bloquea silenciosamente y GLTFLoader tira
+    // "Couldn't load texture" aunque el archivo esté perfecto)
+    `connect-src 'self' ${backend} https://accounts.google.com blob:`,
     // El botón de Google se renderiza dentro de un iframe de Google
     `frame-src https://accounts.google.com`,
     `object-src 'none'`,
