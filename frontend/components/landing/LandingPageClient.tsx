@@ -196,16 +196,29 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
               </span>
             </div>
 
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.05] mb-6 drop-shadow-sm">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.1] mb-6 drop-shadow-sm text-balance">
+              {isSingleTenant ? (
+                <>
+                  Aprende idiomas{" "}
+                  <span className="bg-gradient-to-r from-rose-500 to-pink-500 bg-clip-text text-transparent">
+                    a tu ritmo
+                  </span>
+                </>
+              ) : (
+                <>
+                  El conocimiento que buscas,{" "}
+                  <span className="bg-gradient-to-r from-rose-500 to-pink-500 bg-clip-text text-transparent">
+                    como tú lo prefieres
+                  </span>
+                </>
+              )}
+            </h1>
+
+            <p className="text-xl text-slate-700 leading-relaxed mb-8 max-w-xl mx-auto lg:mx-0 font-semibold">
               {platformTagline ||
                 (isSingleTenant
                   ? `Clases personalizadas 100% online con ${mainTeacher ? displayName(mainTeacher) : "una profesora certificada"}. Desde principiante hasta avanzado.`
                   : `Clases 100% online con nuestro equipo de ${teachers.length || "varios"} profesores certificados, para cada objetivo y nivel.`)}
-            </h1>
-
-            <p className="text-lg text-slate-500 leading-relaxed mb-8 max-w-xl mx-auto lg:mx-0 font-medium">
-              Aprende idiomas{" "}
-              <span className="bg-gradient-to-r from-rose-500 to-pink-500 bg-clip-text text-transparent font-bold">a tu ritmo</span>
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
