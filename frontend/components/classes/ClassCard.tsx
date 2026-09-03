@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { User, Video, X, Clock, RotateCcw, Check, AlertCircle, Phone, Users2, ChevronDown, MessageCircle } from "lucide-react";
+import { User, Video, X, Clock, RotateCcw, Check, AlertCircle, Phone, Users2, ChevronDown, MessageCircle, Calendar } from "lucide-react";
 import api from "@/lib/api";
 import { getFlagForNationality } from "@/lib/nationalities";
 import { formatTimeTz, formatWeekdayShortTz, formatMonthShortTz, getDayOfMonthTz, getMyDisplayTimezone } from "@/lib/tzFormat";
@@ -33,6 +33,7 @@ export interface ClassCardData {
   cohort_id?: number | null;
   participant_count?: number | null;
   participant_names?: string[] | null;
+  external_source?: string | null;
 }
 
 type Role = "student" | "teacher" | "teacher_admin";
@@ -231,6 +232,11 @@ export default function ClassCard({
   const isPast = endDate < new Date();
   const isHistory = HISTORY_STATUSES.includes(class_.status);
   const isGroup = class_.class_type === "group";
+  // Clase reflejada desde el Google Calendar del profesor (ej. Preply):
+  // es de solo lectura, no tiene alumno real en la plataforma ni admite
+  // ninguna acción (reagendar/cancelar/gestionar Meet no tienen sentido,
+  // esos cambios viven en la otra plataforma) — solo unirse si trae link.
+  const isExternal = class_.class_type === "external";
 
   const personName = role === "student" ? class_.teacher_name : class_.student_name;
   const personAvatar = role === "student" ? class_.teacher_avatar : class_.student_avatar;
@@ -333,7 +339,7 @@ export default function ClassCard({
   const teacherNextActions = role === "teacher" && withinManualStatusWindow
     ? MANUAL_TARGET_STATUSES.filter((s) => s !== class_.status)
     : [];
-  const canReschedule = role === "teacher"
+  const canReschedule = isExternal ? false : role === "teacher"
     // El profesor SÍ puede reagendar una clase 'no_show' — como cortesía
     // cuando el alumno faltó (ver can_reschedule_class en el backend, que
     // ahora permite esto solo para role="teacher"). El alumno nunca puede
@@ -352,7 +358,7 @@ export default function ClassCard({
   // cohorte (POST /cohorts/{cohort_id}/leave, con confirmación explícita en
   // studentCancelInline), no solo de esta sesión puntual. Al salir, el
   // enrollment queda cancelado y el alumno puede elegir un nuevo paquete.
-  const canCancel = role === "teacher"
+  const canCancel = isExternal ? false : role === "teacher"
     ? TEACHER_CANCELABLE_STATUSES.includes(class_.status)
     : STUDENT_CANCELABLE.includes(class_.status);
 
@@ -362,7 +368,7 @@ export default function ClassCard({
   // Tanto alumno como profesor ven el botón de unirse en cuanto hay un
   // link cargado (el profesor además conserva el de editar).
   const canManageMeetLink = (role === "teacher" || role === "teacher_admin")
-    && class_.status === "confirmed" && !readOnly;
+    && class_.status === "confirmed" && !readOnly && !isExternal;
   // El profesor también puede unirse (no solo editar) una vez que hay
   // link cargado — antes solo el alumno tenía botón de "Unirse".
   const canJoinMeetLink = !!class_.meet_link
@@ -371,7 +377,7 @@ export default function ClassCard({
   // BUG-05/17 fix: antes 'showTeacherActions' exigía !isPast, lo que ocultaba
   // los botones de Completar/No asistió justo cuando más se necesitan (después
   // de que la clase terminó). Ahora se basan en la ventana de 72h.
-  const showTeacherActions = role === "teacher" && withinManualStatusWindow && !readOnly;
+  const showTeacherActions = role === "teacher" && withinManualStatusWindow && !readOnly && !isExternal;
   // Una clase 'finalized' ya pasó por definición, pero tanto profesor como
   // estudiante pueden reagendarla sin restricción de antelación (BUG-02
   // ampliado), así que el estado 'finalized' siempre puede ignorar el
@@ -484,6 +490,15 @@ export default function ClassCard({
                   <Users2 className="w-2.5 h-2.5" /> Grupal
                 </span>
               )}
+              {isExternal && (
+                <span
+                  className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-700"
+                  title="Importada automáticamente desde tu Google Calendar — de solo lectura"
+                >
+                  <Calendar className="w-2.5 h-2.5" />
+                  {class_.external_source ? class_.external_source[0].toUpperCase() + class_.external_source.slice(1) : "Externa"}
+                </span>
+              )}
               {tzDiffLabel && (
                 <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-700">
                   <Clock className="w-2.5 h-2.5" /> {tzDiffLabel}
@@ -515,6 +530,13 @@ export default function ClassCard({
                       {getFlagForNationality(personNationality)} {personNationality}
                     </span>
                   )}
+                </span>
+              )}
+
+              {isExternal && role === "teacher" && (
+                <span className="flex items-center gap-1.5 text-slate-400 italic">
+                  <Calendar className="w-3.5 h-3.5 text-sky-400" />
+                  Bloqueada en tu Google Calendar — no gestionable desde acá
                 </span>
               )}
 

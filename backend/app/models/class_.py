@@ -6,9 +6,14 @@ import enum
 
 
 class ClassType(str, enum.Enum):
-    trial   = "trial"    # Prueba — no consume del paquete, staff la ofrece
-    regular = "regular"  # Clase normal del paquete
-    group   = "group"    # Sesión grupal — múltiples alumnos vía ClassParticipant
+    trial    = "trial"     # Prueba — no consume del paquete, staff la ofrece
+    regular  = "regular"   # Clase normal del paquete
+    group    = "group"     # Sesión grupal — múltiples alumnos vía ClassParticipant
+    external = "external"  # Importada desde el Google Calendar del profesor
+                            # (ej. clases de Preply, ver core/google_calendar.py
+                            # ::import_external_classes_for_teacher). No tiene
+                            # student_id (no existe como alumno en la plataforma)
+                            # ni enrollment_id, y no consume paquete/crédito.
 
 
 class Class(Base):
@@ -38,6 +43,9 @@ class Class(Base):
     # [start_time_utc, end_time_utc + buffer_minutes).
     buffer_minutes = Column(Integer, nullable=False, default=10)
     google_event_id = Column(String, nullable=True)  # Para sync con Calendar
+    # Origen de una clase class_type=="external" (ej. "preply"). NULL para
+    # cualquier otra clase (creada normalmente en la plataforma).
+    external_source = Column(String, nullable=True)
     status = Column(String, default="pending")
     # pending_trial      → bloquea horario
     # pending          → bloquea slot, esperando comprobante

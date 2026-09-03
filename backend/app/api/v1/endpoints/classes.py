@@ -84,6 +84,28 @@ def _get_class_or_404(
     return class_
 
 
+def _reject_if_external(class_: Class) -> None:
+    """
+    Las clases class_type=="external" (importadas del Google Calendar del
+    profesor, ej. Preply — ver core/google_calendar.py::
+    import_external_classes_for_teacher) son de solo lectura: existen
+    únicamente para reflejar el itinerario completo del profesor, no
+    para gestionarse desde acá. Cualquier intento de reagendar/cancelar/
+    cambiar estado/editar el meet_link se rechaza acá — la UI ya oculta
+    esas acciones (ver ClassCard.tsx), esto es la validación de respaldo
+    del lado del servidor.
+    """
+    if class_.class_type == ClassType.external:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Esta clase se importó automáticamente desde Google Calendar "
+                f"({class_.external_source or 'externa'}) y es de solo lectura: "
+                "no se puede reagendar, cancelar ni editar desde la plataforma."
+            ),
+        )
+
+
 def _build_class_responses(classes: list[Class], db: Session) -> list[ClassResponse]:
     """
     Convierte una lista de Class (ORM) en ClassResponse enriquecidos con
@@ -602,6 +624,7 @@ def update_class_status(
     db: Session = Depends(get_db)
 ):
     class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
+    _reject_if_external(class_)
 
     # BUG-05/17 fix: el profesor puede cambiar libremente el estado de una
     # clase a completed/no_show/finalized, sin importar cuál era el estado
@@ -675,6 +698,7 @@ def update_meet_link(
     el que ClassResponse se lo muestra al estudiante).
     """
     class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
+    _reject_if_external(class_)
 
     if class_.status != "confirmed":
         raise HTTPException(
@@ -703,6 +727,7 @@ def cancel_class_teacher(
     es exclusivamente para cancelaciones hechas por el propio estudiante.
     """
     class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
+    _reject_if_external(class_)
 
     if class_.status == "cancelled":
         raise HTTPException(
@@ -754,6 +779,7 @@ def reschedule_class_teacher(
     db: Session = Depends(get_db)
 ):
     class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
+    _reject_if_external(class_)
 
     can_reschedule, error_msg = can_reschedule_class(class_, role="teacher", db=db)
     if not can_reschedule:
@@ -804,6 +830,7 @@ def reschedule_class_admin(
     db: Session = Depends(get_db)
 ):
     class_ = _get_class_or_404(db, class_id)
+    _reject_if_external(class_)
 
     can_book, error_msg = can_book_slot(
         start_time_utc=data.start_time_utc,
@@ -851,6 +878,7 @@ def cancel_class_admin(
     igual que en la cancelación del profesor.
     """
     class_ = _get_class_or_404(db, class_id)
+    _reject_if_external(class_)
 
     if class_.status == "cancelled":
         raise HTTPException(

@@ -8,7 +8,7 @@ from app.models.package import Enrollment, EnrollmentStatus
 from datetime import timedelta
 import logging
 from app.db.base import SessionLocal
-from app.models.class_ import Class
+from app.models.class_ import Class, ClassType
 from app.models.student import StudentProfile
 from app.models.user import User
 from app.core.timezone import utc_now, format_local_datetime
@@ -175,6 +175,12 @@ async def generate_upcoming_meet_links():
     Si el profesor no tiene Google Calendar conectado, no hay forma de
     generar un link real: se deja sin asignar y la clase sigue
     funcionando igual (el profesor puede cargarlo manualmente).
+
+    Las clases "external" (importadas desde Preply, ver
+    core/google_calendar.py::import_external_classes_for_teacher) se
+    excluyen a propósito: son puramente visuales para reflejar la
+    agenda completa del profesor, y no deben mutar el evento original
+    de Preply agregándole un Google Meet que nadie va a usar ahí.
     """
     db: Session = SessionLocal()
     now = utc_now()
@@ -187,6 +193,7 @@ async def generate_upcoming_meet_links():
             Class.meet_link.is_(None),
             Class.start_time_utc > now,
             Class.start_time_utc <= window_end,
+            Class.class_type != ClassType.external,
         ).all()
 
         generated = 0
@@ -215,7 +222,19 @@ async def generate_upcoming_meet_links():
 # (book_class ahora exige el crédito ya pagado/aprobado de antemano).
 
 async def sync_all_teacher_calendars():
-    """Sincroniza el calendario de todos los profesores conectados, cada hora."""
+    """
+    Job que se ejecuta cada 30 minutos, en segundo plano, sin depender
+    de que algún profesor tenga el panel abierto.
+
+    Antes la sincronización "real" solo ocurría cuando el profesor
+    cargaba su panel de Google Calendar y disparaba `POST /calendar/sync`
+    manualmente (botón "Sincronizar ahora" en CalendarSync.tsx), más un
+    barrido de respaldo cada 1 hora. Con este job, la sincronización
+    (push de clases propias hacia Google + importación de eventos
+    externos como Preply, ver `sync_calendar_logic`) corre siempre sola,
+    y el botón manual queda solo como un "forzar ya" para el profesor
+    que no quiere esperar al próximo ciclo.
+    """
     db: Session = SessionLocal()
     try:
         run_calendar_sync_for_all_teachers(db)
@@ -282,7 +301,7 @@ async def notify_low_credit_packages():
 def start_scheduler():
     scheduler.add_job(send_class_reminders, trigger=IntervalTrigger(hours=1), id="class_reminders", replace_existing=True)
     scheduler.add_job(finalize_expired_classes, trigger=IntervalTrigger(minutes=10), id="finalize_expired_classes", replace_existing=True)
-    scheduler.add_job(sync_all_teacher_calendars, trigger=IntervalTrigger(hours=1), id="sync_teacher_calendars", replace_existing=True)
+    scheduler.add_job(sync_all_teacher_calendars, trigger=IntervalTrigger(minutes=30), id="sync_teacher_calendars", replace_existing=True)
     scheduler.add_job(generate_upcoming_meet_links, trigger=IntervalTrigger(minutes=5), id="generate_meet_links", replace_existing=True)
     scheduler.add_job(notify_low_credit_packages, trigger=IntervalTrigger(days=7), id="notify_low_credit_packages", replace_existing=True)
     scheduler.start()

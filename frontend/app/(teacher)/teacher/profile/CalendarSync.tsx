@@ -15,10 +15,13 @@ import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 
 interface SyncResult {
-  new_count:     number;
-  updated_count: number;
-  deleted_count: number;
-  msg:           string;
+  new_count:              number;
+  updated_count:          number;
+  deleted_count:          number;
+  imported_new_count?:    number;
+  imported_updated_count?: number;
+  imported_cancelled_count?: number;
+  msg:                    string;
 }
 
 export default function CalendarSync() {
@@ -101,6 +104,11 @@ export default function CalendarSync() {
         ["teacher", "calendar", "status"],
         (prev) => (prev ? { ...prev, last_sync_at: new Date().toISOString() } : prev)
       );
+      // El sync no solo empuja clases propias hacia Google: también
+      // puede traer clases nuevas importadas de Preply (o actualizar/
+      // cancelar las que ya existían). Sin esto, el profesor tendría que
+      // recargar la página a mano para verlas aparecer en su agenda.
+      queryClient.invalidateQueries({ queryKey: ["teacher", "classes"] });
       toast.success("Calendario sincronizado correctamente");
     } catch (e) {
       const msg = getErrorMessage(e, "Error al sincronizar");
@@ -296,7 +304,7 @@ export default function CalendarSync() {
                 Sincronización automática
               </p>
               <p className="text-xs text-slate-500 mt-0.5">
-                Sincroniza al cargar el panel de administrador
+                Se sincroniza sola en segundo plano cada 30 minutos
               </p>
             </div>
             <button
@@ -376,10 +384,19 @@ export default function CalendarSync() {
                     Sincronización completada
                   </p>
                 </div>
-                <div className="flex gap-4 text-[10px] text-emerald-600 font-bold pl-6">
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-emerald-600 font-bold pl-6">
                   <span>+{syncResult.new_count} nuevas</span>
                   <span>↑{syncResult.updated_count} actualizadas</span>
                   <span>-{syncResult.deleted_count} eliminadas</span>
+                  {!!syncResult.imported_new_count && (
+                    <span>📥 +{syncResult.imported_new_count} Preply</span>
+                  )}
+                  {!!syncResult.imported_updated_count && (
+                    <span>📥 ↑{syncResult.imported_updated_count} Preply</span>
+                  )}
+                  {!!syncResult.imported_cancelled_count && (
+                    <span>📥 -{syncResult.imported_cancelled_count} Preply</span>
+                  )}
                 </div>
               </div>
             )}

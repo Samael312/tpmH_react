@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.timezone import UTC, utc_now
-from app.models.class_ import Class
+from app.models.class_ import Class, ClassType
 from app.models.google_calendar import GoogleCalendarToken
 from app.models.teacher import TeacherProfile
 
@@ -35,6 +35,15 @@ SCOPES = [
 
 # Ventana hacia adelante que consideramos al sincronizar / consultar busy
 SYNC_WINDOW_DAYS = 30
+
+# Palabra(s) que identifican, en el título de un evento del Google
+# Calendar del profesor, una clase dictada en OTRA plataforma que
+# queremos reflejar (solo lectura) dentro de tpmH — hoy solo Preply.
+# El match es case-insensitive y busca la palabra en el summary del
+# evento. Se guarda en Class.external_source cuál keyword la originó.
+EXTERNAL_IMPORT_SOURCES = {
+    "preply": "preply",
+}
 
 # Reintentos ante errores transitorios (5xx, rate limit puntual)
 MAX_RETRIES = 3
@@ -239,6 +248,203 @@ def get_teacher_busy_ranges(
         return []
 
     return get_busy_ranges(service, token.calendar_id or "primary", time_min, time_max)
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Lectura — eventos reales (no solo busy) para importar clases externas
+# ─────────────────────────────────────────────────────────────────────────
+
+def list_calendar_events(
+    service,
+    calendar_id: str,
+    time_min: datetime,
+    time_max: datetime,
+) -> List[dict]:
+    """
+    Trae los eventos "reales" (con título, no solo el rango busy/free)
+    del calendario del profesor en la ventana dada. `singleEvents=True`
+    expande eventos recurrentes en instancias individuales, cada una con
+    su propio id — necesario para poder dedupear/actualizar por
+    Class.google_event_id igual que hacemos con los eventos que nosotros
+    mismos creamos.
+    """
+    if time_min.tzinfo is None:
+        time_min = time_min.replace(tzinfo=UTC)
+    if time_max.tzinfo is None:
+        time_max = time_max.replace(tzinfo=UTC)
+
+    events: List[dict] = []
+    page_token = None
+    try:
+        while True:
+            result = _with_retries(
+                service.events().list(
+                    calendarId=calendar_id,
+                    timeMin=time_min.isoformat(),
+                    timeMax=time_max.isoformat(),
+                    singleEvents=True,
+                    orderBy="startTime",
+                    pageToken=page_token,
+                    maxResults=250,
+                ).execute
+            )
+            events.extend(result.get("items", []))
+            page_token = result.get("nextPageToken")
+            if not page_token:
+                break
+    except HttpError as e:
+        logger.warning(f"Error listando eventos en {calendar_id}: {e}")
+
+    return events
+
+
+def _is_own_event(event: dict) -> bool:
+    """True si el evento lo creó esta plataforma (ver create_calendar_event /
+    create_calendar_event_with_meet, que siempre marcan extendedProperties).
+    Estos nunca deben re-importarse como clase externa."""
+    return (
+        event.get("extendedProperties", {})
+        .get("private", {})
+        .get("tpmh_managed") == "true"
+    )
+
+
+def _match_external_source(event: dict) -> Optional[str]:
+    """
+    Si el título del evento contiene alguna de las keywords configuradas
+    en EXTERNAL_IMPORT_SOURCES, devuelve el nombre de la fuente (ej.
+    "preply"). None si no matchea ninguna o si el evento no tiene un
+    horario puntual (dateTime) — los eventos de todo el día (solo
+    "date") no se importan porque Class exige start/end exactos.
+    """
+    if _is_own_event(event):
+        return None
+    if event.get("status") == "cancelled":
+        return None
+    if not event.get("start", {}).get("dateTime") or not event.get("end", {}).get("dateTime"):
+        return None
+
+    title = (event.get("summary") or "").lower()
+    for keyword, source in EXTERNAL_IMPORT_SOURCES.items():
+        if keyword in title:
+            return source
+    return None
+
+
+def import_external_classes_for_teacher(
+    teacher_id: int,
+    service,
+    calendar_id: str,
+    db: Session,
+    time_min: datetime,
+    time_max: datetime,
+) -> dict:
+    """
+    Lee los eventos reales del Google Calendar del profesor (no solo
+    freebusy) y refleja como Class(class_type="external") los que
+    correspondan a una plataforma externa reconocida (ver
+    EXTERNAL_IMPORT_SOURCES, hoy solo Preply, detectado por palabra en
+    el título). Son de solo lectura desde la perspectiva de tpmH: no
+    tienen student_id/enrollment_id, no consumen paquete/crédito, y el
+    profesor no puede editarlas — solo existen para que se vean en su
+    calendario/agenda y para que bloqueen el horario ante nuevos
+    alumnos (can_book_slot ya las excluye del double-booking igual que
+    a cualquier clase que no sea "group").
+
+    Reconciliación por evento (dedup vía Class.google_event_id):
+      - Evento nuevo que matchea       -> crea Class externa "confirmed".
+      - Evento ya importado, sigue ahí -> actualiza horario/título si cambiaron.
+      - Evento ya importado, cancelado
+        o borrado en Google            -> marca la Class como "cancelled".
+    """
+    events = list_calendar_events(service, calendar_id, time_min, time_max)
+
+    existing = db.query(Class).filter(
+        Class.teacher_id == teacher_id,
+        Class.class_type == ClassType.external,
+        Class.google_event_id.isnot(None),
+        Class.start_time_utc >= time_min,
+        Class.start_time_utc <= time_max,
+    ).all()
+    existing_by_event_id = {c.google_event_id: c for c in existing}
+
+    seen_event_ids: set[str] = set()
+    new_count = 0
+    updated_count = 0
+    cancelled_count = 0
+
+    for event in events:
+        event_id = event.get("id")
+        if not event_id:
+            continue
+
+        source = _match_external_source(event)
+        if not source:
+            continue
+
+        seen_event_ids.add(event_id)
+        title = event.get("summary") or "Clase externa"
+        start_dt = datetime.fromisoformat(event["start"]["dateTime"].replace("Z", "+00:00"))
+        end_dt = datetime.fromisoformat(event["end"]["dateTime"].replace("Z", "+00:00"))
+        duration_minutes = max(int((end_dt - start_dt).total_seconds() // 60), 1)
+        # Si el evento de Preply ya trae su propio link de videollamada
+        # (Meet, o cualquier URL en "location"), lo reflejamos para que
+        # el profesor pueda unirse directo desde la card de la clase.
+        meet_link = _extract_meet_link(event)
+        if not meet_link:
+            location = event.get("location") or ""
+            if location.startswith("http://") or location.startswith("https://"):
+                meet_link = location
+
+        class_ = existing_by_event_id.get(event_id)
+        if class_:
+            changed = (
+                class_.start_time_utc != start_dt
+                or class_.end_time_utc != end_dt
+                or class_.subject != title
+                or class_.meet_link != meet_link
+                or class_.status == "cancelled"
+            )
+            if changed:
+                class_.start_time_utc = start_dt
+                class_.end_time_utc = end_dt
+                class_.duration = duration_minutes
+                class_.subject = title
+                class_.meet_link = meet_link
+                if class_.status == "cancelled":
+                    class_.status = "confirmed"
+                updated_count += 1
+        else:
+            db.add(Class(
+                teacher_id=teacher_id,
+                student_id=None,
+                class_type=ClassType.external,
+                external_source=source,
+                subject=title,
+                start_time_utc=start_dt,
+                end_time_utc=end_dt,
+                duration=duration_minutes,
+                buffer_minutes=0,
+                status="confirmed",
+                meet_link=meet_link,
+                google_event_id=event_id,
+                notes=f"Importada automáticamente desde Google Calendar ({source}).",
+            ))
+            new_count += 1
+
+    # Eventos que ya habíamos importado pero que ya no aparecen (se
+    # borraron o dejaron de matchear en Google) -> se cancelan, nunca se
+    # borran (mismo criterio que el resto de la plataforma al cancelar).
+    for event_id, class_ in existing_by_event_id.items():
+        if event_id not in seen_event_ids and class_.status != "cancelled":
+            class_.status = "cancelled"
+            cancelled_count += 1
+
+    return {
+        "new_count": new_count,
+        "updated_count": updated_count,
+        "cancelled_count": cancelled_count,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -509,7 +715,26 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
         busy = get_busy_ranges(service, calendar_id, now, window_end)
         external_busy_count = len(busy)
     except Exception as e:
-        logger.warning(f"Fase A (lectura) falló para teacher_id={teacher_id}: {e}")
+        logger.warning(f"Fase A (lectura busy) falló para teacher_id={teacher_id}: {e}")
+
+    # Fase A.2 (lectura de eventos reales) — importa clases externas
+    # reconocidas (Preply, etc.) como Class(class_type="external"). Se
+    # hace siempre, sin importar si luego falla el push de abajo, para
+    # que una API caída a mitad de sync no le cueste al profesor perder
+    # la importación de este ciclo.
+    imported_new = imported_updated = imported_cancelled = 0
+    try:
+        imported = import_external_classes_for_teacher(
+            teacher_id, service, calendar_id, db, now, window_end,
+        )
+        imported_new = imported["new_count"]
+        imported_updated = imported["updated_count"]
+        imported_cancelled = imported["cancelled_count"]
+        if imported_new or imported_updated or imported_cancelled:
+            db.commit()
+    except Exception as e:
+        logger.warning(f"Fase A.2 (import clases externas) falló para teacher_id={teacher_id}: {e}")
+        db.rollback()
 
     new_count = 0
     updated_count = 0
@@ -597,7 +822,8 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
     msg = (
         f"Sync OK — {new_count} nuevas, {updated_count} actualizadas, "
         f"{deleted_count} eliminadas, {error_count} errores, "
-        f"{external_busy_count} bloques externos detectados"
+        f"{external_busy_count} bloques externos detectados, "
+        f"{imported_new} clases externas importadas (Preply, etc.)"
     )
     logger.info(f"[calendar_sync] teacher_id={teacher_id}: {msg}")
     return {
@@ -608,6 +834,9 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
         "deleted_count": deleted_count,
         "error_count": error_count,
         "external_busy_count": external_busy_count,
+        "imported_new_count": imported_new,
+        "imported_updated_count": imported_updated,
+        "imported_cancelled_count": imported_cancelled,
     }
 
 

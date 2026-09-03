@@ -136,6 +136,10 @@ class ClassResponse(BaseModel):
     cohort_id: Optional[int] = None
     participant_count: Optional[int] = None
     participant_names: Optional[List[str]] = None
+    # Solo poblado para class_type == "external" (ver
+    # core/google_calendar.py::import_external_classes_for_teacher).
+    # Indica de qué plataforma se importó (ej. "preply").
+    external_source: Optional[str] = None
 
     class Config:
         from_attributes = True

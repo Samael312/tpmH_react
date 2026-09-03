@@ -17,6 +17,7 @@ import PackagesCarousel from "@/components/landing/PackagesCarousel";
 import TeacherVideosCarousel from "@/components/landing/TeacherVideosCarousel";
 import { priceLabelSuffix } from "@/lib/packageThemes";
 import Skeleton from "@/components/ui/Skeleton";
+import Reveal from "@/components/ui/Reveal";
 
 // Three.js pesa bastante y es puramente decorativo: se carga solo en el
 // cliente (nunca en SSR) y, más abajo, solo se monta si el viewport no
@@ -338,7 +339,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-purple-800/10 rounded-full blur-[110px] pointer-events-none" />
           
           <div className="relative max-w-6xl mx-auto px-4 sm:px-6 z-10">
-            <div className="text-center mb-12">
+            <Reveal className="text-center mb-12">
               <p className="text-[10px] font-bold text-rose-400 uppercase tracking-widest mb-3 flex items-center justify-center gap-1.5">
                 <VideoIcon className="w-3.5 h-3.5" /> Presentaciones
               </p>
@@ -349,7 +350,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
               <p className="text-slate-400 max-w-lg mx-auto text-lg font-light">
                 Antes de reservar tu clase, mira quién estará al otro lado de la pantalla.
               </p>
-            </div>
+            </Reveal>
 
             {loading ? (
               <div className="flex gap-5 overflow-hidden">
@@ -358,7 +359,9 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                 ))}
               </div>
             ) : (
-              <TeacherVideosCarousel teachers={videoTeachers} />
+              <Reveal>
+                <TeacherVideosCarousel teachers={videoTeachers} />
+              </Reveal>
             )}
           </div>
         </section>
@@ -369,7 +372,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
         <div className="absolute top-0 left-0 w-[400px] h-[400px] bg-rose-300/50 mix-blend-multiply rounded-full blur-[100px] pointer-events-none" />
 
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 z-10">
-          <div className="text-center mb-16">
+          <Reveal className="text-center mb-16">
             <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-3">
               {isSingleTenant ? "Sobre mí" : "Nuestro equipo"}
             </p>
@@ -381,13 +384,13 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                 ? "Una apasionada del idioma con años de experiencia enseñando a estudiantes de todos los niveles y países."
                 : "Un equipo de profesores certificados, cada uno con su propia especialidad, listos para acompañarte."}
             </p>
-          </div>
+          </Reveal>
 
           {loading ? (
             <Skeleton className="h-64 w-full rounded-[2rem]" />
           ) : isSingleTenant ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
-              <div className="bg-white/80 backdrop-blur-sm rounded-[2rem] border border-rose-100 shadow-xl p-8">
+              <Reveal className="bg-white/80 backdrop-blur-sm rounded-[2rem] border border-rose-100 shadow-xl p-8">
                 <p className="text-slate-600 leading-relaxed text-lg mb-6">
                   {mainTeacher?.bio ?? "Profesora certificada y bilingüe con pasión por enseñar de forma personalizada. Mi metodología se adapta a tus objetivos y ritmo de aprendizaje."}
                 </p>
@@ -409,7 +412,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                     ))}
                   </div>
                 )}
-              </div>
+              </Reveal>
 
               <div className="grid grid-cols-2 gap-4">
                 {[
@@ -417,20 +420,20 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                   { value: avgRating.toFixed(1), label: "Rating", sub: `${reviews.length} reseñas`, icon: <Star className="w-6 h-6 text-amber-500 fill-amber-500" />, bg: "bg-amber-50 border-amber-100" },
                   { value: `${combinedLanguages.length || 2}+`, label: "Idiomas", sub: combinedLanguages.slice(0,2).join(" · ") || "Inglés · Español", icon: <BookOpen className="w-6 h-6 text-purple-500" />, bg: "bg-purple-50 border-purple-100" },
                   { value: "50+", label: "Estudiantes", sub: "De 10+ países", icon: <Users className="w-6 h-6 text-emerald-500" />, bg: "bg-emerald-50 border-emerald-100" },
-                ].map(stat => (
-                  <div key={stat.label} className={`${stat.bg} border rounded-[1.5rem] p-6 flex flex-col items-center text-center shadow-sm`}>
+                ].map((stat, idx) => (
+                  <Reveal key={stat.label} delay={idx * 90} className={`${stat.bg} border rounded-[1.5rem] p-6 flex flex-col items-center text-center shadow-sm`}>
                     <div className="mb-3">{stat.icon}</div>
                     <p className="text-3xl font-extrabold text-slate-900 leading-none">{stat.value}</p>
                     <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mt-2">{stat.label}</p>
                     <p className="text-xs text-slate-500 mt-1">{stat.sub}</p>
-                  </div>
+                  </Reveal>
                 ))}
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {teachers.map(t => (
-                <div key={t.user_username} className="bg-white/80 backdrop-blur-sm rounded-[2rem] border border-rose-100 shadow-xl p-6 flex flex-col items-center text-center hover:-translate-y-1 hover:shadow-2xl transition-all duration-300">
+              {teachers.map((t, idx) => (
+                <Reveal key={t.user_username} delay={(idx % 3) * 100} className="bg-white/80 backdrop-blur-sm rounded-[2rem] border border-rose-100 shadow-xl p-6 flex flex-col items-center text-center hover:-translate-y-1 hover:shadow-2xl transition-all duration-300">
                   <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-white shadow-lg ring-1 ring-rose-200 mb-4">
                     <TeacherAvatar teacher={t} className="object-cover" sizes="80px" />
                   </div>
@@ -446,7 +449,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                   <Link href={`/teachers/${t.user_username}`} className="mt-5 text-xs font-bold text-rose-600 hover:text-rose-700 transition-colors bg-rose-50 px-4 py-2 rounded-full">
                     Ver perfil →
                   </Link>
-                </div>
+                </Reveal>
               ))}
               {teachers.length === 0 && (
                 <p className="col-span-full text-center text-slate-400 font-bold py-10">
@@ -461,30 +464,32 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
       {/* ─── Materias combinadas (solo multi-tenant) ─── */}
       {!isSingleTenant && combinedSubjects.length > 0 && (
         <section className="pb-12 bg-white">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-wrap justify-center gap-3">
+          <Reveal className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-wrap justify-center gap-3">
             {combinedSubjects.map(s => (
               <span key={s} className="px-4 py-2 bg-slate-50 border border-slate-100 shadow-sm text-slate-600 text-sm font-bold rounded-full">
                 {s}
               </span>
             ))}
-          </div>
+          </Reveal>
         </section>
       )}
 
       
 
       {/* ─── Chipi, el asistente IA ─── */}
-      <ChipiSection />
+      <Reveal>
+        <ChipiSection />
+      </Reveal>
 
       {/* ─── Planes / Paquetes reales de los profesores ─── */}
       <section id="plans" className="py-24 relative overflow-hidden bg-white">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-200/40 mix-blend-multiply rounded-full blur-[120px] pointer-events-none" />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 z-10">
-          <div className="text-center mb-20">
+          <Reveal className="text-center mb-20">
             <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-3">Planes y precios</p>
             <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">Elige tu plan</h2>
             <p className="text-slate-500 max-w-xl mx-auto text-lg">Sin contratos. Sin letra pequeña. Solo aprendizaje.</p>
-          </div>
+          </Reveal>
 
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -503,7 +508,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
             // con una fila incompleta. El ancho de cada tarjeta replica el
             // que tendría en un grid de 2/4 columnas (mismo gap-8 = 2rem).
             <div className="flex flex-wrap justify-center gap-8">
-              {individualPackages.slice(0, 8).map(pkg => {
+              {individualPackages.slice(0, 8).map((pkg, idx) => {
                 const accent = pkg.color || "#e11d48"; // Default a rose-600
                 const priceSuffix = priceLabelSuffix(pkg.classes_count);
                 const priceDisplay = Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2);
@@ -519,8 +524,9 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                       ];
 
                 return (
-                  <div
+                  <Reveal
                     key={pkg.id}
+                    delay={(idx % 4) * 90}
                     className="relative w-full sm:w-[calc(50%-1rem)] lg:w-[calc(25%-1.5rem)] bg-white/80 backdrop-blur-sm rounded-[2rem] border border-rose-100 shadow-xl flex flex-col p-8 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl bg-white"
                   >
                     <div className="mb-6">
@@ -551,7 +557,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                     >
                       Elegir {pkg.name}
                     </Link>
-                  </div>
+                  </Reveal>
                 );
               })}
             </div>
@@ -573,7 +579,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
         <section id="group-plans" className="py-24 relative overflow-hidden bg-slate-50 border-y border-slate-100">
           <div className="absolute top-0 left-0 w-[450px] h-[450px] bg-purple-200/40 mix-blend-multiply rounded-full blur-[110px] pointer-events-none" />
           <div className="relative max-w-6xl mx-auto px-4 sm:px-6 z-10">
-            <div className="text-center mb-14">
+            <Reveal className="text-center mb-14">
               <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-3 flex items-center justify-center gap-1.5">
                 <Users className="w-3.5 h-3.5" /> Clases grupales
               </p>
@@ -585,7 +591,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                   ? "Comparte la clase con otros estudiantes de tu nivel y ahorra frente al plan individual."
                   : "Varios de nuestros profesores arman grupos reducidos por nivel e idioma. Comparten la clase, comparten el precio."}
               </p>
-            </div>
+            </Reveal>
 
             {/* Cómo funciona */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-16">
@@ -605,18 +611,20 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                   title: "Empiezan las clases",
                   desc: "Si el grupo no se llega a completar, siempre puedes pasar tu cupo a clases individuales.",
                 },
-              ].map(s => (
-                <div key={s.step} className="bg-white rounded-[1.75rem] border border-slate-100 shadow-sm p-6 flex flex-col items-center text-center">
+              ].map((s, idx) => (
+                <Reveal key={s.step} delay={idx * 120} className="bg-white rounded-[1.75rem] border border-slate-100 shadow-sm p-6 flex flex-col items-center text-center">
                   <div className="w-10 h-10 rounded-full bg-rose-600 text-white font-black flex items-center justify-center mb-4">
                     {s.step}
                   </div>
                   <h3 className="font-extrabold text-slate-900 mb-2">{s.title}</h3>
                   <p className="text-sm text-slate-500 leading-relaxed">{s.desc}</p>
-                </div>
+                </Reveal>
               ))}
             </div>
 
-            <PackagesCarousel packages={groupPackages} showTeacher={!isSingleTenant} />
+            <Reveal>
+              <PackagesCarousel packages={groupPackages} showTeacher={!isSingleTenant} />
+            </Reveal>
           </div>
         </section>
       )}
@@ -625,7 +633,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
       <section id="reviews" className="py-24 relative overflow-hidden border-y border-slate-100 bg-slate-50">
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-rose-300/40 mix-blend-multiply rounded-full blur-[100px] pointer-events-none" />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 z-10">
-          <div className="text-center mb-16">
+          <Reveal className="text-center mb-16">
             <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-3">Testimonios</p>
             <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">
               {isSingleTenant ? "Lo que dicen mis alumnos" : "Historias de Éxito"}
@@ -635,7 +643,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
               <span className="text-slate-900 font-extrabold">{avgRating.toFixed(1)}</span>
               <span className="text-slate-500 text-lg">Personas reales, resultados reales.</span>
             </div>
-          </div>
+          </Reveal>
 
           {reviews.length === 0 ? (
             <div className="text-center py-12">
@@ -643,8 +651,8 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {reviews.slice(0, 6).map(r => (
-                <div key={r.id} className="bg-white/90 backdrop-blur-sm rounded-2xl border border-rose-50 shadow-lg shadow-slate-200/50 p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+              {reviews.slice(0, 6).map((r, idx) => (
+                <Reveal key={r.id} delay={(idx % 3) * 120} className="bg-white/90 backdrop-blur-sm rounded-2xl border border-rose-50 shadow-lg shadow-slate-200/50 p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center flex-shrink-0 shadow-sm border border-rose-100">
                       <span className="text-rose-600 font-bold text-sm">{r.student_name?.[0] ?? "?"}</span>
@@ -665,7 +673,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                   </div>
                   <div className="text-rose-200 mb-[-10px]"><svg className="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg></div>
                   <p className="text-sm text-slate-600 leading-relaxed italic relative z-10">&quot;{r.comment}&quot;</p>
-                </div>
+                </Reveal>
               ))}
             </div>
           )}
@@ -678,7 +686,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
         <div className="absolute inset-0 bg-gradient-to-tr from-slate-50 to-rose-50/40 pointer-events-none" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[40rem] h-[40rem] bg-rose-200/40 rounded-full mix-blend-multiply blur-3xl pointer-events-none" />
 
-        <div className="relative max-w-2xl mx-auto px-4 sm:px-6 text-center z-10">
+        <Reveal className="relative max-w-2xl mx-auto px-4 sm:px-6 text-center z-10">
           <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">¿Listo para empezar?</h2>
           <p className="text-slate-500 text-lg mb-8 leading-relaxed font-medium">
             Tu primera clase de prueba es gratuita. Sin compromisos, sin tarjeta de crédito.
@@ -693,7 +701,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
               </button>
             )}
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* ─── Footer (Estilo oscuro) ─── */}
