@@ -19,8 +19,8 @@ import {
   type TeacherPackage as Package,
 } from "@/hooks/useTeacherData";
 import { useBusinessRules } from "@/hooks/useBusinessRules";
-import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
+import { useToast } from "@/hooks/useToast";
 
 interface Session {
   id: number;
@@ -613,7 +613,7 @@ function AttendanceModal({ session, onClose }: { session: Session; onClose: () =
   useEffect(() => {
     api.get<SessionParticipant[]>(`/cohorts/sessions/${session.id}/participants`)
       .then(res => setParticipants(res.data))
-      .catch((e) => setError(e?.response?.data?.detail || "No se pudo cargar la lista"));
+      .catch((e) => setError(getErrorMessage(e, "No se pudo cargar la lista")));
   }, [session.id]);
 
   const mark = async (studentId: number, status: "confirmed" | "no_show") => {
@@ -627,8 +627,7 @@ function AttendanceModal({ session, onClose }: { session: Session; onClose: () =
       );
       toast.success(status === "confirmed" ? "Asistencia marcada como confirmada" : "Asistencia marcada como ausente");
     } catch (e) {
-      const err = e as { response?: { data?: { detail?: string } } };
-      setError(err?.response?.data?.detail || "No se pudo actualizar la asistencia");
+      setError(getErrorMessage(e, "No se pudo actualizar la asistencia"));
     } finally {
       setUpdatingId(null);
     }

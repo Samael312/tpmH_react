@@ -55,4 +55,5 @@ class ErrorLogStats(BaseModel):
     warnings: int
     backend: int
     frontend: int
+    security: int
     last_24h: int

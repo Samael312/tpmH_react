@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Check, AlertTriangle, Loader2, Calendar } from "lucide-react";
 import api from "@/lib/api";
 import { usePageTopBar } from "@/lib/mobileTopBar";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 function CalendarCallbackInner() {
   const router = useRouter();
@@ -47,9 +48,7 @@ function CalendarCallbackInner() {
       })
       .catch((e) => {
         setStatus("error");
-        setErrorMsg(
-          e.response?.data?.detail || "Error conectando con Google Calendar."
-        );
+        setErrorMsg(getErrorMessage(e, "Error conectando con Google Calendar."));
       });
   }, [searchParams, router]);
 

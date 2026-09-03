@@ -9,6 +9,7 @@ import { useAuthStore } from "@/store/authStore";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -85,8 +86,8 @@ export default function LoginPage() {
         else if (["teacher", "teacher_admin"].includes(role)) router.push("/teacher/dashboard");
         else router.push("/dashboard");
       }
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "Error iniciando sesión con Google");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Error iniciando sesión con Google"));
     } finally {
       setLoading(false);
     }
@@ -170,8 +171,8 @@ export default function LoginPage() {
           router.push("/dashboard");
         }
       }
-    } catch (e: any) {
-      const detail = e.response?.data?.detail || "Usuario o contraseña incorrectos";
+    } catch (e: unknown) {
+      const detail = getErrorMessage(e, "Usuario o contraseña incorrectos");
       if (detail.toLowerCase().includes("desactivada")) {
         setError("Cuenta desactivada. Contacta con el administrador.");
       } else {
@@ -238,6 +239,7 @@ export default function LoginPage() {
                   <input
                     type="text"
                     value={form.login}
+                    maxLength={255}
                     onChange={(e) => setForm({ ...form, login: e.target.value.toLowerCase() })}
                     placeholder="Tu usuario"
                     className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-11 pr-4 py-2.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
@@ -254,6 +256,7 @@ export default function LoginPage() {
                   <input
                     type={showPw ? "text" : "password"}
                     value={form.password}
+                    maxLength={128}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                     placeholder="••••••••"
                     className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-11 pr-11 py-2.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"

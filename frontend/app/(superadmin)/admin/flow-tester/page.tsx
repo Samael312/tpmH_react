@@ -11,6 +11,7 @@ import api from "@/lib/api";
 import { Card, Badge, Button } from "@/components/ui";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { usePageTopBar } from "@/lib/mobileTopBar";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 // ─── Tipos (calcan la respuesta de /api/v1/flow-tests) ────────────────────
 
@@ -85,8 +86,7 @@ function outcomeIcon(outcome: string | undefined) {
 }
 
 function extractErrorMessage(e: unknown): string {
-  const err = e as { response?: { data?: { detail?: string } }; message?: string };
-  return err?.response?.data?.detail || err?.message || "Error desconocido al hablar con el backend.";
+  return getErrorMessage(e, "Error desconocido al hablar con el backend.");
 }
 
 export default function FlowTesterPage() {

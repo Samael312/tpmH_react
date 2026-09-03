@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import axios from "axios";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -22,6 +23,7 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { usePlatformTenantMode } from "@/lib/platformTenantMode";
 import Skeleton from "@/components/ui/Skeleton";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
   return (
@@ -99,6 +101,8 @@ export default function RegisterPage() {
   const fieldError = (field: string, value: string) => {
     if (!touched[field]) return false;
     if (field === "email") return !value.trim() || !value.includes("@");
+    if (field === "username") return value.trim().length < 3 || value.trim().length > 50;
+    if (field === "name" || field === "surname") return !value.trim() || value.trim().length > 100;
     if (field === "password") return value.length < 8;
     if (field === "confirmPw") return value !== password;
     return !value.trim();
@@ -106,8 +110,11 @@ export default function RegisterPage() {
 
   const step1Valid = Boolean(
     name.trim() &&
+      name.trim().length <= 100 &&
       surname.trim() &&
-      username.trim() &&
+      surname.trim().length <= 100 &&
+      username.trim().length >= 3 &&
+      username.trim().length <= 50 &&
       email.includes("@") &&
       role
   );
@@ -117,12 +124,17 @@ export default function RegisterPage() {
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
     setTouched({ name: true, surname: true, username: true, email: true });
-    
+
+    if (username.trim().length < 3) {
+      setError("El usuario debe tener al menos 3 caracteres.");
+      return;
+    }
+
     if (!step1Valid) {
       setError("Por favor, completa todos los campos correctamente antes de continuar.");
       return;
     }
-    
+
     setError("");
     setStep(2);
   };
@@ -162,11 +174,11 @@ export default function RegisterPage() {
         router.push("/login?registered=1");
       }, 2000);
     } catch (err: unknown) {
-      const errorResponse = err as { response?: { data?: { detail?: string }; status?: number } };
-      const detail = errorResponse.response?.data?.detail || "Error creando la cuenta";
+      const detail = getErrorMessage(err, "Error creando la cuenta");
       setError(detail);
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
       if (
-        errorResponse.response?.status === 400 &&
+        status === 400 &&
         (detail.toLowerCase().includes("email") ||
           detail.toLowerCase().includes("usuario"))
       ) {
@@ -280,10 +292,7 @@ export default function RegisterPage() {
                         );
                       }
                     } catch (err: unknown) {
-                      const errorResponse = err as { response?: { data?: { detail?: string } } };
-                      setError(
-                        errorResponse.response?.data?.detail || "Error con Google"
-                      );
+                      setError(getErrorMessage(err, "Error con Google"));
                     } finally {
                       setGoogleLoading(false);
                     }
@@ -381,6 +390,7 @@ export default function RegisterPage() {
                           name="given-name"
                           autoComplete="given-name"
                           value={name}
+                          maxLength={100}
                           onChange={(e) => setName(e.target.value)}
                           onBlur={() => markTouched("name")}
                           placeholder="Maria"
@@ -399,6 +409,7 @@ export default function RegisterPage() {
                           name="family-name"
                           autoComplete="family-name"
                           value={surname}
+                          maxLength={100}
                           onChange={(e) => setSurname(e.target.value)}
                           onBlur={() => markTouched("surname")}
                           placeholder="Farias"
@@ -421,6 +432,7 @@ export default function RegisterPage() {
                         name="username"
                         autoComplete="username"
                         value={username}
+                        maxLength={50}
                         onChange={(e) =>
                           setUsername(
                             e.target.value.toLowerCase().replace(/\s/g, "")
@@ -484,6 +496,7 @@ export default function RegisterPage() {
                         autoComplete="new-password"
                         type={showPw ? "text" : "password"}
                         value={password}
+                        maxLength={128}
                         onChange={(e) => setPassword(e.target.value)}
                         onBlur={() => markTouched("password")}
                         placeholder="Mínimo 8 caracteres"

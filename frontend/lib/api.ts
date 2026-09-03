@@ -2,6 +2,7 @@ import axios from "axios";
 import Cookies from "js-cookie";
 import { useAuthStore } from "@/store/authStore";
 import { reportFrontendError } from "@/lib/errorReporting";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1",
@@ -67,9 +68,7 @@ api.interceptors.response.use(
     if (typeof window !== "undefined" && err.response?.status !== 401) {
       const status = err.response?.status;
       reportFrontendError({
-        message: err.response?.data?.detail
-          ? String(err.response.data.detail)
-          : err.message || "Error de red al llamar a la API",
+        message: getErrorMessage(err, err.message || "Error de red al llamar a la API"),
         screen: window.location.pathname,
         level: status && status < 500 ? "warning" : "error",
         status_code: status,

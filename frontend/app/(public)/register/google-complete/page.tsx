@@ -9,6 +9,7 @@ import { useAuthStore } from "@/store/authStore";
 import { usePlatformTenantMode } from "@/lib/platformTenantMode";
 import Skeleton from "@/components/ui/Skeleton";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 export default function GoogleCompleteSignupPage() {
   const router = useRouter();
@@ -90,8 +91,8 @@ export default function GoogleCompleteSignupPage() {
       } catch {
         router.push(userRole === "teacher" ? "/teacher/dashboard" : "/dashboard");
       }
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "Error completando el registro");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Error completando el registro"));
     } finally {
       setLoading(false);
     }

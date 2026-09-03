@@ -309,7 +309,7 @@ function VideoUploadSection({
       setFeedback({ msg: res.data.message || "Video subido con éxito", type: "success" });
       onUploaded();
     } catch (e: any) {
-      setFeedback({ msg: e.response?.data?.detail || "Error subiendo el video", type: "error" });
+      setFeedback({ msg: formatErrorMessage(e, "Error subiendo el video"), type: "error" });
     } finally {
       setUploading(false);
       if (videoRef.current) videoRef.current.value = "";
@@ -323,7 +323,7 @@ function VideoUploadSection({
       setFeedback({ msg: "Video eliminado correctamente", type: "success" });
       onUploaded();
     } catch (e: any) {
-      setFeedback({ msg: e.response?.data?.detail || "Error eliminando el video", type: "error" });
+      setFeedback({ msg: formatErrorMessage(e, "Error eliminando el video"), type: "error" });
     }
   };
 
@@ -419,7 +419,7 @@ function ThemeColorSection({ initialColor, onSaved }: { initialColor?: string | 
       setFeedback({ msg: "Estilo actualizado", type: "success" });
       onSaved();
     } catch (e: any) {
-      setFeedback({ msg: e.response?.data?.detail || "Error guardando el estilo", type: "error" });
+      setFeedback({ msg: formatErrorMessage(e, "Error guardando el estilo"), type: "error" });
     } finally {
       setSaving(false);
       setTimeout(() => setFeedback(null), 2500);

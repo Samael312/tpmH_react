@@ -3,7 +3,7 @@ import api from "@/lib/api";
 
 export interface ErrorLogEntry {
   id: number;
-  source: "backend" | "frontend";
+  source: "backend" | "frontend" | "security";
   level: "error" | "warning";
   message: string;
   detail: string | null;
@@ -23,6 +23,7 @@ export interface ErrorLogStats {
   warnings: number;
   backend: number;
   frontend: number;
+  security: number;
   last_24h: number;
 }
 
@@ -32,7 +33,7 @@ export interface ErrorLogUserOption {
 }
 
 export interface ErrorLogFilters {
-  source?: "backend" | "frontend";
+  source?: "backend" | "frontend" | "security";
   level?: "error" | "warning";
   screen?: string;
   user_id?: number;

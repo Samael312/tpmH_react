@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
 
 class GoogleAuthResponse(BaseModel):
@@ -37,10 +37,10 @@ class GoogleRegisterRequest(BaseModel):
 
 class RegisterRequest(BaseModel):
     email: EmailStr
-    username: str
-    password: str
-    name: str
-    surname: str
+    username: str = Field(min_length=3, max_length=50)
+    password: str = Field(min_length=8, max_length=128)
+    name: str = Field(min_length=1, max_length=100)
+    surname: str = Field(min_length=1, max_length=100)
     role: str = "student"
 
     @field_validator("username")
@@ -49,6 +49,21 @@ class RegisterRequest(BaseModel):
         v = v.strip().lower()
         if not v:
             raise ValueError("El usuario no puede estar vacío")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError("La contraseña debe tener al menos 8 caracteres")
+        return v
+
+    @field_validator("name", "surname")
+    @classmethod
+    def validate_not_blank(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Este campo no puede estar vacío")
         return v
 
     @field_validator("role")
@@ -60,8 +75,8 @@ class RegisterRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     """Datos para hacer login"""
-    login: str
-    password: str
+    login: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=1, max_length=128)
 
 class TokenResponse(BaseModel):
     """Lo que devuelve el servidor al hacer login"""

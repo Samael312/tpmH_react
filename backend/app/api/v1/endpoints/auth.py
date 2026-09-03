@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 import httpx
 import logging
 import secrets
 from app.db.base import get_db
+from app.core.rate_limit import limiter
 from app.models.user import User, UserRole
 from app.models.teacher import TeacherProfile
 from app.models.student import StudentProfile
@@ -35,7 +36,8 @@ router = APIRouter()
 
 
 @router.post("/register", response_model=TokenResponse)
-def register(data: RegisterRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/hour")
+def register(request: Request, data: RegisterRequest, db: Session = Depends(get_db)):
 
     # 1. Verificar que el email no existe
     if db.query(User).filter(User.email == data.email).first():
@@ -82,7 +84,8 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     )
 
 @router.post("/login", response_model=TokenResponse)
-def login(data: LoginRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
 
     # Buscar por username O por email — el usuario usa lo que prefiera
     user = (
@@ -116,7 +119,8 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
     )
 
 @router.post("/google", response_model=GoogleAuthResponse)
-async def google_login(data: GoogleAuthRequest, db: Session = Depends(get_db)):
+@limiter.limit("20/minute")
+async def google_login(request: Request, data: GoogleAuthRequest, db: Session = Depends(get_db)):
     """
     Paso 1 del flujo Google (GSI). Verifica el id_token contra Google.
     - Si el email ya tiene cuenta -> login normal, devuelve token.
@@ -167,7 +171,8 @@ async def google_login(data: GoogleAuthRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/google/register", response_model=GoogleAuthResponse)
-async def google_register(data: GoogleRegisterRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/hour")
+async def google_register(request: Request, data: GoogleRegisterRequest, db: Session = Depends(get_db)):
     try:
         google_data = await verify_google_token(data.id_token)
     except ValueError as e:
@@ -232,7 +237,9 @@ async def google_register(data: GoogleRegisterRequest, db: Session = Depends(get
     )
 
 @router.post("/forgot-password")
+@limiter.limit("5/hour")
 def forgot_password(
+    request: Request,
     data: ForgotPasswordRequest,
     db: Session = Depends(get_db)
 ):
@@ -274,7 +281,9 @@ def forgot_password(
 
 
 @router.post("/reset-password")
+@limiter.limit("10/hour")
 def reset_password(
+    request: Request,
     data: ResetPasswordRequest,
     db: Session = Depends(get_db)
 ):
@@ -313,7 +322,9 @@ def reset_password(
     return {"message": "Contraseña actualizada correctamente"}
 
 @router.post("/forgot-username")
+@limiter.limit("5/hour")
 def forgot_username(
+    request: Request,
     data: ForgotUsernameRequest,
     db: Session = Depends(get_db)
 ):

@@ -6,7 +6,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_student, get_current_teacher_or_teacher_admin
+from app.auth.dependencies import get_current_student, get_current_teacher_or_teacher_admin, get_current_user
 from app.core.group_cohort_logic import (
     cancel_cohort,
     cancel_future_cohort_sessions,
@@ -23,7 +23,7 @@ from app.models.group_cohort import CohortStatus, GroupCohort
 from app.models.package import Enrollment, EnrollmentStatus, Package
 from app.models.payment import Payment
 from app.models.teacher import TeacherProfile
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.cohorts import (
     CohortCloseRequest,
     CohortCreate,
@@ -486,12 +486,27 @@ def create_group_session(
 @router.get("/{cohort_id}/sessions", response_model=List[GroupSessionResponse])
 def get_cohort_sessions(
     cohort_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Visible tanto para el profesor como para los alumnos de la cohorte."""
     cohort = db.query(GroupCohort).filter(GroupCohort.id == cohort_id).first()
     if not cohort:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+
+    is_owner_teacher = (
+        current_user.teacher_profile is not None
+        and cohort.teacher_id == current_user.teacher_profile.id
+    )
+    is_enrolled_student = False
+    if current_user.student_profile is not None:
+        is_enrolled_student = db.query(Enrollment).filter(
+            Enrollment.cohort_id == cohort_id,
+            Enrollment.student_id == current_user.student_profile.id,
+        ).first() is not None
+
+    if not (is_owner_teacher or is_enrolled_student or current_user.role == UserRole.superadmin):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "No tenés acceso a esta cohorte")
 
     sessions = db.query(Class).filter(
         Class.cohort_id == cohort_id,

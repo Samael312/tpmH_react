@@ -5,7 +5,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from app.core.config import settings
+from app.core.rate_limit import limiter
 from app.api.v1.router import api_router
 from app.core.scheduler import start_scheduler, stop_scheduler
 from app.db.base import SessionLocal
@@ -41,6 +44,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate limiting — ver app/core/rate_limit.py. `app.state.limiter` es lo
+# que lee el decorador @limiter.limit(...) en cada endpoint, y el
+# middleware es el que efectivamente cuenta las requests y agrega los
+# headers X-RateLimit-* a la respuesta.
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
 
 # ─── Logs centralizados de errores (pantalla de Logs en /admin) ──────
 #
@@ -103,6 +113,34 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         status_code=exc.status_code,
         content={"detail": exc.detail},
         headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    # Se registra siempre como evento de seguridad (independientemente
+    # de la ruta) para poder detectar patrones de fuerza bruta o scraping
+    # desde la pantalla de Logs en /admin, filtrando por source=security.
+    db = SessionLocal()
+    try:
+        user = get_user_from_request(db, request)
+        log_error(
+            source="security",
+            level="warning",
+            message=f"Rate limit excedido ({exc.detail})",
+            screen=request.url.path,
+            method=request.method,
+            status_code=429,
+            user=user,
+            extra={"ip": request.client.host if request.client else None},
+            db=db,
+        )
+    finally:
+        db.close()
+
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Demasiados intentos. Probá de nuevo en unos minutos."},
     )
 
 

@@ -19,6 +19,7 @@ import {
 } from "@/hooks/useGodMode";
 import { AvailableSlot } from "@/hooks/useStudentData";
 import { getMyDisplayTimezone, formatTimeTz } from "@/lib/tzFormat";
+import { getErrorMessage } from "@/lib/errorMessage";
 import GodModeAvailabilityPicker from "./GodModeAvailabilityPicker";
 
 const baseInputClasses = "w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 " +
@@ -154,8 +155,7 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
       setValuesState({});
       setReason("");
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      setResult({ ok: false, message: typeof detail === "string" ? detail : "Ocurrió un error al ejecutar la acción." });
+      setResult({ ok: false, message: getErrorMessage(err, "Ocurrió un error al ejecutar la acción.") });
       setConfirming(false);
     }
   };

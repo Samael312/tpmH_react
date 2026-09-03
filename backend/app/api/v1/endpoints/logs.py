@@ -47,7 +47,7 @@ def report_frontend_error(
 
 @router.get("", response_model=PaginatedErrorLogResponse)
 def list_error_logs(
-    source: Optional[str] = Query(None, pattern="^(backend|frontend)$"),
+    source: Optional[str] = Query(None, pattern="^(backend|frontend|security)$"),
     level: Optional[str] = Query(None, pattern="^(error|warning)$"),
     screen: Optional[str] = Query(None, description="Búsqueda parcial sobre la pantalla/endpoint"),
     user_id: Optional[int] = None,
@@ -128,6 +128,7 @@ def get_error_log_stats(
     warnings = db.query(ErrorLog).filter(ErrorLog.level == "warning").count()
     backend = db.query(ErrorLog).filter(ErrorLog.source == "backend").count()
     frontend = db.query(ErrorLog).filter(ErrorLog.source == "frontend").count()
+    security = db.query(ErrorLog).filter(ErrorLog.source == "security").count()
     last_24h = db.query(ErrorLog).filter(ErrorLog.created_at >= since).count()
 
     return ErrorLogStats(
@@ -136,5 +137,6 @@ def get_error_log_stats(
         warnings=warnings,
         backend=backend,
         frontend=frontend,
+        security=security,
         last_24h=last_24h,
     )

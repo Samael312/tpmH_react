@@ -18,6 +18,7 @@ import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
 import { usePageTopBar } from '@/lib/mobileTopBar'
 import { useToast } from '@/hooks/useToast'
+import { getErrorMessage } from '@/lib/errorMessage'
 
 function BanStudentModal({
   student,
@@ -45,8 +46,8 @@ function BanStudentModal({
       toast.success('Estudiante expulsado correctamente')
       onBanned()
       onClose()
-    } catch (e: any) {
-      setError(e.response?.data?.detail || 'Error expulsando al estudiante')
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, 'Error expulsando al estudiante'))
     } finally {
       setBanning(false)
     }

@@ -8,6 +8,7 @@ import { Lock, Eye, EyeOff, Check, ArrowLeft, AlertTriangle } from "lucide-react
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import Skeleton from "@/components/ui/Skeleton";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -36,8 +37,8 @@ function ResetPasswordForm() {
       });
       setSuccess(true);
       setTimeout(() => router.push("/login"), 2500);
-    } catch (e: any) {
-      const detail = e.response?.data?.detail || "Error al restablecer la contraseña";
+    } catch (e: unknown) {
+      const detail = getErrorMessage(e, "Error al restablecer la contraseña");
       if (detail.toLowerCase().includes("expirado") || detail.toLowerCase().includes("inválido")) {
         setError("El enlace ha expirado o ya fue usado. Solicita uno nuevo.");
       } else {

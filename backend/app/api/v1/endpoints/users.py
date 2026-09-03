@@ -3,10 +3,11 @@ from zoneinfo import ZoneInfo
 import logging
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 from sqlalchemy.orm import Session
 from app.core.phone import normalize_phone
 from app.db.base import get_db
+from app.core.rate_limit import limiter
 from app.auth.dependencies import get_current_student, get_current_user
 from app.auth.passwords import hash_password, verify_password
 from app.models.user import User
@@ -177,7 +178,9 @@ def update_profile(
 
 
 @router.post("/me/change-password")
+@limiter.limit("10/hour")
 def change_password(
+    request: Request,
     data: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
