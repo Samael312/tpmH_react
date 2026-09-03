@@ -7,7 +7,7 @@ import { useAuthStore } from "@/store/authStore";
 import { 
   LayoutDashboard, Users, GraduationCap, Calendar, Settings, LogOut, 
   MonitorPlay, UserCircle, ClipboardEdit, CreditCard, Book, BarChart, ChevronLeft,
-  CheckCheck, Package as PackageIcon, MoreHorizontal, Users2, LifeBuoy, Crown, AlertOctagon
+  CheckCheck, MoreHorizontal, Users2, LifeBuoy, Crown, AlertOctagon
 } from "lucide-react";
 import { useUnreadNotificationCount } from "@/hooks/useAdminData";
 import { useUnreadSupportCount } from "@/hooks/useSupport";
@@ -56,7 +56,6 @@ const ADMIN_MAIN: TabItem[] = [
 ];
 const ADMIN_MORE: TabItem[] = [
   { href: "/admin/god-mode", label: "Modo Dios", icon: <Crown size={20} /> },
-  { href: "/admin/package-requests", label: "Solicitudes", icon: <PackageIcon size={20} /> },
   { href: "/admin/support", label: "Soporte", icon: <LifeBuoy size={20} /> },
   { href: "/admin/logs", label: "Logs", icon: <AlertOctagon size={20} /> },
   { href: "/admin/settings", label: "Configuración", icon: <Settings size={20} /> },

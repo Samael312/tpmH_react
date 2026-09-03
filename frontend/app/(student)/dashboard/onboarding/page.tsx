@@ -686,7 +686,7 @@ function StepPaymentMethods({ selected, setSelected, onNext, onBack, saving }: S
       <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex gap-4 items-start">
         <span className="text-xl">💡</span>
         <p className="text-sm font-bold text-amber-800 leading-relaxed">
-          El pago de las clases se coordina directamente con el profesor fuera de la plataforma. Esta selección nos ayuda a mostrarte profesores que acepten tus métodos preferidos.
+          El pago se hace directamente en la plataforma: transfieres por el método que elijas y notificas el pago para que lo validen. Esta selección es solo tu preferencia guardada en el perfil, puedes cambiarla cuando quieras.
         </p>
       </div>
 
