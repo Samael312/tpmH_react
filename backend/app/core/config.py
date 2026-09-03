@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     EMAIL_FROM: str = "soporte@mail.tuprofemaria.com"
 
     # App
-    APP_NAME: str = "TPMH"
+    APP_NAME: str = "TPM"
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8000")
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")

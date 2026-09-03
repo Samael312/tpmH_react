@@ -45,7 +45,7 @@ async def analyze_test_failure(
             detail="GEMINI_API_KEY no está configurada en el servidor"
         )
 
-    prompt = f"""Eres un QA engineer experto en FastAPI + Next.js analizando TPMH.
+    prompt = f"""Eres un QA engineer experto en FastAPI + Next.js analizando TPM.
 
 Test fallido:
 - Nombre: {data.test_name}

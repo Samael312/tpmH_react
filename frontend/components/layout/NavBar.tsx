@@ -74,7 +74,7 @@ function MobileTopBar() {
         paddingBottom: "0.75rem",
       }}
     >
-      <h1 className="text-sm font-black text-slate-800 truncate">{title || "TPMH"}</h1>
+      <h1 className="text-sm font-black text-slate-800 truncate">{title || "TPM"}</h1>
       {onRefresh && <RefreshButton onRefresh={onRefresh} isFetching={isFetching} className="w-8 h-8" />}
     </header>
   );
@@ -202,13 +202,13 @@ export default function DashboardSidebar() {
             <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-400 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-lg shadow-pink-200 transform hover:rotate-12 transition-transform overflow-hidden">
               <img
                 src="/assets/logo.png"
-                alt="TPMH"
+                alt="TPM"
                 className="w-full h-full object-contain p-1.5"
               />
             </div>
             {!collapsed && (
               <div className="animate-in fade-in duration-300">
-                <span className="font-black text-lg text-slate-800 tracking-tight block leading-none">TPMH</span>
+                <span className="font-black text-lg text-slate-800 tracking-tight block leading-none">TuProfeMaria</span>
                 <span className="text-[11px] font-bold text-pink-400 uppercase tracking-widest">Portal</span>
               </div>
             )}

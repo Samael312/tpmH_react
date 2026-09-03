@@ -5,7 +5,7 @@ from typing import Optional
 import json
 
 from app.db.base import get_db
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user_optional
 from app.models.user import User
 from app.schemas.chipi import ChipiRequest, ChipiResponse
 from app.core.chipi.prompts import build_system_prompt
@@ -23,22 +23,11 @@ from app.core.chipi.service import (
 router = APIRouter()
 
 
-def _get_optional_user(
-    db: Session = Depends(get_db),
-) -> Optional[User]:
-    """
-    Dependencia opcional — no falla si no hay token.
-    Chipi funciona tanto para usuarios autenticados como visitantes.
-    """
-    return None
-
-
 @router.post("/chat")
 async def chat_with_chipi(
     data: ChipiRequest,
     db: Session = Depends(get_db),
-    no_user: Optional[User] = Depends(_get_optional_user),
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """
     Endpoint principal del chatbot Chipi.

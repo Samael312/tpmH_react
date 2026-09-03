@@ -119,7 +119,7 @@ function SidebarProgress({ step, name }: { step: number; name: string }) {
 
       <div className="relative z-10">
         <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700/50">
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">TPMH Platform</p>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">TPM Platform</p>
           <p className="text-slate-300 text-xs">Tu perfil es tu carta de presentación para los estudiantes.</p>
         </div>
       </div>

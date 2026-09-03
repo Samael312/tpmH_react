@@ -18,7 +18,7 @@ class PlatformConfig(Base):
     # int  = modo single-tenant (profesor fijo)
     featured_teacher_id = Column(Integer,ForeignKey("teacher_profiles.id"),nullable=True)
     # Nombre de la plataforma (personalizable)
-    platform_name = Column(String, default="TPMH")
+    platform_name = Column(String, default="TPM")
     platform_tagline = Column(String, nullable=True)
     # Modo de la plataforma
     is_single_tenant = Column(Boolean, default=True)

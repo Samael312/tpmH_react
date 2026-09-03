@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     lifespan=lifespan,
-    description="API de TPMH - Plataforma de clases particulares",
+    description="API de TPM - Plataforma de clases particulares",
     version="1.0.0",
     # En producción desactivamos la documentación pública
     docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
