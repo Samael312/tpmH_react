@@ -151,9 +151,27 @@ vuelta al docstring completo como "technical_description" y
 | `test_availability.py` | Disponibilidad semanal del profesor (roles correctos), slots públicos, excepciones puntuales |
 | `test_materials_homework.py` | Crear/asignar material y vocabulario, crear/asignar/borrar tareas, vínculo profesor-estudiante |
 | `test_purchase_flow.py` | El flujo completo: prueba gratuita → completarla (god-mode) → crear paquete → notificar pago → aprobar pago → clase regular con crédito |
+| `test_scheduling_edge_cases.py` | Rechazos y casos límite de agendar/cancelar/reagendar: antelación mínima, créditos agotados, enrollment sin pagar, choques de horario (profesor y estudiante), ventana de 12h para cancelar/reagendar |
+| `test_package_change.py` | Matriz completa de cambio de paquete y migraciones individual↔grupal: upgrade/downgrade (instantáneo, con cargo, con reembolso, con créditos ya usados), cambio a ilimitado, unirse/salir de una cohorte, migración grupal→individual (cotización + aplicación), y grupal→grupal manual |
 | `test_admin_staff.py` | Regresión directa del bug original: staff (`superadmin`/`teacher_admin`) vs. no-staff en endpoints de admin |
 | `test_support.py` | Crear ticket, listar, resolver (superadmin y teacher_admin) |
 | `test_cohorts.py` | Integrantes de una cohorte en vivo mientras se llena (`GET /cohorts/{id}/members`); regresión del bug de migración grupo → paquete individual ilimitado que dejaba `cohort_id` colgado; cierre y cancelación de cohorte; rechazo de un pago pendiente de inscripción grupal |
+| `test_lifetime_completed_classes.py` | El contador de clases completadas de por vida del estudiante sobrevive a renovaciones/cambios de paquete; cuenta clases grupales y excluye participantes cancelados |
+| `test_public_and_logs.py` | `GET /public/landing` (filtro `is_test_account` también en este endpoint nuevo, funciona sin sesión); `/logs/*` (crear log de frontend con/sin sesión, listado/stats/usuarios solo para staff) |
+
+## Bugs reales encontrados por la suite (más allá de los del flow-tester viejo)
+
+- **`app/main.py::validation_exception_handler` serializaba mal los
+  errores de validación** (encontrado al correr la suite después de un
+  `git pull` que agregó el sistema de logs). Cualquier `@field_validator`
+  que hace `raise ValueError(...)` — hay ~16 schemas así en el proyecto
+  (auth, payments, packages, classes, cohorts, homework, materials...) —
+  hacía que el endpoint devolviera 500 en vez del 422 esperado, porque
+  Pydantic v2 deja el objeto `ValueError` original (no serializable) en
+  `error["ctx"]["error"]`, y el handler personalizado usaba `json.dumps`
+  a secas en vez de `jsonable_encoder`. Corregido con un cambio de una
+  línea; `test_register_rejects_privileged_role` en `test_auth.py` queda
+  como regresión permanente.
 
 ## Diagnóstico de "0 tests" en la UI sin ningún error visible
 
@@ -175,6 +193,11 @@ incluyendo ese mensaje exacto, para que quede obvio qué instalar y dónde.
 
 ## Limitaciones conocidas / próximos pasos
 
+- No cubierto a propósito (es agendar sesiones dentro de una cohorte ya
+  confirmada, otra área de la app): crear sesiones grupales, asistencia,
+  o completar/cancelar una cohorte con sesiones ya agendadas. Los tests de
+  cohortes existentes cubren crear, inscribirse, salir, y migrar hacia
+  individual.
 - **Modo single-tenant**: `POST /payments/book` ignora `teacher_username`
   si `PlatformConfig.is_single_tenant` es `True` (o no hay fila de config
   todavía) y usa el "profesor destacado"

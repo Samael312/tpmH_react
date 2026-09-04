@@ -82,10 +82,20 @@ def test_register_rejects_privileged_role(client):
     """
     Técnico: intenta registrar con role=superadmin vía el endpoint público
     y espera 422 (rechazado por el schema, RegisterRequest.validate_role
-    solo permite student/teacher).
+    solo permite student/teacher). Este test también sirve de regresión de
+    un bug real encontrado en esta suite: el validation_exception_handler
+    personalizado de app/main.py serializaba exc.errors() con json.dumps
+    a secas, que no sabe convertir el objeto ValueError original que
+    Pydantic v2 deja en error["ctx"]["error"] para validadores con `raise
+    ValueError(...)` — crasheaba con 500 en vez de devolver el 422
+    esperado, en cualquiera de los ~16 schemas del proyecto que usan ese
+    patrón (auth, payments, packages, classes, cohorts, homework,
+    materials...). Ya corregido con jsonable_encoder.
     UX: cierra un hueco de seguridad — nadie debería poder auto-otorgarse
     permisos de administrador simplemente registrándose con ese rol en el
-    formulario público.
+    formulario público. Y, más en general, cualquier error de validación
+    en la app (un campo mal formado en cualquier formulario) debe mostrar
+    un mensaje de error legible, no una pantalla de error genérica de 500.
     """
     r = client.post("/api/v1/auth/register", json={
         "name": "X", "surname": "Y", "username": f"hacker_{uuid.uuid4().hex[:6]}",

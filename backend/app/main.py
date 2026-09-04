@@ -2,6 +2,7 @@ import traceback
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
@@ -170,7 +171,19 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors()},
+        # BUG real encontrado por la suite de flow-tests: exc.errors() trae,
+        # para validadores que hacen `raise ValueError(...)`, el objeto
+        # ValueError original sin serializar dentro de error["ctx"]["error"]
+        # (así lo expone Pydantic v2). El JSONResponse de Starlette usa
+        # json.dumps a secas, que no sabe serializar excepciones -> esto
+        # crasheaba con un 500 "Object of type ValueError is not JSON
+        # serializable" en CUALQUIER validador de los ~16 schemas que usan
+        # `raise ValueError(...)` (auth, payments, packages, classes,
+        # cohorts, homework, materials, etc.), en vez de devolver el 422
+        # esperado con el mensaje de validación. jsonable_encoder (lo mismo
+        # que usa el handler por defecto de FastAPI) sí sabe convertir esas
+        # excepciones a texto antes de serializar.
+        content={"detail": jsonable_encoder(exc.errors())},
     )
 
 

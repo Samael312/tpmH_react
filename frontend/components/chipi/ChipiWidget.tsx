@@ -36,7 +36,7 @@ const QUICK_SUGGESTIONS = [
 // prefijo genérico como "/admin" nunca "tape" a una ruta más específica
 // como "/admin/students/banned" — a diferencia del bug anterior, que
 // dependía del orden de inserción del objeto.
-const SCREEN_ROUTES: Array<[string, string]> = [
+const SCREEN_ROUTES: Array<[string, string]> = ([
   // Públicas
   ["/", "main"],
   ["/login", "login"],
@@ -93,7 +93,7 @@ const SCREEN_ROUTES: Array<[string, string]> = [
   // bajo /teacher o /admin sin registrarla arriba)
   ["/teacher", "teacher_home"],
   ["/admin", "admin_home"],
-].sort((a, b) => b[0].length - a[0].length);
+].sort((a, b) => b[0].length - a[0].length) as Array<[string, string]>);
 
 function useScreenName(): string {
   const pathname = usePathname() || "/";
