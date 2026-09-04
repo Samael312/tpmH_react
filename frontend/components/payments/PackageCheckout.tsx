@@ -17,7 +17,7 @@ export interface PackageLite {
   allow_installments: boolean;
   installment_count: number | null;
   installment_amount: number | null;
-  icon?: string;
+  icon?: string | null;
 }
 
 export interface PackageCheckoutProps {

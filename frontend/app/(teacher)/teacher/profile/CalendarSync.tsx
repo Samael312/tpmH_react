@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Calendar, Link as LinkIcon, Unlink,
   RefreshCw, Check, AlertTriangle,
-  ExternalLink, Loader2
+  Loader2
 } from "lucide-react";
 import api from "@/lib/api";
 import { getMyDisplayTimezone } from "@/lib/tzFormat";

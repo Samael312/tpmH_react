@@ -35,7 +35,7 @@ export interface TeacherProfile {
   languages: string[]
   subjects: string[]
   skills: string[]
-  certificates: any[]
+  certificates: { title: string; year: string }[]
   gallery: string[]
   social_links: Record<string, string>
   status: string
@@ -43,6 +43,10 @@ export interface TeacherProfile {
   balance: number
   video_url?: string | null
   theme_color?: string | null
+  rejection_reason?: string | null
+  rejection_feedback_seen?: boolean
+  appeal_count?: number
+  appeal_exhausted?: boolean
 }
 
 export interface WeeklySlot {
@@ -142,12 +146,37 @@ export interface TeacherMaterial {
 }
 
 // ─── Pagos del profesor (validación) ─────────────────────────────────────────
+// Ambos endpoints devuelven una forma parecida (pending-review agrega
+// payment_expires_at; history agrega validated_at/status/rejection_reason),
+// y la UI (teacher/payments/page.tsx) los combina en una sola lista según la
+// pestaña activa, por eso se modela como un único tipo con los campos
+// exclusivos de cada endpoint marcados opcionales.
+export interface TeacherPaymentEntry {
+  payment_id: number
+  payment_type: string
+  installment_index: number | null
+  amount: number
+  transaction_reference: string | null
+  submitted_at: string
+  student_name: string
+  student_username: string | null
+  class_start_utc?: string | null
+  package_name?: string | null
+  installment_total?: number | null
+  // Solo en /payments/pending-review (pagos de una sola clase con vencimiento)
+  payment_expires_at?: string | null
+  // Solo en /payments/history
+  validated_at?: string | null
+  status?: "approved" | "rejected"
+  rejection_reason?: string | null
+}
+
 export function useTeacherPendingPayments(enabled: boolean = true) {
   const query = useQuery({
     queryKey: ["teacher", "payments", "pending"],
     queryFn: async () => {
       const res = await api.get('/payments/pending-review')
-      return res.data as any[]
+      return res.data as TeacherPaymentEntry[]
     },
     enabled,
   })
@@ -166,7 +195,7 @@ export function useTeacherPaymentsHistory(enabled: boolean = true) {
     queryKey: ["teacher", "payments", "history"],
     queryFn: async () => {
       const res = await api.get('/payments/history')
-      return res.data as any[]
+      return res.data as TeacherPaymentEntry[]
     },
     enabled,
   })

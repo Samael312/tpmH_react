@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import Image from "next/image";
+import axios from "axios";
 import {
   User, Mail, Globe, CreditCard, Lock, Trash2, Eye, EyeOff,
   Check, AlertTriangle, Camera, ChevronDown, Phone, Edit2, X, AtSign, RefreshCw
@@ -18,7 +20,7 @@ import {
   normalizeGoalsCatalog,
   flattenGoals,
 } from "@/lib/teacherOptions";
-import { useStudentProfileData } from "@/hooks/useStudentData";
+import { useStudentProfileData, StudentProfileRecord, UserProfileResponse } from "@/hooks/useStudentData";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
@@ -26,17 +28,24 @@ import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 
 // ─── Helpers & Formateadores de Errores ──────────────────────────────────────
-function formatErrorMessage(error: any, fallbackMessage: string): string {
-  const detail = error?.response?.data?.detail;
+function formatErrorMessage(error: unknown, fallbackMessage: string): string {
+  const detail = axios.isAxiosError(error) ? error.response?.data?.detail : undefined;
 
   if (typeof detail === "string") return detail;
 
   if (Array.isArray(detail) && detail.length > 0) {
-    return detail.map((err: any) => err?.msg || JSON.stringify(err)).join(". ");
+    return detail
+      .map((err: unknown) => {
+        if (err && typeof err === "object" && "msg" in err) {
+          return (err as { msg?: string }).msg || JSON.stringify(err);
+        }
+        return JSON.stringify(err);
+      })
+      .join(". ");
   }
 
   if (typeof detail === "object" && detail !== null) {
-    return detail.msg || JSON.stringify(detail);
+    return (detail as { msg?: string }).msg || JSON.stringify(detail);
   }
 
   return fallbackMessage;
@@ -151,7 +160,7 @@ export default function StudentProfilePage() {
   const { user, setUser, logout } = useAuthStore();
   const toast = useToast();
   const [nationality, setNationality] = useState("");
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<(UserProfileResponse & { studentProfile: StudentProfileRecord }) | null>(null);
   const {
     data: profileQueryData,
     loading: loadingProfile,
@@ -162,9 +171,6 @@ export default function StudentProfilePage() {
   const loadError = profileHasError ? "No se pudo cargar la información del perfil." : null;
   const [isEditing, setIsEditing] = useState(false);
   const [timezonesList, setTimezonesList] = useState<string[]>(DEFAULT_TIMEZONES);
-
-  // Timezone
-  const [savedTimezone, setSavedTimezone] = useState("");
 
   // Campos de formulario
   const [username, setUsername] = useState("");
@@ -224,7 +230,7 @@ export default function StudentProfilePage() {
   }, [catalogs.student_payment_methods]);
 
   // Normalizador de datos (Maneja fallbacks de API)
-  const populateFields = useCallback((userData: any, studentData: any) => {
+  const populateFields = useCallback((userData: UserProfileResponse, studentData: StudentProfileRecord) => {
     setProfile({ ...userData, studentProfile: studentData });
     setNationality(userData.nationality ?? "");
     setUsername(userData.username ?? studentData.user_username ?? user?.username ?? "");
@@ -233,7 +239,7 @@ export default function StudentProfilePage() {
     setEmail(userData.email ?? "");
     setIsGoogleAccount(!!userData.is_google_account);
 
-    const rawPhone = userData.phone_number ?? userData.phone ?? "";
+    const rawPhone = userData.phone_number ?? "";
     const { country, rest } = parsePhoneNumber(rawPhone);
     setPhoneCountry(country);
     setPhoneRest(rest);
@@ -244,7 +250,6 @@ export default function StudentProfilePage() {
       "UTC";
     setTz(detectedTz);
     setTimezonesList(prev => (prev.includes(detectedTz) ? prev : [detectedTz, ...prev]));
-    setSavedTimezone(studentData.timezone || "");
 
     const loadedGoal = studentData.goal ?? "";
     setGoal(loadedGoal);
@@ -262,7 +267,7 @@ export default function StudentProfilePage() {
     setUseCustomGoal(isCustom);
     setPay(studentData.preferred_payment_methods ?? []);
 
-    const photo = userData.avatar_url ?? userData.avatar ?? studentData.profile_photo_url ?? null;
+    const photo = userData.avatar ?? studentData.profile_photo_url ?? null;
     setAvatarUrl(photo);
   }, [user?.username, goalsByCategory, allGoalsFlat]);
 
@@ -334,7 +339,7 @@ export default function StudentProfilePage() {
       setInfoFeedback({ msg: "Perfil actualizado correctamente", type: "success" });
       setIsEditing(false);
       refetchProfile();
-    } catch (e: any) {
+    } catch (e) {
       setInfoFeedback({
         msg: formatErrorMessage(e, "Error al guardar los cambios"),
         type: "error",
@@ -364,7 +369,7 @@ export default function StudentProfilePage() {
       });
       setOldPw(""); setNewPw(""); setConfirm("");
       setPwFeedback({ msg: "Contraseña actualizada exitosamente", type: "success" });
-    } catch (e: any) {
+    } catch (e) {
       setPwFeedback({
         msg: formatErrorMessage(e, "Contraseña actual incorrecta"),
         type: "error",
@@ -388,7 +393,7 @@ export default function StudentProfilePage() {
       toast.error(getErrorMessage(e, "No se pudo eliminar la cuenta"));
       setDeleting(false);
     }
-  }, [deleteInput, username, user?.username, logout]);
+  }, [deleteInput, username, user?.username, logout, toast]);
 
   // ─── PATCH: Subir Foto de Perfil ─────────────────────────────────────────────
   const handleAvatarChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -412,7 +417,7 @@ export default function StudentProfilePage() {
       }
       refetchProfile();
       toast.success("Foto de perfil actualizada correctamente");
-    } catch (e: any) {
+    } catch (e) {
       setInfoFeedback({
         msg: formatErrorMessage(e, "Error al subir la imagen"),
         type: "error"
@@ -420,7 +425,7 @@ export default function StudentProfilePage() {
     } finally {
       setUploading(false);
     }
-  }, [user, setUser, refetchProfile]);
+  }, [user, setUser, refetchProfile, toast]);
 
   const displayName = useMemo(
     () => `${name} ${surname}`.trim() || user?.name || "Estudiante",
@@ -465,9 +470,9 @@ export default function StudentProfilePage() {
         <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg p-6 sm:p-7 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
           <div className="flex items-center gap-5">
             <div className="relative flex-shrink-0">
-              <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-pink-400 to-rose-400 flex items-center justify-center shadow-md shadow-pink-100">
+              <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-pink-400 to-rose-400 flex items-center justify-center shadow-md shadow-pink-100">
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" loading="lazy" />
+                  <Image src={avatarUrl} alt="avatar" fill sizes="80px" className="object-cover" />
                 ) : (
                   <span className="text-white font-black text-2xl">{initials}</span>
                 )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Image from "next/image";
 import {
   Search, Users, Mail, Phone, ChevronDown, BookOpen,
   GraduationCap, Package as PackageIcon, Filter, X, Sliders,
@@ -43,7 +44,11 @@ const SUBJECT_LANGUAGE_OPTIONS = Array.from(new Set([...SUBJECTS, ...LANGUAGES])
 
 function StudentAvatar({ s, className }: { s: TeacherStudentFull; className?: string }) {
   if (s.avatar) {
-    return <img src={s.avatar} alt={s.name} className={`${className} object-cover`} />;
+    return (
+      <span className={`relative ${className} block overflow-hidden`}>
+        <Image src={s.avatar} alt={s.name} fill sizes="40px" className="object-cover" />
+      </span>
+    );
   }
   return (
     <div className={`${className} bg-gradient-to-br from-pink-400 to-rose-400 flex items-center justify-center text-white font-black`}>

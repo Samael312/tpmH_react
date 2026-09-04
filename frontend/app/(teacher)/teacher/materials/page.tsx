@@ -1,18 +1,19 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import NextImage from "next/image";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Upload, FileText, Image, Trash2,
+  Upload, FileText, Image as ImageIcon, Trash2,
   Users, Plus, BookOpen, Search, X, Check,
   Volume2, ChevronDown, FolderOpen, Sparkles,
-  Edit2, AlertTriangle, Loader2, RefreshCw
+  Edit2, AlertTriangle, RefreshCw
 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 // in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
-import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS, TOPICS as FALLBACK_TOPICS, LEVELS as FALLBACK_LEVELS } from "@/lib/teacherOptions";
+import { TOPICS as FALLBACK_TOPICS, LEVELS as FALLBACK_LEVELS } from "@/lib/teacherOptions";
 import { useTeacherMaterials, useTeacherStudentsBasic, type TeacherMaterial as Material } from "@/hooks/useTeacherData";
 import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
@@ -44,7 +45,7 @@ function getFileIcon(filename: string | null, category: string) {
     return <Volume2 className="w-6 h-6 text-purple-500" />;
   const ext = filename?.split(".").pop()?.toLowerCase();
   if (["jpg","jpeg","png","gif","webp"].includes(ext || ""))
-    return <Image className="w-6 h-6 text-blue-500" />;
+    return <ImageIcon className="w-6 h-6 text-blue-500" />;
   if (ext === "pdf")
     return <FileText className="w-6 h-6 text-rose-500" />;
   return <FileText className="w-6 h-6 text-slate-400" />;
@@ -94,7 +95,11 @@ export function ExpandableDescription({ text, limitLines = 2 }: ExpandableDescri
 
 function StudentAvatar({ s, className }: { s: Student; className?: string }) {
   if (s.avatar) {
-    return <img src={s.avatar} alt={s.name} className={`${className} object-cover`} />;
+    return (
+      <span className={`relative ${className} block overflow-hidden`}>
+        <NextImage src={s.avatar} alt={s.name} fill sizes="40px" className="object-cover" />
+      </span>
+    );
   }
   return (
     <div className={`${className} bg-gradient-to-br from-pink-400 to-rose-400
@@ -758,9 +763,6 @@ function DeleteMaterialModal({
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function MaterialsPage() {
   const { catalogs } = useSystemCatalogs();
-  const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
-  const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
-  const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
   const CATEGORIES = catalogs.material_categories.length ? catalogs.material_categories : FALLBACK_TOPICS;
   const LEVELS = catalogs.material_levels.length ? catalogs.material_levels : FALLBACK_LEVELS;
   
@@ -1000,7 +1002,7 @@ export default function MaterialsPage() {
               ].map(t => (
                 <button
                   key={t.key}
-                  onClick={() => setTab(t.key as any)}
+                  onClick={() => setTab(t.key as "files" | "vocab")}
                   className={`px-5 py-2 rounded-lg text-sm font-bold
                     transition-all duration-200
                     ${tab === t.key
@@ -1381,7 +1383,7 @@ export default function MaterialsPage() {
               ].map(t => (
                 <button
                   key={t.key}
-                  onClick={() => setTab(t.key as any)}
+                  onClick={() => setTab(t.key as "files" | "vocab")}
                   className={`px-4 py-2 rounded-xl text-sm font-bold
                     transition-all duration-200 border-2
                     ${tab === t.key

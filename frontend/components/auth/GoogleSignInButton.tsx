@@ -144,6 +144,12 @@ export default function GoogleSignInButton({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [buttonWidth, setButtonWidth] = useState<number | null>(null);
 
+  // La variable de entorno es estática (no cambia entre renders), así que
+  // se calcula acá como valor derivado en vez de sincronizarla con estado
+  // dentro de un efecto (evita el setState síncrono en el cuerpo del efecto).
+  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  const envErrorMessage = clientId ? null : "Falta configurar NEXT_PUBLIC_GOOGLE_CLIENT_ID";
+
   // Guardar callbacks en refs para evitar re-ejecutar el useEffect si cambian en cada render
   const onCredentialRef = useRef(onCredential);
   const onErrorRef = useRef(onError);
@@ -176,11 +182,8 @@ export default function GoogleSignInButton({
   }, []);
 
   useEffect(() => {
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (!clientId) {
-      const msg = "Falta configurar NEXT_PUBLIC_GOOGLE_CLIENT_ID";
-      setErrorMessage(msg);
-      onErrorRef.current?.(msg);
+    if (envErrorMessage || !clientId) {
+      onErrorRef.current?.(envErrorMessage ?? "Falta configurar NEXT_PUBLIC_GOOGLE_CLIENT_ID");
       return;
     }
 
@@ -232,12 +235,12 @@ export default function GoogleSignInButton({
       cancelled = true;
       if (activeHandler === handler) activeHandler = null;
     };
-  }, [text, buttonWidth]); // Re-renderiza si cambia el texto o el ancho medido
+  }, [text, buttonWidth, envErrorMessage, clientId]); // Re-renderiza si cambia el texto o el ancho medido
 
-  if (errorMessage) {
+  if (envErrorMessage || errorMessage) {
     return (
       <div className="w-full p-2.5 text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl text-center font-medium">
-        {errorMessage}
+        {envErrorMessage || errorMessage}
       </div>
     );
   }

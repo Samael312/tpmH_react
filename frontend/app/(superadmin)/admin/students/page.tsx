@@ -1,14 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useStudents, useStudentDetail} from '@/hooks/useAdminData'
+import { useStudents, useStudentDetail, type Student } from '@/hooks/useAdminData'
 import { Card } from '@/components/ui'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
-import { useRouter } from 'next/navigation'
 import {
   Users, Search, X, UserCheck, UserX, Phone, Calendar, Loader2,
-  Sparkles, SlidersHorizontal, ShieldAlert, ChevronDown,
+  ShieldAlert, ChevronDown,
   Package as PackageIcon, AtSign, AlertTriangle, RefreshCw, GraduationCap,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -25,7 +24,7 @@ function BanStudentModal({
   onClose,
   onBanned,
 }: {
-  student: any
+  student: Student
   onClose: () => void
   onBanned: () => void
 }) {
@@ -112,8 +111,8 @@ function StudentRow({
   student,
   onBanTarget,
 }: {
-  student: any
-  onBanTarget: (s: any) => void
+  student: Student
+  onBanTarget: (s: Student) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const { detail, loading: loadingDetail, isError: detailError, refetch: refetchDetail } = useStudentDetail(student.id, expanded)
@@ -290,9 +289,8 @@ function StudentRow({
 export default function StudentsPage() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [banTarget, setBanTarget] = useState<any | null>(null)
+  const [banTarget, setBanTarget] = useState<Student | null>(null)
   const { students, loading, isFetching, isError, total, refetch } = useStudents(debouncedSearch)
-  const router = useRouter()
 
   // Debounce del buscador (400ms)
   useEffect(() => {

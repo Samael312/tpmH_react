@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
+import type { BusinessRules } from './useBusinessRules'
 
 interface PlatformStats {
   total_users: number
@@ -20,20 +21,27 @@ interface PlatformStats {
   new_classes_this_week: number
 }
 
-interface PendingPayment {
+export interface PendingPayment {
   payment_id: number
-  class_id: number
+  payment_type: string
+  installment_index: number | null
   student_name: string
-  student_username: string
+  student_username: string | null
   amount: number
-  payment_method: string
-  transaction_id: string
-  receipt_url: string
-  class_start_utc: string
+  transaction_reference: string | null
   submitted_at: string
+  class_start_utc?: string | null
+  payment_expires_at?: string | null
+  package_name?: string | null
+  installment_total?: number | null
+  // NOTA: el backend (/payments/pending-review, /payments/history) nunca
+  // envía este campo hoy — se deja opcional para que, si en el futuro se
+  // agrega al endpoint, el renderizado condicional que ya existe en la UI
+  // (`{p.teacher_name && ...}`) empiece a funcionar sin más cambios.
+  teacher_name?: string | null
 }
 
-interface Teacher {
+export interface Teacher {
   id: number
   username: string
   name: string
@@ -50,9 +58,11 @@ interface Teacher {
   total_classes: number
   total_students: number
   created_at: string
+  rejection_reason?: string | null
+  appeal_exhausted?: boolean
 }
 
-interface Student {
+export interface Student {
   id: number
   username: string
   name: string
@@ -69,24 +79,7 @@ interface Student {
   created_at: string
 }
 
-interface PaymentRecord {
-  id: number
-  class_id: number | null
-  student_id: number
-  teacher_id: number
-  amount_total: number
-  amount_teacher: number
-  amount_platform: number
-  payment_method: string
-  receipt_url: string | null
-  transaction_id: string | null
-  status: string
-  created_at: string
-  validated_at: string | null
-  
-}
-
-interface WithdrawalRecord {
+export interface WithdrawalRecord {
   id: number
   teacher_id: number
   teacher_username: string
@@ -98,7 +91,7 @@ interface WithdrawalRecord {
   created_at: string
 }
 
-interface PaymentHistoryItem extends PendingPayment {
+export interface PaymentHistoryItem extends PendingPayment {
   status: 'approved' | 'rejected'
   validated_at: string | null
   rejection_reason?: string | null
@@ -249,25 +242,23 @@ export interface AdminNotification {
 export function useUnreadNotificationCount(enabled: boolean = true) {
   const [count, setCount] = useState(0)
 
-  const fetch = useCallback(async () => {
-    if (!enabled) return
-    try {
-      const res = await api.get('/admin/notifications/unread-count')
-      setCount(res.data.unread_count)
-    } catch { }
+  const fetchCount = useCallback(() => {
+    if (!enabled) return Promise.resolve()
+    return api.get('/admin/notifications/unread-count')
+      .then(res => setCount(res.data.unread_count))
+      .catch(() => {})
   }, [enabled])
 
   useEffect(() => {
-    if (!enabled) {
-      setCount(0)
-      return
-    }
-    fetch()
-    const interval = setInterval(fetch, 30000) // refresco cada 30s
+    if (!enabled) return
+    fetchCount()
+    const interval = setInterval(fetchCount, 30000) // refresco cada 30s
     return () => clearInterval(interval)
-  }, [enabled, fetch])
+  }, [enabled, fetchCount])
 
-  return { count, refetch: fetch }
+  // Si el hook está deshabilitado, no mostramos un conteo obtenido
+  // previamente en vez de resetear el estado dentro del efecto.
+  return { count: enabled ? count : 0, refetch: fetchCount }
 }
 
 export function useNotifications(unreadOnly = false) {
@@ -503,7 +494,14 @@ export interface AdminPlatformConfig {
   platform_name: string
   platform_tagline: string | null
   is_single_tenant: boolean
-  featured_teacher: any
+  featured_teacher: {
+    username: string
+    name: string
+    title: string | null
+    bio: string | null
+    avatar: string | null
+    subjects: string[] | null
+  } | null
   featured_teacher_username?: string
 }
 
@@ -534,7 +532,7 @@ export function useAdminBusinessRules() {
     queryKey: ["admin", "settings", "business-rules"],
     queryFn: async () => {
       const res = await api.get('/system-catalogs/business-rules')
-      return res.data
+      return res.data as BusinessRules
     },
   })
 

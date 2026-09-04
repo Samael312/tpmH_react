@@ -4,9 +4,9 @@ import { useState } from "react";
 import {
   ClipboardList, Clock, CheckCircle, Star,
   Send, X, ChevronDown, AlertCircle,
-  BookOpen, Award
+  Award
 } from "lucide-react";
-import { useStudentHomework } from "@/hooks/useStudentData";
+import { useStudentHomework, StudentHomework } from "@/hooks/useStudentData";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import Skeleton from "@/components/ui/Skeleton";
@@ -15,6 +15,7 @@ import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
+import { useNow } from "@/lib/useNow";
 
 const STATUS_CONFIG: Record<string, {
   label: string;
@@ -48,7 +49,7 @@ function SubmitModal({
   onClose,
   onSaved,
 }: {
-  hw: any;
+  hw: StudentHomework;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -230,9 +231,9 @@ function SubmitModal({
 }
 
 // ─── Card de tarea calificada (expandible) ────────────────────────────────────
-function GradedCard({ hw }: { hw: any }) {
+function GradedCard({ hw }: { hw: StudentHomework }) {
   const [expanded, setExpanded] = useState(false);
-  const score = hw.score;
+  const score = hw.score ?? 0;
   const feedback = hw.feedback;
 
   const scoreColor =
@@ -345,7 +346,7 @@ function HomeworkCard({
   hw,
   onSubmit,
 }: {
-  hw: any;
+  hw: StudentHomework;
   onSubmit: () => void;
 }) {
   const cfg =
@@ -354,8 +355,9 @@ function HomeworkCard({
 
   const dueDate = new Date(hw.homework.due_date_utc);
   const isOverdue = dueDate < new Date() && hw.status === "pending";
+  const now = useNow();
   const daysLeft = Math.ceil(
-    (dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    (dueDate.getTime() - now) / (1000 * 60 * 60 * 24)
   );
 
   return (
@@ -441,7 +443,7 @@ function HomeworkCard({
 export default function StudentHomeworkPage() {
   const { homeworks, loading, isFetching, refetch } = useStudentHomework();
   const [tab, setTab] = useState<"pending" | "graded">("pending");
-  const [submitTarget, setSubmitTarget] = useState<any | null>(null);
+  const [submitTarget, setSubmitTarget] = useState<StudentHomework | null>(null);
 
   const pending = homeworks.filter((h) => h.status !== "graded");
   const graded  = homeworks.filter((h) => h.status === "graded");
@@ -531,7 +533,7 @@ export default function StudentHomeworkPage() {
           ].map((t) => (
             <button
               key={t.key}
-              onClick={() => setTab(t.key as any)}
+              onClick={() => setTab(t.key as "pending" | "graded")}
               className={`
                 px-5 py-2.5 rounded-xl text-sm font-bold
                 transition-all duration-200

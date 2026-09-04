@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Mail, ArrowLeft, Check, User } from "lucide-react";
+import axios from "axios";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 
@@ -31,8 +32,8 @@ const handleSubmit = async (e: React.SubmitEvent) => {
       const endpoint = mode === "password" ? "/auth/forgot-password" : "/auth/forgot-username";
       await api.post(endpoint, { email });
       setSent(true);
-    } catch (e: any) {
-      const status = e.response?.status;
+    } catch (e) {
+      const status = axios.isAxiosError(e) ? e.response?.status : undefined;
       // Anti-enumeración solo aplica a 4xx (el backend ya responde igual
       // exista o no el email). Los fallos de red/servidor deben avisarse.
       if (status && status < 500) {

@@ -75,28 +75,32 @@ export interface AvailableSlot {
   block_end_time_utc?: string;
 }
 
+export interface PackageInfo {
+  id: number;
+  name: string;
+  subject: string;
+  description: string | null;
+  description_type?: "text" | "list" | string | null;
+  description_items?: string[] | null;
+  color?: string | null;
+  icon?: string | null;
+  classes_count: number | null;
+  allow_installments: boolean;
+  installment_count: number | null;
+  installment_amount: number | null;
+  price: number;
+  duration_minutes: number;
+  is_active: boolean;
+  created_at: string;
+  is_group?: boolean;
+  min_students?: number | null;
+  max_students?: number | null;
+}
+
 export interface StudentEnrollment {
   id: number;
   package_id: number;
-  package: {
-    id: number;
-    name: string;
-    subject: string;
-    description: string | null;
-    description_type?: "text" | "list" | string | null;
-    description_items?: string[] | null;
-    color?: string | null;
-    icon?: string | null;
-    classes_count: number | null;
-    installment_count?: number;
-    price: number;
-    duration_minutes: number;
-    is_active: boolean;
-    created_at: string;
-    is_group?: boolean;
-    min_students?: number | null;
-    max_students?: number | null;
-  };
+  package: PackageInfo;
   classes_used: number;
   unlocked_credits?: number;
   classes_total: number | null;
@@ -385,7 +389,7 @@ export function useTeacherPackagesFor(teacherUsername: string | undefined, enabl
     queryKey: ["student", "teacher-packages", teacherUsername],
     queryFn: async () => {
       const res = await api.get(`/packages/teacher/${teacherUsername}`);
-      return (res.data || []) as any[];
+      return (res.data || []) as PackageInfo[];
     },
     enabled: enabled && !!teacherUsername,
   });
@@ -485,9 +489,40 @@ export function useStudentPreferences() {
 }
 
 // ─── Perfil del estudiante (usuario + student-profile combinados) ───────────
+export interface UserProfileResponse {
+  id: number;
+  username: string;
+  name: string;
+  surname: string;
+  phone_number: string | null;
+  email: string;
+  role: string;
+  avatar: string | null;
+  is_active: boolean;
+  is_verified: boolean;
+  created_at: string;
+  nationality: string | null;
+  onboarding_completed: boolean;
+  is_google_account: boolean;
+}
+
+export interface StudentProfileRecord {
+  id: number;
+  user_id: number;
+  user_username: string;
+  timezone: string;
+  goal: string | null;
+  teacher_username: string | null;
+  preferred_payment_methods: string[];
+  created_at: string;
+  profile_photo_url: string | null;
+  profile_photo_public_id: string | null;
+  total_completed_classes: number;
+}
+
 export interface StudentProfileData {
-  user: any;
-  studentProfile: any;
+  user: UserProfileResponse;
+  studentProfile: StudentProfileRecord;
 }
 
 export function useStudentProfileData() {

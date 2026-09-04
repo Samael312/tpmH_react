@@ -9,7 +9,8 @@ import {
   useAdminPaymentConfig, useAdminPlatformConfig, useAdminBusinessRules,
   AdminPaymentConfig, AdminPlatformConfig,
 } from '@/hooks/useAdminData'
-import { useSystemCatalogs } from '@/hooks/useSystemCatalogs'
+import type { BusinessRules } from '@/hooks/useBusinessRules'
+import { useSystemCatalogs, type StudentGoalsCatalog, type StudentGoal } from '@/hooks/useSystemCatalogs'
 import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
@@ -18,7 +19,7 @@ import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
 import { getErrorMessage } from '@/lib/errorMessage'
 
-function CatalogEditor({ catalogKey, label, items, onSave }: {
+function CatalogEditor({ label, items, onSave }: {
   catalogKey: string; label: string; items: string[]; onSave: (v: string[]) => Promise<void>;
 }) {
   const [list, setList] = useState(items)
@@ -64,19 +65,19 @@ const GOAL_CATEGORY_TABS = [
   { key: 'academico', label: 'Otras materias' },
 ]
 
-function GoalsEditor({ items, onSave }: { items: any; onSave: (v: Record<string, any[]>) => Promise<void> }) {
-  const normalized: Record<string, any[]> = Array.isArray(items)
+function GoalsEditor({ items, onSave }: { items: StudentGoalsCatalog | StudentGoal[]; onSave: (v: StudentGoalsCatalog) => Promise<void> }) {
+  const normalized: StudentGoalsCatalog = Array.isArray(items)
     ? { idiomas: items }
     : (items && typeof items === 'object' ? items : {})
 
-  const [grouped, setGrouped] = useState<Record<string, any[]>>(normalized)
+  const [grouped, setGrouped] = useState<StudentGoalsCatalog>(normalized)
   const [tab, setTab] = useState<string>(GOAL_CATEGORY_TABS[0].key)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => setGrouped(Array.isArray(items) ? { idiomas: items } : (items && typeof items === 'object' ? items : {})), [items])
 
   const list = grouped[tab] ?? []
-  const setList = (next: any[]) => setGrouped({ ...grouped, [tab]: next })
+  const setList = (next: StudentGoal[]) => setGrouped({ ...grouped, [tab]: next })
 
   const update = (i: number, field: string, value: string) => {
     const next = [...list]; next[i] = { ...next[i], [field]: value }; setList(next)
@@ -130,7 +131,9 @@ function GoalsEditor({ items, onSave }: { items: any; onSave: (v: Record<string,
   )
 }
 
-function ThemePresetsEditor({ items, onSave }: { items: any[]; onSave: (v: any[]) => Promise<void> }) {
+interface ThemePreset { label: string; value: string }
+
+function ThemePresetsEditor({ items, onSave }: { items: ThemePreset[]; onSave: (v: ThemePreset[]) => Promise<void> }) {
   const [list, setList] = useState(items)
   const [saving, setSaving] = useState(false)
   useEffect(() => setList(items), [items])
@@ -164,8 +167,10 @@ function ThemePresetsEditor({ items, onSave }: { items: any[]; onSave: (v: any[]
   )
 }
 
+type ThemeMapEntry = { icon: string; color: string }
+
 function SubjectThemeMapEditor({ subjects, languages, map, onSave }: {
-  subjects: string[]; languages: string[]; map: Record<string, any>; onSave: (v: any) => Promise<void>
+  subjects: string[]; languages: string[]; map: Record<string, ThemeMapEntry>; onSave: (v: Record<string, ThemeMapEntry>) => Promise<void>
 }) {
   const [local, setLocal] = useState(map)
   const [saving, setSaving] = useState(false)
@@ -200,7 +205,9 @@ function SubjectThemeMapEditor({ subjects, languages, map, onSave }: {
   )
 }
 
-function PaymentMethodsEditor({ title, items, onSave }: { title: string; items: any[]; onSave: (v: any[]) => Promise<void> }) {
+interface PaymentMethodOption { value: string; label: string; icon: string }
+
+function PaymentMethodsEditor({ title, items, onSave }: { title: string; items: PaymentMethodOption[]; onSave: (v: PaymentMethodOption[]) => Promise<void> }) {
   const [list, setList] = useState(items)
   const [saving, setSaving] = useState(false)
   useEffect(() => setList(items), [items])
@@ -336,14 +343,14 @@ type TabKey = typeof TABS[number]['key']
 
 export default function SettingsPage() {
   const toast = useToast()
-  const { paymentConfig: remotePaymentConfig, loading: pcLoading, isFetching: pcFetching, isError: pcError, refetch: refetchPaymentConfig } = useAdminPaymentConfig()
-  const { platformConfig: remotePlatformConfig, loading: plLoading, isFetching: plFetching, isError: plError, refetch: refetchPlatformConfig } = useAdminPlatformConfig()
+  const { paymentConfig: remotePaymentConfig, isFetching: pcFetching, isError: pcError, refetch: refetchPaymentConfig } = useAdminPaymentConfig()
+  const { platformConfig: remotePlatformConfig, isFetching: plFetching, isError: plError, refetch: refetchPlatformConfig } = useAdminPlatformConfig()
     const { catalogs, loading: catLoading, isFetching: catFetching, isError: catError, refetch: refetchCatalogs } = useSystemCatalogs()
-  const { businessRules: remoteBusinessRules, loading: brLoading, isFetching: brFetching, isError: brError, refetch: refetchBusinessRules } = useAdminBusinessRules()
+  const { businessRules: remoteBusinessRules, isFetching: brFetching, isError: brError, refetch: refetchBusinessRules } = useAdminBusinessRules()
   
   const [paymentConfig, setPaymentConfig] = useState<AdminPaymentConfig | null>(null)
   const [platformConfig, setPlatformConfig] = useState<AdminPlatformConfig | null>(null)
-  const [businessRules, setBusinessRules] = useState<any>(null)
+  const [businessRules, setBusinessRules] = useState<BusinessRules | null>(null)
   
   const [paymentDirty, setPaymentDirty] = useState(false)
   const [platformDirty, setPlatformDirty] = useState(false)
@@ -395,12 +402,12 @@ export default function SettingsPage() {
     setPlatformDirty(true)
   }
 
-  const updateBusinessRules = (next: any) => {
+  const updateBusinessRules = (next: BusinessRules) => {
     setBusinessRules(next)
     setRulesDirty(true)
   }
 
-  const saveCatalog = async (key: string, value: any) => {
+  const saveCatalog = async (key: string, value: unknown) => {
     try {
       await api.patch(`/system-catalogs/${key}`, { value })
       await refetchCatalogs()
@@ -410,7 +417,7 @@ export default function SettingsPage() {
     }
   }
 
-  const saveBusinessRules = async (patch: any) => {
+  const saveBusinessRules = async (patch: Partial<BusinessRules>) => {
     setRulesSaving(true)
     try {
       const r = await api.patch('/system-catalogs/business-rules', patch)
@@ -473,7 +480,7 @@ export default function SettingsPage() {
 
   const tabCount = (key: TabKey) => {
     if (key === 'catalogs') {
-      return Object.values(catalogs || {}).filter((v: any) => Array.isArray(v) ? v.length : v && Object.keys(v).length).length
+      return Object.values(catalogs || {}).filter((v: unknown) => Array.isArray(v) ? v.length : v && Object.keys(v).length).length
     }
     return undefined
   }
@@ -772,7 +779,7 @@ export default function SettingsPage() {
                   <div>
                     <p className="text-slate-800 text-sm font-bold">Comisión por defecto</p>
                     <p className="text-slate-500 text-xs font-medium mt-0.5">
-                      Se aplica a profesores nuevos. Puedes personalizarla por profesor desde "Profesores".
+                      Se aplica a profesores nuevos. Puedes personalizarla por profesor desde &ldquo;Profesores&rdquo;.
                     </p>
                   </div>
                 </div>
@@ -1046,13 +1053,17 @@ export default function SettingsPage() {
             </h2>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            {[
+            {([
               { key: 'min_booking_hours', label: 'Horas mínimas para agendar' },
               { key: 'min_cancel_hours', label: 'Horas mínimas para cancelar sin penalización' },
               { key: 'min_reschedule_hours_student', label: 'Horas mínimas para reagendar (estudiante)' },
               { key: 'low_credit_threshold', label: 'Umbral de crédito bajo' },
               { key: 'low_credit_renotify_days', label: 'Días entre avisos de crédito bajo' },
-            ].map(f => (
+            ] as {
+              key: 'min_booking_hours' | 'min_cancel_hours' | 'min_reschedule_hours_student'
+                 | 'low_credit_threshold' | 'low_credit_renotify_days';
+              label: string;
+            }[]).map(f => (
               <div key={f.key}>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{f.label}</label>
                 <input type="number" value={businessRules[f.key]}

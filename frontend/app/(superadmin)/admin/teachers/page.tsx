@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { useTeachers, useTeacherAppeals, TeacherAppeal } from '@/hooks/useAdminData'
+import { useTeachers, useTeacherAppeals, type Teacher } from '@/hooks/useAdminData'
 import { Card, Badge, Button } from '@/components/ui'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 import { getFlagForNationality } from '@/lib/nationalities'
+import Image from 'next/image'
 import { X, Video as VideoIcon, MessageSquare, Check, AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
 import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
@@ -42,7 +43,7 @@ function TeacherDetailModal({
   onClose,
   onActioned,
 }: {
-  teacher: any
+  teacher: Teacher
   onClose: () => void
   onActioned: () => void
 }) {
@@ -55,7 +56,7 @@ function TeacherDetailModal({
   const updateStatus = async (newStatus: string) => {
     setActioning(true)
     try {
-      let body: any = { status: newStatus }
+      const body: { status: string; reason?: string } = { status: newStatus }
       if (newStatus === 'rejected') {
         const reason = prompt('Motivo del rechazo:')
         if (!reason) { setActioning(false); return }
@@ -102,9 +103,9 @@ function TeacherDetailModal({
       <div className="relative w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-100 to-rose-50 border border-pink-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+            <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-100 to-rose-50 border border-pink-200 flex items-center justify-center overflow-hidden flex-shrink-0">
               {teacher.profile_photo_url ? (
-                <img src={teacher.profile_photo_url} alt={teacher.name} className="w-full h-full object-cover" />
+                <Image src={teacher.profile_photo_url} alt={teacher.name} fill sizes="48px" className="object-cover" />
               ) : (
                 <span className="text-pink-600 font-black">{teacher.name[0]}{teacher.surname[0]}</span>
               )}
@@ -262,7 +263,7 @@ export default function TeachersPage() {
   const [actioning, setActioning] = useState<number | null>(null)
   const [commissionEdit, setCommissionEdit] = useState<number | null>(null)
   const [commissionValue, setCommissionValue] = useState('')
-  const [detailTarget, setDetailTarget] = useState<any | null>(null)
+  const [detailTarget, setDetailTarget] = useState<Teacher | null>(null)
   const { teachers, loading, isFetching, isError, refetch } = useTeachers(activeTab)
   const toast = useToast()
 
@@ -275,7 +276,7 @@ export default function TeachersPage() {
   const updateStatus = async (teacherId: number, newStatus: string) => {
     setActioning(teacherId)
     try {
-      let body: any = { status: newStatus }
+      const body: { status: string; reason?: string } = { status: newStatus }
       if (newStatus === 'rejected') {
         const reason = prompt('Motivo del rechazo:')
         if (!reason) { setActioning(null); return }
@@ -394,9 +395,9 @@ export default function TeachersPage() {
 
                     {/* Avatar & Basic Info */}
                     <div className="flex items-center gap-4 flex-1 min-w-0">
-                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-100 to-rose-50 border border-pink-200 flex items-center justify-center flex-shrink-0 shadow-inner group-hover:scale-105 transition-transform overflow-hidden">
+                      <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-100 to-rose-50 border border-pink-200 flex items-center justify-center flex-shrink-0 shadow-inner group-hover:scale-105 transition-transform overflow-hidden">
                         {teacher.profile_photo_url ? (
-                          <img src={teacher.profile_photo_url} alt={teacher.name} className="w-full h-full object-cover" />
+                          <Image src={teacher.profile_photo_url} alt={teacher.name} fill sizes="56px" className="object-cover" />
                         ) : (
                           <span className="text-pink-600 font-black text-xl">
                             {teacher.name[0]}{teacher.surname[0]}

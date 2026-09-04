@@ -44,7 +44,9 @@ export function usePageTopBar(opts: { title: string; onRefresh?: () => void; isF
 
   // Store the latest callback in a ref to avoid triggers on function identity changes
   const onRefreshRef = useRef(opts.onRefresh);
-  onRefreshRef.current = opts.onRefresh;
+  useEffect(() => {
+    onRefreshRef.current = opts.onRefresh;
+  }, [opts.onRefresh]);
 
   // Extract primitive dependencies
   const hasOnRefresh = Boolean(opts.onRefresh);

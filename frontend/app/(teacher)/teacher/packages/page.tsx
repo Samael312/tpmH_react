@@ -13,12 +13,11 @@ import { THEME_PRESETS as DEFAULT_THEME_PRESETS } from "@/lib/color";
 import { useAuthStore } from "@/store/authStore";
 // in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
-import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
+import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES } from "@/lib/teacherOptions";
 import {
   useTeacherPackages,
   useTeacherEnrollments,
   type TeacherPackage as Package,
-  type TeacherEnrollmentCompliance as EnrollmentCompliance,
 } from "@/hooks/useTeacherData";
 import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
@@ -350,7 +349,7 @@ export default function TeacherPackagesPage() {
                       <button
                         key={opt.key}
                         type="button"
-                        onClick={() => { setKind(opt.key as any); setForm({ ...form, subject: "" }); }}
+                        onClick={() => { setKind(opt.key as "subject" | "language"); setForm({ ...form, subject: "" }); }}
                         className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all
                           ${kind === opt.key ? "border-pink-400 bg-pink-50 text-pink-600" : "border-slate-100 bg-slate-50 text-slate-500"}`}
                       >

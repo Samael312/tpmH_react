@@ -1,10 +1,10 @@
 "use client";
 import { useState } from "react";
-import { Check, X, Clock, Package as PackageIcon, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
+import { Check, X, Clock, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { useAuthStore } from "@/store/authStore";
-import { useTeacherPendingPayments, useTeacherPaymentsHistory } from "@/hooks/useTeacherData";
+import { useTeacherPendingPayments, useTeacherPaymentsHistory, TeacherPaymentEntry } from "@/hooks/useTeacherData";
 import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
@@ -12,7 +12,7 @@ import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 
-const TYPE_BADGE: Record<string, { label: (p: any) => string; cls: string }> = {
+const TYPE_BADGE: Record<string, { label: (p: TeacherPaymentEntry) => string; cls: string }> = {
   package:            { label: p => p.installment_total ? `Cuota ${p.installment_index}/${p.installment_total}` : "Paquete", cls: "bg-pink-100 text-pink-700" },
   renewal:            { label: p => p.installment_total ? `Renovación (Cuota ${p.installment_index}/${p.installment_total})` : "Renovación", cls: "bg-emerald-100 text-emerald-700" },
   package_renewal:    { label: p => p.installment_total ? `Renovación (Cuota ${p.installment_index}/${p.installment_total})` : "Renovación", cls: "bg-emerald-100 text-emerald-700" },
@@ -64,7 +64,7 @@ export default function TeacherPaymentsPage() {
   // BUG-04/12 fix: se eliminó "single_class" — ya no hace falta pedir el
   // link de Meet al aprobar. Es opcional y se carga por clase, una vez
   // confirmada, desde el ícono de video en cada clase.
-  const approve = async (p: any) => {
+  const approve = async (p: TeacherPaymentEntry) => {
     setProcessing(p.payment_id);
     try {
       await api.patch(`/payments/${p.payment_id}/validate`, {
@@ -77,7 +77,7 @@ export default function TeacherPaymentsPage() {
     } finally { setProcessing(null); }
   };
 
-  const reject = async (p: any) => {
+  const reject = async (p: TeacherPaymentEntry) => {
     const reason = prompt("Motivo del rechazo:");
     if (!reason) return;
     setProcessing(p.payment_id);
@@ -154,7 +154,7 @@ export default function TeacherPaymentsPage() {
               cls: "bg-slate-100 text-slate-700"
             };
 
-            const packageName = p.requested_package_name || p.package_name;
+            const packageName = p.package_name;
 
             return (
               <div key={p.payment_id} className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
@@ -209,7 +209,7 @@ export default function TeacherPaymentsPage() {
                         <div className="bg-rose-50 px-3 py-1.5 rounded-lg w-fit mb-1 flex items-center gap-1">
                           <X className="w-3.5 h-3.5" /> Rechazado
                         </div>
-                        {p.rejection_reason && <p className="italic px-1">"{p.rejection_reason}"</p>}
+                        {p.rejection_reason && <p className="italic px-1">&ldquo;{p.rejection_reason}&rdquo;</p>}
                       </div>
                     )}
                   </div>

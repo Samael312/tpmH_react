@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
@@ -147,12 +148,21 @@ function BottomTabBar({
   );
 }
 
+// Detecta si el componente ya se hidrató en el cliente. Se usa
+// useSyncExternalStore (en vez de useState+useEffect) para evitar el
+// setState síncrono dentro de un efecto: getServerSnapshot siempre
+// devuelve false (coincide con el render de servidor), y getSnapshot
+// devuelve true una vez que el módulo corrió en el cliente.
+function subscribeNoop() { return () => {}; }
+function getMountedSnapshot() { return true; }
+function getServerMountedSnapshot() { return false; }
+
 // ─── Componente principal ─────────────────────────────────────────────────
 export default function DashboardSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
+  const isMounted = useSyncExternalStore(subscribeNoop, getMountedSnapshot, getServerMountedSnapshot);
 
   const role = user?.role || "";
   const showAdminMenu = ["superadmin", "teacher_admin"].includes(role);
@@ -160,10 +170,6 @@ export default function DashboardSidebar() {
   const showStudentMenu = role === "student";
   const { count: unreadCount } = useUnreadNotificationCount(showAdminMenu);
   const { count: unreadSupportCount } = useUnreadSupportCount(showStudentMenu || (showTeacherMenu && role === "teacher"));
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   const handleLogout = () => {
     logout();
@@ -198,11 +204,13 @@ export default function DashboardSidebar() {
           }`}
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-400 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-lg shadow-pink-200 transform hover:rotate-12 transition-transform overflow-hidden">
-              <img
+            <div className="relative w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-400 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-lg shadow-pink-200 transform hover:rotate-12 transition-transform overflow-hidden">
+              <Image
                 src="/assets/logo.png"
                 alt="TPM"
-                className="w-full h-full object-contain p-1.5"
+                fill
+                sizes="40px"
+                className="object-contain p-1.5"
               />
             </div>
             {!collapsed && (

@@ -7,9 +7,9 @@ import {
   useStudentClasses, 
   useEnrollments, 
   useBookingStage, 
-  BookingStage,
+  StudentEnrollment,
+  StudentClass,
 } from "@/hooks/useStudentData";
-import api from "@/lib/api";
 import ClassCard from "@/components/classes/ClassCard";
 import GroupWaitingPanel from "@/components/classes/GroupWaitingPanel";
 import ChangePackageModal from "@/components/payments/ChangePackageModal";
@@ -124,9 +124,9 @@ export default function StudentDashboard() {
   const { enrollments, loading: enrollmentsLoading, isFetching: enrollmentsFetching, isError: enrollmentsError, refetch: refetchEnrollments } = useEnrollments();
   const { stage, lastRejectedPayment, isFetching: stageFetching, refetch: refetchStage } = useBookingStage();
 
-  const [changePackageTarget, setChangePackageTarget] = useState<any | null>(null);
-  const [installmentTarget, setInstallmentTarget] = useState<any | null>(null);
-  const [rechargeTarget, setRechargeTarget] = useState<any | null>(null);
+  const [changePackageTarget, setChangePackageTarget] = useState<StudentEnrollment | null>(null);
+  const [installmentTarget, setInstallmentTarget] = useState<StudentEnrollment | null>(null);
+  const [rechargeTarget, setRechargeTarget] = useState<StudentEnrollment | null>(null);
 
   const activeOrChangingEnrollments = enrollments.filter(
     e => (e.status === "active" || e.status === "pending_package_change") && !e.cohort_id
@@ -135,7 +135,7 @@ export default function StudentDashboard() {
     e => !!e.cohort_id && e.status !== "cancelled"
   );
 
-  const classList: any[] = Array.isArray(classesData) ? classesData : [];
+  const classList: StudentClass[] = Array.isArray(classesData) ? classesData : [];
   const hasTrial = classList.some(c => c.class_type === "trial");
 
   const upcoming = classList

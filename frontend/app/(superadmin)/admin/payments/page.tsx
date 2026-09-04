@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { usePendingPayments, useWithdrawals, useTeachers, usePaymentsHistory } from '@/hooks/useAdminData'
+import { usePendingPayments, useWithdrawals, useTeachers, usePaymentsHistory, type PendingPayment, type WithdrawalRecord, type Teacher, type PaymentHistoryItem } from '@/hooks/useAdminData'
 import { Card, Badge, Button, RejectReasonModal } from '@/components/ui'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
@@ -14,7 +14,7 @@ import { usePageTopBar } from '@/lib/mobileTopBar'
 import { useToast } from '@/hooks/useToast'
 import { getErrorMessage } from '@/lib/errorMessage'
 
-const TYPE_BADGE: Record<string, { label: (p: any) => string; cls: string }> = {
+const TYPE_BADGE: Record<string, { label: (p: PendingPayment | PaymentHistoryItem) => string; cls: string }> = {
   package: {
     label: (p) => p.installment_total ? `Cuota ${p.installment_index}/${p.installment_total}` : "Paquete Inicial",
     cls: "bg-pink-100 text-pink-700 border-pink-200"
@@ -88,7 +88,7 @@ export default function PaymentsPage() {
   // BUG-04/12 fix: se eliminó el tipo de pago "single_class" — el link de
   // Meet ya no se pide al aprobar. Es opcional y el profesor lo carga por
   // clase, desde el ícono de video en cada clase confirmada.
-  const handleApprove = async (p: any) => {
+  const handleApprove = async (p: PendingPayment) => {
     setValidating(p.payment_id)
     try {
       await api.patch(`/payments/${p.payment_id}/validate`, {
@@ -103,7 +103,7 @@ export default function PaymentsPage() {
     }
   }
 
-  const handleReject = (p: any) => {
+  const handleReject = (p: PendingPayment) => {
     setRejectTarget({
       kind: 'payment',
       paymentId: p.payment_id,
@@ -191,7 +191,7 @@ export default function PaymentsPage() {
           ].map(tab => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key as any)}
+              onClick={() => setActiveTab(tab.key as 'payments' | 'withdrawals' | 'teachers' | 'history')}
               className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${
                 activeTab === tab.key
                   ? 'bg-white text-pink-600 shadow-sm border border-pink-100'
@@ -227,7 +227,7 @@ export default function PaymentsPage() {
                 <p className="text-slate-500 font-bold text-lg">No hay pagos pendientes de confirmación</p>
               </Card>
             ) : (
-              payments?.map((p: any) => {
+              payments?.map((p: PendingPayment) => {
                 const badge = TYPE_BADGE[p.payment_type] || {
                   label: () => p.payment_type || "Pago",
                   cls: "bg-slate-100 text-slate-700 border-slate-200"
@@ -253,10 +253,10 @@ export default function PaymentsPage() {
 
                     {/* Detalle adicional */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs text-slate-500 mb-4 bg-slate-50/70 p-3 rounded-2xl border border-slate-100">
-                      {(p.package_name || p.requested_package_name) && (
+                      {p.package_name && (
                         <div className="flex items-center gap-1.5">
                           <PackageIcon className="w-3.5 h-3.5 text-slate-400" />
-                          <span>Paquete: <strong className="text-slate-700">{p.requested_package_name || p.package_name}</strong></span>
+                          <span>Paquete: <strong className="text-slate-700">{p.package_name}</strong></span>
                         </div>
                       )}
                       {p.teacher_name && (
@@ -331,7 +331,7 @@ export default function PaymentsPage() {
                 <p className="text-slate-500 font-bold text-lg">No hay solicitudes de retiro pendientes</p>
               </Card>
             ) : (
-              withdrawals?.map((w: any) => (
+              withdrawals?.map((w: WithdrawalRecord) => (
                 <Card key={w.id} hover className="p-6 border-slate-100 shadow-sm rounded-3xl">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                     <div className="flex-1 min-w-0">
@@ -392,7 +392,7 @@ export default function PaymentsPage() {
               </Card>
             ) : (
               <>
-                {pendingTeachers?.slice(0, 5).map((t: any) => (
+                {pendingTeachers?.slice(0, 5).map((t: Teacher) => (
                   <Card key={t.id} className="p-5 border-slate-100 shadow-sm rounded-2xl flex items-center justify-between">
                     <div>
                       <p className="font-bold text-slate-800">{t.name} {t.surname}</p>
@@ -436,7 +436,7 @@ export default function PaymentsPage() {
                 <p className="text-slate-500 font-bold text-lg">Sin historial todavía</p>
               </Card>
             ) : (
-              history?.map((p: any) => {
+              history?.map((p: PaymentHistoryItem) => {
                 const badge = TYPE_BADGE[p.payment_type] || {
                   label: () => p.payment_type || "Pago",
                   cls: "bg-slate-100 text-slate-700 border-slate-200"
@@ -462,10 +462,10 @@ export default function PaymentsPage() {
 
                     {/* Detalle adicional */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs text-slate-500 mb-4 bg-slate-50/70 p-3 rounded-2xl border border-slate-100">
-                      {(p.package_name || p.requested_package_name) && (
+                      {p.package_name && (
                         <div className="flex items-center gap-1.5">
                           <PackageIcon className="w-3.5 h-3.5 text-slate-400" />
-                          <span>Paquete: <strong className="text-slate-700">{p.requested_package_name || p.package_name}</strong></span>
+                          <span>Paquete: <strong className="text-slate-700">{p.package_name}</strong></span>
                         </div>
                       )}
                       {p.teacher_name && (

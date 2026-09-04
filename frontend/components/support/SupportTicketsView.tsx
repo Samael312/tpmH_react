@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { LifeBuoy, Bug, AlertTriangle, HelpCircle, MoreHorizontal, ChevronDown, Clock, CheckCircle2, Plus } from "lucide-react";
 import { useMySupportTickets, markSupportTicketSeen, SupportTicket } from "@/hooks/useSupport";
 import SupportTicketModal from "@/components/support/SupportTicketModal";

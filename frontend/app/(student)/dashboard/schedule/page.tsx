@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import axios from "axios";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useAvailableSlots,
@@ -10,6 +11,9 @@ import {
   useBookingStatusFor,
   useTeacherPackagesFor,
   invalidateAvailableSlots,
+  AvailableSlot,
+  PackageInfo,
+  StudentClass,
 } from "@/hooks/useStudentData";
 import {
   Calendar, Clock, CreditCard,
@@ -35,23 +39,17 @@ import type { RejectedPaymentInfo } from "@/hooks/useStudentData";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 
-type BookingStage =
-  | "loading"
-  | "needs_trial"
-  | "trial_in_progress"
-  | "needs_package"
-  | "package_pending_payment"
-  | "needs_payment"
-  | "needs_renewal"
-  | "renew_required"
-  | "renewal_pending"
-  | "ready";
-
-
-function extractErrorMessage(e: any, fallback: string): string {
-  const detail = e?.response?.data?.detail;
+function extractErrorMessage(e: unknown, fallback: string): string {
+  const detail = axios.isAxiosError(e) ? e.response?.data?.detail : undefined;
   if (Array.isArray(detail)) {
-    return detail.map((d: any) => d?.msg ?? JSON.stringify(d)).join(", ");
+    return detail
+      .map((d: unknown) => {
+        if (d && typeof d === "object" && "msg" in d) {
+          return (d as { msg?: string }).msg ?? JSON.stringify(d);
+        }
+        return JSON.stringify(d);
+      })
+      .join(", ");
   }
   if (typeof detail === "string") {
     return detail;
@@ -164,26 +162,24 @@ function StepSelectSlot({
   teacherUsername,
   isTrial = false,
 }: {
-  onSelect: (date: string, slot: any, duration: number, subject?: string) => void;
+  onSelect: (date: string, slot: AvailableSlot, duration: number, subject?: string) => void;
   teacherUsername: string | null;
   isTrial?: boolean;
 }) {
   const { rules } = useBusinessRules();
   const DURATIONS = rules.allowed_class_durations; // pool configurado por el superadmin
   const [date, setDate] = useState("");
-  const [duration, setDuration] = useState(isTrial ? rules.trial_duration_minutes : (rules.allowed_class_durations[0] ?? 50));
+  const [duration, setDuration] = useState(rules.allowed_class_durations[0] ?? 50);
+  // La duración de la prueba no la elige el estudiante — siempre es la
+  // configurada por el superadmin (rules.trial_duration_minutes), que llega
+  // async (arranca con el fallback del hook y se actualiza cuando responde
+  // el backend). Por eso es un valor derivado y no un estado sincronizado
+  // con un efecto: así siempre refleja el valor más reciente de `rules`.
+  const effectiveDuration = isTrial ? rules.trial_duration_minutes : duration;
   const [subjectOptions, setSubjectOptions] = useState<string[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<string>("");
-  const { slots, loading } = useAvailableSlots(date, duration, teacherUsername, isTrial ? "trial" : "regular");
+  const { slots, loading } = useAvailableSlots(date, effectiveDuration, teacherUsername, isTrial ? "trial" : "regular");
   const myTz = getMyDisplayTimezone();
-
-  useEffect(() => {
-    // La duración de la prueba no la elige el estudiante — siempre es la
-    // configurada por el superadmin (rules.trial_duration_minutes). Se
-    // sincroniza acá porque `rules` llega async (arranca con el fallback
-    // del hook y se actualiza cuando responde el backend).
-    if (isTrial) setDuration(rules.trial_duration_minutes);
-  }, [isTrial, rules.trial_duration_minutes]);
 
   useEffect(() => {
     if (!isTrial || !teacherUsername) return;
@@ -196,7 +192,7 @@ function StepSelectSlot({
 
   const formatTime = (utc: string) => formatTimeTz(utc, myTz);
 
-  const isPreferredSlot = (slot: any) => !!slot.is_preferred;
+  const isPreferredSlot = (slot: AvailableSlot) => !!slot.is_preferred;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -301,7 +297,7 @@ function StepSelectSlot({
               return (
                 <button
                   key={i}
-                  onClick={() => !blocked && onSelect(date, slot, duration, isTrial ? selectedSubject : undefined)}
+                  onClick={() => !blocked && onSelect(date, slot, effectiveDuration, isTrial ? selectedSubject : undefined)}
                   disabled={blocked}
                   className={`
                     relative py-4 px-3 rounded-2xl text-center border-2 transition-all duration-200
@@ -351,7 +347,7 @@ function StepConfirmTrial({
   onBooked,
 }: {
   date: string;
-  slot: any;
+  slot: AvailableSlot;
   teacherUsername: string | null;
   subject?: string;
   onBack: () => void;
@@ -476,7 +472,7 @@ function StepConfirmTrial({
 function StepPayment({
   date, slot, duration, enrollmentId, teacherUsername, onBack, onSuccess,
 }: {
-  date: string; slot: any; duration: number;
+  date: string; slot: AvailableSlot; duration: number;
   enrollmentId?: number; teacherUsername: string | null;
   onBack: () => void; onSuccess: () => void;
 }) {
@@ -518,8 +514,8 @@ function StepPayment({
       setDone(true);
       toast.success("Clase reservada correctamente");
       setTimeout(onSuccess, 1500);
-    } catch (e: any) {
-      const detail = e?.response?.data?.detail;
+    } catch (e) {
+      const detail = axios.isAxiosError(e) ? e.response?.data?.detail : undefined;
       if (typeof detail === "string" && detail.toLowerCase().includes("crédito")) {
         setNoCredits(true);
       }
@@ -642,7 +638,7 @@ const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   finalized: { label: "Finalizada", cls: "bg-slate-100 text-slate-600" },
 };
 
-function EnrollmentClassesList({ classes }: { classes: any[] }) {
+function EnrollmentClassesList({ classes }: { classes: StudentClass[] }) {
   const myTz = getMyDisplayTimezone();
   if (classes.length === 0) {
     return (
@@ -893,9 +889,9 @@ function NeedsPackageScreen({
   // pantalla, acá se volvía a pedir desde cero).
   const { packages, loading } = useTeacherPackagesFor(teacherUsername ?? undefined, true);
   const [error, setError] = useState("");
-  const [checkoutTarget, setCheckoutTarget] = useState<{ pkg: any; enrollmentId: number | null } | null>(null);
+  const [checkoutTarget, setCheckoutTarget] = useState<{ pkg: PackageInfo; enrollmentId: number | null } | null>(null);
 
-  const choose = (pkg: any) => {
+  const choose = (pkg: PackageInfo) => {
     setError("");
     setCheckoutTarget({ pkg, enrollmentId: null });
   };
@@ -1047,9 +1043,9 @@ function NeedsRenewalScreen({
   const lastEnrollmentId = enrollments[0]?.id ?? null;
   const [requesting] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const [checkoutTarget, setCheckoutTarget] = useState<any>(null);
+  const [checkoutTarget, setCheckoutTarget] = useState<{ pkg: PackageInfo; enrollmentId: number | null } | null>(null);
 
-  const requestRenewal = (pkg: any) => {
+  const requestRenewal = (pkg: PackageInfo) => {
     if (!lastEnrollmentId) return;
     setError("");
     setCheckoutTarget({ pkg, enrollmentId: lastEnrollmentId });
@@ -1207,31 +1203,29 @@ function RenewalPendingScreen() {
 export default function SchedulePage() {
   const [step, setStep] = useState<"select" | "payment">("select");
   const [selectedDate, setSelectedDate] = useState("");
-  const [selectedSlot, setSelectedSlot] = useState<any>(null);
+  const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
   const [selectedDuration, setSelectedDuration] = useState(50);
   const [selectedSubject, setSelectedSubject] = useState<string | undefined>(undefined);
-  const [selectedTeacherUsername, setSelectedTeacherUsername] = useState<string | null>(null);
+  const [manualTeacherUsername, setSelectedTeacherUsername] = useState<string | null>(null);
 
   const { enrollments, refetch: refetchEnrollments } = useEnrollments();
   const { classes: allClasses, refetch: refetchClasses } = useStudentClasses(true);
   const { teachers: myTeachers, loading: teachersLoading, isSingleTenant } = useMyTeachers();
 
+  // El profesor "efectivo" es derivado, no un estado sincronizado por efecto:
+  // si el estudiante solo tiene un profesor, se usa ese automáticamente; en
+  // modo single-tenant no aplica ninguno; si tiene varios, se respeta la
+  // elección manual (setSelectedTeacherUsername, click en el selector).
+  const selectedTeacherUsername = isSingleTenant
+    ? null
+    : myTeachers.length === 1
+      ? myTeachers[0].teacher_username
+      : manualTeacherUsername;
+
   const needsTeacherSelection = !isSingleTenant && myTeachers.length > 1 && !selectedTeacherUsername;
   const teacherBlocked = !teachersLoading && !isSingleTenant && myTeachers.length === 0;
 
   const [buyCreditsOpen, setBuyCreditsOpen] = useState(false);
-
-  useEffect(() => {
-    if (teachersLoading) return;
-    if (myTeachers.length === 1) {
-      setSelectedTeacherUsername(myTeachers[0].teacher_username);
-      return;
-    }
-    if (isSingleTenant) {
-      setSelectedTeacherUsername(null);
-      return;
-    }
-  }, [teachersLoading, isSingleTenant, myTeachers]);
 
   const activeEnrollment = selectedTeacherUsername
     ? enrollments.find(e => e.status === "active" && e.teacher_username === selectedTeacherUsername)
@@ -1239,7 +1233,6 @@ export default function SchedulePage() {
 
   const {
     stage,
-    enrollmentId,
     lastRejectedPayment,
     isFetching: stageFetching,
     refetch: refetchStage,
@@ -1259,7 +1252,7 @@ export default function SchedulePage() {
   });
 
   const handleSlotSelect = (
-    date: string, slot: any, duration: number, subject?: string
+    date: string, slot: AvailableSlot, duration: number, subject?: string
   ) => {
     setSelectedDate(date);
     setSelectedSlot(slot);
@@ -1473,7 +1466,7 @@ export default function SchedulePage() {
               />
             )}
 
-            {stage === "needs_trial" && step === "payment" && (
+            {stage === "needs_trial" && step === "payment" && selectedSlot && (
               <StepConfirmTrial
                 date={selectedDate}
                 slot={selectedSlot}
@@ -1518,7 +1511,7 @@ export default function SchedulePage() {
               />
             )}
 
-            {stage === "ready" && step === "payment" && (
+            {stage === "ready" && step === "payment" && selectedSlot && (
               <StepPayment
                 date={selectedDate}
                 slot={selectedSlot}
@@ -1536,7 +1529,7 @@ export default function SchedulePage() {
         {stage === "ready" && activeEnrollment && (
           <div className="max-w-2xl mx-auto w-full pt-2">
             <EnrollmentClassesList
-              classes={allClasses.filter((c: any) => c.enrollment_id === activeEnrollment.id)}
+              classes={allClasses.filter((c) => c.enrollment_id === activeEnrollment.id)}
             />
           </div>
         )}

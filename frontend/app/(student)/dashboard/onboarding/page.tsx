@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import axios from "axios";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
@@ -16,7 +17,7 @@ import { NATIONALITIES } from "@/lib/nationalities";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 // in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
-import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS, GOALS as FALLBACK_GOALS, GOAL_CATEGORIES, PAYMENT_METHODS as FALLBACK_METHODS, normalizeGoalsCatalog, flattenGoals } from "@/lib/teacherOptions";
+import { GOALS as FALLBACK_GOALS, GOAL_CATEGORIES, PAYMENT_METHODS as FALLBACK_METHODS, normalizeGoalsCatalog, flattenGoals } from "@/lib/teacherOptions";
 
 
 
@@ -39,15 +40,16 @@ interface CountryInfo {
 }
 
 // ─── Función Auxiliar para Convertir Errores de API (FastAPI / Pydantic) ────
-function parseApiError(detail: any): string {
+function parseApiError(detail: unknown): string {
   if (typeof detail === "string") return detail;
 
   if (Array.isArray(detail)) {
     return detail
       .map((item) => {
-        if (typeof item === "object" && item !== null && item.msg) {
-          const field = Array.isArray(item.loc) ? item.loc[item.loc.length - 1] : "";
-          return field ? `${field}: ${item.msg}` : item.msg;
+        if (typeof item === "object" && item !== null && "msg" in item) {
+          const { msg, loc } = item as { msg: string; loc?: unknown[] };
+          const field = Array.isArray(loc) ? loc[loc.length - 1] : "";
+          return field ? `${field}: ${msg}` : msg;
         }
         return JSON.stringify(item);
       })
@@ -55,7 +57,8 @@ function parseApiError(detail: any): string {
   }
 
   if (detail && typeof detail === "object") {
-    return detail.msg || JSON.stringify(detail);
+    const { msg } = detail as { msg?: string };
+    return msg || JSON.stringify(detail);
   }
 
   return "Error guardando la configuración. Inténtalo de nuevo.";
@@ -184,9 +187,6 @@ function StepPreferences({
   onNext, onBack,
 }: StepPreferencesProps) {
   const { catalogs } = useSystemCatalogs();
-  const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
-  const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
-  const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
 
   // Los objetivos sugeridos están agrupados por categoría (idiomas vs.
   // otras materias) porque la plataforma no es solo de idiomas.
@@ -843,8 +843,8 @@ export default function OnboardingPage() {
       // 8. Redirigir al dashboard tras 3 segundos
       setTimeout(() => router.replace("/dashboard"), 3000);
 
-    } catch (e: any) {
-      const errorDetail = e.response?.data?.detail;
+    } catch (e) {
+      const errorDetail = axios.isAxiosError(e) ? e.response?.data?.detail : undefined;
       setError(parseApiError(errorDetail));
     } finally {
       setSaving(false);

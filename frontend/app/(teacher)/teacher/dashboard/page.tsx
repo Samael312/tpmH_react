@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { useTeacherClasses, useWallet, useTeacherProfile, type TeacherClass } from '@/hooks/useTeacherData'
+import Image from 'next/image'
+import { useTeacherClasses, useWallet, useTeacherProfile, type TeacherClass, type TeacherProfile } from '@/hooks/useTeacherData'
 import ClassCard from '@/components/classes/ClassCard'
 import { RescheduleModal } from '@/components/classes/RescheduleModal'
 import StatCard from '@/components/ui/StatCard'
@@ -178,7 +179,9 @@ function StudentFilterDropdown({
       >
         {selected ? (
           selected.avatar ? (
-            <img src={selected.avatar} alt={selected.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 shadow-sm" />
+            <span className="relative w-7 h-7 rounded-full overflow-hidden flex-shrink-0 shadow-sm block">
+              <Image src={selected.avatar} alt={selected.name} fill sizes="28px" className="object-cover" />
+            </span>
           ) : (
             <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-pink-500 to-rose-400 text-white text-[11px] font-black shadow-sm">
               {selected.name[0]?.toUpperCase()}
@@ -226,7 +229,9 @@ function StudentFilterDropdown({
                 }`}
               >
                 {o.avatar ? (
-                  <img src={o.avatar} alt={o.name} className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                  <span className="relative w-6 h-6 rounded-full overflow-hidden flex-shrink-0 block">
+                    <Image src={o.avatar} alt={o.name} fill sizes="24px" className="object-cover" />
+                  </span>
                 ) : (
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-black ${
                     isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
@@ -244,7 +249,7 @@ function StudentFilterDropdown({
   )
 }
 
-function RejectionFeedbackBanner({ profile, onRefetch }: { profile: any; onRefetch: () => void }) {
+function RejectionFeedbackBanner({ profile, onRefetch }: { profile: TeacherProfile | null; onRefetch: () => void }) {
   const [dismissing, setDismissing] = useState(false)
   const [showAppealForm, setShowAppealForm] = useState(false)
   const [appealMessage, setAppealMessage] = useState('')
@@ -423,7 +428,10 @@ export default function TeacherDashboard() {
     isFetching: isPageFetching,
   })
 
-  const safeClasses: TeacherClass[] = Array.isArray(classes) ? classes : []
+  const safeClasses: TeacherClass[] = useMemo(
+    () => (Array.isArray(classes) ? classes : []),
+    [classes]
+  )
   const now = new Date()
 
   const upcomingAll = useMemo(() => {
@@ -684,7 +692,7 @@ export default function TeacherDashboard() {
                 ].map(t => (
                   <button
                     key={t.key}
-                    onClick={() => setTab(t.key as any)}
+                    onClick={() => setTab(t.key as 'upcoming' | 'history')}
                     className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ${
                       tab === t.key
                         ? 'bg-white text-pink-600 shadow-sm border border-slate-100'

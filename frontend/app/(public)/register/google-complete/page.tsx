@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { User, ArrowRight, BookOpen, GraduationCap, Mail } from "lucide-react";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -130,9 +131,11 @@ export default function GoogleCompleteSignupPage() {
         <div className="w-full max-w-sm sm:max-w-md animate-in fade-in slide-in-from-bottom-6 duration-500">
           <div className="flex flex-col items-center mb-8">
             {prefill.avatar && !imgError ? (
-              <img
+              <Image
                 src={prefill.avatar}
                 alt={prefill.name || "Usuario"}
+                width={80}
+                height={80}
                 referrerPolicy="no-referrer"
                 onError={() => setImgError(true)}
                 className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl shadow-xl shadow-pink-200 mb-4 object-cover"

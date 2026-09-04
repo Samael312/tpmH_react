@@ -3,39 +3,22 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Clock, Video, Calendar, ChevronLeft,
-  ChevronRight, AlertCircle, X, Check,
-  RotateCcw, BookOpen
+  Calendar, ChevronLeft,
+  ChevronRight, AlertCircle, X, Check
 } from "lucide-react";
-import { useStudentClasses } from "@/hooks/useStudentData";
+import { useStudentClasses, StudentClass } from "@/hooks/useStudentData";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import ClassCard from "@/components/classes/ClassCard";
 import { RescheduleModal } from "@/components/classes/RescheduleModal";
-import { getMyDisplayTimezone, formatTimeTz, formatDateHumanTz } from "@/lib/tzFormat";
+import { getMyDisplayTimezone, formatDateHumanTz } from "@/lib/tzFormat";
 import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
-
-const STATUS_CONFIG: Record<string, {
-  label: string;
-  badge: string;
-  border: string;
-  dot: string;
-}> = {
-  pending_trial:    { label: "Prueba pendiente",  badge: "bg-purple-100 text-purple-700", border: "border-l-purple-400", dot: "bg-purple-400" },
-  pending:         { label: "Pendiente de pago",  badge: "bg-amber-100 text-amber-700",    border: "border-l-amber-400",   dot: "bg-amber-400" },
-  pending_payment: { label: "Pago en revisión",   badge: "bg-blue-100 text-blue-700",      border: "border-l-blue-400",    dot: "bg-blue-400" },
-  confirmed:       { label: "Confirmada",         badge: "bg-emerald-100 text-emerald-700", border: "border-l-emerald-400", dot: "bg-emerald-400" },
-  completed:       { label: "Completada",         badge: "bg-slate-100 text-slate-500",    border: "border-l-slate-300",   dot: "bg-slate-300" },
-  cancelled:       { label: "Cancelada",          badge: "bg-red-100 text-red-600",        border: "border-l-red-400",     dot: "bg-red-400" },
-  no_show:         { label: "No asististe",       badge: "bg-red-100 text-red-600",        border: "border-l-red-600",     dot: "bg-red-600" },
-  rescheduled:     { label: "Reagendada",         badge: "bg-orange-100 text-orange-700",  border: "border-l-orange-400",  dot: "bg-orange-400" },
-  finalized:       { label: "Finalizada",         badge: "bg-slate-100 text-slate-500",    border: "border-l-slate-300",   dot: "bg-slate-300" },
-};
+import { useNow } from "@/lib/useNow";
 
 const HISTORY_STATUSES = ["completed", "cancelled", "no_show", "finalized"];
 
@@ -304,7 +287,7 @@ function DatePickerCalendar({
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function MyClassesPage() {
   const [tab, setTab] = useState<"upcoming" | "history">("upcoming");
-  const [rescheduleTarget, setRescheduleTarget] = useState<any | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<StudentClass | null>(null);
   const [cancelTarget, setCancelTarget] = useState<{
     id: number; date: string; cohortId: number | null;
   } | null>(null);
@@ -334,7 +317,7 @@ export default function MyClassesPage() {
   // Y que todavía no haya empezado. Sin el chequeo de fecha, una clase que
   // ya arrancó pero aún no fue finalizada por el backend se contaría como
   // "próxima" en este tab aunque el backend ya no la considere así.
-  const now = Date.now();
+  const now = useNow();
   const upcomingAll = safeClasses.filter(
     c => !HISTORY_STATUSES.includes(c.status) &&
       new Date(c.start_time_utc).getTime() >= now
@@ -465,7 +448,7 @@ export default function MyClassesPage() {
           ].map(t => (
             <button
               key={t.key}
-              onClick={() => setTab(t.key as any)}
+              onClick={() => setTab(t.key as "upcoming" | "history")}
               className={`
                 px-5 py-2.5 rounded-xl text-sm font-bold
                 transition-all duration-200

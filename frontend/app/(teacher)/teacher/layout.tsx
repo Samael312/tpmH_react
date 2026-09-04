@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuthStore } from '@/store/authStore'
 import NavBar from '@/components/layout/NavBar'
@@ -23,22 +23,28 @@ export default function TeacherLayout({
   // Bloquea el render hasta confirmar que el onboarding está completo
   const [ready, setReady] = useState(isFullscreen)
 
+  const userRef = useRef(user)
+  useEffect(() => {
+    userRef.current = user
+  }, [user])
+
   useEffect(() => {
     if (!hasHydrated) return
 
-    if (!user || !token) {
+    const currentUser = userRef.current
+
+    if (!currentUser || !token) {
       router.push('/login')
       return
     }
 
-    if (!['teacher', 'teacher_admin'].includes(user.role)) {
+    if (!['teacher', 'teacher_admin'].includes(currentUser.role)) {
       router.push('/login')
       return
     }
 
     // En el onboarding no hace falta verificar nada más
     if (pathname.startsWith('/teacher/onboarding')) {
-      setReady(true)
       return
     }
 
@@ -49,11 +55,13 @@ export default function TeacherLayout({
     const data = meRes.data;
     const teacherData = tpRes.data;
     const done = data.onboarding_completed ?? false;
+    const latestUser = userRef.current;
+    if (!latestUser) return;
 
     setUser({
-      ...user,
+      ...latestUser,
       onboarding_completed: done,
-      timezone: teacherData?.timezone ?? user.timezone,
+      timezone: teacherData?.timezone ?? latestUser.timezone,
     });
 
     if (!done) {
@@ -62,13 +70,14 @@ export default function TeacherLayout({
       setReady(true);
     }
   }).catch(() => {
-    if (!user.onboarding_completed) {
+    const latestUser = userRef.current;
+    if (!latestUser?.onboarding_completed) {
       router.replace('/teacher/onboarding');
     } else {
       setReady(true);
     }
   });
-}, [pathname, hasHydrated]);
+}, [pathname, hasHydrated, token, router, setUser]);
 
   // Si el store ya no tiene user/token (p.ej. logout en curso), no renderizar
   // el dashboard con datos nulos: mostrar spinner mientras se redirige.

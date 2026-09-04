@@ -47,7 +47,7 @@ export function useBusinessRules() {
   const [loading, setLoading] = useState(!cache);
 
   useEffect(() => {
-    if (cache) { setLoading(false); return; }
+    if (cache) return;
     api.get("/system-catalogs/business-rules")
       .then(res => { cache = res.data; setRules(res.data); })
       .catch(() => setRules(FALLBACK))

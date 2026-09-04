@@ -2,7 +2,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useAdminStats, usePendingPayments, useNotifications } from '@/hooks/useAdminData'
+import { useAdminStats, usePendingPayments, useNotifications, type PendingPayment } from '@/hooks/useAdminData'
 import api from '@/lib/api'
 import Link from 'next/link'
 import StatCard from '@/components/ui/StatCard'
@@ -211,7 +211,7 @@ function PendingPaymentsSection() {
         </div>
       ) : (
         <div className="space-y-3">
-          {payments.slice(0, 5).map((p: any) => (
+          {payments.slice(0, 5).map((p: PendingPayment) => (
             <div key={p.payment_id} className="bg-slate-50/70 border border-slate-100 rounded-2xl p-4">
               <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
                 <span className="text-sm font-bold text-slate-800">{p.student_name}</span>

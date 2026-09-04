@@ -1,51 +1,43 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
 import api from "@/lib/api";
 import NavBar from "@/components/layout/NavBar";
 import DashboardTopbar from "@/components/layout/DashboardTopbar";
-import {
-  Home,
-  CalendarDays,
-  MonitorPlay,
-  Library,
-  ClipboardEdit,
-  GraduationCap,
-  UserCircle,
-  LogOut,
-  ChevronLeft,
-} from "lucide-react";
 
 const FULLSCREEN_ROUTES = ["/dashboard/onboarding"];
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, token, logout, setUser, hasHydrated } = useAuthStore();
-  const [collapsed, setCollapsed] = useState(false);
+  const { user, token, setUser, hasHydrated } = useAuthStore();
   const [checked, setChecked] = useState(false);
 
   const isFullscreen = FULLSCREEN_ROUTES.some((r) => pathname.startsWith(r));
   const isHome = pathname === "/dashboard";
 
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
   useEffect(() => {
     if (!hasHydrated) return;
-    if (!user || !token) {
+    const currentUser = userRef.current;
+    if (!currentUser || !token) {
       router.replace("/login");
       return;
     }
 
-    if (user.role !== "student") {
+    if (currentUser.role !== "student") {
       router.replace("/login");
       return;
     }
 
     // If already on onboarding, don't re-check
     if (pathname.startsWith("/dashboard/onboarding")) {
-      setChecked(true);
       return;
     }
 
@@ -56,13 +48,15 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       const userData = meRes.data;
       const studentData = spRes.data;
       const onboardingCompleted = userData.onboarding_completed ?? false;
+      const latestUser = userRef.current;
+      if (!latestUser) return;
 
       setUser({
-        ...user,
+        ...latestUser,
         onboarding_completed: onboardingCompleted,
         // solo sobreescribe si el perfil trae un valor real — nunca con "UTC" falso
-        timezone: studentData?.timezone || user.timezone,
-        goal: studentData?.goal ?? user.goal,
+        timezone: studentData?.timezone || latestUser.timezone,
+        goal: studentData?.goal ?? latestUser.goal,
       });
 
       if (!onboardingCompleted) {
@@ -71,18 +65,14 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         setChecked(true);
       }
     }).catch(() => {
-      if (!user.onboarding_completed) {
+      const latestUser = userRef.current;
+      if (!latestUser?.onboarding_completed) {
         router.replace("/dashboard/onboarding");
       } else {
         setChecked(true);
       }
     });
-  }, [pathname, hasHydrated]);
-
-  const handleLogout = () => {
-    logout();
-    router.replace("/login");
-  };
+  }, [pathname, hasHydrated, token, router, setUser]);
 
   // Si el store ya no tiene user/token (p.ej. logout en curso), no renderizar
   // el dashboard con datos nulos: mostrar spinner mientras se redirige.

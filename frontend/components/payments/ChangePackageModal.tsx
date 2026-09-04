@@ -10,20 +10,25 @@
 
 import { useState } from "react";
 import { X } from "lucide-react";
-import { useTeacherPackagesFor } from "@/hooks/useStudentData";
+import { useTeacherPackagesFor, type StudentEnrollment, type PackageInfo } from "@/hooks/useStudentData";
 import PackageCheckout from "./PackageCheckout";
 
-function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: any) {
-  const { packages: rawPackages, loading, isError } = useTeacherPackagesFor(teacherUsername, true);
+function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: {
+  enrollment: StudentEnrollment;
+  teacherUsername: string | null | undefined;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { packages: rawPackages, loading, isError } = useTeacherPackagesFor(teacherUsername ?? undefined, true);
   // Nunca se ofrece un paquete grupal como destino de un cambio/migración
   // por esta vía — unirse a un grupo requiere elegir una cohorte
   // específica (ver /teacher/[username], sección de clases grupales).
-  const packages = rawPackages.filter((p: any) => p.id !== enrollment.package?.id && !p.is_group);
+  const packages = rawPackages.filter((p) => p.id !== enrollment.package?.id && !p.is_group);
 
-  const [checkoutTarget, setCheckoutTarget] = useState<any>(null);
+  const [checkoutTarget, setCheckoutTarget] = useState<PackageInfo | null>(null);
   const [changeOption, setChangeOption] = useState<"full_refund" | "adjust_difference" | null>(null);
-  const [optionTarget, setOptionTarget] = useState<any>(null); // paquete en espera de que elijan Caso A
-  const [requesting, setRequesting] = useState<number | null>(null);
+  const [optionTarget, setOptionTarget] = useState<PackageInfo | null>(null); // paquete en espera de que elijan Caso A
+  const [requesting] = useState<number | null>(null);
   const [error, setError] = useState("");
 
   // Créditos ya usados/agendados del paquete actual (fuente de verdad: el
@@ -31,7 +36,7 @@ function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: an
   const classesTotal = enrollment.classes_total ?? enrollment.package?.classes_count ?? 0;
   const hasUsedCredits = (classesTotal - (enrollment.available_credits ?? classesTotal)) > 0;
 
-  const request = (pkg: any) => {
+  const request = (pkg: PackageInfo) => {
     setError("");
     const isDowngrade =
       pkg.classes_count != null &&
@@ -115,7 +120,7 @@ function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: an
               installmentsPaid={0}
               currentCredits={enrollment.available_credits ?? enrollment.prepaid_unlimited_credits ?? 0}
               currentPackagePrice={enrollment.package?.price}
-              currentPackageClassesTotal={enrollment.classes_total ?? enrollment.package?.classes_count}
+              currentPackageClassesTotal={enrollment.classes_total ?? enrollment.package?.classes_count ?? undefined}
               changeOption={changeOption ?? undefined}
               onClose={onClose}
               onDone={onDone}
@@ -154,7 +159,7 @@ function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: an
             <p className="text-sm text-slate-400 text-center py-6">No hay otros paquetes disponibles de este profesor</p>
           ) : (
             <div className="space-y-2">
-              {packages.map((p: any) => (
+              {packages.map((p) => (
                 <div key={p.id} className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3">
                   <div>
                     <p className="text-sm font-bold text-slate-800">{p.name}</p>

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import Image from "next/image";
+import axios from "axios";
 import {
   ClipboardList, Plus, Send, Star, Clock,
   CheckCircle, AlertCircle, ChevronDown,
@@ -33,7 +35,11 @@ interface TeacherCohort {
 
 function StudentAvatar({ s, className }: { s: Student; className?: string }) {
   if (s.avatar) {
-    return <img src={s.avatar} alt={s.name} className={`${className} object-cover`} />;
+    return (
+      <span className={`relative ${className} block overflow-hidden`}>
+        <Image src={s.avatar} alt={s.name} fill sizes="40px" className="object-cover" />
+      </span>
+    );
   }
   return (
     <div className={`${className} bg-gradient-to-br from-pink-400 to-rose-400
@@ -45,7 +51,11 @@ function StudentAvatar({ s, className }: { s: Student; className?: string }) {
 
 function SubmissionAvatar({ sub, className }: { sub: Submission; className?: string }) {
   if (sub.student_avatar) {
-    return <img src={sub.student_avatar} alt={sub.student_name ?? ""} className={`${className} object-cover`} />;
+    return (
+      <span className={`relative ${className} block overflow-hidden`}>
+        <Image src={sub.student_avatar} alt={sub.student_name ?? ""} fill sizes="40px" className="object-cover" />
+      </span>
+    );
   }
   return (
     <div className={`${className} bg-slate-100 flex items-center justify-center
@@ -559,7 +569,6 @@ export default function HomeworkPage() {
   const {
     submissions,
     loading: loadingSubs,
-    isError: subsError,
     refetch: refetchSubmissions,
   } = useHomeworkSubmissions(activeHw);
 
@@ -602,11 +611,16 @@ export default function HomeworkPage() {
       refetchHomework();
       setTab("review");
       toast.success("Tarea creada correctamente");
-    } catch (e: any) {
-      const detail = e.response?.data?.detail;
+    } catch (e) {
+      const detail = axios.isAxiosError(e) ? e.response?.data?.detail : undefined;
       setCreateError(
         Array.isArray(detail)
-          ? detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ")
+          ? detail.map((d: unknown) => {
+              if (d && typeof d === "object" && "msg" in d) {
+                return (d as { msg?: string }).msg || JSON.stringify(d);
+              }
+              return JSON.stringify(d);
+            }).join(", ")
           : detail || "Error creando tarea"
       );
     } finally { setCreating(false); }
@@ -749,7 +763,7 @@ export default function HomeworkPage() {
           ].map(t => (
             <button
               key={t.key}
-              onClick={() => setTab(t.key as any)}
+              onClick={() => setTab(t.key as "review" | "create")}
               className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl
                 text-xs sm:text-sm font-bold transition-all duration-200
                 ${tab === t.key
@@ -1115,7 +1129,7 @@ export default function HomeworkPage() {
                 </div>
               ) : filteredStudents.length === 0 ? (
                 <p className="text-sm text-slate-400 text-center py-8">
-                  Sin resultados para "{studentSearch}"
+                  Sin resultados para &ldquo;{studentSearch}&rdquo;
                 </p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[420px]

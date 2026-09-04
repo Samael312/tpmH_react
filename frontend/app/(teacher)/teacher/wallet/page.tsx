@@ -7,8 +7,6 @@ import { usePageTopBar } from '@/lib/mobileTopBar'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 import { Wallet as WalletIcon, TrendingUp, CheckCircle2, X, Loader2, ArrowDownLeft, ArrowUpRight, AlertTriangle, RefreshCw } from 'lucide-react'
-import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
-import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS, PAYMENT_METHODS as FALLBACK_WITHDRAWAL } from "@/lib/teacherOptions";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 
@@ -185,12 +183,6 @@ function RequestWithdrawalModal({
 }
 
 export default function WalletPage() {
-  const { catalogs } = useSystemCatalogs();
-  const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
-  const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
-  const SKILL_SUGGESTIONS = catalogs.skill_suggestions.length ? catalogs.skill_suggestions : FALLBACK_SKILLS;
-  const WITHDRAWAL_METHODS = catalogs.withdrawal_methods.length ? catalogs.withdrawal_methods : FALLBACK_WITHDRAWAL;
-  
   const { wallet, loading: wBalanceLoading, isFetching: wFetching, isError: wError, refetch: refetchWallet } = useWallet()
   const { withdrawals, loading: wLoading, isFetching: wListFetching, isError: wListError, refetch: refetchW } = useMyWithdrawals()
   const { income, loading: iLoading, isFetching: iFetching, isError: iError, refetch: refetchI } = useMyIncome()

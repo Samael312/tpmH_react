@@ -7,12 +7,10 @@ import {
   FileText, Search, BookOpen,
   Volume2, ExternalLink, Clock,
   Play, Pause, Loader2, Headphones,
-  CheckCircle2, CircleDashed, Sparkles, BarChart3, ChevronDown
+  CheckCircle2, CircleDashed, Sparkles, BarChart3
 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
-import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
-import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
 import { useStudentMaterials, type MaterialAssignmentFull as MaterialAssignment } from "@/hooks/useStudentData";
 import { useQueryClient } from "@tanstack/react-query";
 import Skeleton from "@/components/ui/Skeleton";
@@ -70,7 +68,6 @@ function ExpandableDescription({ text }: { text: string }) {
 }
 
 export default function StudentMaterialsPage() {
-  const { catalogs } = useSystemCatalogs();
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -104,7 +101,8 @@ export default function StudentMaterialsPage() {
   } | null>(null);
 
   useEffect(() => {
-    return () => { audioRef.current?.pause(); };
+    const audioEl = audioRef.current;
+    return () => { audioEl?.pause(); };
   }, []);
 
   const ensureVocabAudio = useCallback(async (material: Material) => {
@@ -121,7 +119,7 @@ export default function StudentMaterialsPage() {
     } finally {
       setLoadingVocabAudio(prev => ({ ...prev, [material.id]: false }));
     }
-  }, [audioCache]);
+  }, [audioCache, toast]);
 
   const stopPlayback = useCallback(() => {
     sequenceRef.current = null;

@@ -14,7 +14,7 @@ interface AppHeaderProps {
   role?: 'teacher' | 'student'
 }
 
-export default function AppHeader({ navItems, role }: AppHeaderProps) {
+export default function AppHeader({ navItems }: AppHeaderProps) {
   const pathname = usePathname()
   const router   = useRouter()
   const { user, logout } = useAuthStore()

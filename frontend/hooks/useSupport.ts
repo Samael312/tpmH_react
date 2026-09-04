@@ -58,23 +58,22 @@ export async function markSupportTicketSeen(ticketId: number) {
 export function useUnreadSupportCount(enabled: boolean = true) {
   const [count, setCount] = useState(0);
 
-  const fetch = useCallback(async () => {
-    try {
-      const res = await api.get("/support/tickets/me/unread-count");
-      setCount(res.data.unread_count);
-    } catch {}
+  const fetchUnread = useCallback(() => {
+    return api.get("/support/tickets/me/unread-count")
+      .then(res => setCount(res.data.unread_count))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
     if (!enabled) return;
-    fetch();
-    const interval = setInterval(fetch, 30000); // refresco cada 30s
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30000); // refresco cada 30s
     return () => clearInterval(interval);
-  }, [enabled, fetch]);
+  }, [enabled, fetchUnread]);
 
   // Si el hook está deshabilitado (ej. rol sin acceso a soporte), no mostramos
   // un conteo obtenido previamente en vez de resetear el estado dentro del efecto.
-  return { count: enabled ? count : 0, refetch: fetch };
+  return { count: enabled ? count : 0, refetch: fetchUnread };
 }
 
 // ─── Helper para invalidar caché tras crear/ver un ticket ────────────────────

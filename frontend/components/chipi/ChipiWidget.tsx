@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
-import { X, Send, Minimize2, Sparkles, RotateCcw, Bot, LifeBuoy } from "lucide-react";
+import { X, Send, Minimize2, Sparkles, RotateCcw, LifeBuoy } from "lucide-react";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { usePathname } from "next/navigation";

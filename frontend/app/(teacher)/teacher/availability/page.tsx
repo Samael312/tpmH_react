@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Calendar, Clock, Trash2, CalendarDays,
+  Clock, Trash2, CalendarDays,
   Sparkles, Check, X, AlertTriangle, RefreshCw,
 } from "lucide-react";
 import api from "@/lib/api";
@@ -53,13 +53,12 @@ export default function TeacherAvailabilityPage() {
   });
 
   // Sincroniza selectedSlots cuando llega nueva disponibilidad del servidor.
-  // Usamos JSON.stringify o dependencias estables para evitar ejecuciones repetidas innecesarias.
   useEffect(() => {
-    if (!availability) return;
+    if (availability.length === 0) return;
     const userTimezone = getMyDisplayTimezone();
     const initialSlots: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
 
-    availability.forEach((slot: any) => {
+    availability.forEach((slot) => {
       if (!slot.is_available) return;
       const day = slot.day_of_week;
       const localStart = utcTimeToLocal(slot.start_time_utc, day, userTimezone);
@@ -80,7 +79,7 @@ export default function TeacherAvailabilityPage() {
       }
     });
     setSelectedSlots(initialSlots);
-  }, [JSON.stringify(availability)]); // Usar JSON.stringify previene bucles si la referencia del array padre cambia en cada render de React Query
+  }, [availability]);
 
   // Derivamos los bloques de manera limpia (sin necesidad de un useEffect extra que guarde en state, 
   // o calculándolos de forma directa/memoizada para evitar ciclos de render).

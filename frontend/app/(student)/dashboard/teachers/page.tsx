@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { GraduationCap, Users, Sparkles } from "lucide-react";
 import { useTeacherDirectory, usePlatformConfig, useMyTeachers } from "@/hooks/useStudentData";
 import TeacherCard from "@/components/student/TeacherCard";
@@ -33,7 +34,7 @@ export default function ChooseTeacherPage() {
   const router = useRouter();
   const { config, loading: configLoading } = usePlatformConfig();
   const { teachers: directory, loading: directoryLoading, isFetching: directoryFetching, refetch: refetchDirectory } = useTeacherDirectory();
-  const { teachers: myTeachers, loading: myLoading, isFetching: myFetching, isSingleTenant, refetch: refetchMine } = useMyTeachers();
+  const { teachers: myTeachers, loading: myLoading, isFetching: myFetching, refetch: refetchMine } = useMyTeachers();
 
   const refetchAll = () => {
     refetchDirectory();
@@ -118,9 +119,9 @@ export default function ChooseTeacherPage() {
                   className="bg-white rounded-[2rem] border border-slate-100 shadow-lg shadow-slate-200/50
                              hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 p-5 flex gap-4 items-center"
                 >
-                  <div className="w-16 h-16 rounded-2xl overflow-hidden bg-gradient-to-br from-pink-400 to-rose-400 flex items-center justify-center flex-shrink-0">
+                  <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-gradient-to-br from-pink-400 to-rose-400 flex items-center justify-center flex-shrink-0">
                     {t.profile_photo_url ? (
-                      <img src={t.profile_photo_url} alt={t.name ?? ""} className="w-full h-full object-cover" />
+                      <Image src={t.profile_photo_url} alt={t.name ?? ""} fill sizes="64px" className="object-cover" />
                     ) : (
                       <span className="text-white text-xl font-black">{t.name?.[0]?.toUpperCase() ?? "P"}</span>
                     )}

@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import Image from "next/image";
+import axios from "axios";
 import {
   User, Briefcase, Globe, MapPin, Link2, MessageCircle, Plus,
-  X, Check, Save, Upload, Award, BookOpen, ChevronDown, ExternalLink,
+  X, Check, Upload, Award, BookOpen, ChevronDown, ExternalLink,
   AlertTriangle, Phone, Lock, Eye, EyeOff, Trash2, Edit2, RefreshCw,
   Calendar, Video, Palette, AtSign, Mail
 } from "lucide-react";
@@ -28,13 +30,22 @@ const MAX_VIDEO_SIZE_MB = 100;
 const ALLOWED_VIDEO_MIME_TYPES = ["video/mp4", "video/quicktime"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
-function formatErrorMessage(error: any, fallbackMessage: string): string {
-  const detail = error?.response?.data?.detail;
+function formatErrorMessage(error: unknown, fallbackMessage: string): string {
+  const detail = axios.isAxiosError(error) ? error.response?.data?.detail : undefined;
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail) && detail.length > 0) {
-    return detail.map((err: any) => err?.msg || JSON.stringify(err)).join(". ");
+    return detail
+      .map((err: unknown) => {
+        if (err && typeof err === "object" && "msg" in err) {
+          return (err as { msg?: string }).msg || JSON.stringify(err);
+        }
+        return JSON.stringify(err);
+      })
+      .join(". ");
   }
-  if (typeof detail === "object" && detail !== null) return detail.msg || JSON.stringify(detail);
+  if (typeof detail === "object" && detail !== null) {
+    return (detail as { msg?: string }).msg || JSON.stringify(detail);
+  }
   return fallbackMessage;
 }
 
@@ -308,7 +319,7 @@ function VideoUploadSection({
       });
       setFeedback({ msg: res.data.message || "Video subido con éxito", type: "success" });
       onUploaded();
-    } catch (e: any) {
+    } catch (e) {
       setFeedback({ msg: formatErrorMessage(e, "Error subiendo el video"), type: "error" });
     } finally {
       setUploading(false);
@@ -322,7 +333,7 @@ function VideoUploadSection({
       await api.delete("/teachers/me/video");
       setFeedback({ msg: "Video eliminado correctamente", type: "success" });
       onUploaded();
-    } catch (e: any) {
+    } catch (e) {
       setFeedback({ msg: formatErrorMessage(e, "Error eliminando el video"), type: "error" });
     }
   };
@@ -418,7 +429,7 @@ function ThemeColorSection({ initialColor, onSaved }: { initialColor?: string | 
       await api.patch("/teachers/me/profile", { theme_color: newColor });
       setFeedback({ msg: "Estilo actualizado", type: "success" });
       onSaved();
-    } catch (e: any) {
+    } catch (e) {
       setFeedback({ msg: formatErrorMessage(e, "Error guardando el estilo"), type: "error" });
     } finally {
       setSaving(false);
@@ -500,9 +511,6 @@ export default function TeacherProfilePage() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  // Timezone
-  const [savedTimezone, setSavedTimezone] = useState("");
-
   // Campos de formulario
   const [phoneCountry, setPhoneCountry] = useState<CountryInfo>(DEFAULT_COUNTRY);
   const [phoneRest, setPhoneRest] = useState("");
@@ -546,7 +554,6 @@ export default function TeacherProfilePage() {
     setNationality(prof.nationality ?? "");
     setTitle_(prof.title ?? "");
     setTimezone(prof.timezone ?? "");
-    setSavedTimezone(prof.timezone ?? "");
     setLanguages(prof.languages ?? []);
     setSubjects(prof.subjects ?? []);
     setSkills(prof.skills ?? []);
@@ -606,7 +613,7 @@ export default function TeacherProfilePage() {
       refetch();
       refetchCurrentUser();
       setInfoFeedback({ msg: "Foto de perfil actualizada", type: "success" });
-    } catch (e: any) {
+    } catch (e) {
       setInfoFeedback({ msg: formatErrorMessage(e, "Error subiendo la foto"), type: "error" });
     } finally {
       setUploadingPhoto(false);
@@ -632,10 +639,9 @@ export default function TeacherProfilePage() {
         nationality: nationality || null,
       });
       await Promise.all([refetch(), refetchCurrentUser()]);
-      setSavedTimezone(timezone);
       setInfoFeedback({ msg: "Perfil actualizado correctamente", type: "success" });
       setIsEditing(false);
-    } catch (e: any) {
+    } catch (e) {
       setInfoFeedback({ msg: formatErrorMessage(e, "Error guardando el perfil"), type: "error" });
     } finally {
       setSaving(false);
@@ -661,7 +667,7 @@ export default function TeacherProfilePage() {
       });
       setOldPw(""); setNewPw(""); setConfirmPw("");
       setPwFeedback({ msg: "Contraseña actualizada exitosamente", type: "success" });
-    } catch (e: any) {
+    } catch (e) {
       setPwFeedback({ msg: formatErrorMessage(e, "Contraseña actual incorrecta"), type: "error" });
     } finally {
       setSavingPw(false);
@@ -726,7 +732,7 @@ export default function TeacherProfilePage() {
                   className="w-20 h-20 rounded-2xl overflow-hidden cursor-pointer group border-2 border-slate-200 hover:border-pink-400 transition-all shadow-md relative bg-gradient-to-br from-pink-400 to-rose-400 flex items-center justify-center"
                 >
                   {displayPhoto ? (
-                    <img src={displayPhoto} alt="avatar" className="w-full h-full object-cover" />
+                    <Image src={displayPhoto} alt="avatar" fill unoptimized sizes="80px" className="object-cover" />
                   ) : (
                     <span className="text-white font-black text-2xl">
                       {profile?.user_username?.[0]?.toUpperCase() ?? "T"}

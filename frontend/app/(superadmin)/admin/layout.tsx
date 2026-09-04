@@ -1,24 +1,21 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
-import Link from 'next/link'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/store/authStore'
 import NavBar from '@/components/layout/NavBar'
 import DashboardTopbar from '@/components/layout/DashboardTopbar'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const pathname = usePathname()
-  const { user, logout, hasHydrated } = useAuthStore()
-  const [collapsed, setCollapsed] = useState(false)
+  const { user, hasHydrated } = useAuthStore()
 
   useEffect(() => {
     if (!hasHydrated) return
     if (!user || !["superadmin", "teacher_admin"].includes(user.role)) {
       router.push('/login')
     }
-  }, [user, hasHydrated])
+  }, [user, hasHydrated, router])
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">

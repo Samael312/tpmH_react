@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import {
-  Clock, Calendar, ChevronLeft, ChevronRight,
+  Calendar, ChevronLeft, ChevronRight,
   AlertCircle, X, Check, RotateCcw, BookOpen
 } from "lucide-react";
 import api from "@/lib/api";
-import { useAvailableSlots } from "@/hooks/useStudentData";
+import { useAvailableSlots, type AvailableSlot } from "@/hooks/useStudentData";
 import { useBusinessRules } from "@/hooks/useBusinessRules";
 import { getMyDisplayTimezone, formatTimeTz } from "@/lib/tzFormat";
 import { useToast } from "@/hooks/useToast";
@@ -163,7 +163,7 @@ export function RescheduleModal({
   const [saving, setSaving]   = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError]     = useState("");
-  const [selected, setSelected] = useState<any>(null);
+  const [selected, setSelected] = useState<AvailableSlot | null>(null);
   const toast = useToast();
 
   const currentDuration = classItem?.duration_minutes || 60;

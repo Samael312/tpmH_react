@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { 
-  Calendar, Clock, Trash2, CalendarDays, 
-  Sparkles, AlertCircle, Check, X 
+  Clock, Trash2, CalendarDays, 
+  Sparkles, Check, X 
 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { utcTimeToLocal } from "@/lib/scheduleUtc";
 import { getMyDisplayTimezone } from "@/lib/tzFormat";
-import { useStudentPreferences } from "@/hooks/useStudentData";
+import { useStudentPreferences, StudentPreference } from "@/hooks/useStudentData";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
@@ -64,7 +64,7 @@ export default function StudentPreferencesPage() {
     const userTimezone = getMyDisplayTimezone();
     const initialSlots: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
 
-    preferences.forEach((pref: any) => {
+    preferences.forEach((pref: StudentPreference) => {
       // Declaramos 'day' ANTES del try para que el catch pueda acceder a él
       const day = pref.day_of_week;
 

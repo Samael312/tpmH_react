@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import axios from "axios";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
@@ -45,15 +46,16 @@ interface CountryInfo {
 }
 
 // ─── Función Auxiliar para Convertir Errores de API (FastAPI / Pydantic) ────
-function parseApiError(detail: any): string {
+function parseApiError(detail: unknown): string {
   if (typeof detail === "string") return detail;
 
   if (Array.isArray(detail)) {
     return detail
       .map((item) => {
-        if (typeof item === "object" && item !== null && item.msg) {
-          const field = Array.isArray(item.loc) ? item.loc[item.loc.length - 1] : "";
-          return field ? `${field}: ${item.msg}` : item.msg;
+        if (typeof item === "object" && item !== null && "msg" in item) {
+          const { msg, loc } = item as { msg: string; loc?: unknown[] };
+          const field = Array.isArray(loc) ? loc[loc.length - 1] : "";
+          return field ? `${field}: ${msg}` : msg;
         }
         return JSON.stringify(item);
       })
@@ -61,7 +63,8 @@ function parseApiError(detail: any): string {
   }
 
   if (detail && typeof detail === "object") {
-    return detail.msg || JSON.stringify(detail);
+    const { msg } = detail as { msg?: string };
+    return msg || JSON.stringify(detail);
   }
 
   return "Error guardando el perfil. Inténtalo de nuevo.";
@@ -261,7 +264,7 @@ function StepProfile({
             <label className="cursor-pointer group">
               <div className="relative w-24 h-24 rounded-2xl overflow-hidden border-2 border-dashed border-slate-200 group-hover:border-pink-400 transition-colors bg-slate-50 flex items-center justify-center">
                 {photoPreview ? (
-                  <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                  <Image src={photoPreview} alt="Preview" fill unoptimized className="object-cover" />
                 ) : (
                   <div className="flex flex-col items-center gap-1">
                     <Upload className="w-6 h-6 text-slate-300" />
@@ -422,7 +425,14 @@ function StepSpecialties({
   languages, setLanguages, subjects, setSubjects,
   skills, setSkills, certificates, setCertificates,
   onNext, onBack,
-}: any) {
+}: {
+  languages: string[]; setLanguages: React.Dispatch<React.SetStateAction<string[]>>;
+  subjects: string[]; setSubjects: React.Dispatch<React.SetStateAction<string[]>>;
+  skills: string[]; setSkills: React.Dispatch<React.SetStateAction<string[]>>;
+  certificates: { title: string; year: string }[];
+  setCertificates: React.Dispatch<React.SetStateAction<{ title: string; year: string }[]>>;
+  onNext: () => void; onBack: () => void;
+}) {
   const { catalogs } = useSystemCatalogs();
   const SUBJECTS = catalogs.subjects.length ? catalogs.subjects : FALLBACK_SUBJECTS;
   const LANGUAGES = catalogs.languages.length ? catalogs.languages : FALLBACK_LANGUAGES;
@@ -444,9 +454,9 @@ function StepSpecialties({
 
   const addCert = () => setCertificates([...certificates, { title: "", year: "" }]);
   const updateCert = (idx: number, field: "title" | "year", val: string) =>
-    setCertificates(certificates.map((c: any, i: number) => i === idx ? { ...c, [field]: val } : c));
+    setCertificates(certificates.map((c, i) => i === idx ? { ...c, [field]: val } : c));
   const removeCert = (idx: number) =>
-    setCertificates(certificates.filter((_: any, i: number) => i !== idx));
+    setCertificates(certificates.filter((_, i) => i !== idx));
 
   // Validación: Se requiere al menos un idioma O una materia (no ambos obligatoriamente)
   const handleContinue = () => {
@@ -551,7 +561,7 @@ function StepSpecialties({
           <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Certificaciones (opcional)</p>
         </div>
         <div className="space-y-3 mb-3">
-          {certificates.map((cert: any, idx: number) => (
+          {certificates.map((cert, idx) => (
             <div key={idx} className="flex gap-3 items-center bg-slate-50 rounded-2xl p-3">
               <div className="flex-1 grid grid-cols-2 gap-2">
                 <input value={cert.title} onChange={e => updateCert(idx, "title", e.target.value)}
@@ -585,7 +595,11 @@ function StepSpecialties({
 }
 
 // ─── Paso 4: Disponibilidad ───────────────────────────────────────────────────
-function StepAvailability({ blocks, setBlocks, onNext, onBack }: any) {
+function StepAvailability({ blocks, setBlocks, onNext, onBack }: {
+  blocks: ScheduleBlock[];
+  setBlocks: React.Dispatch<React.SetStateAction<ScheduleBlock[]>>;
+  onNext: () => void; onBack: () => void;
+}) {
   const [selectedDay, setSelectedDay] = useState(0);
   const [selectedSlots, setSelectedSlots] = useState<Record<number, string[]>>(
     { 0:[], 1:[], 2:[], 3:[], 4:[], 5:[], 6:[] }
@@ -708,8 +722,12 @@ function StepAvailability({ blocks, setBlocks, onNext, onBack }: any) {
 }
 
 // ─── Paso 5: Redes sociales y finalizar ──────────────────────────────────────
-function StepSocial({ socialLinks, setSocialLinks, onFinish, onBack, saving }: any) {
-  const fields = [
+function StepSocial({ socialLinks, setSocialLinks, onFinish, onBack, saving }: {
+  socialLinks: { instagram: string; website: string };
+  setSocialLinks: React.Dispatch<React.SetStateAction<{ instagram: string; website: string }>>;
+  onFinish: () => void; onBack: () => void; saving: boolean;
+}) {
+  const fields: { key: "instagram" | "website"; label: string; placeholder: string; icon: React.ReactNode }[] = [
     { key: "instagram", label: "Instagram", placeholder: "https://www.instagram.com/tu_usuario/", icon: <GraduationCap className="w-5 h-5" /> },
     { key: "website", label: "Sitio web", placeholder: "https://tuweb.com", icon: <Globe className="w-5 h-5" /> },
   ];
@@ -894,8 +912,8 @@ export default function TeacherOnboardingPage() {
       // 7. Redirigir tras 3s
       setTimeout(() => router.push("/teacher/dashboard"), 3000);
 
-    } catch (e: any) {
-      const errorDetail = e.response?.data?.detail;
+    } catch (e) {
+      const errorDetail = axios.isAxiosError(e) ? e.response?.data?.detail : undefined;
       setError(parseApiError(errorDetail));
     } finally {
       setSaving(false);

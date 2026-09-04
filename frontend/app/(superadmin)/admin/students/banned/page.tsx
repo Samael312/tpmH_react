@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useBannedStudents } from '@/hooks/useAdminData'
+import { useBannedStudents, type Student } from '@/hooks/useAdminData'
 import { Card } from '@/components/ui'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
@@ -95,7 +95,7 @@ export default function BannedStudentsPage() {
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {students.map((student: any) => (
+              {students.map((student: Student) => (
                 <div key={student.id} className="grid grid-cols-1 md:grid-cols-[2.5fr_2.5fr_1.5fr] gap-4 px-6 md:px-8 py-5 items-center hover:bg-rose-50/30 transition-colors">
                   <div className="flex items-center gap-3.5 min-w-0">
                     <div className="w-11 h-11 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center flex-shrink-0">

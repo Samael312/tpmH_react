@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Image from "next/image";
 import { createPortal } from "react-dom";
 import { User, Video, X, Clock, RotateCcw, Check, AlertCircle, Phone, Users2, ChevronDown, MessageCircle, Calendar } from "lucide-react";
 import api from "@/lib/api";
@@ -78,7 +79,13 @@ const STUDENT_CANCELABLE = ["pending", "pending_trial", "pending_payment", "conf
 const STUDENT_RESCHEDULABLE = ["pending", "pending_trial", "confirmed", "finalized"];
 
 function PersonAvatar({ name, url, className }: { name?: string | null; url?: string | null; className?: string }) {
-  if (url) return <img src={url} alt={name ?? ""} className={`${className} object-cover`} />;
+  if (url) {
+    return (
+      <span className={`relative ${className} block overflow-hidden`}>
+        <Image src={url} alt={name ?? ""} fill sizes="40px" className="object-cover" />
+      </span>
+    );
+  }
   return (
     <div className={`${className} bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-[10px]`}>
       {name ? name.charAt(0).toUpperCase() : <User className="w-3 h-3" />}
@@ -328,7 +335,7 @@ export default function ClassCard({
 
   const handleCancelClick = () => {
     if (onCancel) { onCancel(); return; }
-    role === "teacher" ? teacherCancelInline() : studentCancelInline();
+    if (role === "teacher") { teacherCancelInline(); } else { studentCancelInline(); }
   };
 
   // --- PERMISOS ---
@@ -582,7 +589,7 @@ export default function ClassCard({
             </div>
 
             {class_.notes && (
-              <p className="text-xs text-slate-500 italic mb-2 truncate">"{class_.notes}"</p>
+              <p className="text-xs text-slate-500 italic mb-2 truncate">&ldquo;{class_.notes}&rdquo;</p>
             )}
             {error && (
               <p className="text-xs font-bold text-red-500 mb-2 truncate">{error}</p>
