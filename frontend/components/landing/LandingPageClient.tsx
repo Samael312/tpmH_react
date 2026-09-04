@@ -719,9 +719,17 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
               <Link href="/register" className="hover:text-rose-400 transition-colors">Registrarse</Link>
             </div>
           </div>
-          <div className="border-t border-slate-800/50 pt-8 text-center md:text-left flex flex-col md:flex-row justify-between items-center">
+          <div className="border-t border-slate-800/50 pt-8 text-center md:text-left flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-slate-500 text-sm">© {new Date().getFullYear()} {platformName} · Todos los derechos reservados</p>
-            <p className="text-slate-600 text-xs mt-4 md:mt-0 uppercase tracking-widest font-bold">Empoderando estudiantes</p>
+            <div className="flex items-center gap-5">
+              <Link href="/privacy" className="text-slate-500 text-xs font-semibold hover:text-rose-400 transition-colors">
+                Política de Privacidad
+              </Link>
+              <Link href="/terms" className="text-slate-500 text-xs font-semibold hover:text-rose-400 transition-colors">
+                Términos de Servicio
+              </Link>
+            </div>
+            <p className="text-slate-600 text-xs uppercase tracking-widest font-bold">Empoderando estudiantes</p>
           </div>
         </div>
       </footer>

@@ -92,6 +92,7 @@ export default function RegisterPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
@@ -119,7 +120,8 @@ export default function RegisterPage() {
       role
   );
 
-  const step2Valid = password.length >= 8 && password === confirmPw;
+  const step2Valid =
+    password.length >= 8 && password === confirmPw && acceptedTerms;
 
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,6 +154,11 @@ export default function RegisterPage() {
     // Validar si las contraseñas coinciden
     if (password !== confirmPw) {
       setError("Las contraseñas no coinciden.");
+      return;
+    }
+
+    if (!acceptedTerms) {
+      setError("Debés aceptar los Términos de Servicio y la Política de Privacidad para continuar.");
       return;
     }
 
@@ -553,6 +560,38 @@ export default function RegisterPage() {
                     </div>
                   </div>
 
+                  <label
+                    htmlFor="acceptedTerms"
+                    className="flex items-start gap-2 pt-1 cursor-pointer select-none"
+                  >
+                    <input
+                      id="acceptedTerms"
+                      type="checkbox"
+                      checked={acceptedTerms}
+                      onChange={(e) => setAcceptedTerms(e.target.checked)}
+                      className="mt-0.5 w-3.5 h-3.5 rounded border-2 border-slate-300 text-pink-600 focus:ring-pink-400 accent-pink-600 shrink-0"
+                    />
+                    <span className="text-[11px] text-slate-500 leading-snug">
+                      Acepto los{" "}
+                      <Link
+                        href="/terms"
+                        target="_blank"
+                        className="font-bold text-pink-600 hover:underline"
+                      >
+                        Términos de Servicio
+                      </Link>{" "}
+                      y la{" "}
+                      <Link
+                        href="/privacy"
+                        target="_blank"
+                        className="font-bold text-pink-600 hover:underline"
+                      >
+                        Política de Privacidad
+                      </Link>
+                      .
+                    </span>
+                  </label>
+
                   <div className="flex gap-2 pt-2">
                     <button
                       type="button"
@@ -566,7 +605,7 @@ export default function RegisterPage() {
                     </button>
                     <button
                       type="submit"
-                      disabled={loading || success}
+                      disabled={loading || success || !acceptedTerms}
                       className="flex-[2] py-2.5 text-xs font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
                     >
                       {loading ? (
