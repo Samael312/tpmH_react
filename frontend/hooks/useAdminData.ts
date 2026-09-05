@@ -34,10 +34,9 @@ export interface PendingPayment {
   payment_expires_at?: string | null
   package_name?: string | null
   installment_total?: number | null
-  // NOTA: el backend (/payments/pending-review, /payments/history) nunca
-  // envía este campo hoy — se deja opcional para que, si en el futuro se
-  // agrega al endpoint, el renderizado condicional que ya existe en la UI
-  // (`{p.teacher_name && ...}`) empiece a funcionar sin más cambios.
+  // El backend puede devolver null si el profesor fue eliminado; se deja
+  // opcional para que el renderizado condicional (`{p.teacher_name && ...}`)
+  // siga siendo seguro en ese caso.
   teacher_name?: string | null
 }
 

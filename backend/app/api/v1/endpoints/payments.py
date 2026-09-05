@@ -713,6 +713,7 @@ def get_payments_pending_review(
     result = []
     for p in payments:
         student_user = p.student.user if p.student else None
+        teacher_user = p.teacher.user if p.teacher else None
         entry = {
             "payment_id": p.id,
             "payment_type": p.payment_type,
@@ -722,6 +723,7 @@ def get_payments_pending_review(
             "submitted_at": p.created_at,
             "student_name": f"{student_user.name} {student_user.surname}" if student_user else "Desconocido",
             "student_username": student_user.username if student_user else None,
+            "teacher_name": f"{teacher_user.name} {teacher_user.surname}" if teacher_user else None,
         }
         # BUG-04/12: "single_class" ya no se genera para pagos nuevos, pero se
         # preserva el branch por compatibilidad con filas históricas previas
@@ -760,6 +762,7 @@ def get_payments_history(
     result = []
     for p in payments:
         student_user = p.student.user if p.student else None
+        teacher_user = p.teacher.user if p.teacher else None
         entry = {
             "payment_id": p.id,
             "payment_type": p.payment_type,
@@ -772,6 +775,7 @@ def get_payments_history(
             "rejection_reason": p.rejection_reason,
             "student_name": f"{student_user.name} {student_user.surname}" if student_user else "Desconocido",
             "student_username": student_user.username if student_user else None,
+            "teacher_name": f"{teacher_user.name} {teacher_user.surname}" if teacher_user else None,
         }
         if p.payment_type == "single_class" and p.class_id:
             class_ = db.query(Class).filter(Class.id == p.class_id).first()
