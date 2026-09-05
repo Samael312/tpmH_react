@@ -28,7 +28,6 @@ function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: {
   const [checkoutTarget, setCheckoutTarget] = useState<PackageInfo | null>(null);
   const [changeOption, setChangeOption] = useState<"full_refund" | "adjust_difference" | null>(null);
   const [optionTarget, setOptionTarget] = useState<PackageInfo | null>(null); // paquete en espera de que elijan Caso A
-  const [requesting] = useState<number | null>(null);
   const [error, setError] = useState("");
 
   // Créditos ya usados/agendados del paquete actual (fuente de verdad: el
@@ -169,10 +168,9 @@ function ChangePackageModal({ enrollment, teacherUsername, onClose, onDone }: {
                   </div>
                   <button
                     onClick={() => request(p)}
-                    disabled={requesting !== null}
                     className="px-4 py-2 bg-pink-500 text-white text-xs font-bold rounded-xl disabled:opacity-50"
                   >
-                    {requesting === p.id ? "..." : "Solicitar"}
+                    Solicitar
                   </button>
                 </div>
               ))}
