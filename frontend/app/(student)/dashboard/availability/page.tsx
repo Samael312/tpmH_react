@@ -65,8 +65,11 @@ export default function StudentPreferencesPage() {
     const initialSlots: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
 
     preferences.forEach((pref: StudentPreference) => {
-      // Declaramos 'day' ANTES del try para que el catch pueda acceder a él
-      const day = pref.day_of_week;
+      // Declaramos 'day' ANTES del try para que el catch pueda acceder a él.
+      // Usamos local_day_of_week (el día que el estudiante eligió en su
+      // calendario) y no day_of_week (que representa el día real en UTC,
+      // puede diferir para horarios cercanos a medianoche).
+      const day = pref.local_day_of_week;
 
       try {
         const localStart = utcTimeToLocal(pref.start_time_utc, day, userTimezone);

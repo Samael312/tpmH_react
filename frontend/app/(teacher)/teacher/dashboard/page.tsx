@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { useTeacherClasses, useWallet, useTeacherProfile, type TeacherClass, type TeacherProfile } from '@/hooks/useTeacherData'
 import ClassCard from '@/components/classes/ClassCard'
 import { RescheduleModal } from '@/components/classes/RescheduleModal'
@@ -247,6 +248,51 @@ function StudentFilterDropdown({
       )}
     </div>
   )
+}
+
+// Banner de estado del perfil para 'pending'/'suspended' (rejected tiene su
+// propio banner, RejectionFeedbackBanner, más abajo — no duplicar acá).
+// Sin esto, un profesor recién onboardeado (sin video, o con video subido
+// pero aún en revisión) navega el dashboard entero sin ninguna pista de que
+// su perfil todavía no es visible para estudiantes.
+function ProfileStatusBanner({ profile }: { profile: TeacherProfile | null }) {
+  if (!profile || profile.status === 'rejected' || profile.status === 'approved') return null
+
+  if (!profile.video_url) {
+    return (
+      <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="flex gap-3 items-start flex-1">
+          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <p className="text-sm font-bold text-amber-700 leading-relaxed">
+            Tu perfil todavía no es visible para estudiantes: falta subir tu video de presentación, obligatorio para la aprobación.
+          </p>
+        </div>
+        <Link
+          href="/teacher/profile"
+          className="flex-shrink-0 text-center text-sm font-black text-white bg-amber-500 hover:bg-amber-600 rounded-xl px-5 py-2.5 transition-colors"
+        >
+          Subir video
+        </Link>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+      <div className="flex gap-3 items-start flex-1">
+        <AlertTriangle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+        <p className="text-sm font-bold text-blue-700 leading-relaxed">
+          Tu video fue recibido y tu perfil está siendo revisado por el equipo. Todavía no es visible para estudiantes.
+        </p>
+      </div>
+      <Link
+        href="/teacher/profile"
+        className="flex-shrink-0 text-center text-sm font-black text-blue-700 bg-white border border-blue-200 hover:bg-blue-100 rounded-xl px-5 py-2.5 transition-colors"
+      >
+        Ver mi perfil
+      </Link>
+    </div>
+  );
 }
 
 function RejectionFeedbackBanner({ profile, onRefetch }: { profile: TeacherProfile | null; onRefetch: () => void }) {
@@ -521,6 +567,8 @@ export default function TeacherDashboard() {
   return (
     <>
       <div className="space-y-8 animate-fade-up bg-white min-h-screen p-6 rounded-3xl">
+        <ProfileStatusBanner profile={profile} />
+
         {profile?.status === 'rejected' && (
           <RejectionFeedbackBanner profile={profile} onRefetch={refetchProfile} />
         )}

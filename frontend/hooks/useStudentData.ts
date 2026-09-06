@@ -458,7 +458,8 @@ export function useStudentHomework() {
 
 // ─── Preferencias horarias del estudiante ────────────────────────────────────
 export interface StudentPreference {
-  day_of_week: number;
+  day_of_week: number;         // día real en UTC
+  local_day_of_week: number;   // día que el estudiante eligió en su calendario — usar este para mostrar en UI
   start_time_utc: string;
   end_time_utc: string;
 }

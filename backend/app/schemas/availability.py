@@ -45,7 +45,8 @@ class SetWeeklyAvailabilityRequest(BaseModel):
 class WeeklySlotResponse(BaseModel):
     id: int
     teacher_id: int
-    day_of_week: int
+    day_of_week: int          # día real en UTC (para lógica de reservas)
+    local_day_of_week: int    # día que el profesor eligió en su calendario (para mostrar en UI)
     start_time_utc: str    # "13:00" UTC
     end_time_utc: str      # "22:00" UTC
     is_available: bool

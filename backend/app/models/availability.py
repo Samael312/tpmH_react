@@ -15,7 +15,13 @@ class TeacherAvailability(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     teacher_id = Column(Integer, ForeignKey("teacher_profiles.id"), nullable=False)
-    day_of_week = Column(Integer, nullable=False)   # 0-6 ISO
+    day_of_week = Column(Integer, nullable=False)   # 0-6 ISO, día real en UTC
+    # Día que el profesor eligió en SU calendario, siempre el mismo sin
+    # importar zona horaria (a diferencia de day_of_week, que es el día
+    # real en UTC y puede diferir para horarios cercanos a medianoche —
+    # ver core/timezone.py). Nullable solo por compatibilidad con filas
+    # viejas migradas; todo INSERT nuevo debe completarlo.
+    local_day_of_week = Column(Integer, nullable=True)
     start_time_utc = Column(String(5), nullable=False)  # "09:00" UTC
     end_time_utc = Column(String(5), nullable=False)    # "18:00" UTC
     is_available = Column(Boolean, default=True)

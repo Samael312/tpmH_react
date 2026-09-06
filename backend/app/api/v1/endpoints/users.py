@@ -14,7 +14,7 @@ from app.models.user import User
 from app.models.student import StudentProfile
 from app.schemas.user import UserResponse, UpdateProfileRequest, ChangePasswordRequest, StudentProfileResponse
 from app.models.student_preferences import StudentSchedulePreference
-from app.core.timezone import convert_local_time_to_utc_string, validate_timezone
+from app.core.timezone import convert_local_time_to_utc, validate_timezone
 from app.schemas.preferences import SetPreferencesRequest, PreferenceSlotResponse
 from app.core.storage import upload_file, delete_file
 from app.models.teacher import TeacherProfile, TeacherStatus
@@ -367,11 +367,11 @@ def set_schedule_preferences(
     new_prefs = []
     for slot in data.slots:
         try:
-            start_utc = convert_local_time_to_utc_string(
+            start_utc, utc_day_of_week = convert_local_time_to_utc(
                 slot.start_time_local, data.timezone, slot.day_of_week
             )
-            end_utc = convert_local_time_to_utc_string(
-                slot.end_time_local, data.timezone, slot.day_of_week 
+            end_utc, _ = convert_local_time_to_utc(
+                slot.end_time_local, data.timezone, slot.day_of_week
             )
         except ValueError as e:
             raise HTTPException(
@@ -381,7 +381,8 @@ def set_schedule_preferences(
 
         pref = StudentSchedulePreference(
             student_id=student_id,
-            day_of_week=slot.day_of_week,
+            day_of_week=utc_day_of_week,
+            local_day_of_week=slot.day_of_week,
             start_time_utc=start_utc,
             end_time_utc=end_utc,
         )
@@ -437,10 +438,10 @@ def update_schedule_preferences(
     new_prefs = []
     for slot in data.slots:
         try:
-            start_utc = convert_local_time_to_utc_string(
+            start_utc, utc_day_of_week = convert_local_time_to_utc(
                 slot.start_time_local, data.timezone, slot.day_of_week
             )
-            end_utc = convert_local_time_to_utc_string(
+            end_utc, _ = convert_local_time_to_utc(
                 slot.end_time_local, data.timezone, slot.day_of_week
             )
         except ValueError as e:
@@ -451,7 +452,8 @@ def update_schedule_preferences(
 
         pref = StudentSchedulePreference(
             student_id=student_id,
-            day_of_week=slot.day_of_week,
+            day_of_week=utc_day_of_week,
+            local_day_of_week=slot.day_of_week,
             start_time_utc=start_utc,
             end_time_utc=end_utc,
         )

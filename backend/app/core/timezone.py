@@ -121,20 +121,28 @@ def get_next_weekday_date(day_of_week: int, tz_str: str, reference: datetime | N
     return target_date.strftime("%Y-%m-%d")
 
 
-def convert_local_time_to_utc_string(
+def convert_local_time_to_utc(
     time_str: str,
     tz_str: str,
     day_of_week: int,
-) -> str:
+) -> tuple[str, int]:
     """
-    Convierte una hora local "HH:MM" a su equivalente UTC "HH:MM".
-    Usa la próxima fecha real de ese día de la semana como referencia,
-    para que el offset (incluyendo DST) sea el correcto y consistente
-    con la conversión inversa que hace el frontend al mostrar el horario.
+    Convierte una hora local "HH:MM" a su equivalente UTC "HH:MM", y
+    además devuelve el día de la semana (ISO, 0=Lunes...6=Domingo) que
+    ese horario ocupa REALMENTE en UTC.
+
+    Esto importa porque un horario local cercano a la medianoche puede
+    caer en un día distinto una vez convertido a UTC (ej. Lunes 06:00 en
+    Sydney es Domingo 20:00 UTC). Cualquier código que compare contra
+    "día de la semana" usando fechas en UTC (como la búsqueda de slots
+    disponibles para reservar) necesita este día ajustado, no el día
+    local original — para eso existe local_day_of_week en los modelos
+    que usan esta función, que sí preserva el día que el usuario eligió
+    en su propio calendario.
 
     Example:
-        convert_local_time_to_utc_string("09:00", "America/Caracas", 0)
-        → "13:00"
+        convert_local_time_to_utc("06:00", "Australia/Sydney", 0)
+        → ("20:00", 6)   # 20:00 UTC del Domingo (6), no del Lunes (0)
     """
     try:
         tz = ZoneInfo(tz_str)
@@ -143,10 +151,29 @@ def convert_local_time_to_utc_string(
             f"{reference_date}T{time_str}:00", "%Y-%m-%dT%H:%M:%S"
         ).replace(tzinfo=tz)
         dt_utc = dt_local.astimezone(UTC)
-        return dt_utc.strftime("%H:%M")
+        return dt_utc.strftime("%H:%M"), dt_utc.weekday()
     except Exception as e:
-        logger.error(f"Error en convert_local_time_to_utc_string: {e}")
+        logger.error(f"Error en convert_local_time_to_utc: {e}")
         raise ValueError(f"No se pudo convertir '{time_str}' desde '{tz_str}'")
+
+
+def convert_local_time_to_utc_string(
+    time_str: str,
+    tz_str: str,
+    day_of_week: int,
+) -> str:
+    """
+    Igual que convert_local_time_to_utc, pero solo devuelve la hora,
+    para el código que ya maneja el día de la semana por su cuenta
+    (ej. excepciones puntuales, que tienen una fecha real de calendario
+    en vez de un day_of_week recurrente, así que no sufren el problema
+    del corrimiento de día).
+
+    Example:
+        convert_local_time_to_utc_string("09:00", "America/Caracas", 0)
+        → "13:00"
+    """
+    return convert_local_time_to_utc(time_str, tz_str, day_of_week)[0]
 
 def convert_utc_time_to_local_string(
     utc_time_str: str,

@@ -60,7 +60,7 @@ export default function TeacherAvailabilityPage() {
 
     availability.forEach((slot) => {
       if (!slot.is_available) return;
-      const day = slot.day_of_week;
+      const day = slot.local_day_of_week;
       const localStart = utcTimeToLocal(slot.start_time_utc, day, userTimezone);
       const localEnd = utcTimeToLocal(slot.end_time_utc, day, userTimezone);
 

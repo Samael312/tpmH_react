@@ -52,7 +52,8 @@ export interface TeacherProfile {
 export interface WeeklySlot {
   id: number
   teacher_id: number
-  day_of_week: number
+  day_of_week: number         // día real en UTC (uso interno del backend para reservas)
+  local_day_of_week: number   // día que el profesor eligió en su calendario — usar este para mostrar en UI
   start_time_utc: string
   end_time_utc: string
   is_available: boolean

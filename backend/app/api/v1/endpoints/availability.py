@@ -22,7 +22,7 @@ from app.schemas.availability import (
 from app.core.timezone import (
     UTC,
     utc_now,
-    convert_local_time_to_utc_string,
+    convert_local_time_to_utc,
     build_weekly_range_utc,
     get_all_slots_utc,
     is_slot_in_past,
@@ -80,10 +80,10 @@ def set_my_weekly_availability(
     new_slots = []
     for slot in data.slots:
         try:
-            start_utc = convert_local_time_to_utc_string(
+            start_utc, utc_day_of_week = convert_local_time_to_utc(
                 slot.start_time_local, data.timezone, slot.day_of_week
             )
-            end_utc = convert_local_time_to_utc_string(
+            end_utc, _ = convert_local_time_to_utc(
                 slot.end_time_local, data.timezone, slot.day_of_week
             )
         except ValueError as e:
@@ -94,7 +94,8 @@ def set_my_weekly_availability(
 
         new_slot = TeacherAvailability(
             teacher_id=teacher_id,
-            day_of_week=slot.day_of_week,
+            day_of_week=utc_day_of_week,
+            local_day_of_week=slot.day_of_week,
             start_time_utc=start_utc,
             end_time_utc=end_utc,
             is_available=slot.is_available,

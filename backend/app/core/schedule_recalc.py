@@ -4,11 +4,14 @@ Recálculo de horarios al cambiar la zona horaria de una cuenta.
 Regla de negocio:
 - Disponibilidad semanal recurrente (TeacherAvailability) y preferencias del
   estudiante (StudentSchedulePreference): se guardan como "HH:MM UTC" +
-  day_of_week. Al cambiar de zona horaria, la hora LOCAL que el usuario
-  configuró ("trabajo de 12:00 a 19:00") se PRESERVA tal cual, y lo que se
-  recalcula es el UTC equivalente para la nueva zona horaria. El
-  day_of_week NO cambia — sigue siendo el mismo día que el usuario configuró
-  en su propio calendario, independientemente de dónde esté físicamente.
+  day_of_week + local_day_of_week. Al cambiar de zona horaria, la hora LOCAL
+  que el usuario configuró ("trabajo de 12:00 a 19:00") se PRESERVA tal cual,
+  y lo que se recalcula es el UTC equivalente para la nueva zona horaria.
+  local_day_of_week NO cambia nunca — es el día que el usuario eligió en su
+  propio calendario, independientemente de dónde esté físicamente. day_of_week
+  SÍ puede cambiar: representa el día de la semana real en UTC de ese horario,
+  y un cambio de zona horaria puede correrlo de día (ver core/timezone.py,
+  convert_local_time_to_utc) — por eso se recalcula acá igual que las horas.
 
 - Excepciones puntuales (TeacherAvailabilityException): tienen una fecha de
   calendario real (ej. "17 de agosto, vacaciones 09:00-13:00"). Ahí se
@@ -25,7 +28,7 @@ import logging
 
 from app.core.timezone import (
     UTC,
-    convert_local_time_to_utc_string,
+    convert_local_time_to_utc,
     convert_utc_time_to_local_string,
 )
 from app.models.availability import TeacherAvailability, TeacherAvailabilityException
@@ -43,17 +46,29 @@ def _recalc_weekly_rows(rows, old_tz: str, new_tz: str) -> List[Dict[str, Any]]:
     changes = []
     for row in rows:
         try:
-            local_start = convert_utc_time_to_local_string(row.start_time_utc, old_tz, row.day_of_week)
-            local_end = convert_utc_time_to_local_string(row.end_time_utc, old_tz, row.day_of_week)
+            # El ancla para "qué día es este horario en la vida real del
+            # usuario" es local_day_of_week — NO day_of_week, que ahora
+            # representa el día en UTC y puede diferir del local para
+            # horarios cercanos a la medianoche (ver core/timezone.py).
+            # Si por algún motivo una fila vieja no tiene local_day_of_week
+            # cargado, day_of_week es el mejor fallback disponible.
+            anchor_day = row.local_day_of_week if row.local_day_of_week is not None else row.day_of_week
 
-            new_start_utc = convert_local_time_to_utc_string(local_start, new_tz, row.day_of_week)
-            new_end_utc = convert_local_time_to_utc_string(local_end, new_tz, row.day_of_week)
+            local_start = convert_utc_time_to_local_string(row.start_time_utc, old_tz, anchor_day)
+            local_end = convert_utc_time_to_local_string(row.end_time_utc, old_tz, anchor_day)
 
-            if new_start_utc == row.start_time_utc and new_end_utc == row.end_time_utc:
-                continue  # mismo offset, sin cambio real
+            new_start_utc, new_utc_day = convert_local_time_to_utc(local_start, new_tz, anchor_day)
+            new_end_utc, _ = convert_local_time_to_utc(local_end, new_tz, anchor_day)
+
+            if (
+                new_start_utc == row.start_time_utc
+                and new_end_utc == row.end_time_utc
+                and new_utc_day == row.day_of_week
+            ):
+                continue  # mismo offset y mismo día UTC, sin cambio real
 
             changes.append({
-                "day_of_week": row.day_of_week,
+                "day_of_week": anchor_day,
                 "local_time": f"{local_start} - {local_end}",
                 "old_start_utc": row.start_time_utc,
                 "old_end_utc": row.end_time_utc,
@@ -63,6 +78,7 @@ def _recalc_weekly_rows(rows, old_tz: str, new_tz: str) -> List[Dict[str, Any]]:
 
             row.start_time_utc = new_start_utc
             row.end_time_utc = new_end_utc
+            row.day_of_week = new_utc_day
         except ValueError as e:
             logger.warning(f"No se pudo recalcular fila id={getattr(row, 'id', '?')}: {e}")
             continue

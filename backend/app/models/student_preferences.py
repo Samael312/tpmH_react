@@ -16,7 +16,10 @@ class StudentSchedulePreference(Base):
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("student_profiles.id"), nullable=False)
 
-    day_of_week = Column(Integer, nullable=False)   # 0=Lunes ... 6=Domingo
+    day_of_week = Column(Integer, nullable=False)   # 0=Lunes ... 6=Domingo, día real en UTC
+    # Mismo criterio que TeacherAvailability.local_day_of_week — ver
+    # core/timezone.py y core/schedule_recalc.py.
+    local_day_of_week = Column(Integer, nullable=True)
     start_time_utc = Column(String(5), nullable=False)  # "09:00" UTC
     end_time_utc = Column(String(5), nullable=False)    # "17:00" UTC
 

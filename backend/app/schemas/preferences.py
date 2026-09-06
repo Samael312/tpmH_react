@@ -38,7 +38,8 @@ class SetPreferencesRequest(BaseModel):
 class PreferenceSlotResponse(BaseModel):
     id: int
     student_id: int
-    day_of_week: int
+    day_of_week: int          # día real en UTC
+    local_day_of_week: int    # día que el estudiante eligió en su calendario
     start_time_utc: str
     end_time_utc: str
     created_at: datetime

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarOff, CalendarPlus, Trash2, Plus,
@@ -58,20 +58,33 @@ export default function ExceptionsSection() {
     queryClient.invalidateQueries({ queryKey: ["teacher", "availability", "exceptions"] });
   }, [queryClient]);
 
-  // Filtramos las válidas para mostrar, y limpiamos en segundo plano las
-  // que ya pasaron (mismo comportamiento que antes, ahora reaccionando a
-  // los datos del query en vez de hacerlo dentro del propio fetch).
+  // Filtramos las válidas para mostrar. La limpieza en segundo plano de
+  // las que ya pasaron va en un useEffect (más abajo) — llamar a la API
+  // directo en el cuerpo del render dispara un DELETE en cada re-render
+  // mientras el array siga sin refrescarse (y se duplica en dev por el
+  // doble-render de React Strict Mode). El useRef evita reintentar el
+  // mismo id más de una vez aunque el componente vuelva a renderizar
+  // antes de que la invalidación de la query traiga los datos nuevos.
   const now = new Date();
   const exceptions = (rawExceptions ?? []).filter((exc) => new Date(exc.end_time_utc) >= now);
-  const pastExceptions = (rawExceptions ?? []).filter((exc) => new Date(exc.end_time_utc) < now);
 
-  if (pastExceptions.length > 0) {
-    pastExceptions.forEach((exc) => {
+  const cleanedIdsRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!rawExceptions) return;
+    const nowInEffect = new Date();
+    const toClean = rawExceptions.filter(
+      (exc) => new Date(exc.end_time_utc) < nowInEffect && !cleanedIdsRef.current.has(exc.id)
+    );
+    if (toClean.length === 0) return;
+
+    toClean.forEach((exc) => {
+      cleanedIdsRef.current.add(exc.id);
       api.delete(`/availability/me/exceptions/${exc.id}`).catch(() => {
         console.error(`Error limpiando excepción pasada ID: ${exc.id}`);
       });
     });
-  }
+  }, [rawExceptions]);
 
   const resetForm = () => {
     setDate("");
