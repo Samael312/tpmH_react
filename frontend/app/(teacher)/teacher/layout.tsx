@@ -89,8 +89,14 @@ export default function TeacherLayout({
     )
   }
 
-  // Mientras se verifica la API, mostrar spinner en lugar del dashboard
-  if (!ready) {
+  // Mientras se verifica la API, mostrar spinner en lugar del dashboard.
+  // El `&& !isFullscreen` es necesario: si el guard nos hizo `replace()`
+  // hacia /teacher/onboarding *después* de montar en otra ruta (ready
+  // seguía en `false` de ese montaje), sin este resguardo la pantalla de
+  // onboarding se queda esperando un `setReady(true)` que nunca llega,
+  // porque la rama del effect para onboarding hace `return` temprano sin
+  // setearlo. Con esto, isFullscreen manda apenas la ruta cambia.
+  if (!ready && !isFullscreen) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />

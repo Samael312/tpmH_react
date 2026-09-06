@@ -18,6 +18,7 @@ function ResetPasswordForm() {
   const [password, setPassword] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [showPw, setShowPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
@@ -117,15 +118,22 @@ function ResetPasswordForm() {
         <div className="relative">
           <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-pink-500 transition-colors pointer-events-none" />
           <input
-            type={showPw ? "text" : "password"}
+            type={showConfirmPw ? "text" : "password"}
             value={confirmPw}
             onChange={e => setConfirmPw(e.target.value)}
             placeholder="Repite la nueva contraseña"
-            className={`w-full bg-slate-50 border-2 rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-11 pr-4 py-3.5 focus:outline-none focus:bg-white transition-all duration-300 ${confirmPw && confirmPw !== password
+            className={`w-full bg-slate-50 border-2 rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-11 pr-11 py-3.5 focus:outline-none focus:bg-white transition-all duration-300 ${confirmPw && confirmPw !== password
               ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-50"
               : "border-transparent focus:border-pink-500 focus:ring-4 focus:ring-pink-50"
               }`}
           />
+          <button
+            type="button"
+            onClick={() => setShowConfirmPw(!showConfirmPw)}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+          >
+            {showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
         </div>
         {confirmPw && confirmPw !== password && (
           <p className="text-[11px] text-red-500 font-bold mt-1 px-1 flex items-center gap-1">
@@ -167,7 +175,7 @@ export default function ResetPasswordPage() {
 
         <div className="relative w-full max-w-sm sm:max-w-md animate-in fade-in slide-in-from-bottom-6 duration-500">
           <div className="flex flex-col items-center mb-8">
-            <div className="w-14 h-14 rounded-[1.25rem] overflow-hidden shadow-xl shadow-pink-200 mb-4">
+            <div className="w-14 h-14 rounded-[1.25rem] overflow-hidden shadow-xl shadow-pink-200 mb-4 bg-white p-2">
               <Image src="/assets/logo.png" alt="TuProfeMaria" width={56} height={56} className="object-contain w-full h-full" />
             </div>
             <h1 className="text-2xl font-black text-slate-800 tracking-tight">Nueva contraseña</h1>

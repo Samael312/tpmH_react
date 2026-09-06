@@ -59,8 +59,8 @@ const handleSubmit = async (e: React.SubmitEvent) => {
 
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-[1.25rem] overflow-hidden
-                          shadow-xl shadow-pink-200 mb-4">
+          <div className="w-14 h-14 rounded-[1.25rem] overflow-hidden shadow-xl shadow-pink-200 mb-4
+                          bg-white p-2">
             <Image
               src="/assets/logo.png"
               alt="TuProfeMaria"

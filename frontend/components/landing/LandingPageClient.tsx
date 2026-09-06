@@ -728,6 +728,9 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
               <Link href="/terms" className="text-slate-500 text-xs font-semibold hover:text-rose-400 transition-colors">
                 Términos de Servicio
               </Link>
+              <a href="mailto:soporte@mail.tuprofemaria.com" className="text-slate-500 text-xs font-semibold hover:text-rose-400 transition-colors">
+                Contacto
+              </a>
             </div>
             <p className="text-slate-600 text-xs uppercase tracking-widest font-bold">Empoderando estudiantes</p>
           </div>

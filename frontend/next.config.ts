@@ -35,8 +35,12 @@ function buildCsp(): string {
     `style-src 'self' 'unsafe-inline'`,
     // blob:/data: -> avatares generados y previews locales antes de subir
     `img-src 'self' blob: data: https://res.cloudinary.com https://ui-avatars.com https://lh3.googleusercontent.com`,
-    // Videos de presentación de profesores, servidos desde Cloudinary
-    `media-src 'self' https://res.cloudinary.com`,
+    // Videos de presentación de profesores, servidos desde Cloudinary.
+    // blob: además es necesario para la vista previa local del video antes
+    // de subirlo (onboarding de profesor: URL.createObjectURL(file) en el
+    // <video>) — sin esto el navegador bloquea la carga silenciosamente y
+    // el reproductor se queda en negro sin ningún error visible en la UI.
+    `media-src 'self' https://res.cloudinary.com blob:`,
     `font-src 'self' data:`,
     // 'self' + el backend (dominio distinto en producción) + Google (el
     // script de GSI hace sus propias requests de auth) + blob: (Three.js

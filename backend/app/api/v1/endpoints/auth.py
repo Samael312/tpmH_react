@@ -107,7 +107,7 @@ def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cuenta desactivada"
+            detail="Cuenta desactivada, contacta con soporte."
         )
 
     token = create_access_token(user.id, user.role)
@@ -155,7 +155,7 @@ async def google_login(request: Request, data: GoogleAuthRequest, db: Session = 
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cuenta desactivada"
+            detail="Cuenta desactivada, contacta con soporte."
         )
 
     token = create_access_token(user.id, user.role)

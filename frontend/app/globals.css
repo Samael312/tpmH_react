@@ -19,3 +19,20 @@
   .animate-fade-up-2 { animation-delay: 200ms; }
   .animate-fade-up-3 { animation-delay: 300ms; }
 }
+
+/* Oculta los íconos nativos de "mostrar/ocultar contraseña" y "borrar"
+   que algunos navegadores (Edge/Chromium, Android) inyectan sobre
+   input[type=password], para no duplicar el ícono custom (Eye/EyeOff). */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
+input[type="password"]::-webkit-credentials-auto-fill-button,
+input[type="password"]::-webkit-strong-password-auto-fill-button {
+  visibility: hidden;
+  display: none !important;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+}

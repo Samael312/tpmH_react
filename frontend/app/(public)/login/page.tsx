@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 import { User, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import api from "@/lib/api";
@@ -172,9 +173,17 @@ export default function LoginPage() {
         }
       }
     } catch (e: unknown) {
-      const detail = getErrorMessage(e, "Usuario o contraseña incorrectos");
-      if (detail.toLowerCase().includes("desactivada")) {
-        setError("Cuenta desactivada. Contacta con el administrador.");
+      // Solo el 401 (credenciales inválidas) usa el mensaje genérico fijo,
+      // a propósito, para no confirmarle a un atacante si el usuario existe.
+      // El 403 (cuenta desactivada) y el 429 (rate limit) sí tienen algo
+      // real y útil que decirle al usuario, así que se respeta el `detail`
+      // que manda el backend en vez de taparlo con el mensaje de login.
+      const status = axios.isAxiosError(e) ? e.response?.status : undefined;
+
+      if (status === 403) {
+        setError(getErrorMessage(e, "Cuenta desactivada, contacta con soporte."));
+      } else if (status === 429) {
+        setError(getErrorMessage(e, "Demasiados intentos. Probá de nuevo en unos minutos."));
       } else {
         setError("Usuario o contraseña incorrectos");
       }
@@ -281,6 +290,16 @@ export default function LoginPage() {
               <div className="flex items-center justify-between mb-1.5">
                   <Link href="/forgot-password" className="text-xs font-bold text-pink-500 hover:text-pink-600">¿Olvidaste tu usuario o contraseña?</Link>
                 </div>
+
+              {/* Contacto de soporte para quien no puede ingresar por otro motivo
+                  (cuenta desactivada, rate limit, etc.) y no tiene sesión activa
+                  para abrir un ticket desde el dashboard. */}
+              <p className="text-xs text-slate-400 text-left">
+                ¿No puedes ingresar?{" "}
+                <a href="mailto:soporte@mail.tuprofemaria.com" className="font-bold text-slate-500 hover:text-pink-600">
+                  Escribenos a soporte
+                </a>
+              </p>
 
               <button
                 type="submit"

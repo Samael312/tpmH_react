@@ -78,6 +78,7 @@ function SidebarProgress({ step, name }: { step: number; name: string }) {
     { num: 3, title: "Especialidades", desc: "Qué enseñas" },
     { num: 4, title: "Disponibilidad", desc: "Tus horarios" },
     { num: 5, title: "Redes sociales", desc: "Contacto" },
+    { num: 6, title: "Video", desc: "Opcional" },
   ];
 
   return (
@@ -241,6 +242,10 @@ function StepProfile({
     setValError("");
     onNext();
   };
+
+  // Mismos campos que valida handleContinue, para deshabilitar el botón
+  // en vez de dejar que el usuario dispare el mensaje de error a ciegas.
+  const stepValid = Boolean(title_.trim() && bio.trim() && nationality && timezone && phone.trim());
 
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-300 w-full max-w-3xl mx-auto space-y-7">
@@ -412,7 +417,7 @@ function StepProfile({
         <button onClick={onBack} className="px-8 py-4 text-base font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors flex items-center gap-2">
           <ChevronLeft className="w-5 h-5" /> Volver
         </button>
-        <button onClick={handleContinue} className="flex-1 py-4 text-base font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2">
+        <button onClick={handleContinue} disabled={!stepValid} className="flex-1 py-4 text-base font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
           Continuar <ChevronRight className="w-5 h-5" />
         </button>
       </div>
@@ -468,6 +473,8 @@ function StepSpecialties({
     setValError("");
     onNext();
   };
+
+  const stepValid = languages.length > 0 || subjects.length > 0;
 
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-300 w-full max-w-3xl mx-auto space-y-7">
@@ -586,7 +593,7 @@ function StepSpecialties({
         <button onClick={onBack} className="px-8 py-4 text-base font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors flex items-center gap-2">
           <ChevronLeft className="w-5 h-5" /> Volver
         </button>
-        <button onClick={handleContinue} className="flex-1 py-4 text-base font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2">
+        <button onClick={handleContinue} disabled={!stepValid} className="flex-1 py-4 text-base font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
           Continuar <ChevronRight className="w-5 h-5" />
         </button>
       </div>
@@ -721,15 +728,29 @@ function StepAvailability({ blocks, setBlocks, onNext, onBack }: {
   );
 }
 
+// ─── Íconos redes sociales (mismos que teacher/profile, para consistencia visual) ───
+const LinkedinIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+    <path d="M20.45 20.45h-3.55v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45z" />
+  </svg>
+);
+const TiktokIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+    <path d="M16.6 5.82c-.9-.9-1.4-2.13-1.4-3.5h-3.15v13.86a2.58 2.58 0 1 1-1.83-2.47V10.6a5.75 5.75 0 1 0 4.98 5.71V9.4a7.35 7.35 0 0 0 4.4 1.45V7.7a4.85 4.85 0 0 1-3-1.88z" />
+  </svg>
+);
+
 // ─── Paso 5: Redes sociales y finalizar ──────────────────────────────────────
-function StepSocial({ socialLinks, setSocialLinks, onFinish, onBack, saving }: {
-  socialLinks: { instagram: string; website: string };
-  setSocialLinks: React.Dispatch<React.SetStateAction<{ instagram: string; website: string }>>;
-  onFinish: () => void; onBack: () => void; saving: boolean;
+function StepSocial({ socialLinks, setSocialLinks, onNext, onBack, saving }: {
+  socialLinks: { instagram: string; website: string; linkedin: string; tiktok: string };
+  setSocialLinks: React.Dispatch<React.SetStateAction<{ instagram: string; website: string; linkedin: string; tiktok: string }>>;
+  onNext: () => void; onBack: () => void; saving: boolean;
 }) {
-  const fields: { key: "instagram" | "website"; label: string; placeholder: string; icon: React.ReactNode }[] = [
+  const fields: { key: "instagram" | "website" | "linkedin" | "tiktok"; label: string; placeholder: string; icon: React.ReactNode }[] = [
     { key: "instagram", label: "Instagram", placeholder: "https://www.instagram.com/tu_usuario/", icon: <GraduationCap className="w-5 h-5" /> },
     { key: "website", label: "Sitio web", placeholder: "https://tuweb.com", icon: <Globe className="w-5 h-5" /> },
+    { key: "linkedin", label: "LinkedIn", placeholder: "https://linkedin.com/in/tuperfil", icon: <LinkedinIcon /> },
+    { key: "tiktok", label: "TikTok", placeholder: "@tuprofe", icon: <TiktokIcon /> },
   ];
 
   return (
@@ -758,7 +779,76 @@ function StepSocial({ socialLinks, setSocialLinks, onFinish, onBack, saving }: {
 
       <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 flex gap-3 items-start">
         <Sparkles className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-        <p className="text-sm font-bold text-blue-700">¡Ya casi terminas! Una vez completado el onboarding, podrás editar tu perfil en cualquier momento desde la sección <strong>Mi Perfil</strong>.</p>
+        <p className="text-sm font-bold text-blue-700">Un paso más y terminamos. Una vez completado el onboarding, podrás editar tu perfil en cualquier momento desde la sección <strong>Mi Perfil</strong>.</p>
+      </div>
+
+      <div className="flex gap-4 pt-4">
+        <button onClick={onBack} disabled={saving} className="px-8 py-4 text-base font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50">
+          <ChevronLeft className="w-5 h-5" /> Volver
+        </button>
+        <button onClick={onNext} disabled={saving} className="flex-1 py-4 text-base font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-70 flex items-center justify-center gap-2">
+          Continuar <ChevronRight className="w-5 h-5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Paso 6: Video de presentación (opcional) ──────────────────────────────
+function StepVideo({ videoFile, setVideoFile, videoPreview, setVideoPreview, onFinish, onBack, saving, savingStage }: {
+  videoFile: File | null;
+  setVideoFile: React.Dispatch<React.SetStateAction<File | null>>;
+  videoPreview: string | null;
+  setVideoPreview: React.Dispatch<React.SetStateAction<string | null>>;
+  onFinish: () => void; onBack: () => void; saving: boolean; savingStage: string;
+}) {
+  const handleFile = (f: File | null) => {
+    setVideoFile(f);
+    if (videoPreview) URL.revokeObjectURL(videoPreview);
+    setVideoPreview(f ? URL.createObjectURL(f) : null);
+  };
+
+  const removeVideo = () => handleFile(null);
+
+  return (
+    <div className="animate-in fade-in slide-in-from-right-4 duration-300 w-full max-w-2xl mx-auto space-y-7">
+      <div>
+        <h2 className="text-4xl font-black text-slate-800 tracking-tight">Video de presentación</h2>
+        <p className="text-slate-500 text-lg mt-2">Contales a tus futuros alumnos quién sos (opcional por ahora).</p>
+      </div>
+
+      <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+        {videoPreview ? (
+          <div className="space-y-4">
+            <div className="relative rounded-2xl overflow-hidden bg-black">
+              <video src={videoPreview} controls preload="metadata" className="w-full max-h-80 block" />
+              {/* Badge de confirmación */}
+              <div className="absolute top-3 left-3 flex items-center gap-2 bg-emerald-500/95 text-white text-xs font-black px-3 py-1.5 rounded-full shadow-lg pointer-events-none">
+                <Check className="w-3.5 h-3.5" /> Video seleccionado
+              </div>
+            </div>
+            {/* Opción para eliminar/cambiar el video */}
+            <div className="flex justify-end">
+              <button onClick={removeVideo} className="text-sm font-bold text-red-500 hover:text-red-600 flex items-center gap-1.5">
+                <X className="w-4 h-4" /> Quitar video
+              </button>
+            </div>
+          </div>
+        ) : (
+          <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-slate-200 rounded-2xl py-12 cursor-pointer hover:border-pink-300 hover:bg-pink-50/30 transition-colors">
+            <Upload className="w-8 h-8 text-slate-300" />
+            <span className="text-sm font-bold text-slate-500">Click para subir tu video de presentación</span>
+            <span className="text-xs text-slate-400">MP4</span>
+            <input type="file" accept="video/mp4" className="hidden" onChange={e => handleFile(e.target.files?.[0] ?? null)} />
+          </label>
+        )}
+      </div>
+
+      <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex gap-3 items-start">
+        <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+        <p className="text-sm font-bold text-amber-800">
+          Este paso es opcional para terminar el onboarding, pero <strong>tu perfil no será aprobado hasta que subas un video de presentación</strong>. Si preferís hacerlo más adelante, podés subirlo cuando quieras desde <strong>Mi Perfil</strong>.
+        </p>
       </div>
 
       <div className="flex gap-4 pt-4">
@@ -767,9 +857,12 @@ function StepSocial({ socialLinks, setSocialLinks, onFinish, onBack, saving }: {
         </button>
         <button onClick={onFinish} disabled={saving} className="flex-1 py-4 text-base font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-70 flex items-center justify-center gap-2">
           {saving ? (
-            <div className="w-6 h-6 border-4 border-white/40 border-t-white rounded-full animate-spin" />
+            <>
+              <div className="w-5 h-5 border-4 border-white/40 border-t-white rounded-full animate-spin flex-shrink-0" />
+              <span>{savingStage || "Guardando..."}</span>
+            </>
           ) : (
-            <><Rocket className="w-5 h-5" /> Finalizar y acceder</>
+            <><Rocket className="w-5 h-5" /> {videoFile ? "Finalizar y acceder" : "Saltar y finalizar"}</>
           )}
         </button>
       </div>
@@ -777,7 +870,7 @@ function StepSocial({ socialLinks, setSocialLinks, onFinish, onBack, saving }: {
   );
 }
 
-// ─── Paso 6: Éxito ────────────────────────────────────────────────────────────
+// ─── Paso 7: Éxito ────────────────────────────────────────────────────────────
 function StepSuccess({ name }: { name: string }) {
   return (
     <div className="flex flex-col items-center text-center py-10 animate-in fade-in zoom-in-95 duration-500 max-w-xl mx-auto">
@@ -809,10 +902,10 @@ function StepSuccess({ name }: { name: string }) {
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function TeacherOnboardingPage() {
   const router   = useRouter();
-  const { user, setUser } = useAuthStore();
+  const { user, setUser, logout } = useAuthStore();
   const [nationality, setNationality] = useState("");
   const [step, setStep] = useState(1);
-  const TOTAL_STEPS = 6;
+  const TOTAL_STEPS = 7;
 
   // Step 2
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -844,9 +937,13 @@ export default function TeacherOnboardingPage() {
   // Step 4
   const [blocks, setBlocks]             = useState<ScheduleBlock[]>([]);
   // Step 5
-  const [socialLinks, setSocialLinks]   = useState({ instagram: "", website: "" });
+  const [socialLinks, setSocialLinks]   = useState({ instagram: "", website: "", linkedin: "", tiktok: "" });
+  // Step 6
+  const [videoFile, setVideoFile]       = useState<File | null>(null);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
+  const [savingStage, setSavingStage] = useState("");
   const [error, setError]   = useState("");
 
   const name = user?.name ?? "Profesor";
@@ -859,6 +956,7 @@ export default function TeacherOnboardingPage() {
     setError("");
     try {
       // 1. Subir foto si hay
+      setSavingStage("Guardando tu perfil...");
       let photoUrl: string | null = null;
       if (photoFile) {
         const form = new FormData();
@@ -892,10 +990,26 @@ export default function TeacherOnboardingPage() {
 
       // 3. Guardar disponibilidad si hay bloques
       if (blocks.length > 0) {
+        setSavingStage("Guardando tu disponibilidad...");
         await api.put("/availability/me/weekly", {
           timezone,
           slots: blocks,
         });
+      }
+
+      // 3b. Subir video de presentación si lo cargó (opcional acá; sin él
+      // el perfil queda pendiente de aprobación, se puede subir después
+      // desde Mi Perfil). Es la llamada más pesada de toda la cadena (puede
+      // pesar varios MB), así que le damos su propio mensaje de progreso
+      // en vez de dejar el spinner genérico sin contexto.
+      if (videoFile) {
+        setSavingStage("Subiendo tu video, puede tardar unos segundos...");
+        const vform = new FormData();
+        vform.append("file", videoFile);
+        await api.post("/teachers/me/video", vform, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        setSavingStage("Video subido correctamente ✓");
       }
 
       // 4. Marcar onboarding completado
@@ -916,6 +1030,7 @@ export default function TeacherOnboardingPage() {
       const errorDetail = axios.isAxiosError(e) ? e.response?.data?.detail : undefined;
       setError(parseApiError(errorDetail));
     } finally {
+      setSavingStage("");
       setSaving(false);
     }
   };
@@ -926,6 +1041,17 @@ export default function TeacherOnboardingPage() {
       <SidebarProgress step={step} name={name} />
 
       <div className="flex-1 flex flex-col justify-center px-6 py-12 md:px-12 overflow-y-auto relative">
+        {/* Salida de emergencia: si el usuario llegó acá por error (ej. volvió
+            con el botón "atrás" del navegador y volvió a entrar con otra
+            cuenta), tiene que poder volver al login sin quedar atrapado,
+            ya que el onboarding no tiene ningún otro link de navegación. */}
+        <button
+          onClick={() => { logout(); router.push("/login"); }}
+          className="absolute top-6 left-6 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors z-50"
+        >
+          ¿Quieres hacerlo después, {name}? Cerrar sesión
+        </button>
+
         {/* Error global de la API */}
         {error && (
           <div className="absolute top-6 right-6 left-6 md:left-auto max-w-sm bg-rose-50 border border-rose-200 text-rose-700 px-5 py-4 rounded-2xl text-sm font-bold flex items-start gap-3 shadow-lg z-50 animate-in slide-in-from-top-5">
@@ -960,10 +1086,17 @@ export default function TeacherOnboardingPage() {
           {step === 5 && (
             <StepSocial
               socialLinks={socialLinks} setSocialLinks={setSocialLinks}
-              onFinish={finish} onBack={back} saving={saving}
+              onNext={next} onBack={back} saving={saving}
             />
           )}
           {step === 6 && (
+            <StepVideo
+              videoFile={videoFile} setVideoFile={setVideoFile}
+              videoPreview={videoPreview} setVideoPreview={setVideoPreview}
+              onFinish={finish} onBack={back} saving={saving} savingStage={savingStage}
+            />
+          )}
+          {step === 7 && (
             <div className="w-full">
               <StepSuccess name={name} />
               <div className="max-w-md mx-auto mt-8">
@@ -977,11 +1110,11 @@ export default function TeacherOnboardingPage() {
         </div>
 
         {/* Indicador mobile */}
-        {step < 6 && (
+        {step < 7 && (
           <div className="lg:hidden mt-10 text-center">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Paso {step} de 5</p>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Paso {step} de 6</p>
             <div className="flex justify-center gap-2 mt-3">
-              {[1,2,3,4,5].map(s => (
+              {[1,2,3,4,5,6].map(s => (
                 <div key={s} className={`h-1.5 rounded-full transition-all duration-300 ${step >= s ? "w-8 bg-pink-500" : "w-4 bg-slate-200"}`} />
               ))}
             </div>
