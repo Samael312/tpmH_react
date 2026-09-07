@@ -7,6 +7,7 @@ import {
   useAvailableSlots,
   useEnrollments,
   useMyTeachers,
+  useFeaturedTeacherUsername,
   useStudentClasses,
   useBookingStatusFor,
   useTeacherPackagesFor,
@@ -1212,12 +1213,21 @@ export default function SchedulePage() {
   const { classes: allClasses, refetch: refetchClasses } = useStudentClasses(true);
   const { teachers: myTeachers, loading: teachersLoading, isSingleTenant } = useMyTeachers();
 
+  // En single-tenant, el "profesor efectivo" no puede quedar en null: varias
+  // pantallas de esta página (slots, paquetes, renovación) le pegan a
+  // endpoints que necesitan el username real como path param y no tienen
+  // forma de resolverlo solos del lado del servidor. Lo resolvemos acá una
+  // sola vez con useFeaturedTeacherUsername (que sí sabe consultar la
+  // configuración real de la plataforma) y lo reusamos en toda la página.
+  const { username: featuredTeacherUsername } = useFeaturedTeacherUsername(isSingleTenant);
+
   // El profesor "efectivo" es derivado, no un estado sincronizado por efecto:
   // si el estudiante solo tiene un profesor, se usa ese automáticamente; en
-  // modo single-tenant no aplica ninguno; si tiene varios, se respeta la
-  // elección manual (setSelectedTeacherUsername, click en el selector).
+  // modo single-tenant se usa el featured (resuelto arriba); si tiene varios,
+  // se respeta la elección manual (setSelectedTeacherUsername, click en el
+  // selector).
   const selectedTeacherUsername = isSingleTenant
-    ? null
+    ? featuredTeacherUsername
     : myTeachers.length === 1
       ? myTeachers[0].teacher_username
       : manualTeacherUsername;

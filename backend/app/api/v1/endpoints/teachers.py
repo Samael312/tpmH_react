@@ -19,6 +19,7 @@ from app.core.phone import normalize_phone
 from app.core.notifications import create_notification
 from app.models.teacher_appeal import TeacherAppeal
 from app.schemas.notifications import CreateAppealRequest, TeacherAppealResponse
+from app.core.schedule_recalc import recalculate_teacher_schedule_timezone
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -119,9 +120,11 @@ def update_my_teacher_profile(
 ):
     """
     Actualiza el perfil del profesor autenticado.
-    El cambio de zona horaria NO recalcula disponibilidad ni excepciones:
-    las horas configuradas son fijas en el día (ej. "10:00-17:00") y no
-    dependen de la zona horaria de la cuenta.
+    Si cambia la zona horaria, se recalcula la disponibilidad semanal y las
+    excepciones puntuales para que la hora LOCAL configurada por el profesor
+    se preserve (ej. "06:00-08:00" en Sydney sigue siendo "06:00-08:00" al
+    pasar a Bogotá) — lo único que cambia es el UTC equivalente. Ver
+    core/schedule_recalc.py para el detalle de la regla de negocio.
     """
     profile = current_user.teacher_profile
     if not profile:
@@ -137,8 +140,19 @@ def update_my_teacher_profile(
         if wa:
             update_data["social_links"]["whatsapp"] = normalize_phone(wa) or wa
 
+    old_timezone = profile.timezone
+    new_timezone = update_data.get("timezone")
+
     for field, value in update_data.items():
         setattr(profile, field, value)
+
+    if new_timezone and new_timezone != old_timezone:
+        recalculate_teacher_schedule_timezone(
+            teacher_id=profile.id,
+            old_tz=old_timezone,
+            new_tz=new_timezone,
+            db=db,
+        )
 
     db.commit()
     db.refresh(profile)

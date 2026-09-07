@@ -257,6 +257,32 @@ export function useMyTeachers() {
   };
 }
 
+// En modo single-tenant, todas las pantallas de booking necesitan el
+// username real del profesor featured para poder pegarle a endpoints que
+// lo requieren como path param (slots, paquetes de un profesor puntual,
+// etc.) — esos endpoints no tienen forma de "omitir" el username como sí
+// puede hacer /payments/booking-status (que lo recibe como query param
+// opcional). Se resuelve UNA vez acá y se reusa en toda la página, en vez
+// de que cada pantalla individual intente adivinarlo (o, como pasaba
+// antes, reciba `null` y su fetch quede deshabilitado silenciosamente).
+export function useFeaturedTeacherUsername(enabled: boolean = true) {
+  const query = useQuery({
+    queryKey: ["student", "featured-teacher-username"],
+    queryFn: async () => {
+      const res = await api.get("/availability/featured-teacher/username");
+      return res.data.username as string;
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000, // no cambia seguido, no hace falta refrescar agresivo
+  });
+
+  return {
+    username: query.data ?? null,
+    loading: query.isLoading,
+    isError: query.isError,
+  };
+}
+
 export function useAvailableSlots(
   date: string,
   duration: number,

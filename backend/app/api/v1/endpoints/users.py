@@ -15,6 +15,7 @@ from app.models.student import StudentProfile
 from app.schemas.user import UserResponse, UpdateProfileRequest, ChangePasswordRequest, StudentProfileResponse
 from app.models.student_preferences import StudentSchedulePreference
 from app.core.timezone import convert_local_time_to_utc, validate_timezone
+from app.core.schedule_recalc import recalculate_student_preferences_timezone
 from app.schemas.preferences import SetPreferencesRequest, PreferenceSlotResponse
 from app.core.storage import upload_file, delete_file
 from app.models.teacher import TeacherProfile, TeacherStatus
@@ -315,8 +316,10 @@ def update_student_profile(
 ):
     """
     Actualiza datos del perfil de estudiante (timezone, goal, etc.).
-    El cambio de zona horaria NO recalcula las preferencias de horario:
-    son fijas en el día, independientes de la zona horaria de la cuenta.
+    Si cambia la zona horaria, se recalculan las preferencias de horario
+    (StudentSchedulePreference) para preservar la hora LOCAL configurada
+    por el estudiante — solo se recalcula el UTC equivalente. Ver
+    core/schedule_recalc.py.
     """
     if current_user.role != "student":
         raise HTTPException(
@@ -332,9 +335,20 @@ def update_student_profile(
         )
 
     allowed_fields = {"timezone", "goal", "preferred_payment_methods"}
+    old_timezone = profile.timezone
+    new_timezone = data.get("timezone")
+
     for field, value in data.items():
         if field in allowed_fields:
             setattr(profile, field, value)
+
+    if new_timezone and new_timezone != old_timezone:
+        recalculate_student_preferences_timezone(
+            student_id=profile.id,
+            old_tz=old_timezone,
+            new_tz=new_timezone,
+            db=db,
+        )
 
     db.commit()
     db.refresh(profile)
