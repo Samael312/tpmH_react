@@ -54,7 +54,7 @@ interface StudentRow {
   };
 }
 
-const ROLES = ["student", "teacher", "superadmin"];
+const ROLES = ["student", "teacher", "superadmin", "teacher_admin"];
 
 // ─── Badge de Rol ─────────────────────────────────────────────────────────────
 function RoleBadge({ role }: { role: string }) {

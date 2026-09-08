@@ -406,7 +406,7 @@ function VideoUploadSection({
           )}
           <input ref={videoRef} type="file" accept="video/mp4,video/quicktime" className="hidden" onChange={handleUpload} />
         </div>
-        <p className="text-[11px] text-slate-400 font-bold">Formatos aceptados: MP4, MOV. Máximo 100MB.</p>
+        <p className="text-[11px] text-slate-400 font-bold">Formatos aceptados: MP4. Máximo 100MB.</p>
       </div>
     </Section>
   );
