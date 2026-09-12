@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
-import httpx
 import logging
 import secrets
 from app.db.base import get_db
@@ -27,7 +26,6 @@ from app.models.password_reset import PasswordResetToken
 from app.core.email import send_password_reset_email, send_username_recovery_email  
 from app.core.timezone import utc_now
 from pydantic import BaseModel, EmailStr
-from app.core.storage import upload_file
 from app.core.email import send_welcome_email
 
 logger = logging.getLogger(__name__)
@@ -80,7 +78,10 @@ def register(request: Request, data: RegisterRequest, db: Session = Depends(get_
         access_token=token,
         role=user.role,
         name=user.name,
-        username=user.username
+        surname=user.surname,
+        username=user.username,
+        email=user.email,
+        avatar_url=user.avatar,  # recién creado: nunca tiene profile_photo_url todavía
     )
 
 @router.post("/login", response_model=TokenResponse)
@@ -111,11 +112,24 @@ def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
         )
 
     token = create_access_token(user.id, user.role)
+
+    # La foto "real" (la que el usuario subió como estudiante/profesor) tiene
+    # prioridad sobre el avatar de Google, que puede estar desactualizado o
+    # ni siquiera existir si la cuenta no se creó con Google.
+    avatar_url = (
+        (user.teacher_profile.profile_photo_url if user.teacher_profile else None)
+        or (user.student_profile.profile_photo_url if user.student_profile else None)
+        or user.avatar
+    )
+
     return TokenResponse(
         access_token=token,
         role=user.role,
         name=user.name,
-        username=user.username
+        surname=user.surname,
+        username=user.username,
+        email=user.email,
+        avatar_url=avatar_url,
     )
 
 @router.post("/google", response_model=GoogleAuthResponse)
@@ -159,6 +173,11 @@ async def google_login(request: Request, data: GoogleAuthRequest, db: Session = 
         )
 
     token = create_access_token(user.id, user.role)
+    avatar_url = (
+        (user.teacher_profile.profile_photo_url if user.teacher_profile else None)
+        or (user.student_profile.profile_photo_url if user.student_profile else None)
+        or user.avatar
+    )
     return GoogleAuthResponse(
         access_token=token,
         role=user.role,
@@ -166,7 +185,7 @@ async def google_login(request: Request, data: GoogleAuthRequest, db: Session = 
         username=user.username,
         email=user.email,
         surname=user.surname,
-        avatar=user.avatar,
+        avatar=avatar_url,
     )
 
 
@@ -184,24 +203,13 @@ async def google_register(request: Request, data: GoogleRegisterRequest, db: Ses
     if db.query(User).filter(User.username == data.username).first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Este nombre de usuario ya está en uso")
 
+    # F6 (verification_roadmap): antes se descargaba y re-hospedaba
+    # automáticamente la foto de perfil de Google como avatar del usuario,
+    # lo cual permitía saltarse por completo la carga de foto propia en el
+    # onboarding. Ahora, igual que en el registro con email/password, el
+    # usuario arranca sin avatar y el onboarding lo obliga a subir una
+    # foto propia.
     avatar_url = None
-    google_picture = google_data.get("avatar")
-    if google_picture:
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                img_res = await client.get(google_picture)
-            if img_res.status_code == 200:
-                content_type = img_res.headers.get("content-type", "image/jpeg").split(";")[0].strip()
-                upload_result = upload_file(
-                    file_bytes=img_res.content,
-                    filename=f"google_avatar_{data.username}.jpg",
-                    content_type=content_type,
-                    folder="tpm/avatars",
-                )
-                avatar_url = upload_result["url"]
-        except Exception as e:
-            logger.warning(f"No se pudo re-hospedar la foto de Google para {data.username}: {e}")
-            avatar_url = google_picture  # fallback: usar la URL original de Google
 
     user = User(
         username=data.username,

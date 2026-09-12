@@ -17,6 +17,7 @@ import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES } from "
 import {
   useTeacherPackages,
   useTeacherEnrollments,
+  useTeacherProfile,
   type TeacherPackage as Package,
 } from "@/hooks/useTeacherData";
 import Skeleton from "@/components/ui/Skeleton";
@@ -63,11 +64,24 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function TeacherPackagesPage() {
   const { catalogs } = useSystemCatalogs();
+  const { profile: teacherProfile } = useTeacherProfile();
   const toast = useToast();
-  
+
   // Catálogos dinámicos con fallbacks seguros
-  const SUBJECTS = catalogs?.subjects?.length ? catalogs.subjects : FALLBACK_SUBJECTS;
-  const LANGUAGES = catalogs?.languages?.length ? catalogs.languages : FALLBACK_LANGUAGES;
+  const ALL_SUBJECTS = catalogs?.subjects?.length ? catalogs.subjects : FALLBACK_SUBJECTS;
+  const ALL_LANGUAGES = catalogs?.languages?.length ? catalogs.languages : FALLBACK_LANGUAGES;
+  // Las opciones de materia/idioma al crear un paquete se limitan a las que
+  // el profesor eligió en su onboarding — no tiene sentido ofrecerle crear
+  // un paquete de una materia que no enseña. Si por algún motivo el perfil
+  // no tiene ninguna cargada todavía, se cae de vuelta al catálogo completo.
+  const teacherSubjects = teacherProfile?.subjects ?? [];
+  const teacherLanguages = teacherProfile?.languages ?? [];
+  const SUBJECTS = teacherSubjects.length
+    ? ALL_SUBJECTS.filter(s => teacherSubjects.includes(s))
+    : ALL_SUBJECTS;
+  const LANGUAGES = teacherLanguages.length
+    ? ALL_LANGUAGES.filter(l => teacherLanguages.includes(l))
+    : ALL_LANGUAGES;
   const ICON_OPTIONS = catalogs?.package_icon_options?.length ? catalogs.package_icon_options : DEFAULT_ICON_OPTIONS;
   const THEME_PRESETS = catalogs?.theme_presets?.length ? catalogs.theme_presets : DEFAULT_THEME_PRESETS;
   
@@ -377,7 +391,12 @@ export default function TeacherPackagesPage() {
                                 focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all cursor-pointer"
                     >
                       <option value="">{kind === "subject" ? "Selecciona una materia..." : "Selecciona un idioma..."}</option>
-                      {(kind === "subject" ? SUBJECTS : LANGUAGES).map(s => <option key={s} value={s}>{s}</option>)}
+                      {(kind === "subject" ? SUBJECTS : LANGUAGES)
+                        // Si el paquete que se edita tiene una materia/idioma que el
+                        // profesor ya no tiene en su perfil, igual se muestra para
+                        // no perder la selección actual silenciosamente.
+                        .concat(editingId && form.subject && !(kind === "subject" ? SUBJECTS : LANGUAGES).includes(form.subject) ? [form.subject] : [])
+                        .map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
@@ -518,6 +537,10 @@ export default function TeacherPackagesPage() {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
                     Formato de la descripción
                   </label>
+                  <p className="text-[11px] text-slate-400 font-medium bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 -mt-1">
+                    💡 &quot;{form.duration_minutes} min por clase&quot; y &quot;Modalidad 100% online&quot; ya se muestran
+                    automáticamente en la tarjeta del paquete — no hace falta que los repitas aquí abajo.
+                  </p>
                   <div className="flex gap-2">
                     {[
                       { key: "paragraph", label: "Párrafo" },
@@ -742,15 +765,15 @@ export default function TeacherPackagesPage() {
                   const accent = pkg.color || "#ec4899";
                   const priceSuffix = priceLabelSuffix(pkg.classes_count);
                   const priceDisplay = Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2);
+                  const autoFacts: string[] = [
+                    pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
+                    `${pkg.duration_minutes} min por clase`,
+                    "Modalidad 100% online",
+                  ];
                   const bullets: string[] =
                     pkg.description_type === "list" && pkg.description_items?.length
-                      ? pkg.description_items
-                      : [
-                          pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
-                          `${pkg.duration_minutes} min por clase`,
-                          "Modalidad 100% online",
-                          ...(pkg.description ? [pkg.description] : []),
-                        ];
+                      ? [...autoFacts, ...pkg.description_items]
+                      : [...autoFacts, ...(pkg.description ? [pkg.description] : [])];
 
                   return (
                     <div

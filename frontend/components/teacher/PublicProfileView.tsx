@@ -90,6 +90,13 @@ interface PublicProfileViewProps {
   heroActions?: React.ReactNode;
   notice?: React.ReactNode;
   reviewForm?: React.ReactNode;
+  /** Se renderiza pegado a la esquina superior izquierda del banner (ej. "Volver al marketplace"). Solo desktop. */
+  topLeftAction?: React.ReactNode;
+  /** Se renderiza pegado a la esquina superior derecha del banner (ej. botón de refresh). Solo desktop. */
+  topRightAction?: React.ReactNode;
+  /** Config global de plataforma (toggle admin/settings): si es false, oculta
+   * el botón de WhatsApp del banner aunque el profesor lo tenga cargado. */
+  showWhatsapp?: boolean;
 }
 
 export default function PublicProfileView({
@@ -98,6 +105,9 @@ export default function PublicProfileView({
   heroActions,
   notice,
   reviewForm,
+  topLeftAction,
+  topRightAction,
+  showWhatsapp = true,
 }: PublicProfileViewProps) {
   const accent = teacher.theme_color || DEFAULT_THEME_COLOR;
   const accentLight = shadeColor(accent, 22);
@@ -167,6 +177,13 @@ export default function PublicProfileView({
           <div className="absolute top-[-40px] right-[-40px] w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none" />
           <div className="absolute bottom-[-60px] left-[-20px] w-64 h-64 bg-white/5 rounded-full blur-3xl pointer-events-none" />
 
+          {(topLeftAction || topRightAction) && (
+            <div className="hidden md:flex absolute top-2 left-6 right-6 items-center justify-between z-20">
+              <div>{topLeftAction}</div>
+              <div>{topRightAction}</div>
+            </div>
+          )}
+
           <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
               <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-[2rem] overflow-hidden border-4 border-white/30 shadow-2xl flex-shrink-0 bg-white/20 flex items-center justify-center">
@@ -215,7 +232,9 @@ export default function PublicProfileView({
                   ))}
 
                   {/* Redes sociales trasladadas al banner principal */}
-                  {socialButtons.map((s) => {
+                  {socialButtons
+                    .filter((s) => s.key !== "whatsapp" || showWhatsapp)
+                    .map((s) => {
                     const raw = teacher.social_links?.[s.key];
                     if (!raw) return null;
                     const href = getSocialHref(s.key, raw);

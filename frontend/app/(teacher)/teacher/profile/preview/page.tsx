@@ -4,14 +4,15 @@ import { AlertCircle, BookOpen, RefreshCw } from "lucide-react";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import PublicProfileView, { PublicProfileTeacher } from "@/components/teacher/PublicProfileView";
 import { useTeacherProfile, useTeacherOwnReviews } from "@/hooks/useTeacherData";
+import { usePlatformConfig } from "@/hooks/useStudentData";
 import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
-import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 
 export default function TeacherProfilePreviewPage() {
   const { profile, loading, isFetching, isError, refetch } = useTeacherProfile();
   const { reviews } = useTeacherOwnReviews(profile?.user_username);
+  const { config: platformConfig } = usePlatformConfig();
 
   usePageTopBar({
     title: "Vista previa",
@@ -54,14 +55,11 @@ export default function TeacherProfilePreviewPage() {
 
   return (
     <>
-      <DesktopOnly>
-        <div className="max-w-3xl mx-auto pt-4 flex justify-end">
-          <RefreshButton onRefresh={refetch} isFetching={isFetching} />
-        </div>
-      </DesktopOnly>
       <PublicProfileView
         teacher={teacher}
         reviews={reviews}
+        topRightAction={<RefreshButton onRefresh={refetch} isFetching={isFetching} />}
+        showWhatsapp={platformConfig?.show_teacher_whatsapp ?? true}
         notice={
           !isApproved ? (
             <div className="bg-amber-500 border-2 border-amber-400 rounded-3xl p-5 text-white shadow-xl shadow-amber-200/50 flex items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500">

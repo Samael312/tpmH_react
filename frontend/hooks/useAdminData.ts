@@ -234,6 +234,7 @@ export interface AdminNotification {
   title: string
   message: string | null
   related_teacher_id: number | null
+  related_support_ticket_id: number | null
   is_read: boolean
   created_at: string
 }
@@ -493,6 +494,7 @@ export interface AdminPlatformConfig {
   platform_name: string
   platform_tagline: string | null
   is_single_tenant: boolean
+  show_teacher_whatsapp: boolean
   featured_teacher: {
     username: string
     name: string

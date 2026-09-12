@@ -20,17 +20,23 @@ from app.core.notifications import create_notification
 from app.models.teacher_appeal import TeacherAppeal
 from app.schemas.notifications import CreateAppealRequest, TeacherAppealResponse
 from app.core.schedule_recalc import recalculate_teacher_schedule_timezone
+from app.core.platform_config import get_or_create_platform_config
 from pydantic import BaseModel
 
 router = APIRouter()
 
-def _to_public(t: TeacherProfile) -> TeacherPublicResponse:
+def _to_public(t: TeacherProfile, hide_whatsapp: bool = False) -> TeacherPublicResponse:
     """Convierte un TeacherProfile a su respuesta pública, incluyendo
     nombre y apellido que viven en el User relacionado (no en TeacherProfile)."""
     resp = TeacherPublicResponse.model_validate(t)
     if t.user:
         resp.name = t.user.name
         resp.surname = t.user.surname
+    # Interruptor global de admin (platform_config.show_teacher_whatsapp):
+    # oculta el WhatsApp de TODOS los profesores sin tocar lo que cada uno
+    # cargó en su propio perfil.
+    if hide_whatsapp and resp.social_links and "whatsapp" in resp.social_links:
+        resp.social_links = {k: v for k, v in resp.social_links.items() if k != "whatsapp"}
     return resp
 
 # Dejamos solo esta versión de la ruta raíz ("/") que ya maneja los filtros opcionales
@@ -69,7 +75,7 @@ def list_approved_teachers(
             ]
         ]
 
-    return [_to_public(t) for t in teachers]
+    return [_to_public(t, hide_whatsapp=not get_or_create_platform_config(db).show_teacher_whatsapp) for t in teachers]
 
 
 @router.get("/{username}", response_model=TeacherPublicResponse)
@@ -94,7 +100,7 @@ def get_teacher_profile(username: str, db: Session = Depends(get_db)):
             detail="Profesor no disponible"
         )
 
-    return _to_public(teacher)
+    return _to_public(teacher, hide_whatsapp=not get_or_create_platform_config(db).show_teacher_whatsapp)
 
 
 @router.get("/me/profile", response_model=TeacherProfileResponse)

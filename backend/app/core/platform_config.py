@@ -39,4 +39,5 @@ def serialize_platform_config(db: Session, config: PlatformConfig) -> dict:
         "platform_tagline": config.platform_tagline,
         "is_single_tenant": config.is_single_tenant,
         "featured_teacher": featured_teacher,
+        "show_teacher_whatsapp": config.show_teacher_whatsapp,
     }

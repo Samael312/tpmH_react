@@ -112,6 +112,7 @@ class EnrollmentResponse(BaseModel):
     package: PackageResponse
     teacher_name: Optional[str] = None
     teacher_username: Optional[str] = None
+    teacher_status: Optional[str] = None
     teacher_avatar: Optional[str] = None
     cohort_id: Optional[int] = None
     cohort_status: Optional[str] = None       # "filling" | "confirmed" | ... (solo si cohort_id)
@@ -119,6 +120,11 @@ class EnrollmentResponse(BaseModel):
     cohort_current_students: Optional[int] = None
     cohort_max_students: Optional[int] = None
     credit_balance_usd: Optional[float] = None
+    # True si hay un Payment payment_type="unlimited_recharge" en
+    # pending_review para este enrollment — se usa en el dashboard para
+    # mostrar "recarga en revisión" en vez de dejar ver 0 créditos sin
+    # ninguna explicación mientras el staff todavía no la aprueba.
+    has_pending_recharge: Optional[bool] = False
 
     class Config:
         from_attributes = True

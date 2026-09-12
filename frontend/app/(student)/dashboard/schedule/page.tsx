@@ -20,7 +20,7 @@ import {
   Calendar, Clock, CreditCard,
   Check, X, ChevronLeft,
   ChevronRight, AlertCircle, AlertTriangle,
-  Sparkles, Package as PackageIcon, Hourglass, Users2,
+  Sparkles, Package as PackageIcon, Hourglass, Users2, Loader2,
 } from "lucide-react";
 import api from "@/lib/api";
 import Link from "next/link";
@@ -62,9 +62,11 @@ function extractErrorMessage(e: unknown, fallback: string): string {
 function MiniCalendar({
   value,
   onChange,
+  disabled = false,
 }: {
   value: string;
   onChange: (v: string) => void;
+  disabled?: boolean;
 }) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -92,8 +94,14 @@ function MiniCalendar({
   };
 
   return (
-    <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6">
-      <div className="flex items-center justify-between mb-5">
+    <div className="relative bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6">
+      {disabled && (
+        <div className="absolute inset-0 z-10 rounded-[2rem] bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center gap-2">
+          <Loader2 className="w-5 h-5 text-pink-400 animate-spin" />
+          <p className="text-xs font-bold text-slate-400">Cargando materias del profesor…</p>
+        </div>
+      )}
+      <div className={`flex items-center justify-between mb-5 ${disabled ? "pointer-events-none opacity-40" : ""}`}>
         <button onClick={prev} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
           <ChevronLeft className="w-4 h-4 text-slate-600" />
         </button>
@@ -105,7 +113,7 @@ function MiniCalendar({
         </button>
       </div>
 
-      <div className="grid grid-cols-7 mb-2">
+      <div className={`grid grid-cols-7 mb-2 ${disabled ? "opacity-40" : ""}`}>
         {DAYS.map(d => (
           <div key={d} className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest py-1">
             {d}
@@ -113,7 +121,7 @@ function MiniCalendar({
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className={`grid grid-cols-7 gap-1 ${disabled ? "pointer-events-none opacity-40" : ""}`}>
         {cells.map((day, i) => {
           if (!day) return <div key={i} />;
           const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -133,7 +141,7 @@ function MiniCalendar({
           return (
             <button
               key={i}
-              disabled={isPast}
+              disabled={isPast || disabled}
               onClick={() => onChange(dateStr)}
               className={`
                 w-full aspect-square rounded-xl text-sm font-bold
@@ -179,16 +187,35 @@ function StepSelectSlot({
   const effectiveDuration = isTrial ? rules.trial_duration_minutes : duration;
   const [subjectOptions, setSubjectOptions] = useState<string[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<string>("");
+  // Mientras esto está en true, el calendario de abajo queda bloqueado: antes
+  // era posible elegir fecha/horario de prueba mientras todavía no sabíamos
+  // si el profesor tiene más de una materia, y la sección "¿Qué quieres
+  // practicar?" podía aparecer recién después de que el alumno ya había
+  // elegido el slot, con la materia por defecto ya fijada sin que el alumno
+  // llegara a elegirla a propósito.
+  const [subjectsLoading, setSubjectsLoading] = useState(isTrial);
   const { slots, loading } = useAvailableSlots(date, effectiveDuration, teacherUsername, isTrial ? "trial" : "regular");
   const myTz = getMyDisplayTimezone();
 
   useEffect(() => {
-    if (!isTrial || !teacherUsername) return;
+    if (!isTrial || !teacherUsername) { setSubjectOptions([]); setSelectedSubject(""); setSubjectsLoading(false); return; }
+    // Se limpia de inmediato al cambiar de profesor (no solo cuando
+    // resuelve el fetch): así nunca queda un instante mostrando las
+    // materias del profesor anterior mientras carga el nuevo. `ignore`
+    // además evita que una respuesta vieja (si el estudiante cambia de
+    // profesor rápido y las respuestas llegan desordenadas) sobrescriba
+    // la del profesor que realmente está seleccionado ahora.
+    let ignore = false;
+    setSubjectOptions([]);
+    setSelectedSubject("");
+    setSubjectsLoading(true);
     api.get(`/teachers/${teacherUsername}`).then(res => {
-      const opts = [...(res.data.subjects || []), ...(res.data.languages || [])];
+      if (ignore) return;
+      const opts = [...new Set([...(res.data.subjects || []), ...(res.data.languages || [])])];
       setSubjectOptions(opts);
       setSelectedSubject(opts[0] || "");
-    }).catch(() => setSubjectOptions([]));
+    }).catch(() => { if (!ignore) setSubjectOptions([]); }).finally(() => { if (!ignore) setSubjectsLoading(false); });
+    return () => { ignore = true; };
   }, [isTrial, teacherUsername]);
 
   const formatTime = (utc: string) => formatTimeTz(utc, myTz);
@@ -196,7 +223,7 @@ function StepSelectSlot({
   const isPreferredSlot = (slot: AvailableSlot) => !!slot.is_preferred;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
       <div className="space-y-5">
         {isTrial && subjectOptions.length > 1 && (
           <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-xl shadow-slate-200/50 p-6">
@@ -221,7 +248,7 @@ function StepSelectSlot({
           </div>
         )}
 
-        <MiniCalendar value={date} onChange={setDate} />
+        <MiniCalendar value={date} onChange={setDate} disabled={subjectsLoading} />
 
         {!isTrial && (
           <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-xl shadow-slate-200/50 p-6">
@@ -290,7 +317,7 @@ function StepSelectSlot({
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-[400px] overflow-y-auto pr-1 pt-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-h-[400px] overflow-y-auto pr-1 pt-3">
             {slots.map((slot, i) => {
               const preferred = isPreferredSlot(slot);
               const blocked = !slot.is_available || slot.is_past || slot.too_soon;
@@ -939,15 +966,19 @@ function NeedsPackageScreen({
             const priceDisplay = pkg.price?.toFixed
               ? (Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2))
               : pkg.price;
+            // Las notas automáticas (clases, duración, modalidad) se muestran
+            // siempre, sea cual sea el formato elegido para la descripción —
+            // antes solo aparecían con description_type "paragraph" y se
+            // perdían por completo si el profesor usaba viñetas.
+            const autoFacts: string[] = [
+              pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
+              `${pkg.duration_minutes} min por clase`,
+              "Modalidad 100% online",
+            ];
             const bullets: string[] =
               pkg.description_type === "list" && pkg.description_items?.length
-                ? pkg.description_items
-                : [
-                    pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
-                    `${pkg.duration_minutes} min por clase`,
-                    "Modalidad 100% online",
-                    ...(pkg.description ? [pkg.description] : []),
-                  ];
+                ? [...autoFacts, ...pkg.description_items]
+                : [...autoFacts, ...(pkg.description ? [pkg.description] : [])];
 
             return (
               <div
@@ -1096,15 +1127,19 @@ function NeedsRenewalScreen({
             const priceDisplay = pkg.price?.toFixed
               ? (Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2))
               : pkg.price;
+            // Las notas automáticas (clases, duración, modalidad) se muestran
+            // siempre, sea cual sea el formato elegido para la descripción —
+            // antes solo aparecían con description_type "paragraph" y se
+            // perdían por completo si el profesor usaba viñetas.
+            const autoFacts: string[] = [
+              pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
+              `${pkg.duration_minutes} min por clase`,
+              "Modalidad 100% online",
+            ];
             const bullets: string[] =
               pkg.description_type === "list" && pkg.description_items?.length
-                ? pkg.description_items
-                : [
-                    pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
-                    `${pkg.duration_minutes} min por clase`,
-                    "Modalidad 100% online",
-                    ...(pkg.description ? [pkg.description] : []),
-                  ];
+                ? [...autoFacts, ...pkg.description_items]
+                : [...autoFacts, ...(pkg.description ? [pkg.description] : [])];
 
             return (
               <div key={pkg.id} className="bg-white rounded-[2rem] border border-slate-100 shadow-lg shadow-slate-100 p-6 flex flex-col hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
@@ -1234,6 +1269,13 @@ export default function SchedulePage() {
 
   const needsTeacherSelection = !isSingleTenant && myTeachers.length > 1 && !selectedTeacherUsername;
   const teacherBlocked = !teachersLoading && !isSingleTenant && myTeachers.length === 0;
+
+  // Profesor suspendido/rechazado: sus créditos quedan "congelados" y no se
+  // puede agendar clase nueva con él (ver /payments/book en el backend).
+  // Reflejamos ese bloqueo también acá para no mostrarle un calendario que
+  // de todas formas el backend va a rechazar.
+  const selectedTeacherInfo = myTeachers.find(t => t.teacher_username === selectedTeacherUsername);
+  const teacherSuspended = !!selectedTeacherUsername && !!selectedTeacherInfo && selectedTeacherInfo.status !== "approved";
 
   const [buyCreditsOpen, setBuyCreditsOpen] = useState(false);
 
@@ -1392,6 +1434,28 @@ export default function SchedulePage() {
           </div>
         )}
 
+        {!teacherBlocked && teacherSuspended && (
+          <div className="bg-rose-50 border border-rose-200 rounded-2xl px-5 py-4 flex items-center justify-between gap-4 max-w-2xl animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-black text-rose-800">
+                  Su profesor ha sido suspendido
+                </p>
+                <p className="text-xs text-rose-700 mt-0.5">
+                  Tus créditos están congelados mientras dure la suspensión. Puedes solicitar un reembolso desde &quot;Tus Profesores&quot;.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/dashboard/teachers"
+              className="flex-shrink-0 px-4 py-2.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl shadow-sm transition-colors whitespace-nowrap"
+            >
+              Ver mis profesores
+            </Link>
+          </div>
+        )}
+
         {stage === "ready" && step === "payment" && !activeEnrollment && (
           <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 max-w-lg mx-auto">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -1456,7 +1520,7 @@ export default function SchedulePage() {
           </div>
         )}
 
-        {!needsTeacherSelection && !teacherBlocked && (
+        {!needsTeacherSelection && !teacherBlocked && !teacherSuspended && (
           <div className="animate-in fade-in duration-300">
             {stage === "loading" && (
               <div className="space-y-4 py-4">

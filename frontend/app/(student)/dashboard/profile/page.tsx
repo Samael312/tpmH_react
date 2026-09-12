@@ -891,7 +891,10 @@ export default function StudentProfilePage() {
                       <div>
                         <p className="text-xs font-black text-rose-700">¿Estás absolutamente seguro?</p>
                         <p className="text-[11px] text-rose-500 mt-0.5 leading-relaxed">
-                          Esta acción no se puede deshacer. Se eliminarán permanentemente tu cuenta, historial y clases.
+                          Esta acción no se puede deshacer. Se borran tus datos personales (nombre, foto, teléfono)
+                          y quedas desconectado de inmediato; el historial de pagos y clases se conserva por motivos
+                          contables, pero deja de estar asociado a tu nombre. Podrás registrarte de nuevo con el
+                          mismo correo si quieres.
                         </p>
                       </div>
                     </div>

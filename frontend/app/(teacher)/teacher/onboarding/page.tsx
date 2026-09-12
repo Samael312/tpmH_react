@@ -228,6 +228,7 @@ function StepProfile({
 
   const handleContinue = () => {
     const missing: string[] = [];
+    if (!photoPreview) missing.push("Foto de perfil");
     if (!title_.trim()) missing.push("Título profesional");
     if (!bio.trim()) missing.push("Sobre mí");
     if (!nationality) missing.push("Nacionalidad");
@@ -245,7 +246,7 @@ function StepProfile({
 
   // Mismos campos que valida handleContinue, para deshabilitar el botón
   // en vez de dejar que el usuario dispare el mensaje de error a ciegas.
-  const stepValid = Boolean(title_.trim() && bio.trim() && nationality && timezone && phone.trim());
+  const stepValid = Boolean(photoPreview && title_.trim() && bio.trim() && nationality && timezone && phone.trim());
 
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-300 w-full max-w-3xl mx-auto space-y-7">
@@ -263,7 +264,7 @@ function StepProfile({
 
       {/* Foto */}
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
-        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Foto de perfil</p>
+        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Foto de perfil <span className="text-pink-400 normal-case font-bold">· obligatoria</span></p>
         <div className="flex items-center gap-6">
           <div className="relative flex-shrink-0">
             <label className="cursor-pointer group">

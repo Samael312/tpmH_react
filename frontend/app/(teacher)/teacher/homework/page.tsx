@@ -24,6 +24,7 @@ import {
   type TeacherHomeworkItem as Homework,
   type HomeworkSubmission as Submission,
   type TeacherStudentBasic as Student,
+  useCohortMembers,
 } from "@/hooks/useTeacherData";
 
 interface TeacherCohort {
@@ -366,6 +367,7 @@ function EditHomeworkModal({
   const [title, setTitle] = useState(hw.title);
   const [content, setContent] = useState(hw.description);
   const [due, setDue] = useState(hw.due_date_utc.slice(0, 10));
+  const [dueTime, setDueTime] = useState(hw.due_date_utc.slice(11, 16) || "23:59");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const toast = useToast();
@@ -376,7 +378,7 @@ function EditHomeworkModal({
       await api.patch(`/homework/${hw.id}`, {
         title,
         description: content,
-        due_date_utc: new Date(`${due}T23:59:59`).toISOString(),
+        due_date_utc: new Date(`${due}T${dueTime || "23:59"}:00`).toISOString(),
       });
       toast.success("Tarea actualizada correctamente");
       onSaved();
@@ -424,11 +426,24 @@ function EditHomeworkModal({
           />
         </div>
 
-        <div>
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-            Fecha límite
-          </label>
-          <DatePicker value={due} onChange={setDue} />
+        <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
+          <div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+              Fecha límite
+            </label>
+            <DatePicker value={due} onChange={setDue} />
+          </div>
+          <div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+              Hora
+            </label>
+            <input
+              type="time"
+              value={dueTime}
+              onChange={(e) => setDueTime(e.target.value)}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300"
+            />
+          </div>
         </div>
 
         {error && <div className="bg-rose-50 text-rose-600 text-xs font-bold px-4 py-3 rounded-xl">{error}</div>}
@@ -552,6 +567,7 @@ export default function HomeworkPage() {
   const [hwTitle, setHwTitle]       = useState("");
   const [hwContent, setHwContent]   = useState("");
   const [hwDue, setHwDue]           = useState("");
+  const [hwDueTime, setHwDueTime]   = useState("23:59");
   const [hwStudents, setHwStudents] = useState<number[]>([]);
   const [creating, setCreating]     = useState(false);
   const [createError, setCreateError] = useState("");
@@ -559,6 +575,11 @@ export default function HomeworkPage() {
   // Asignar a un grupo (cohorte) completo, además de estudiantes individuales
   const [cohorts, setCohorts] = useState<TeacherCohort[]>([]);
   const [hwCohortId, setHwCohortId] = useState<number | null>(null);
+  // Integrantes del grupo elegido: se usan solo para resaltarlos en la
+  // lista de abajo (ya quedan incluidos automáticamente por el hwCohortId),
+  // así el profesor no cree que tiene que volver a tildarlos a mano.
+  const { members: hwCohortMembers } = useCohortMembers(hwCohortId);
+  const hwCohortMemberIds = new Set(hwCohortMembers.map(m => m.student_id));
 
   useEffect(() => {
     api.get<TeacherCohort[]>("/cohorts/teacher")
@@ -596,7 +617,7 @@ export default function HomeworkPage() {
     setCreating(true);
     setCreateError("");
     try {
-      const dueDateUtc = new Date(`${hwDue}T23:59:59`).toISOString();
+      const dueDateUtc = new Date(`${hwDue}T${hwDueTime || "23:59"}:00`).toISOString();
       await api.post("/homework/", {
         title: hwTitle,
         description: hwContent,
@@ -841,7 +862,8 @@ export default function HomeworkPage() {
                             Vence: {new Date(hw.due_date_utc)
                               .toLocaleDateString("es", {
                                 day: "numeric", month: "short"
-                              })}
+                              })} · {new Date(hw.due_date_utc)
+                              .toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
                           </span>
                           {!hw.is_active && (
                             <span className="text-[10px] font-black uppercase tracking-widest
@@ -883,7 +905,7 @@ export default function HomeworkPage() {
                               <Calendar className="w-3 h-3" />
                               Vence el {new Date(hw.due_date_utc).toLocaleDateString("es", {
                                 day: "numeric", month: "long", year: "numeric",
-                              })}
+                              })} a las {new Date(hw.due_date_utc).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
                             </span>
                           </div>
                           <p className="text-xs sm:text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
@@ -1012,12 +1034,27 @@ export default function HomeworkPage() {
                 />
               </div>
 
-              <div className="relative">
-                <label className="text-[10px] font-black text-slate-400
-                                  uppercase tracking-widest block mb-1.5">
-                  Fecha límite
-                </label>
-                <DatePicker value={hwDue} onChange={setHwDue} />
+              <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400
+                                    uppercase tracking-widest block mb-1.5">
+                    Fecha límite
+                  </label>
+                  <DatePicker value={hwDue} onChange={setHwDue} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400
+                                    uppercase tracking-widest block mb-1.5">
+                    Hora
+                  </label>
+                  <input
+                    type="time"
+                    value={hwDueTime}
+                    onChange={(e) => setHwDueTime(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700
+                               focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300"
+                  />
+                </div>
               </div>
 
               {createError && (
@@ -1134,7 +1171,9 @@ export default function HomeworkPage() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[420px]
                                 overflow-y-auto pr-1">
-                  {filteredStudents.map(s => (
+                  {filteredStudents.map(s => {
+                    const inSelectedCohort = hwCohortMemberIds.has(s.id);
+                    return (
                     <button
                       key={s.id}
                       onClick={() => toggleStudent(s.id)}
@@ -1142,6 +1181,8 @@ export default function HomeworkPage() {
                         rounded-2xl border-2 transition-all duration-200 text-left
                         ${hwStudents.includes(s.id)
                           ? "border-pink-400 bg-pink-50"
+                          : inSelectedCohort
+                          ? "border-indigo-300 bg-indigo-50/60"
                           : "border-slate-100 bg-white hover:border-slate-200"
                         }`}
                     >
@@ -1151,12 +1192,20 @@ export default function HomeworkPage() {
                           {s.name} {s.surname}
                         </p>
                         <p className="text-xs text-slate-400">@{s.username}</p>
+                        {inSelectedCohort && !hwStudents.includes(s.id) && (
+                          <p className="text-[10px] font-black text-indigo-500 uppercase tracking-wide mt-0.5">
+                            Ya está en el grupo
+                          </p>
+                        )}
                       </div>
-                      {hwStudents.includes(s.id) && (
+                      {hwStudents.includes(s.id) ? (
                         <Check className="w-4 h-4 text-pink-500 ml-auto flex-shrink-0" />
-                      )}
+                      ) : inSelectedCohort ? (
+                        <Users2 className="w-4 h-4 text-indigo-400 ml-auto flex-shrink-0" />
+                      ) : null}
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

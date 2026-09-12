@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -11,20 +11,32 @@ import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { getErrorMessage } from "@/lib/errorMessage";
+import { useToast } from "@/hooks/useToast";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuthStore();
+  const toast = useToast();
 
   const [form, setForm] = useState({ login: "", password: "" });
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Check for successful registration redirect
-  const registered = typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search).get("registered") === "1"
-    : false;
+  // Flag seteado por /register en sessionStorage justo antes de redirigir acá.
+  // Se lee y se borra una sola vez al montar: evita el toast duplicado al
+  // refrescar la página (que sí pasaba con el query param ?registered=1,
+  // que persistía en la URL hasta que el replace terminaba de resolver) y
+  // el caso en que el toast no llegaba a mostrarse por timing de hidratación.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("tpm_just_registered") === "1") {
+        sessionStorage.removeItem("tpm_just_registered");
+        toast.success("¡Cuenta creada correctamente! Inicia sesión.");
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleGoogleCredential = async (idToken: string) => {
     setError("");
@@ -44,8 +56,8 @@ export default function LoginPage() {
         return;
       }
 
-      const { access_token, role, name, username, email, surname } = res.data;
-      login(access_token, { username, name, role, email, surname });
+      const { access_token, role, name, username, email, surname, avatar } = res.data;
+      login(access_token, { username, name, role, email, surname, avatar_url: avatar });
 
       try {
         const meRes = await api.get("/users/me", {
@@ -74,6 +86,7 @@ export default function LoginPage() {
           username, name, role,
           email: userData.email || email,
           surname: userData.surname || surname,
+          avatar_url: userData.avatar || avatar,
           onboarding_completed: userData.onboarding_completed ?? false,
           timezone, goal,
         });
@@ -106,10 +119,10 @@ export default function LoginPage() {
 
     try {
       const res = await api.post("/auth/login", form);
-      const { access_token, role, name, username, email, surname } = res.data;
+      const { access_token, role, name, username, email, surname, avatar_url } = res.data;
 
       // Fetch full user data to get onboarding_completed
-      login(access_token, { username, name, role, email, surname });
+      login(access_token, { username, name, role, email, surname, avatar_url });
 
       // Fetch user profile to get onboarding_completed status
       try {
@@ -143,6 +156,7 @@ export default function LoginPage() {
           role,
           email: userData.email || email,
           surname: userData.surname || surname,
+          avatar_url: userData.avatar || avatar_url,
           onboarding_completed: userData.onboarding_completed ?? false,
           timezone,
           goal,
@@ -212,31 +226,24 @@ export default function LoginPage() {
       <div className="absolute top-[-100px] right-[-100px] w-[500px] h-[500px] bg-pink-300/25 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-100px] left-[-100px] w-[400px] h-[400px] bg-rose-300/20 rounded-full blur-[100px] pointer-events-none" />
 
-      <main className="flex-1 flex justify-center pt-8 p-4 sm:p-6 relative z-10">
-        <div className="w-full max-w-md lg:max-w-lg animate-in fade-in slide-in-from-bottom-6 duration-500">
+      <main className="flex-1 flex justify-center items-center pt-1 p-3 sm:p-6 relative z-10">
+        <div className="w-full max-w-[24rem] sm:max-w-[27rem] my-auto animate-in fade-in slide-in-from-bottom-6 duration-500">
 
           {/* Logo y Encabezado */}
-          <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 rounded-[1.25rem] overflow-hidden shadow-xl shadow-pink-200 mb-4 bg-white p-2 hover:scale-110 transition-transform duration-300">
+          <div className="flex flex-col items-center mb-6">
+            <div className="w-14 h-14 rounded-[1.25rem] overflow-hidden shadow-xl shadow-pink-200 mb-3 bg-white p-1.5 hover:scale-110 transition-transform duration-300">
               <Image
                 src="/assets/logo.png"
                 alt="Logo"
-                width={64}
-                height={64}
+                width={56}
+                height={56}
                 className="object-contain w-full h-full"
                 priority
               />
             </div>
-            <h1 className="text-2xl font-black text-slate-800 tracking-tight">¡Hola de nuevo!</h1>
+            <h1 className="text-xl font-black text-slate-800 tracking-tight">¡Hola de nuevo!</h1>
             <p className="text-slate-500 text-sm mt-1">Ingresa a tu cuenta para continuar</p>
           </div>
-
-          {/* Banner de registro exitoso */}
-          {registered && (
-            <div className="mb-4 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-2xl text-sm font-bold flex items-center gap-2 animate-in fade-in">
-              <span>✅</span> ¡Cuenta creada correctamente! Inicia sesión.
-            </div>
-          )}
 
           {/* Formulario */}
           <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6 sm:p-8">
@@ -249,7 +256,7 @@ export default function LoginPage() {
                     type="text"
                     value={form.login}
                     maxLength={255}
-                    onChange={(e) => setForm({ ...form, login: e.target.value.toLowerCase() })}
+                    onChange={(e) => setForm({ ...form, login: e.target.value.toLowerCase().replace(/\s/g, "") })}
                     placeholder="Tu usuario"
                     className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 pl-11 pr-4 py-2.5 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all duration-300"
                   />

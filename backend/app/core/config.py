@@ -36,7 +36,7 @@ class Settings(BaseSettings):
 
     # Resend
     RESEND_API_KEY: Optional[str] = None
-    EMAIL_FROM: str = "soporte@mail.tuprofemaria.com"
+    EMAIL_FROM: str = "Soporte TuProfeMaria <soporte@mail.tuprofemaria.com>"
 
     # App
     APP_NAME: str = "TPM"

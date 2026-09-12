@@ -22,6 +22,7 @@ from app.models.teacher import TeacherProfile, TeacherStatus
 from app.core.teacher_students import link_student_to_teacher
 from app.models.payment_config import PlatformConfig
 from app.models.student_teacher_link import StudentTeacherLink
+from app.models.payment import Payment
 from app.core.class_logic import get_student_booking_stage
 from app.models.package import Enrollment, EnrollmentStatus
 
@@ -212,12 +213,56 @@ def delete_account(
 ):
     """
     Elimina la cuenta del usuario.
-    Desactiva en lugar de borrar para preservar historial de clases.
+
+    No es un hard-delete en cascada: los pagos, clases y enrollments se
+    conservan (contabilidad/auditoría), pero el usuario se ANONIMIZA por
+    completo — nombre, foto, teléfono, nacionalidad y credenciales de
+    login se borran, y el email/username/teléfono/google_id quedan
+    liberados (dejan de ser únicos) para que la persona pueda registrarse
+    de nuevo con el mismo correo si quiere. La cuenta además se desactiva
+    (is_active=False) para que ninguna sesión existente siga funcionando.
     """
+    from app.core.timezone import utc_now
+
+    anon_tag = f"deleted_{current_user.id}_{int(utc_now().timestamp())}"
+
+    if current_user.student_profile and current_user.student_profile.profile_photo_public_id:
+        delete_file(current_user.student_profile.profile_photo_public_id)
+    if current_user.teacher_profile and current_user.teacher_profile.profile_photo_public_id:
+        delete_file(current_user.teacher_profile.profile_photo_public_id)
+
+    current_user.email = f"{anon_tag}@deleted.local"
+    current_user.username = anon_tag
+    current_user.name = "Usuario"
+    current_user.surname = "eliminado"
+    current_user.avatar = None
+    current_user.phone_number = None
+    current_user.nationality = None
+    current_user.google_id = None
+    current_user.password_hash = None
     current_user.is_active = False
+    current_user.is_verified = False
+
+    if current_user.student_profile:
+        current_user.student_profile.user_username = anon_tag
+        current_user.student_profile.profile_photo_url = None
+        current_user.student_profile.profile_photo_public_id = None
+
+    if current_user.teacher_profile:
+        current_user.teacher_profile.user_username = anon_tag
+        current_user.teacher_profile.bio = None
+        current_user.teacher_profile.profile_photo_url = None
+        current_user.teacher_profile.profile_photo_public_id = None
+        current_user.teacher_profile.gallery = []
+        current_user.teacher_profile.social_links = {}
+
     db.commit()
 
-    return {"message": "Cuenta desactivada correctamente"}
+    return {
+        "message": "Tu cuenta fue eliminada. Se borraron tus datos personales y podrás registrarte "
+                   "de nuevo con el mismo correo si quieres; tu historial de pagos y clases se "
+                   "conserva por motivos contables."
+    }
 
 
 # ─── ENDPOINTS DE FOTO / AVATAR (GET, POST Y PATCH) ───────────────────────────
@@ -517,6 +562,19 @@ def get_my_teachers(
             Enrollment.status.in_([EnrollmentStatus.active, EnrollmentStatus.pending_package_change]),
         ).first()
 
+        # Profesor suspendido/rechazado mientras el estudiante sigue
+        # vinculado a él (o incluso con paquete activo): sus créditos
+        # quedan "congelados" (no puede agendar, ver el bloqueo en
+        # POST /payments/book) y se le ofrece pedir reembolso.
+        is_frozen = teacher.status != TeacherStatus.approved and active_enrollment is not None
+        refund_pending = False
+        if is_frozen:
+            refund_pending = db.query(Payment).filter(
+                Payment.enrollment_id == active_enrollment.id,
+                Payment.status == "pending_review",
+                Payment.payment_type == "refund",
+            ).first() is not None
+
         result.append({
             "teacher_username": teacher.user_username,
             "name": teacher.user.name if teacher.user else None,
@@ -525,6 +583,9 @@ def get_my_teachers(
             "profile_photo_url": teacher.profile_photo_url,
             "theme_color": teacher.theme_color,
             "stage": stage,
+            "status": teacher.status,
+            "is_frozen": is_frozen,
+            "refund_pending": refund_pending,
             "active_enrollment": {
                 "id": active_enrollment.id,
                 "package_name": active_enrollment.package.name if active_enrollment.package else None,

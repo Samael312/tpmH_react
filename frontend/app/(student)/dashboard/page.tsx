@@ -7,6 +7,7 @@ import {
   useStudentClasses, 
   useEnrollments, 
   useBookingStage, 
+  usePlatformConfig,
   StudentEnrollment,
   StudentClass,
 } from "@/hooks/useStudentData";
@@ -28,6 +29,7 @@ import {
   RefreshCw,
   X,
   AlertTriangle,
+  Snowflake,
 } from "lucide-react";
 import PackageCheckout from "@/components/payments/PackageCheckout";
 import BuyCreditsModal from "@/components/payments/BuyCreditsModal";
@@ -35,7 +37,13 @@ import RejectedPaymentNotice from "@/components/payments/RejectedPaymentNotice";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
+import FullScreenModal from "@/components/ui/FullScreenModal";
+import Button from "@/components/ui/Button";
+import RefundDestinationFields, { emptyRefundDestinationForm, refundFormToPayload } from "@/components/payments/RefundDestinationFields";
 import { usePageTopBar } from "@/lib/mobileTopBar";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
+import api from "@/lib/api";
 
 function Skeleton({ className }: { className?: string }) {
   return <div className={`animate-pulse bg-slate-200/80 rounded-2xl ${className}`} />;
@@ -120,13 +128,38 @@ function QuickAction({
 
 export default function StudentDashboard() {
   const { user } = useAuthStore();
+  const toast = useToast();
   const { classes: classesData, loading: classesLoading, isFetching: classesFetching, isError: classesError, refetch: refetchClasses } = useStudentClasses();
   const { enrollments, loading: enrollmentsLoading, isFetching: enrollmentsFetching, isError: enrollmentsError, refetch: refetchEnrollments } = useEnrollments();
-  const { stage, lastRejectedPayment, isFetching: stageFetching, refetch: refetchStage } = useBookingStage();
+  const { config: platformConfig } = usePlatformConfig();
+  const { stage, enrollmentId: refundEnrollmentId, lastRejectedPayment, pendingRechargePayment, isFetching: stageFetching, refetch: refetchStage } = useBookingStage();
 
   const [changePackageTarget, setChangePackageTarget] = useState<StudentEnrollment | null>(null);
   const [installmentTarget, setInstallmentTarget] = useState<StudentEnrollment | null>(null);
   const [rechargeTarget, setRechargeTarget] = useState<StudentEnrollment | null>(null);
+  const [activeBannerTab, setActiveBannerTab] = useState(0);
+  const [groupRefundModalOpen, setGroupRefundModalOpen] = useState(false);
+  const [groupRefundForm, setGroupRefundForm] = useState(emptyRefundDestinationForm);
+  const [submittingGroupRefund, setSubmittingGroupRefund] = useState(false);
+
+  const submitGroupRefund = async () => {
+    if (!refundEnrollmentId) return;
+    setSubmittingGroupRefund(true);
+    try {
+      await api.post("/payments/request-refund-cohort-cancelled", {
+        enrollment_id: refundEnrollmentId,
+        payment_info: refundFormToPayload(groupRefundForm),
+      });
+      toast.success("Reembolso solicitado. El staff lo revisará en breve.");
+      setGroupRefundModalOpen(false);
+      setGroupRefundForm(emptyRefundDestinationForm);
+      refetchStage();
+    } catch (e) {
+      toast.error(getErrorMessage(e, "No se pudo solicitar el reembolso"));
+    } finally {
+      setSubmittingGroupRefund(false);
+    }
+  };
 
   const activeOrChangingEnrollments = enrollments.filter(
     e => (e.status === "active" || e.status === "pending_package_change") && !e.cohort_id
@@ -214,6 +247,16 @@ export default function StudentDashboard() {
           <RejectedPaymentNotice payment={lastRejectedPayment} variant="compact" />
         )}
 
+        {pendingRechargePayment && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 flex items-center gap-3">
+            <Hourglass className="w-5 h-5 text-amber-500 flex-shrink-0" />
+            <p className="text-sm text-amber-800 font-bold">
+              Tu recarga de {pendingRechargePayment.amount.toLocaleString("es", { style: "currency", currency: "USD" })} está pendiente de verificación.
+              Te avisaremos apenas el staff la confirme.
+            </p>
+          </div>
+        )}
+
         {stage === "needs_trial" && !hasTrial && (
           <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-[2rem] p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-purple-200 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="absolute top-[-40px] right-[-40px] w-48 h-48 bg-white/10 rounded-full blur-2xl" />
@@ -292,6 +335,33 @@ export default function StudentDashboard() {
           </div>
         )}
 
+        {stage === "needs_group_refund" && (
+          <div className="bg-gradient-to-r from-slate-700 to-slate-900 rounded-[2rem] p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-slate-300 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="absolute top-[-40px] right-[-40px] w-48 h-48 bg-white/10 rounded-full blur-2xl" />
+            <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-1">Grupo cancelado</p>
+                  <h2 className="text-xl font-black">Tu profesor(a) canceló ese grupo</h2>
+                  <p className="text-white/80 text-sm mt-1">
+                    Solicita el reembolso de lo que pagaste para entrar. En cuanto el staff lo confirme
+                    vas a poder elegir un paquete o grupo nuevo.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setGroupRefundModalOpen(true)}
+                className="flex-shrink-0 inline-flex items-center gap-2 px-5 py-3 bg-white text-slate-800 text-sm font-bold rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200"
+              >
+                Solicitar reembolso
+              </button>
+            </div>
+          </div>
+        )}
+
         {stage === "needs_payment" && (
           <div className="bg-gradient-to-r from-amber-500 to-rose-500 rounded-[2rem] p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-rose-200 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="absolute top-[-40px] right-[-40px] w-48 h-48 bg-white/10 rounded-full blur-2xl" />
@@ -350,20 +420,72 @@ export default function StudentDashboard() {
           </div>
         )}
 
-        {stage === "ready" && activeOrChangingEnrollments.length > 0 && (
-          <div className={`grid gap-4 ${activeOrChangingEnrollments.length > 1 ? "sm:grid-cols-2" : ""}`}>
-            {activeOrChangingEnrollments.map((enr) => {
-              const isUnlimited = enr.package?.classes_count == null;
-              const remainingCredits = enr.available_credits ?? (isUnlimited
-                ? (enr.prepaid_unlimited_credits ?? 0)
-                : Math.max((enr.unlocked_credits ?? 0) - enr.classes_used, 0));
-              const totalInstallments = enr.package?.installment_count ?? enr.total_installments;
-              const hasMoreInstallments = !isUnlimited && !!totalInstallments && totalInstallments > 1 && (enr.installments_paid ?? 0) < totalInstallments;
-              const needsNextInstallment = hasMoreInstallments && remainingCredits <= 0;
+        {stage === "ready" && activeOrChangingEnrollments.length > 0 && (() => {
+          // Un único banner con tabs (uno por profesor) en vez de tarjetas
+          // una al lado de la otra — así también podemos, en la misma
+          // posición, cambiar el contenido de la tab por un aviso de
+          // "profesor suspendido" sin desarmar el layout.
+          const tabIndex = Math.min(activeBannerTab, activeOrChangingEnrollments.length - 1);
+          const enr = activeOrChangingEnrollments[tabIndex];
+          const teacherSuspended = !!enr.teacher_status && enr.teacher_status !== "approved";
+          const isUnlimited = enr.package?.classes_count == null;
+          const remainingCredits = enr.available_credits ?? (isUnlimited
+            ? (enr.prepaid_unlimited_credits ?? 0)
+            : Math.max((enr.unlocked_credits ?? 0) - enr.classes_used, 0));
+          const totalInstallments = enr.package?.installment_count ?? enr.total_installments;
+          const hasMoreInstallments = !isUnlimited && !!totalInstallments && totalInstallments > 1 && (enr.installments_paid ?? 0) < totalInstallments;
+          const needsNextInstallment = hasMoreInstallments && remainingCredits <= 0;
 
-              return (
-                <div key={enr.id}
-                  className="bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 rounded-[2rem] p-6 text-white relative overflow-hidden shadow-2xl shadow-indigo-950/20 border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          return (
+            <div className="space-y-3">
+              {activeOrChangingEnrollments.length > 1 && (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 animate-in fade-in duration-500">
+                  {activeOrChangingEnrollments.map((e, i) => {
+                    const suspended = !!e.teacher_status && e.teacher_status !== "approved";
+                    return (
+                      <button
+                        key={e.id}
+                        onClick={() => setActiveBannerTab(i)}
+                        className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all
+                          ${i === tabIndex
+                            ? "bg-slate-900 text-white shadow-md"
+                            : "bg-white text-slate-500 border border-slate-200 hover:border-slate-300"}`}
+                      >
+                        {suspended && <Snowflake className="w-3.5 h-3.5 text-rose-400" />}
+                        {e.teacher_name || "Profesor"}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {teacherSuspended ? (
+                <div className="bg-rose-50 border border-rose-200 rounded-[2rem] p-6 sm:p-8 relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <Snowflake className="w-5 h-5 text-rose-500" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-rose-500 mb-1">Profesor suspendido</p>
+                        <h2 className="text-lg font-black text-rose-800">
+                          {enr.teacher_name || "Tu profesor"} no está disponible por ahora
+                        </h2>
+                        <p className="text-rose-700 text-sm mt-1">
+                          Tus créditos quedan congelados mientras dure la suspensión. Puedes solicitar un reembolso desde &quot;Tus Profesores&quot;.
+                        </p>
+                      </div>
+                    </div>
+                    <Link
+                      href="/dashboard/teachers"
+                      className="flex-shrink-0 inline-flex items-center gap-2 px-5 py-3 bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold rounded-xl shadow-md active:scale-[0.98] transition-all duration-200"
+                    >
+                      Ver mis profesores
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 rounded-[2rem] p-6 text-white relative overflow-hidden shadow-2xl shadow-indigo-950/20 border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div className="absolute -top-12 -right-12 w-56 h-56 bg-pink-500/20 rounded-full blur-3xl pointer-events-none" />
                   <div className="relative z-10 space-y-3">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -430,12 +552,18 @@ export default function StudentDashboard() {
                           </button>
                         )}
                         {isUnlimited && (
-                          <button
-                            onClick={() => setRechargeTarget(enr)}
-                            className="w-full py-2.5 text-xs font-bold text-pink-300 hover:text-pink-200 border border-pink-400/30 hover:border-pink-400/60 rounded-xl transition-all"
-                          >
-                            Comprar más créditos ({remainingCredits} disponibles)
-                          </button>
+                          enr.has_pending_recharge ? (
+                            <p className="w-full py-2.5 text-xs font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl text-center flex items-center justify-center gap-1.5">
+                              <Hourglass className="w-3.5 h-3.5" /> Recarga en revisión — se verá reflejada al aprobarse
+                            </p>
+                          ) : (
+                            <button
+                              onClick={() => setRechargeTarget(enr)}
+                              className="w-full py-2.5 text-xs font-bold text-pink-300 hover:text-pink-200 border border-pink-400/30 hover:border-pink-400/60 rounded-xl transition-all"
+                            >
+                              Comprar más créditos ({remainingCredits} disponibles)
+                            </button>
+                          )
                         )}
                       </div>
                     )}
@@ -458,10 +586,10 @@ export default function StudentDashboard() {
                     )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+              )}
+            </div>
+          );
+        })()}
 
         {changePackageTarget && (
           <ChangePackageModal
@@ -551,7 +679,7 @@ export default function StudentDashboard() {
           ) : (
             <div className="space-y-3">
               {upcoming.slice(0, 3).map((cls) => (
-                <ClassCard key={cls.id} class_={cls} role="student" readOnly />
+                <ClassCard key={cls.id} class_={cls} role="student" readOnly showTeacherWhatsapp={platformConfig?.show_teacher_whatsapp ?? true} />
               ))}
             </div>
           )}
@@ -584,6 +712,26 @@ export default function StudentDashboard() {
       </div>
     </div>
     <ChipiWidget screenName="student_home" />
+
+    <FullScreenModal
+      open={groupRefundModalOpen}
+      onClose={() => setGroupRefundModalOpen(false)}
+      title="Solicitar reembolso del grupo cancelado"
+      footer={
+        <Button className="w-full" onClick={submitGroupRefund} loading={submittingGroupRefund}>
+          Enviar solicitud
+        </Button>
+      }
+    >
+      <div className="space-y-5">
+        <p className="text-sm text-slate-500">
+          Indícanos a dónde quieres que te devolvamos lo que pagaste para entrar a ese grupo. Todos los
+          campos son opcionales: completa el o los medios que tengas, o dejanos una nota si no tenés
+          ninguno de los que mostramos abajo.
+        </p>
+        <RefundDestinationFields value={groupRefundForm} onChange={setGroupRefundForm} />
+      </div>
+    </FullScreenModal>
     </>
   );
 }

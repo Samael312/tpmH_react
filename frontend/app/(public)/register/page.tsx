@@ -24,6 +24,7 @@ import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { usePlatformTenantMode } from "@/lib/platformTenantMode";
 import Skeleton from "@/components/ui/Skeleton";
 import { getErrorMessage } from "@/lib/errorMessage";
+import { capitalizeWords } from "@/lib/textFormat";
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
   return (
@@ -177,8 +178,15 @@ export default function RegisterPage() {
         role: isSingleTenant ? "student" : role,
       });
       setSuccess(true);
+      // Flag persistido en sessionStorage (en vez de un query param) para que
+      // el toast de "cuenta creada" en /login se dispare de forma confiable
+      // una sola vez al montar, sin depender del timing entre la navegación
+      // client-side y la lectura de window.location.search.
+      try {
+        sessionStorage.setItem("tpm_just_registered", "1");
+      } catch {}
       setTimeout(() => {
-        router.push("/login?registered=1");
+        router.push("/login");
       }, 2000);
     } catch (err: unknown) {
       const detail = getErrorMessage(err, "Error creando la cuenta");
@@ -398,7 +406,7 @@ export default function RegisterPage() {
                           autoComplete="given-name"
                           value={name}
                           maxLength={100}
-                          onChange={(e) => setName(e.target.value)}
+                          onChange={(e) => setName(capitalizeWords(e.target.value))}
                           onBlur={() => markTouched("name")}
                           placeholder="Maria"
                           className={inputCls(fieldError("name", name))}
@@ -417,7 +425,7 @@ export default function RegisterPage() {
                           autoComplete="family-name"
                           value={surname}
                           maxLength={100}
-                          onChange={(e) => setSurname(e.target.value)}
+                          onChange={(e) => setSurname(capitalizeWords(e.target.value))}
                           onBlur={() => markTouched("surname")}
                           placeholder="Farias"
                           className={inputCls(fieldError("surname", surname))}

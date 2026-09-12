@@ -16,19 +16,19 @@ import { getErrorMessage } from '@/lib/errorMessage'
 
 const TYPE_BADGE: Record<string, { label: (p: PendingPayment | PaymentHistoryItem) => string; cls: string }> = {
   package: {
-    label: (p) => p.installment_total ? `Cuota ${p.installment_index}/${p.installment_total}` : "Paquete Inicial",
+    label: (p) => p.installment_total ? `Cuota ${p.installment_index ?? 1}/${p.installment_total}` : "Paquete Inicial",
     cls: "bg-pink-100 text-pink-700 border-pink-200"
   },
   renewal: {
-    label: (p) => p.installment_total ? `Renovación (Cuota ${p.installment_index}/${p.installment_total})` : "Renovación",
+    label: (p) => p.installment_total ? `Renovación (Cuota ${p.installment_index ?? 1}/${p.installment_total})` : "Renovación",
     cls: "bg-emerald-100 text-emerald-700 border-emerald-200"
   },
   package_renewal: {
-    label: (p) => p.installment_total ? `Renovación (Cuota ${p.installment_index}/${p.installment_total})` : "Renovación",
+    label: (p) => p.installment_total ? `Renovación (Cuota ${p.installment_index ?? 1}/${p.installment_total})` : "Renovación",
     cls: "bg-emerald-100 text-emerald-700 border-emerald-200"
   },
   package_change: {
-    label: (p) => p.installment_total ? `Cambio (Cuota ${p.installment_index}/${p.installment_total})` : "Cambio de Paquete",
+    label: (p) => p.installment_total ? `Cambio (Cuota ${p.installment_index ?? 1}/${p.installment_total})` : "Cambio · Paquete Completo",
     cls: "bg-amber-100 text-amber-700 border-amber-200"
   },
   installment: {

@@ -106,6 +106,31 @@ class WalletResponse(BaseModel):
         from_attributes = True
 
 
+class RefundPaymentInfo(BaseModel):
+    """
+    Datos de destino para el reembolso, tal como los completa el estudiante
+    en el modal de "Solicitar reembolso". Todos los campos son opcionales
+    (el alumno llena el/los que tenga) — si no tiene ninguno de los métodos
+    predefinidos, puede usar `other_notes` como texto libre para el staff.
+    """
+    bank_name: Optional[str] = None
+    bank_account: Optional[str] = None
+    account_holder: Optional[str] = None
+    mobile_payment: Optional[str] = None
+    paypal_or_zelle: Optional[str] = None
+    other_notes: Optional[str] = None
+
+
+class RequestRefundTeacherSuspendedRequest(BaseModel):
+    enrollment_id: int
+    payment_info: Optional[RefundPaymentInfo] = None
+
+
+class RequestRefundCohortCancelledRequest(BaseModel):
+    enrollment_id: int
+    payment_info: Optional[RefundPaymentInfo] = None
+
+
 class WithdrawalRequest(BaseModel):
     amount: float
     destination_method: str   # "paypal", "binance", "bank"
@@ -143,6 +168,11 @@ class NotifyPaymentRequest(BaseModel):
     # Se ignora fuera de ese caso puntual (package_change con 0 créditos
     # usados y el paquete nuevo es un downgrade).
     change_option: Optional[str] = None  # "full_refund" | "adjust_difference"
+    # Cuando la solicitud termina generando un reembolso (payment_type
+    # "refund", ya sea completo o por diferencia), acá van los datos de a
+    # dónde depositarle al estudiante — mismo modal que en
+    # request-refund-teacher-suspended, todos los sub-campos opcionales.
+    payment_info: Optional[RefundPaymentInfo] = None
 
     @field_validator("change_option")
     @classmethod

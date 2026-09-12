@@ -4,6 +4,7 @@ import { useState } from "react";
 import { History, ChevronDown, ChevronUp } from "lucide-react";
 import { Card, Badge, Skeleton } from "@/components/ui";
 import { useGodModeAuditLog, GodModeAuditLogEntry } from "@/hooks/useGodMode";
+import RefreshButton from "@/components/ui/RefreshButton";
 
 const ENTITY_TYPES = ["enrollment", "cohort", "class", "payment", "student", "review"];
 
@@ -67,7 +68,7 @@ function DiffRow({ entry }: { entry: GodModeAuditLogEntry }) {
 
 export default function GodModeAuditLogViewer() {
   const [entityType, setEntityType] = useState<string>("");
-  const { items, total, loading } = useGodModeAuditLog({ entity_type: entityType || undefined, limit: 50 });
+  const { items, total, loading, isFetching, refetch } = useGodModeAuditLog({ entity_type: entityType || undefined, limit: 50 });
 
   return (
     <Card className="p-5 space-y-4">
@@ -77,14 +78,17 @@ export default function GodModeAuditLogViewer() {
           <h3 className="text-sm font-black text-slate-800">Historial de auditoría</h3>
           <Badge variant="neutral">{total}</Badge>
         </div>
-        <select
-          value={entityType}
-          onChange={e => setEntityType(e.target.value)}
-          className="text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600"
-        >
-          <option value="">Todas las entidades</option>
-          {ENTITY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            value={entityType}
+            onChange={e => setEntityType(e.target.value)}
+            className="text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600"
+          >
+            <option value="">Todas las entidades</option>
+            {ENTITY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <RefreshButton onRefresh={refetch} isFetching={isFetching} />
+        </div>
       </div>
 
       {loading ? (

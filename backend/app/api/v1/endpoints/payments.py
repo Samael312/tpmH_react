@@ -48,6 +48,8 @@ from app.schemas.payments import (
     PaymentConfigResponse,
     PaymentResponse,
     ProcessWithdrawalRequest,
+    RequestRefundTeacherSuspendedRequest,
+    RequestRefundCohortCancelledRequest,
     UpdatePaymentConfigRequest,
     ValidatePaymentRequest,
     WalletResponse,
@@ -529,6 +531,19 @@ def book_class(
     if not enrollment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado o no activo")
 
+    # Profesor suspendido/rechazado: el enrollment puede seguir "active" o
+    # "pending_package_change" (ninguno de los dos estados bloquea por sí
+    # solo, ver el filtro de arriba), pero no debe poder agendarse ninguna
+    # clase nueva mientras el profesor no esté disponible. El estudiante
+    # ve sus créditos "congelados" en /users/me/teachers y puede pedir
+    # reembolso vía /payments/request-refund-teacher-suspended.
+    if enrollment.teacher.status != TeacherStatus.approved:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Tu profesor no está disponible en este momento. Tus créditos quedaron congelados: "
+            "puedes solicitar un reembolso desde 'Tus Profesores'."
+        )
+
     can_duration, duration_msg = validate_class_duration(data.duration_minutes, db)
     if not can_duration:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, duration_msg)
@@ -738,6 +753,10 @@ def get_payments_pending_review(
             pkg = db.query(Package).filter(Package.id == pkg_id).first() if pkg_id else None
             entry["package_name"] = pkg.name if pkg else None
             entry["installment_total"] = pkg.installment_count if pkg else None
+        if p.payment_type == "refund":
+            # A dónde tiene que depositar el admin al procesar este reembolso
+            # (ver RefundPaymentInfo — todos los sub-campos son opcionales).
+            entry["refund_payment_info"] = p.refund_payment_info
         result.append(entry)
 
     return result
@@ -790,6 +809,8 @@ def get_payments_history(
             pkg = db.query(Package).filter(Package.id == pkg_id).first() if pkg_id else None
             entry["package_name"] = pkg.name if pkg else None
             entry["installment_total"] = pkg.installment_count if pkg else None
+        if p.payment_type == "refund":
+            entry["refund_payment_info"] = p.refund_payment_info
         result.append(entry)
 
     return result
@@ -804,6 +825,8 @@ def validate_payment(
     payment = db.query(Payment).filter(Payment.id == payment_id, Payment.status == "pending_review").first()
     if not payment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pago no encontrado o ya procesado")
+
+    from app.models.student_teacher_link import StudentTeacherLink
 
     if current_user.role == "teacher":
         if not current_user.teacher_profile or payment.teacher_id != current_user.teacher_profile.id:
@@ -905,6 +928,41 @@ def validate_payment(
 
             if is_full_refund_cancel:
                 enrollment.status = EnrollmentStatus.cancelled
+
+                # Si el reembolso fue por profesor suspendido/rechazado (no
+                # un downgrade voluntario con un profesor que sigue activo),
+                # la relación profesor-estudiante se termina automáticamente
+                # acá mismo — antes quedaba "colgada" (enrollment cancelado
+                # pero el vínculo seguía existiendo) y el estudiante tenía
+                # que ir a buscar manualmente cómo desvincularse antes de
+                # poder elegir un profesor nuevo desde el marketplace.
+                if enrollment.teacher.status != TeacherStatus.approved:
+                    link = db.query(StudentTeacherLink).filter(
+                        StudentTeacherLink.student_id == enrollment.student_id,
+                        StudentTeacherLink.teacher_id == enrollment.teacher_id,
+                    ).first()
+                    if link:
+                        db.delete(link)
+                    teacher_profile = enrollment.teacher
+                    if teacher_profile.students and enrollment.student_id in teacher_profile.students:
+                        teacher_profile.students = [
+                            sid for sid in teacher_profile.students if sid != enrollment.student_id
+                        ]
+
+                    # Cualquier clase que hubiera quedado agendada a futuro
+                    # con este profesor (agendada antes de la suspensión) se
+                    # archiva como cancelada — no se borra de la base de
+                    # datos, queda en el historial, pero no cuenta para el
+                    # nuevo ciclo si este estudiante vuelve a elegir a este
+                    # mismo profesor más adelante una vez reactivado.
+                    future_classes = db.query(Class).filter(
+                        Class.student_id == enrollment.student_id,
+                        Class.teacher_id == enrollment.teacher_id,
+                        Class.start_time_utc > now,
+                        Class.status.notin_(["cancelled", "completed", "no_show", "finalized"]),
+                    ).all()
+                    for cls in future_classes:
+                        cls.status = "cancelled"
             else:
                 target_package_id = (
                     enrollment.renewal_requested_package_id
@@ -1318,11 +1376,31 @@ def get_booking_status(
             "rejected_at": last_payment.validated_at,
         }
 
+    # Recarga de créditos (paquete ilimitado) en revisión: a diferencia de
+    # renovación/cambio de paquete, esto no cambia el `stage` (el estudiante
+    # sigue pudiendo agendar con los créditos que ya tenía), así que sin este
+    # campo no había ninguna forma de que el estudiante supiera que ya
+    # mandó la recarga y está pendiente de que el staff la verifique.
+    pending_recharge_payment = None
+    pending_recharge = db.query(Payment).filter(
+        Payment.student_id == student_id,
+        Payment.teacher_id == teacher.id,
+        Payment.payment_type == "unlimited_recharge",
+        Payment.status == "pending_review",
+    ).order_by(Payment.created_at.desc()).first()
+    if pending_recharge is not None:
+        pending_recharge_payment = {
+            "payment_id": pending_recharge.id,
+            "amount": pending_recharge.amount_total,
+            "created_at": pending_recharge.created_at,
+        }
+
     return {
         "stage": stage,
         "teacher_username": teacher.user_username,
         "enrollment_id": enrollment.id if enrollment else None,
         "last_rejected_payment": last_rejected_payment,
+        "pending_recharge_payment": pending_recharge_payment,
     }
 
 
@@ -1611,6 +1689,10 @@ def notify_payment(
             payment_method="manual", transaction_id=data.transaction_reference,
             status="pending_review", payment_type=payment_type,
             installment_index=None,
+            refund_payment_info=(
+                data.payment_info.model_dump(exclude_none=True)
+                if payment_type == "refund" and data.payment_info else None
+            ),
         )
         db.add(payment)
         db.commit()
@@ -1741,7 +1823,206 @@ def notify_payment(
         
     return {"payment_id": payment.id, "message": "Pago notificado, en espera de aprobación"}
 
-@router.get("/admin/withdrawals/pending")
+
+@router.post("/request-refund-teacher-suspended")
+def request_refund_teacher_suspended(
+    data: RequestRefundTeacherSuspendedRequest,
+    current_user: User = Depends(get_current_student),
+    db: Session = Depends(get_db),
+):
+    """
+    Reembolso disparado por la suspensión/rechazo del profesor del
+    estudiante (no por un downgrade de paquete). Reutiliza el mismo
+    mecanismo que el "reembolso completo" de cambio de paquete (Payment
+    payment_type="refund" sin ningún paquete nuevo solicitado): al
+    aprobarse, /payments/validate/{id} cancela el enrollment
+    automáticamente (ver is_full_refund_cancel). Una vez cancelado, el
+    estudiante puede terminar la relación con este profesor
+    (DELETE /users/me/teachers/{username}, ya no está bloqueado por tener
+    un enrollment activo) y elegir uno nuevo desde el marketplace.
+    """
+    enrollment_id = data.enrollment_id
+    student_id = current_user.student_profile.id
+
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.id == enrollment_id,
+        Enrollment.student_id == student_id,
+    ).first()
+    if not enrollment:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado")
+
+    if enrollment.teacher.status == TeacherStatus.approved:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Tu profesor está disponible — este reembolso solo aplica cuando el profesor "
+            "está suspendido o inhabilitado."
+        )
+
+    if enrollment.status not in (EnrollmentStatus.active, EnrollmentStatus.pending_package_change):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este paquete ya no está activo")
+
+    if db.query(Payment).filter(
+        Payment.enrollment_id == enrollment.id,
+        Payment.status == "pending_review",
+    ).first():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay una solicitud de reembolso en revisión")
+
+    if enrollment.package.classes_count is None:
+        # Paquete ilimitado: el "valor restante" no es 1:1 con un precio
+        # fijo por clase como en los finitos (depende de cuánto se pagó
+        # por cada recarga histórica). Para no inventar un cálculo que
+        # puede quedar mal, se deriva a soporte/admin (God Mode) en vez
+        # de crear un Payment con un monto potencialmente incorrecto.
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Tu paquete es de créditos ilimitados — contacta a soporte para procesar el reembolso "
+            "de tu saldo prepagado manualmente."
+        )
+
+    old_total = enrollment.classes_total or 1
+    old_price = enrollment.package.price
+    occupied_slots = _get_enrollment_occupied_slots(enrollment, db)
+
+    # Monto del reembolso según cuánto del paquete ya se usó:
+    # - Si no usó ningún crédito todavía, se reembolsa el 100% de lo que
+    #   pagó al elegir el paquete (occupied_slots == 0).
+    # - Si ya usó créditos, se reembolsa el valor de los créditos que le
+    #   quedaban disponibles (prorrateado sobre el precio del paquete), no
+    #   el total pagado — ya consumió parte del servicio.
+    if occupied_slots == 0:
+        amount = round(old_price, 2)
+        notify_msg = (
+            f"Se generó una solicitud de reembolso completo de ${amount:.2f} porque tu profesor "
+            "no está disponible. Tu paquete quedará cancelado una vez que el staff procese la "
+            "devolución; podrás elegir un profesor nuevo cuando quieras."
+        )
+    else:
+        price_per_class = old_price / old_total
+        amount = round(price_per_class * (old_total - occupied_slots), 2)
+        if amount <= 0:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Ya usaste todas las clases de este paquete, no queda saldo por reembolsar."
+            )
+        notify_msg = (
+            f"Se generó una solicitud de reembolso de ${amount:.2f} (valor de tus créditos "
+            "disponibles) porque tu profesor no está disponible. En espera de aprobación."
+        )
+
+    duplicate = _find_recent_duplicate_payment(
+        db, student_id, "refund", amount, enrollment_id=enrollment.id,
+    )
+    if duplicate:
+        return {"payment_id": duplicate.id, "message": notify_msg}
+
+    enrollment.status = EnrollmentStatus.pending_package_change
+    enrollment.change_requested_package_id = None
+    enrollment.renewal_requested_package_id = None
+    db.commit()
+
+    payment = Payment(
+        enrollment_id=enrollment.id, student_id=student_id, teacher_id=enrollment.teacher_id,
+        amount_total=amount, amount_teacher=0, amount_platform=0,
+        payment_method="manual", transaction_id=None,
+        status="pending_review", payment_type="refund",
+        installment_index=None,
+        refund_payment_info=data.payment_info.model_dump(exclude_none=True) if data.payment_info else None,
+    )
+    db.add(payment)
+    db.commit()
+    db.refresh(payment)
+
+    admin_emails = [a.email for a in db.query(User).filter(User.role == UserRole.superadmin, User.is_active == True).all()]
+    for admin_email in admin_emails:
+        send_admin_payment_pending_email(
+            to_email=admin_email,
+            student_name=current_user.name,
+            amount=amount,
+            concept="refund",
+            payment_method="manual",
+            transaction_reference=None,
+        )
+
+    return {"payment_id": payment.id, "message": notify_msg}
+
+
+@router.post("/request-refund-cohort-cancelled")
+def request_refund_cohort_cancelled(
+    data: RequestRefundCohortCancelledRequest,
+    current_user: User = Depends(get_current_student),
+    db: Session = Depends(get_db),
+):
+    """
+    Reembolso por una cohorte grupal que el profesor canceló (F3 del
+    roadmap de verificación). A diferencia del reembolso por profesor
+    suspendido, acá siempre es el 100% de lo pagado: el grupo nunca llegó
+    a arrancar (o se abortó), no hay "clases ya tomadas" que descontar.
+    Mientras este reembolso esté pendiente, get_student_booking_stage()
+    devuelve "needs_group_refund" en vez de "needs_package" — así el
+    estudiante ve primero el aviso de grupo cancelado, y recién después
+    de que el staff apruebe/rechace el reembolso puede elegir un paquete
+    o grupo nuevo.
+    """
+    from app.models.group_cohort import GroupCohort, CohortStatus
+
+    student_id = current_user.student_profile.id
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.id == data.enrollment_id,
+        Enrollment.student_id == student_id,
+    ).first()
+    if not enrollment:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado")
+
+    if not enrollment.cohort_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este paquete no es una cohorte grupal")
+
+    cohort = db.query(GroupCohort).filter(GroupCohort.id == enrollment.cohort_id).first()
+    if not cohort or cohort.status != CohortStatus.cancelled:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Este reembolso solo aplica cuando la cohorte fue cancelada por el profesor."
+        )
+
+    if enrollment.payment_status != "paid":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No hay ningún pago confirmado que reembolsar")
+
+    if db.query(Payment).filter(
+        Payment.enrollment_id == enrollment.id,
+        Payment.payment_type == "refund",
+        Payment.status.in_(["pending_review", "approved"]),
+    ).first():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay una solicitud de reembolso en curso para este grupo")
+
+    amount = round(enrollment.package.price, 2)
+    notify_msg = (
+        f"Se generó una solicitud de reembolso de ${amount:.2f} porque el grupo fue cancelado. "
+        "En cuanto el staff la procese, vas a poder elegir un paquete o grupo nuevo."
+    )
+
+    payment = Payment(
+        enrollment_id=enrollment.id, student_id=student_id, teacher_id=enrollment.teacher_id,
+        amount_total=amount, amount_teacher=0, amount_platform=0,
+        payment_method="manual", transaction_id=None,
+        status="pending_review", payment_type="refund",
+        installment_index=None,
+        refund_payment_info=data.payment_info.model_dump(exclude_none=True) if data.payment_info else None,
+    )
+    db.add(payment)
+    db.commit()
+    db.refresh(payment)
+
+    admin_emails = [a.email for a in db.query(User).filter(User.role == UserRole.superadmin, User.is_active == True).all()]
+    for admin_email in admin_emails:
+        send_admin_payment_pending_email(
+            to_email=admin_email,
+            student_name=current_user.name,
+            amount=amount,
+            concept="refund",
+            payment_method="manual",
+            transaction_reference=None,
+        )
+
+    return {"payment_id": payment.id, "message": notify_msg}
 def get_pending_withdrawals(
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db),

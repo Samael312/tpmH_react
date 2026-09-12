@@ -475,9 +475,47 @@ def get_student_booking_stage(student_id: int, teacher_id: int, db: Session) -> 
     if pending_renewal:
         return "renewal_pending"
 
+    # F3: si una cohorte a la que este estudiante estaba inscrito (y ya
+    # había pagado) fue cancelada por el profesor, no lo mandamos derecho a
+    # "elegir paquete nuevo" — primero tiene que resolver el reembolso de lo
+    # que pagó para entrar a ese grupo. Una vez que el staff aprueba (o
+    # rechaza) ese reembolso, el enrollment deja de calificar acá (el
+    # Payment ya no está "pending_review") y sigue el flujo normal.
+    from app.models.group_cohort import GroupCohort, CohortStatus
+    cohort_cancelled_pending_refund = (
+        db.query(Enrollment)
+        .join(GroupCohort, Enrollment.cohort_id == GroupCohort.id)
+        .filter(
+            Enrollment.student_id == student_id,
+            Enrollment.teacher_id == teacher_id,
+            Enrollment.status == EnrollmentStatus.cancelled,
+            Enrollment.payment_status == "paid",
+            GroupCohort.status == CohortStatus.cancelled,
+        )
+        .order_by(Enrollment.id.desc())
+        .first()
+    )
+    if cohort_cancelled_pending_refund:
+        already_refunded = db.query(Payment).filter(
+            Payment.enrollment_id == cohort_cancelled_pending_refund.id,
+            Payment.payment_type == "refund",
+            Payment.status.in_(["pending_review", "approved"]),
+        ).first()
+        if not already_refunded:
+            return "needs_group_refund"
+
     any_enrollment_ever = db.query(Enrollment).filter(
         Enrollment.student_id == student_id,
         Enrollment.teacher_id == teacher_id,
+        # No cuenta un enrollment "cancelled": ese es el estado que queda
+        # tras un reembolso completo (ej. profesor suspendido) — la relación
+        # se considera reiniciada, así que un enrollment cancelado no debe
+        # forzar a este estudiante a "needs_renewal" si vuelve a elegir a
+        # este mismo profesor más adelante. Antes esto rompía la elección de
+        # paquete con "Paquete no encontrado o no disponible", porque el
+        # flujo de renovación exigía un enrollment activo/completado que ya
+        # no existía.
+        Enrollment.status != EnrollmentStatus.cancelled,
     ).first()
     if any_enrollment_ever:
         return "needs_renewal"

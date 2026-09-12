@@ -3,7 +3,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, X, Loader2, CreditCard, Split } from "lucide-react";
+import { Check, X, Loader2, CreditCard, Split, Building2, Smartphone, Wallet, StickyNote } from "lucide-react";
 import api from "@/lib/api";
 import PaymentMethodsInfo from "./PaymentMethodsInfo";
 import { useToast } from "@/hooks/useToast";
@@ -63,6 +63,12 @@ export default function PackageCheckout({
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  // Mismos campos que el modal de "Solicitar reembolso" por profesor
+  // suspendido — todos opcionales, el estudiante llena el/los que tenga.
+  const [refundForm, setRefundForm] = useState({
+    bank_name: "", bank_account: "", account_holder: "",
+    mobile_payment: "", paypal_or_zelle: "", other_notes: "",
+  });
   const toast = useToast();
 
   const alreadyMidInstallments = installmentsPaid > 0;
@@ -140,6 +146,9 @@ export default function PackageCheckout({
     setError("");
     try {
       const typeMap = { initial: "package", renewal: "renewal", change: "package_change" } as const;
+      const payment_info = isRefund
+        ? Object.fromEntries(Object.entries(refundForm).filter(([, v]) => v.trim() !== ""))
+        : undefined;
       await api.post("/payments/notify-payment", {
         type: typeMap[mode],
         enrollment_id: enrollmentId ?? undefined,
@@ -153,6 +162,7 @@ export default function PackageCheckout({
         credits_requested: isUnlimited && !isChange ? creditsRequested : undefined,
         change_option: isChange && isDowngrade && occupiedSlots === 0 ? (changeOption ?? "adjust_difference") : undefined,
         transaction_reference: reference.trim() || undefined,
+        payment_info: payment_info && Object.keys(payment_info).length ? payment_info : undefined,
       });
       setDone(true);
       toast.success("Solicitud de pago enviada correctamente");
@@ -330,18 +340,85 @@ export default function PackageCheckout({
         </div>
 
         <div>
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-            {isRefund ? "Dónde enviarte el reembolso (opcional)" : "Mensaje de transacción (opcional)"}
-          </label>
-          <input
-            type="text" value={reference} onChange={(e) => setReference(e.target.value)}
-            placeholder={isRefund ? "Ej: mismo método con el que pagaste, cuenta, email de PayPal..." : "Ej: últimos 4 dígitos..."}
-            disabled={isInstantSwitchToUnlimited}
-            className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-xs font-bold
-                       text-slate-800 placeholder:text-slate-400 px-4 py-3.5 focus:outline-none
-                       focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all
-                       disabled:opacity-50"
-          />
+          {isRefund ? (
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                Dónde enviarte el reembolso (todo opcional)
+              </label>
+              <div className="space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <p className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <Building2 className="w-3.5 h-3.5" /> Transferencia bancaria
+                </p>
+                <input
+                  placeholder="Banco"
+                  value={refundForm.bank_name}
+                  onChange={e => setRefundForm({ ...refundForm, bank_name: e.target.value })}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs"
+                />
+                <input
+                  placeholder="Número de cuenta / CLABE / IBAN"
+                  value={refundForm.bank_account}
+                  onChange={e => setRefundForm({ ...refundForm, bank_account: e.target.value })}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs"
+                />
+                <input
+                  placeholder="Nombre del titular"
+                  value={refundForm.account_holder}
+                  onChange={e => setRefundForm({ ...refundForm, account_holder: e.target.value })}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs"
+                />
+              </div>
+              <div className="space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <p className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <Smartphone className="w-3.5 h-3.5" /> Pago móvil
+                </p>
+                <input
+                  placeholder="Teléfono / cédula / banco del pago móvil"
+                  value={refundForm.mobile_payment}
+                  onChange={e => setRefundForm({ ...refundForm, mobile_payment: e.target.value })}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs"
+                />
+              </div>
+              <div className="space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <p className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <Wallet className="w-3.5 h-3.5" /> PayPal / Zelle
+                </p>
+                <input
+                  placeholder="Email de PayPal o Zelle"
+                  value={refundForm.paypal_or_zelle}
+                  onChange={e => setRefundForm({ ...refundForm, paypal_or_zelle: e.target.value })}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <p className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <StickyNote className="w-3.5 h-3.5" /> ¿Ninguno de estos? Dejanos una nota
+                </p>
+                <textarea
+                  placeholder="Ej: solo tengo Binance, mi usuario es..."
+                  value={refundForm.other_notes}
+                  onChange={e => setRefundForm({ ...refundForm, other_notes: e.target.value })}
+                  rows={2}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs resize-none"
+                />
+              </div>
+            </div>
+          ) : (
+            <>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                Mensaje de transacción (opcional)
+              </label>
+              <input
+                type="text" value={reference} onChange={(e) => setReference(e.target.value)}
+                placeholder="Ej: últimos 4 dígitos..."
+                disabled={isInstantSwitchToUnlimited}
+                className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-xs font-bold
+                           text-slate-800 placeholder:text-slate-400 px-4 py-3.5 focus:outline-none
+                           focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all
+                           disabled:opacity-50"
+              />
+            </>
+          )}
         </div>
       </div>
 

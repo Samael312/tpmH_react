@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Check, Loader2, AlertCircle, Calendar, UserCheck, MessageCircle, Star } from "lucide-react";
+import Link from "next/link";
+import { Check, Loader2, AlertCircle, Calendar, UserCheck, MessageCircle, Star, ArrowLeft } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
-import { useMyTeachers } from "@/hooks/useStudentData";
+import { useMyTeachers, usePlatformConfig } from "@/hooks/useStudentData";
 import PublicProfileView, { PublicProfileTeacher, PublicProfileReview } from "@/components/teacher/PublicProfileView";
 import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
-import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
@@ -28,7 +28,10 @@ export default function TeacherBrowsePage() {
   const username = params?.username as string;
 
   const { teachers: myTeachers, isSingleTenant, refetch: refetchMyTeachers } = useMyTeachers();
+  const { config: platformConfig } = usePlatformConfig();
   const isMine = myTeachers.some(t => t.teacher_username === username);
+  const myStage = myTeachers.find(t => t.teacher_username === username)?.stage;
+  const trialPending = !myStage || myStage === "needs_trial" || myStage === "trial_in_progress";
   const queryClient = useQueryClient();
 
   const [unlinking, setUnlinking] = useState(false);
@@ -177,14 +180,21 @@ export default function TeacherBrowsePage() {
 
   return (
     <>
-      <DesktopOnly>
-        <div className="max-w-5xl mx-auto px-4 pt-4 flex justify-end">
-          <RefreshButton onRefresh={refetch} isFetching={isFetching} />
-        </div>
-      </DesktopOnly>
       <PublicProfileView
         teacher={teacher}
         reviews={reviews}
+        topLeftAction={
+          !isSingleTenant ? (
+            <Link
+              href="/dashboard/teachers"
+              className="flex items-center gap-1.5 text-sm font-bold text-white/90 hover:text-white bg-white/15 backdrop-blur-md px-2 py-1 rounded-xl transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" /> Volver al marketplace
+            </Link>
+          ) : undefined
+        }
+        topRightAction={<RefreshButton onRefresh={refetch} isFetching={isFetching} />}
+        showWhatsapp={platformConfig?.show_teacher_whatsapp ?? true}
         heroActions={
           <>
             {!isSingleTenant && (
@@ -222,10 +232,10 @@ export default function TeacherBrowsePage() {
               onClick={() => router.push("/dashboard/schedule")}
               className="flex items-center justify-center gap-2 bg-white/20 hover:bg-white/30 backdrop-blur-md px-5 py-3 rounded-2xl text-sm font-bold transition-all duration-200 shadow-lg"
             >
-              <Calendar className="w-4 h-4" /> Agendar clase de prueba
+              <Calendar className="w-4 h-4" /> {trialPending ? "Agendar clase de prueba" : "Agendar clase"}
             </button>
 
-            {teacher.social_links?.whatsapp && (
+            {teacher.social_links?.whatsapp && (platformConfig?.show_teacher_whatsapp ?? true) && (
               <button
                 onClick={openWhatsapp}
                 className="flex items-center justify-center gap-2 bg-white/20 hover:bg-white/30 backdrop-blur-md px-5 py-3 rounded-2xl text-sm font-bold transition-all duration-200 shadow-lg"

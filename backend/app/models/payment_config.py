@@ -52,6 +52,11 @@ class PlatformConfig(Base):
     # link si todavía no tiene uno asignado. Ver core/class_logic.py.
     meet_link_autogen_minutes = Column(Integer, default=30)
 
+    # Interruptor global: oculta el botón de WhatsApp de TODOS los
+    # profesores en el frontend (preview, ClassCard), sin importar qué
+    # cada uno haya cargado en su propio social_links.whatsapp.
+    show_teacher_whatsapp = Column(Boolean, default=True, server_default="true")
+
 # backend/app/models/payment_config.py
 class PaymentConfig(Base):
     __tablename__ = "payment_config"
@@ -73,6 +78,5 @@ class PaymentConfig(Base):
 
     whatsapp_number = Column(String, nullable=True)
     default_commission_rate = Column(Float, default=0.15)
-
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     updated_by = Column(Integer, nullable=True)

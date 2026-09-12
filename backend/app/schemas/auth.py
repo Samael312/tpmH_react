@@ -84,7 +84,10 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     role: str
     name: str
+    surname: str
     username: str
+    email: str
+    avatar_url: str | None = None
 
 class GoogleAuthRequest(BaseModel):
     """Token que manda Google después del login"""

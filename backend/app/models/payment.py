@@ -1,5 +1,6 @@
 # models/payment.py
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
@@ -44,6 +45,12 @@ class Payment(Base):
     validated_by = Column(Integer, nullable=True)    # user_id
     validated_at = Column(DateTime(timezone=True), nullable=True)
     rejection_reason = Column(String, nullable=True)
+
+    # Datos de destino para reembolsos (payment_type="refund"): a dónde
+    # quiere el estudiante que se le devuelva el dinero. Todo opcional —
+    # ver schemas.payments.RefundPaymentInfo. None en cualquier otro tipo
+    # de pago.
+    refund_payment_info = Column(JSONB, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

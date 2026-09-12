@@ -207,7 +207,7 @@ function StepPreferences({
     return Boolean(goal && !ALL_GOALS.some((g) => g.text === goal));
   });
 
-  const valid = Boolean(timezone && goal.trim() && phone.trim() && nationality);
+  const valid = Boolean(avatarPreview && timezone && goal.trim() && phone.trim() && nationality);
 
   const COUNTRY_OPTIONS = useMemo(() => {
     const map = new Map<string, CountryInfo>();
@@ -233,7 +233,7 @@ function StepPreferences({
         <p className="text-slate-500 text-lg mt-2">Cuéntanos sobre ti para personalizar tu experiencia.</p>
       </div>
 
-      {/* ─── Foto de Perfil (Opcional) ─── */}
+      {/* ─── Foto de Perfil (Obligatoria) ─── */}
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col sm:flex-row items-center gap-6">
         <div className="relative flex-shrink-0">
           <div className="w-24 h-24 rounded-full overflow-hidden bg-slate-100 border-2 border-slate-200 flex items-center justify-center relative shadow-inner">
@@ -257,7 +257,7 @@ function StepPreferences({
         <div className="text-center sm:text-left flex-1">
           <div className="flex items-center justify-center sm:justify-start gap-2">
             <span className="font-bold text-slate-800 text-base">Foto de perfil</span>
-            <span className="text-xs font-semibold bg-slate-100 text-slate-500 px-2.5 py-0.5 rounded-full">Opcional</span>
+            <span className="text-xs font-semibold bg-pink-50 text-pink-500 px-2.5 py-0.5 rounded-full">Obligatoria</span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
             Sube una foto clara para que tus profesores puedan reconocerte fácilmente.
@@ -738,7 +738,7 @@ function StepSuccess({ name }: { name: string }) {
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function OnboardingPage() {
   const router = useRouter();
-  const { user, setUser } = useAuthStore();
+  const { user, setUser, logout } = useAuthStore();
   const [nationality, setNationality] = useState("");
   const [step, setStep] = useState(1);
   const TOTAL_STEPS = 5;
@@ -857,7 +857,16 @@ export default function OnboardingPage() {
         <SidebarProgress step={step} name={name} />
 
         <div className="flex-1 flex flex-col justify-center px-6 py-12 md:px-12 overflow-y-auto relative">
-          
+          {/* Salida de emergencia: mismo patrón que teacher/onboarding — si el
+              usuario llegó acá por error, tiene que poder volver al login sin
+              quedar atrapado, ya que el onboarding no tiene otro link de nav. */}
+          <button
+            onClick={() => { logout(); router.push("/login"); }}
+            className="absolute top-6 left-6 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors z-50"
+          >
+            ¿Quieres hacerlo después, {name}? Cerrar sesión
+          </button>
+
           {/* Banner de error seguro contra objetos React */}
           {error && (
             <div className="absolute top-6 right-6 left-6 md:left-auto max-w-sm bg-rose-50 border border-rose-200 text-rose-700 px-5 py-4 rounded-2xl text-sm font-bold flex items-start gap-3 shadow-lg z-50 animate-in slide-in-from-top-5">

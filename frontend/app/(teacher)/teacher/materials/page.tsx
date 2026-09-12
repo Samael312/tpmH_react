@@ -14,7 +14,7 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 // in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { TOPICS as FALLBACK_TOPICS, LEVELS as FALLBACK_LEVELS } from "@/lib/teacherOptions";
-import { useTeacherMaterials, useTeacherStudentsBasic, type TeacherMaterial as Material } from "@/hooks/useTeacherData";
+import { useTeacherMaterials, useTeacherStudentsBasic, useCohortMembers, type TeacherMaterial as Material } from "@/hooks/useTeacherData";
 import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
@@ -131,6 +131,10 @@ function AssignModal({
   const [search, setSearch]     = useState("");
   const [cohorts, setCohorts] = useState<TeacherCohort[]>([]);
   const [cohortId, setCohortId] = useState<number | null>(null);
+  // Integrantes del grupo elegido, solo para resaltarlos en la lista de
+  // abajo (misma lógica que en teacher/homework — F13).
+  const { members: cohortMembers } = useCohortMembers(cohortId);
+  const cohortMemberIds = new Set(cohortMembers.map(m => m.student_id));
   const toast = useToast();
 
   useEffect(() => {
@@ -287,7 +291,9 @@ function AssignModal({
                 <p className="text-sm text-slate-400 text-center py-6">
                   Sin resultados para “{search}”
                 </p>
-              ) : filtered.map(s => (
+              ) : filtered.map(s => {
+                const inSelectedCohort = cohortMemberIds.has(s.id);
+                return (
                 <button
                   key={s.id}
                   onClick={() => toggle(s.id)}
@@ -295,6 +301,8 @@ function AssignModal({
                     rounded-2xl border-2 transition-all duration-200 text-left
                     ${selected.includes(s.id)
                       ? "border-pink-400 bg-pink-50"
+                      : inSelectedCohort
+                      ? "border-indigo-300 bg-indigo-50/60"
                       : "border-slate-100 bg-white hover:border-slate-200"
                     }`}
                 >
@@ -304,12 +312,20 @@ function AssignModal({
                       {s.name} {s.surname}
                     </p>
                     <p className="text-xs text-slate-400">@{s.username}</p>
+                    {inSelectedCohort && !selected.includes(s.id) && (
+                      <p className="text-[10px] font-black text-indigo-500 uppercase tracking-wide mt-0.5">
+                        Ya está en el grupo
+                      </p>
+                    )}
                   </div>
-                  {selected.includes(s.id) && (
+                  {selected.includes(s.id) ? (
                     <Check className="w-4 h-4 text-pink-500 ml-auto flex-shrink-0" />
-                  )}
+                  ) : inSelectedCohort ? (
+                    <Users className="w-4 h-4 text-indigo-400 ml-auto flex-shrink-0" />
+                  ) : null}
                 </button>
-              ))}
+                );
+              })}
             </div>
 
             <button

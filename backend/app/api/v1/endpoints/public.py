@@ -109,6 +109,10 @@ def _build_landing_response(db: Session) -> LandingResponse:
             .filter(
                 TeacherProfile.status == TeacherStatus.approved,
                 User.is_test_account.is_(False),
+                # Solo profesores con avatar configurado: evita el círculo
+                # de 80px con la inicial desproporcionada en el landing.
+                TeacherProfile.profile_photo_url.isnot(None),
+                TeacherProfile.profile_photo_url != "",
             )
             # ORDER BY random() en vez de id.asc(): así no son siempre los
             # mismos 5 primeros que se registraron — la muestra rota en

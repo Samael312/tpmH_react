@@ -369,9 +369,6 @@ export default function ChipiWidget({ screenName }: ChipiWidgetProps) {
             <div>
               <div className="flex items-center gap-1.5">
                 <h3 className="text-white font-black text-sm tracking-tight leading-none">Chipi AI</h3>
-                <span className="bg-white/20 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase">
-                  Beta
-                </span>
               </div>
               <p className="text-white/80 text-[11px] font-medium mt-0.5 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />

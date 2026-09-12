@@ -100,7 +100,7 @@ function Navbar({ platformName, navItems }: { platformName: string; navItems: Na
 }
 
 // ─── Avatar con fallback a iniciales ──────────────────────────────────────────
-function TeacherAvatar({ teacher, className, sizes = "200px", priority = false }: { teacher: LandingTeacher | undefined; className?: string; sizes?: string; priority?: boolean }) {
+function TeacherAvatar({ teacher, className, sizes = "200px", priority = false, textSize = "text-3xl" }: { teacher: LandingTeacher | undefined; className?: string; sizes?: string; priority?: boolean; textSize?: string }) {
   const name = displayName(teacher);
   const photo = teacher?.profile_photo_url;
   if (photo) {
@@ -113,7 +113,7 @@ function TeacherAvatar({ teacher, className, sizes = "200px", priority = false }
   }
   return (
     <div className={`${className} bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center`}>
-      <span className="text-3xl font-black text-white/90">{name[0]?.toUpperCase() ?? "T"}</span>
+      <span className={`${textSize} font-black text-white/90`}>{name[0]?.toUpperCase() ?? "T"}</span>
     </div>
   );
 }
@@ -435,7 +435,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
               {teachers.map((t, idx) => (
                 <Reveal key={t.user_username} delay={(idx % 3) * 100} className="bg-white/80 backdrop-blur-sm rounded-[2rem] border border-rose-100 shadow-xl p-6 flex flex-col items-center text-center hover:-translate-y-1 hover:shadow-2xl transition-all duration-300">
                   <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-white shadow-lg ring-1 ring-rose-200 mb-4">
-                    <TeacherAvatar teacher={t} className="object-cover" sizes="80px" />
+                    <TeacherAvatar teacher={t} className="object-cover" sizes="80px" textSize="text-xl" />
                   </div>
                   <h3 className="font-extrabold text-slate-900 text-lg">{displayName(t)}</h3>
                   {t.title && <p className="text-xs text-slate-500 mt-1">{t.title}</p>}
@@ -513,15 +513,15 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                 const priceSuffix = priceLabelSuffix(pkg.classes_count);
                 const priceDisplay = Number.isInteger(pkg.price) ? pkg.price : pkg.price.toFixed(2);
 
+                const autoFacts: string[] = [
+                  pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
+                  `${pkg.duration_minutes} min por clase`,
+                  "Modalidad 100% online",
+                ];
                 const bullets: string[] =
                   pkg.description_type === "list" && pkg.description_items?.length
-                    ? pkg.description_items
-                    : [
-                        pkg.classes_count == null ? "Clases ilimitadas" : `${pkg.classes_count} clases`,
-                        `${pkg.duration_minutes} min por clase`,
-                        "Modalidad 100% online",
-                        ...(pkg.description ? [pkg.description] : []),
-                      ];
+                    ? [...autoFacts, ...pkg.description_items]
+                    : [...autoFacts, ...(pkg.description ? [pkg.description] : [])];
 
                 return (
                   <Reveal

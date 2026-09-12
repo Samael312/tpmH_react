@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useAuthStore } from '@/store/authStore'
 
 export type DashboardTopbarVariant = 'student' | 'teacher' | 'admin'
@@ -76,12 +77,20 @@ export default function DashboardTopbar({ variant }: { variant: DashboardTopbarV
           <span className={cfg.roleLabelClass}>{cfg.roleLabel}</span>
         </div>
         {cfg.avatar === 'circle' ? (
-          <div className="w-10 h-10 rounded-full bg-pink-100 border-2 border-white shadow-sm flex items-center justify-center text-pink-500 font-bold">
-            {user?.name?.charAt(0)}
+          <div className="relative w-10 h-10 rounded-full bg-pink-100 border-2 border-white shadow-sm flex items-center justify-center text-pink-500 font-bold overflow-hidden">
+            {user?.avatar_url ? (
+              <Image src={user.avatar_url} alt={user.name} fill sizes="40px" className="object-cover" />
+            ) : (
+              user?.name?.charAt(0)
+            )}
           </div>
         ) : (
-          <div className="w-10 h-10 rounded-[10px] bg-gradient-to-br from-pink-100 to-rose-50 border border-pink-200 shadow-inner flex items-center justify-center text-pink-600 font-black text-lg">
-            {user?.name?.[0] || 'A'}
+          <div className="relative w-10 h-10 rounded-[10px] bg-gradient-to-br from-pink-100 to-rose-50 border border-pink-200 shadow-inner flex items-center justify-center text-pink-600 font-black text-lg overflow-hidden">
+            {user?.avatar_url ? (
+              <Image src={user.avatar_url} alt={user.name} fill sizes="40px" className="object-cover" />
+            ) : (
+              user?.name?.[0] || 'A'
+            )}
           </div>
         )}
       </div>

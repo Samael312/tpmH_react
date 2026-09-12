@@ -57,6 +57,7 @@ class PlatformConfigUpdate(BaseModel):
     platform_tagline: Optional[str] = None
     is_single_tenant: Optional[bool] = None
     featured_teacher_username: Optional[str] = None
+    show_teacher_whatsapp: Optional[bool] = None
 
 
 # ─── DEPENDENCIES ───────────────────────────────────────────────────────────
@@ -1003,6 +1004,8 @@ def update_platform_config(
         config.platform_tagline = data.platform_tagline
     if data.is_single_tenant is not None:
         config.is_single_tenant = data.is_single_tenant
+    if data.show_teacher_whatsapp is not None:
+        config.show_teacher_whatsapp = data.show_teacher_whatsapp
 
     switching_to_multi = (
         was_single_tenant

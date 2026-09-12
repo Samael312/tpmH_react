@@ -25,6 +25,15 @@ import {
 const NOTIF_ICON: Record<string, React.ReactNode> = {
   teacher_pending: <Video className="w-4 h-4" />,
   teacher_appeal: <MessageSquare className="w-4 h-4" />,
+  support_ticket: <Bell className="w-4 h-4" />,
+}
+
+// A qué pantalla lleva "Revisar" según el tipo de notificación — antes
+// siempre apuntaba a /admin/support sin importar de qué se trataba.
+const NOTIF_TARGET: Record<string, string> = {
+  teacher_pending: "/admin/teachers?tab=pending&video=1",
+  teacher_appeal: "/admin/teachers?tab=pending",
+  support_ticket: "/admin/support",
 }
 
 // ─── Sección de notificaciones (independiente, arriba de todo) ─────────────
@@ -118,7 +127,7 @@ function NotificationsSection() {
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <Link
-                  href="/admin/support"
+                  href={NOTIF_TARGET[n.type] ?? "/admin/support"}
                   className="text-xs font-bold text-pink-600 hover:text-pink-700 bg-white px-3 py-1.5 rounded-lg border border-pink-100 transition-colors"
                 >
                   Revisar

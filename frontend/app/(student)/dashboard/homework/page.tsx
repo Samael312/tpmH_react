@@ -405,7 +405,7 @@ function HomeworkCard({
               {isOverdue
                 ? "Vencida"
                 : daysLeft === 0
-                ? "Vence hoy"
+                ? `Vence hoy a las ${new Date(hw.homework.due_date_utc).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}`
                 : daysLeft === 1
                 ? "Vence mañana"
                 : `${daysLeft} días`}

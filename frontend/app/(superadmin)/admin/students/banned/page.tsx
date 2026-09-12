@@ -11,6 +11,7 @@ import { getFlagForNationality } from '@/lib/nationalities'
 import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
+import ConfirmModal from '@/components/ui/ConfirmModal'
 import { usePageTopBar } from '@/lib/mobileTopBar'
 import { useToast } from '@/hooks/useToast'
 import { getErrorMessage } from '@/lib/errorMessage'
@@ -18,6 +19,7 @@ import { getErrorMessage } from '@/lib/errorMessage'
 export default function BannedStudentsPage() {
   const { students, loading, isFetching, isError, refetch } = useBannedStudents()
   const [revertingId, setRevertingId] = useState<number | null>(null)
+  const [confirmTarget, setConfirmTarget] = useState<Student | null>(null)
   const toast = useToast()
 
   usePageTopBar({
@@ -27,7 +29,6 @@ export default function BannedStudentsPage() {
   })
 
   const revert = async (id: number) => {
-    if (!confirm('¿Reactivar a este estudiante? Podrá volver a iniciar sesión y agendar clases.')) return
     setRevertingId(id)
     try {
       await api.post(`/admin/students/${id}/unban`)
@@ -37,6 +38,7 @@ export default function BannedStudentsPage() {
       toast.error(getErrorMessage(e, 'No se pudo revertir el baneo del estudiante'))
     } finally {
       setRevertingId(null)
+      setConfirmTarget(null)
     }
   }
 
@@ -133,7 +135,7 @@ export default function BannedStudentsPage() {
 
                   <div className="flex justify-end">
                     <button
-                      onClick={() => revert(student.id)}
+                      onClick={() => setConfirmTarget(student)}
                       disabled={revertingId === student.id}
                       className="flex items-center gap-1.5 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl border border-emerald-200 transition-all active:scale-95 disabled:opacity-50"
                     >
@@ -147,6 +149,16 @@ export default function BannedStudentsPage() {
           )}
         </Card>
       </div>
+      <ConfirmModal
+        open={!!confirmTarget}
+        title="Reactivar estudiante"
+        description={confirmTarget ? `¿Reactivar a ${confirmTarget.name} ${confirmTarget.surname}? Podrá volver a iniciar sesión y agendar clases.` : ''}
+        confirmLabel="Reactivar"
+        variant="primary"
+        onClose={() => setConfirmTarget(null)}
+        onConfirm={() => { if (confirmTarget) return revert(confirmTarget.id) }}
+        loading={!!revertingId}
+      />
       <ChipiWidget screenName="admin_students_banned" />
     </>
   )

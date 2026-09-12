@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Calendar, ChevronLeft,
-  ChevronRight, AlertCircle, X, Check
+  ChevronRight, AlertCircle, X, Check, SlidersHorizontal, User, BookOpen
 } from "lucide-react";
-import { useStudentClasses, StudentClass } from "@/hooks/useStudentData";
+import { useStudentClasses, usePlatformConfig, StudentClass } from "@/hooks/useStudentData";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import ClassCard from "@/components/classes/ClassCard";
@@ -21,6 +21,74 @@ import { getErrorMessage } from "@/lib/errorMessage";
 import { useNow } from "@/lib/useNow";
 
 const HISTORY_STATUSES = ["completed", "cancelled", "no_show", "finalized"];
+
+// ─── Filtro estilizado ──────────────────────────────────────────────────────
+// F8: un <select> nativo no permite estilar el contenido del desplegable de
+// forma consistente entre navegadores (solo el control cerrado). Este
+// dropdown custom reemplaza el <select> para que las opciones abiertas
+// también lleven el estilo de la plataforma.
+function StyledSelect({
+  icon: Icon,
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  const selectedLabel = options.find(o => o.value === value)?.label ?? placeholder;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 text-xs font-bold border-2 border-transparent rounded-xl pl-3 pr-8 py-2.5 bg-white shadow-sm text-slate-700
+                   focus:outline-none focus:border-pink-400 focus:ring-4 focus:ring-pink-50 transition-all cursor-pointer"
+      >
+        <Icon className="w-3.5 h-3.5 text-pink-400 flex-shrink-0" />
+        <span className="max-w-[140px] truncate">{selectedLabel}</span>
+        <ChevronRight className={`w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 transition-transform duration-200 ${open ? "-rotate-90" : "rotate-90"}`} />
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1.5 min-w-full w-max max-h-64 overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+          <button
+            type="button"
+            onClick={() => { onChange(""); setOpen(false); }}
+            className={`w-full text-left px-3.5 py-2 text-xs font-bold transition-colors ${value === "" ? "text-pink-600 bg-pink-50" : "text-slate-600 hover:bg-slate-50"}`}
+          >
+            {placeholder}
+          </button>
+          {options.map(o => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => { onChange(o.value); setOpen(false); }}
+              className={`w-full text-left px-3.5 py-2 text-xs font-bold transition-colors whitespace-nowrap ${value === o.value ? "text-pink-600 bg-pink-50" : "text-slate-600 hover:bg-slate-50"}`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Modal Cancelar ───────────────────────────────────────────────────────────
 function CancelModal({
@@ -304,6 +372,7 @@ export default function MyClassesPage() {
   // porque refetch() sólo refresca la query activa, causando que el conteo
   // de "Próximas" fluctuara al alternar entre tabs.
   const { classes, loading, isFetching, refetch } = useStudentClasses(true);
+  const { config: platformConfig } = usePlatformConfig();
 
   usePageTopBar({
     title: "Mis Clases",
@@ -311,7 +380,30 @@ export default function MyClassesPage() {
     isFetching,
   });
 
-  const safeClasses = Array.isArray(classes) ? classes : [];
+  const safeClasses = useMemo(() => (Array.isArray(classes) ? classes : []), [classes]);
+
+  // El filtro por profesor/asignatura solo tiene sentido cuando el
+  // estudiante tiene más de un profesor (multi-tenant) o dicta más de una
+  // asignatura — si no, no hay nada que filtrar y solo sería ruido visual.
+  const uniqueTeachers = useMemo(() => {
+    const map = new Map<string, string>();
+    safeClasses.forEach(c => map.set(c.teacher_username, c.teacher_name));
+    return Array.from(map.entries()).map(([username, name]) => ({ username, name }));
+  }, [safeClasses]);
+
+  const uniqueSubjects = useMemo(() => {
+    const set = new Set<string>();
+    safeClasses.forEach(c => { if (c.subject) set.add(c.subject); });
+    return Array.from(set).sort();
+  }, [safeClasses]);
+
+  const [teacherFilter, setTeacherFilter] = useState("");
+  const [subjectFilter, setSubjectFilter] = useState("");
+  const showFilters = uniqueTeachers.length > 1 || uniqueSubjects.length > 1;
+
+  const matchesFilters = (c: StudentClass) =>
+    (!teacherFilter || c.teacher_username === teacherFilter) &&
+    (!subjectFilter || c.subject === subjectFilter);
 
   // Mismo criterio que usa el backend para "próximas": estado no finalizado
   // Y que todavía no haya empezado. Sin el chequeo de fecha, una clase que
@@ -320,14 +412,15 @@ export default function MyClassesPage() {
   const now = useNow();
   const upcomingAll = safeClasses.filter(
     c => !HISTORY_STATUSES.includes(c.status) &&
-      new Date(c.start_time_utc).getTime() >= now
+      new Date(c.start_time_utc).getTime() >= now &&
+      matchesFilters(c)
   ).sort((a, b) =>
     new Date(a.start_time_utc).getTime() -
     new Date(b.start_time_utc).getTime()
   );
 
   const history = safeClasses.filter(
-    c => HISTORY_STATUSES.includes(c.status)
+    c => HISTORY_STATUSES.includes(c.status) && matchesFilters(c)
   ).sort((a, b) =>
     new Date(b.start_time_utc).getTime() -
     new Date(a.start_time_utc).getTime()
@@ -463,6 +556,32 @@ export default function MyClassesPage() {
           ))}
         </div>
 
+        {showFilters && (
+          <div className="flex flex-wrap items-center gap-2.5 animate-in fade-in duration-500 delay-100">
+            <span className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              <SlidersHorizontal className="w-3.5 h-3.5" /> Filtrar
+            </span>
+            {uniqueTeachers.length > 1 && (
+              <StyledSelect
+                icon={User}
+                value={teacherFilter}
+                onChange={setTeacherFilter}
+                placeholder="Todos los profesores"
+                options={uniqueTeachers.map(t => ({ value: t.username, label: t.name }))}
+              />
+            )}
+            {uniqueSubjects.length > 1 && (
+              <StyledSelect
+                icon={BookOpen}
+                value={subjectFilter}
+                onChange={setSubjectFilter}
+                placeholder="Todas las asignaturas"
+                options={uniqueSubjects.map(s => ({ value: s, label: s }))}
+              />
+            )}
+          </div>
+        )}
+
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500
                         delay-150 space-y-3">
           {loading ? (
@@ -486,6 +605,7 @@ export default function MyClassesPage() {
                 key={cls.id}
                 class_={cls}
                 role="student"
+                showTeacherWhatsapp={platformConfig?.show_teacher_whatsapp ?? true}
                 onReschedule={() => setRescheduleTarget(cls)}
                 onCancel={() =>
                   setCancelTarget({ id: cls.id, date: cls.start_time_utc, cohortId: cls.cohort_id ?? null })

@@ -46,6 +46,11 @@ interface ClassCardProps {
   onUpdate?: () => void;
   onReschedule?: () => void;
   onCancel?: () => void;
+  /** Config global de plataforma: si es false, oculta el WhatsApp del
+   * profesor cuando la tarjeta la ve un estudiante (no afecta la vista del
+   * profesor, que siempre puede ver el teléfono del estudiante). Default
+   * true para no romper vistas que no pasan este prop. */
+  showTeacherWhatsapp?: boolean;
 }
 
 const STATUS_CONFIG: Record<string, { theme: string; label: string; border: string }> = {
@@ -163,7 +168,7 @@ function getWhatsAppLink(phone?: string | null): string | null {
 }
 
 export default function ClassCard({
-  class_, role, readOnly = false, onUpdate, onReschedule, onCancel,
+  class_, role, readOnly = false, onUpdate, onReschedule, onCancel, showTeacherWhatsapp = true,
 }: ClassCardProps) {
   const [updating, setUpdating] = useState(false);
   const toast = useToast();
@@ -255,7 +260,7 @@ export default function ClassCard({
   // de uno solo; el alumno sigue viendo a su profesor normalmente.
   const groupmateCount = Math.max((class_.participant_count ?? 0) - (role === "student" ? 1 : 0), 0);
 
-  const personPhone = role === "student" ? class_.teacher_phone : class_.student_phone;
+  const personPhone = (role === "student" && !showTeacherWhatsapp) ? undefined : (role === "student" ? class_.teacher_phone : class_.student_phone);
   const myTimezone = (role === "teacher" ? class_.teacher_timezone : class_.student_timezone) || getMyDisplayTimezone();
   const otherTimezone = role === "teacher" ? class_.student_timezone : class_.teacher_timezone;
   const tzDiffLabel = getTimezoneDiffLabel(otherTimezone, myTimezone);

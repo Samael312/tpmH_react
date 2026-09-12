@@ -25,6 +25,7 @@ export type BookingStage =
   | "needs_renewal"
   | "renew_required"
   | "renewal_pending"
+  | "needs_group_refund"
   | "ready";
 
 export interface RejectedPaymentInfo {
@@ -34,7 +35,13 @@ export interface RejectedPaymentInfo {
   rejection_reason: string | null;
   rejected_at: string | null;
 }
-  
+
+export interface PendingRechargeInfo {
+  payment_id: number;
+  amount: number;
+  created_at: string;
+}
+
 export interface StudentClass {
   id: number;
   class_type: "trial" | "regular" | "group";
@@ -116,6 +123,7 @@ export interface StudentEnrollment {
   payment_status?: string;
   teacher_name: string | null;
   teacher_username: string | null;
+  teacher_status?: string | null;
   teacher_avatar: string | null;
   created_at?: string;
   updated_at?: string;
@@ -125,6 +133,7 @@ export interface StudentEnrollment {
   cohort_current_students?: number | null;
   cohort_max_students?: number | null;
   credit_balance_usd?: number | null;
+  has_pending_recharge?: boolean;
 }
 
 export interface StudentMaterial {
@@ -220,6 +229,9 @@ export interface MyTeacherInfo {
   profile_photo_url: string | null;
   theme_color: string | null;
   stage: BookingStage;
+  status: string;
+  is_frozen: boolean;
+  refund_pending: boolean;
   active_enrollment: {
     id: number;
     package_name: string | null;
@@ -349,7 +361,9 @@ export function useBookingStage() {
       const res = await api.get("/payments/booking-status");
       return {
         stage: res.data.stage as BookingStage,
+        enrollmentId: (res.data.enrollment_id ?? null) as number | null,
         lastRejectedPayment: (res.data.last_rejected_payment ?? null) as RejectedPaymentInfo | null,
+        pendingRechargePayment: (res.data.pending_recharge_payment ?? null) as PendingRechargeInfo | null,
       };
     },
   });
@@ -358,7 +372,9 @@ export function useBookingStage() {
     // Preserva el fallback original: si falla, se asume "ready" en vez de
     // bloquear la pantalla indefinidamente.
     stage: query.isError ? ("ready" as BookingStage) : (query.data?.stage ?? "loading"),
+    enrollmentId: query.isError ? null : (query.data?.enrollmentId ?? null),
     lastRejectedPayment: query.isError ? null : (query.data?.lastRejectedPayment ?? null),
+    pendingRechargePayment: query.isError ? null : (query.data?.pendingRechargePayment ?? null),
     isFetching: query.isFetching,
     isError: query.isError,
     refetch: query.refetch,
@@ -652,6 +668,7 @@ export interface PlatformConfigInfo {
   platform_name: string;
   platform_tagline: string | null;
   is_single_tenant: boolean;
+  show_teacher_whatsapp: boolean;
   featured_teacher: {
     username: string;
     name: string;

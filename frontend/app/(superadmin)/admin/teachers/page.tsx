@@ -11,6 +11,7 @@ import { X, Video as VideoIcon, MessageSquare, Check, AlertTriangle, Loader2, Re
 import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
+import RejectReasonModal from '@/components/ui/RejectReasonModal'
 import { usePageTopBar } from '@/lib/mobileTopBar'
 import { useToast } from '@/hooks/useToast'
 import { getErrorMessage } from '@/lib/errorMessage'
@@ -51,17 +52,14 @@ function TeacherDetailModal({
   const [actioning, setActioning] = useState(false)
   const [resolvingAppealId, setResolvingAppealId] = useState<number | null>(null)
   const [adminResponse, setAdminResponse] = useState('')
+  const [showRejectModal, setShowRejectModal] = useState(false)
   const toast = useToast()
 
-  const updateStatus = async (newStatus: string) => {
+  const updateStatus = async (newStatus: string, reason?: string) => {
     setActioning(true)
     try {
       const body: { status: string; reason?: string } = { status: newStatus }
-      if (newStatus === 'rejected') {
-        const reason = prompt('Motivo del rechazo:')
-        if (!reason) { setActioning(false); return }
-        body.reason = reason
-      }
+      if (reason) body.reason = reason
       await api.patch(`/admin/teachers/${teacher.id}/status`, body)
       toast.success(
         newStatus === 'approved' ? 'Profesor aprobado correctamente' :
@@ -74,6 +72,7 @@ function TeacherDetailModal({
       toast.error(getErrorMessage(e, 'No se pudo actualizar el estado del profesor'))
     } finally {
       setActioning(false)
+      setShowRejectModal(false)
     }
   }
 
@@ -98,6 +97,7 @@ function TeacherDetailModal({
   const pendingAppeal = appeals.find(a => a.status === 'pending')
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
@@ -236,7 +236,7 @@ function TeacherDetailModal({
                 <Button variant="primary" loading={actioning} onClick={() => updateStatus('approved')} className="flex-1 justify-center">
                   Aprobar
                 </Button>
-                <Button variant="danger" loading={actioning} onClick={() => updateStatus('rejected')} className="flex-1 justify-center">
+                <Button variant="danger" loading={actioning} onClick={() => setShowRejectModal(true)} className="flex-1 justify-center">
                   Rechazar
                 </Button>
               </>
@@ -255,16 +255,37 @@ function TeacherDetailModal({
         )}
       </div>
     </div>
+
+    <RejectReasonModal
+      open={showRejectModal}
+      title="Rechazar profesor"
+      description={`${teacher.name} ${teacher.surname} (@${teacher.username}) quedará en estado "Rechazado" y podrá apelar.`}
+      onClose={() => setShowRejectModal(false)}
+      onConfirm={(reason) => updateStatus('rejected', reason)}
+      loading={actioning}
+    />
+    </>
   )
 }
 
 export default function TeachersPage() {
-  const [activeTab, setActiveTab] = useState<string | undefined>(undefined)
+  // Lee ?tab= de la URL sin useSearchParams (evita tener que envolver todo
+  // el componente en <Suspense> solo por esto). Es client-only por diseño:
+  // este dashboard nunca se pre-renderiza en servidor.
+  const initialTab = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('tab')
+    : null
+  const [activeTab, setActiveTab] = useState<string | undefined>(initialTab === 'all' ? undefined : (initialTab ?? undefined))
   const [actioning, setActioning] = useState<number | null>(null)
   const [commissionEdit, setCommissionEdit] = useState<number | null>(null)
   const [commissionValue, setCommissionValue] = useState('')
   const [detailTarget, setDetailTarget] = useState<Teacher | null>(null)
-  const { teachers, loading, isFetching, isError, refetch } = useTeachers(activeTab)
+  const [rejectTarget, setRejectTarget] = useState<Teacher | null>(null)
+  const [onlyWithVideo, setOnlyWithVideo] = useState(
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('video') === '1'
+  )
+  const { teachers: rawTeachers, loading, isFetching, isError, refetch } = useTeachers(activeTab)
+  const teachers = onlyWithVideo ? rawTeachers.filter(t => !!t.video_url) : rawTeachers
   const toast = useToast()
 
   usePageTopBar({
@@ -273,15 +294,11 @@ export default function TeachersPage() {
     isFetching,
   })
 
-  const updateStatus = async (teacherId: number, newStatus: string) => {
+  const updateStatus = async (teacherId: number, newStatus: string, reason?: string) => {
     setActioning(teacherId)
     try {
       const body: { status: string; reason?: string } = { status: newStatus }
-      if (newStatus === 'rejected') {
-        const reason = prompt('Motivo del rechazo:')
-        if (!reason) { setActioning(null); return }
-        body.reason = reason
-      }
+      if (reason) body.reason = reason
       await api.patch(`/admin/teachers/${teacherId}/status`, body)
       toast.success(
         newStatus === 'approved' ? 'Profesor aprobado correctamente' :
@@ -293,6 +310,7 @@ export default function TeachersPage() {
       toast.error(getErrorMessage(e, 'No se pudo actualizar el estado del profesor'))
     } finally {
       setActioning(null)
+      setRejectTarget(null)
     }
   }
 
@@ -334,22 +352,35 @@ export default function TeachersPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 bg-slate-50 border border-slate-100 rounded-2xl p-1.5 w-max shadow-inner overflow-x-auto custom-scrollbar max-w-full">
-          {STATUS_TABS.map(tab => (
-            <button
-              key={tab.label}
-              onClick={() => setActiveTab(tab.key)}
-              className={`
-                px-5 py-2 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap
-                ${activeTab === tab.key
-                  ? 'bg-white text-pink-600 shadow-sm border border-pink-100'
-                  : 'text-slate-400 hover:text-pink-500 hover:bg-white/50'
-                }
-              `}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex gap-2 bg-slate-50 border border-slate-100 rounded-2xl p-1.5 w-max shadow-inner overflow-x-auto custom-scrollbar max-w-full">
+            {STATUS_TABS.map(tab => (
+              <button
+                key={tab.label}
+                onClick={() => setActiveTab(tab.key)}
+                className={`
+                  px-5 py-2 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap
+                  ${activeTab === tab.key
+                    ? 'bg-white text-pink-600 shadow-sm border border-pink-100'
+                    : 'text-slate-400 hover:text-pink-500 hover:bg-white/50'
+                  }
+                `}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {(activeTab === 'pending' || activeTab === undefined) && (
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-500 cursor-pointer select-none px-3 py-2 rounded-xl hover:bg-slate-50">
+              <input
+                type="checkbox"
+                checked={onlyWithVideo}
+                onChange={(e) => setOnlyWithVideo(e.target.checked)}
+                className="w-4 h-4 rounded accent-pink-500"
+              />
+              Solo con video sin revisar
+            </label>
+          )}
         </div>
 
         {isError && (
@@ -514,7 +545,7 @@ export default function TeachersPage() {
                             size="sm"
                             variant="danger"
                             loading={actioning === teacher.id}
-                            onClick={() => updateStatus(teacher.id, 'rejected')}
+                            onClick={() => setRejectTarget(teacher)}
                             className="w-full justify-center !py-2"
                           >
                             Rechazar
@@ -559,6 +590,15 @@ export default function TeachersPage() {
           onActioned={refetch}
         />
       )}
+
+      <RejectReasonModal
+        open={!!rejectTarget}
+        title="Rechazar profesor"
+        description={rejectTarget ? `${rejectTarget.name} ${rejectTarget.surname} (@${rejectTarget.username}) quedará en estado "Rechazado" y podrá apelar.` : undefined}
+        onClose={() => setRejectTarget(null)}
+        onConfirm={(reason) => { if (rejectTarget) return updateStatus(rejectTarget.id, 'rejected', reason) }}
+        loading={actioning === rejectTarget?.id}
+      />
 
       {/* Widget fuera del contenedor en su ubicación corregida */}
       <ChipiWidget screenName="admin_teachers" />

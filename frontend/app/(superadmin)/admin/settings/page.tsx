@@ -6,7 +6,7 @@ import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 
 import {
-  useAdminPaymentConfig, useAdminPlatformConfig, useAdminBusinessRules,
+  useAdminPaymentConfig, useAdminPlatformConfig, useAdminBusinessRules, useTeachers,
   AdminPaymentConfig, AdminPlatformConfig,
 } from '@/hooks/useAdminData'
 import type { BusinessRules } from '@/hooks/useBusinessRules'
@@ -347,6 +347,7 @@ export default function SettingsPage() {
   const { platformConfig: remotePlatformConfig, isFetching: plFetching, isError: plError, refetch: refetchPlatformConfig } = useAdminPlatformConfig()
     const { catalogs, loading: catLoading, isFetching: catFetching, isError: catError, refetch: refetchCatalogs } = useSystemCatalogs()
   const { businessRules: remoteBusinessRules, isFetching: brFetching, isError: brError, refetch: refetchBusinessRules } = useAdminBusinessRules()
+  const { teachers: approvedTeachers } = useTeachers('approved')
   
   const [paymentConfig, setPaymentConfig] = useState<AdminPaymentConfig | null>(null)
   const [platformConfig, setPlatformConfig] = useState<AdminPlatformConfig | null>(null)
@@ -464,6 +465,7 @@ export default function SettingsPage() {
         platform_name: platformConfig?.platform_name,
         platform_tagline: platformConfig?.platform_tagline,
         is_single_tenant: platformConfig?.is_single_tenant,
+        show_teacher_whatsapp: platformConfig?.show_teacher_whatsapp,
         featured_teacher_username: platformConfig?.featured_teacher_username || null,
       })
       setPlatformDirty(false)
@@ -914,23 +916,64 @@ export default function SettingsPage() {
                 </button>
               </div>
 
+              {!platformConfig.is_single_tenant && approvedTeachers.length === 0 && (
+                <p className="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5 -mt-2">
+                  Aún no hay profesores aprobados. Podés dejar el modo marketplace activo igual — el landing y la sección de profesores quedarán vacíos hasta que apruebes al menos uno.
+                </p>
+              )}
+
+              {/* WhatsApp de profesores (visibilidad global) */}
+              <div className="flex items-center justify-between bg-emerald-50/50 rounded-2xl p-6 border border-emerald-100">
+                <div>
+                  <p className="text-slate-800 text-sm font-bold">
+                    Mostrar WhatsApp de los profesores
+                  </p>
+                  <p className="text-slate-500 text-xs font-medium mt-1">
+                    Controla si el botón de WhatsApp que cada profesor carga en su propio perfil
+                    (preview, tarjetas de clase) se muestra a los estudiantes. Al apagarlo se
+                    oculta en toda la plataforma sin borrar lo que cada profesor configuró.
+                  </p>
+                </div>
+                <button
+                  onClick={() => updatePlatformConfig({
+                    ...platformConfig,
+                    show_teacher_whatsapp: !platformConfig.show_teacher_whatsapp
+                  })}
+                  className={`
+                    relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none shrink-0 ml-4
+                    ${platformConfig.show_teacher_whatsapp ? 'bg-emerald-500 shadow-inner' : 'bg-slate-200'}
+                  `}
+                >
+                  <span className={`
+                    absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform duration-300 shadow-sm
+                    ${platformConfig.show_teacher_whatsapp ? 'translate-x-6' : 'translate-x-0'}
+                  `}/>
+                </button>
+              </div>
+
               {platformConfig.is_single_tenant && (
                 <div className="space-y-2 pt-2 animate-in fade-in slide-in-from-top-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                    Username del Profesor Destacado
+                    Profesor Destacado
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={platformConfig.featured_teacher_username || ''}
                     onChange={e => updatePlatformConfig({
                       ...platformConfig,
                       featured_teacher_username: e.target.value
                     })}
-                    placeholder="Ejemplo: mar12"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300 transition-all"
-                  />
+                  >
+                    <option value="">Selecciona un profesor aprobado...</option>
+                    {approvedTeachers.map(t => (
+                      <option key={t.username} value={t.username}>
+                        {t.name} {t.surname} (@{t.username})
+                      </option>
+                    ))}
+                  </select>
                   <p className="text-xs text-slate-500 font-medium ml-1 mt-1">
-                    Ingresa el nombre de usuario exacto del profesor. Si el usuario no existe, arrojará un error.
+                    Solo aparecen profesores en estado &quot;Aprobado&quot;. Si el que buscas no está en la lista,
+                    revisa su estado en la sección de Profesores.
                   </p>
                 </div>
               )}

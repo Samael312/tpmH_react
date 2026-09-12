@@ -19,6 +19,7 @@ from app.api.v1.endpoints.public import invalidate_landing_cache
 from app.models.user import User
 from app.models.package import Package, Enrollment, EnrollmentStatus
 from app.models.teacher import TeacherProfile
+from app.models.payment import Payment
 from app.schemas.packages import (
     PackageCreate,
     PackageResponse,
@@ -352,6 +353,12 @@ def get_my_enrollments(
             cohort_current_students = get_cohort_active_count(e.cohort_id, db)
             cohort_max_students = e.cohort.max_students
 
+        pending_recharge = db.query(Payment).filter(
+            Payment.enrollment_id == e.id,
+            Payment.payment_type == "unlimited_recharge",
+            Payment.status == "pending_review",
+        ).first() is not None
+
         result.append(EnrollmentResponse(
             id=e.id,
             student_id=e.student_id,
@@ -374,12 +381,14 @@ def get_my_enrollments(
             teacher_avatar=(teacher_user.avatar if teacher_user else None)
             or (e.teacher.profile_photo_url if e.teacher else None),
             teacher_username=teacher_user.username if teacher_user else None,
+            teacher_status=e.teacher.status.value if e.teacher and e.teacher.status else None,
             cohort_id=e.cohort_id,
             cohort_status=cohort_status,
             cohort_start_date=cohort_start_date,
             cohort_current_students=cohort_current_students,
             cohort_max_students=cohort_max_students,
             credit_balance_usd=getattr(e, "credit_balance_usd", None),
+            has_pending_recharge=pending_recharge,
         ))
 
     return result

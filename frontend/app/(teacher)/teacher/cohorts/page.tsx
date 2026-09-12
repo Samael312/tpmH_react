@@ -6,7 +6,7 @@ import {
   AlertTriangle, Clock, X, UserCheck, UserX, RefreshCw,
 } from "lucide-react";
 import api from "@/lib/api";
-import { Card, Badge, Button, Skeleton, FullScreenModal } from "@/components/ui";
+import { Card, Badge, Button, Skeleton, FullScreenModal, ConfirmModal } from "@/components/ui";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
@@ -106,6 +106,8 @@ export default function TeacherCohortsPage() {
   const [closingCohort, setClosingCohort] = useState<Cohort | null>(null);
   const [closeDate, setCloseDate] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<Cohort | null>(null);
+  const [completeTarget, setCompleteTarget] = useState<Cohort | null>(null);
 
   const [schedulingCohort, setSchedulingCohort] = useState<Cohort | null>(null);
   const { rules } = useBusinessRules();
@@ -162,13 +164,6 @@ export default function TeacherCohortsPage() {
 
   const handleClose = async () => {
     if (!closingCohort || !closeDate) return;
-    if (closingCohort.current_students < closingCohort.min_students) {
-      const ok = window.confirm(
-        `Estás cerrando esta cohorte con ${closingCohort.current_students} de ${closingCohort.min_students} alumnos mínimos sugeridos. ` +
-        `¿Confirmas que quieres iniciarla igual con menos integrantes?`
-      );
-      if (!ok) return;
-    }
     setActionLoading(true);
     try {
       await api.post(`/cohorts/${closingCohort.id}/close`, {
@@ -186,30 +181,30 @@ export default function TeacherCohortsPage() {
   };
 
   const handleCancel = async (cohort: Cohort) => {
-    if (!confirm(`¿Cancelar la cohorte de "${cohort.package_name}"? Se cancelará la inscripción de los ${cohort.current_students} alumno(s), quienes quedarán libres de elegir un nuevo paquete (individual u otra cohorte). También se cancelarán las sesiones futuras ya agendadas.`)) {
-      return;
-    }
+    setActionLoading(true);
     try {
       await api.post(`/cohorts/${cohort.id}/cancel`);
       await loadData();
       toast.success("Cohorte cancelada correctamente");
     } catch (err) {
       toast.error(getErrorMessage(err, "No se pudo cancelar la cohorte"));
+    } finally {
+      setActionLoading(false);
+      setCancelTarget(null);
     }
   };
 
   const handleComplete = async (cohort: Cohort) => {
-    const belowMinimum = cohort.current_students < cohort.min_students;
-    const msg = belowMinimum
-      ? `Estás finalizando esta cohorte con ${cohort.current_students} de ${cohort.min_students} alumnos mínimos. Como quedó por debajo del mínimo, se cancelará la inscripción de todos y se les notificará para que elijan un nuevo paquete. ¿Confirmas?`
-      : `¿Marcar esta cohorte como finalizada? Se cancelará cualquier sesión futura que haya quedado agendada de más.`;
-    if (!confirm(msg)) return;
+    setActionLoading(true);
     try {
       await api.post(`/cohorts/${cohort.id}/complete`);
       await loadData();
       toast.success("Cohorte finalizada correctamente");
     } catch (err) {
       toast.error(getErrorMessage(err, "No se pudo finalizar la cohorte"));
+    } finally {
+      setActionLoading(false);
+      setCompleteTarget(null);
     }
   };
 
@@ -235,13 +230,14 @@ export default function TeacherCohortsPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6 pb-24 sm:pb-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="min-h-screen bg-slate-50 relative overflow-hidden">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-8 pb-24 sm:pb-8 space-y-8">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black text-slate-800 flex items-center gap-2">
-            <Users2 className="w-5 h-5 text-pink-500" /> Clases grupales
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2.5">
+            <Users2 className="w-7 h-7 text-pink-500" /> Clases grupales
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Gestiona tus cohortes: cupos, fecha de inicio y sesiones.</p>
+          <p className="text-slate-500 mt-1">Gestiona tus cohortes: cupos, fecha de inicio y sesiones.</p>
         </div>
         <div className="flex items-center gap-2">
           <DesktopOnly>
@@ -281,8 +277,8 @@ export default function TeacherCohortsPage() {
         </Card>
       )}
 
-      <div className="space-y-4">
-        {cohorts.map((cohort) => (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {cohorts.filter(c => c.status !== "cancelled").map((cohort) => (
           <Card key={cohort.id} className="p-5" hover>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -331,7 +327,7 @@ export default function TeacherCohortsPage() {
                 >
                   <Lock className="w-3.5 h-3.5" /> Cerrar con integrantes actuales
                 </Button>
-                <Button size="sm" variant="danger" onClick={() => handleCancel(cohort)}>
+                <Button size="sm" variant="danger" onClick={() => setCancelTarget(cohort)}>
                   <Ban className="w-3.5 h-3.5" /> Cancelar cohorte
                 </Button>
               </div>
@@ -341,10 +337,10 @@ export default function TeacherCohortsPage() {
                 <Button size="sm" onClick={() => setSchedulingCohort(cohort)}>
                   <Plus className="w-3.5 h-3.5" /> Agendar sesión
                 </Button>
-                <Button size="sm" variant="secondary" onClick={() => handleComplete(cohort)}>
+                <Button size="sm" variant="secondary" onClick={() => setCompleteTarget(cohort)}>
                   <Check className="w-3.5 h-3.5" /> Finalizar cohorte
                 </Button>
-                <Button size="sm" variant="danger" onClick={() => handleCancel(cohort)}>
+                <Button size="sm" variant="danger" onClick={() => setCancelTarget(cohort)}>
                   <Ban className="w-3.5 h-3.5" /> Cancelar cohorte
                 </Button>
               </div>
@@ -455,7 +451,17 @@ export default function TeacherCohortsPage() {
               <select
                 className="w-full mt-2 border border-slate-200 rounded-xl px-3 py-2.5 text-sm"
                 value={form.package_id}
-                onChange={(e) => setForm({ ...form, package_id: e.target.value })}
+                onChange={(e) => {
+                  const pkg = groupPackages.find(p => String(p.id) === e.target.value);
+                  setForm({
+                    ...form,
+                    package_id: e.target.value,
+                    // Los cupos min/max de la cohorte deben coincidir con los
+                    // configurados en el paquete grupal elegido, no ser libres.
+                    min_students: pkg?.min_students != null ? String(pkg.min_students) : form.min_students,
+                    max_students: pkg?.max_students != null ? String(pkg.max_students) : form.max_students,
+                  });
+                }}
               >
                 <option value="">Selecciona un paquete…</option>
                 {groupPackages.map((p) => (
@@ -471,21 +477,24 @@ export default function TeacherCohortsPage() {
               <input
                 type="number"
                 min={1}
-                className="w-full mt-2 border border-slate-200 rounded-xl px-3 py-2.5 text-sm"
+                readOnly
+                disabled
+                className="w-full mt-2 border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 text-slate-500 cursor-not-allowed"
                 value={form.min_students}
-                onChange={(e) => setForm({ ...form, min_students: e.target.value })}
               />
-              <p className="text-[11px] text-slate-400 mt-1">Solo de referencia — igual puedes cerrar con menos.</p>
+              <p className="text-[11px] text-slate-400 mt-1">Definido en el paquete grupal — igual puedes cerrar con menos.</p>
             </div>
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Máximo de alumnos</label>
               <input
                 type="number"
                 min={1}
-                className="w-full mt-2 border border-slate-200 rounded-xl px-3 py-2.5 text-sm"
+                readOnly
+                disabled
+                className="w-full mt-2 border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 text-slate-500 cursor-not-allowed"
                 value={form.max_students}
-                onChange={(e) => setForm({ ...form, max_students: e.target.value })}
               />
+              <p className="text-[11px] text-slate-400 mt-1">Definido en el paquete grupal.</p>
             </div>
           </div>
         </div>
@@ -595,7 +604,36 @@ export default function TeacherCohortsPage() {
         />
       )}
 
+      <ConfirmModal
+        open={!!cancelTarget}
+        title="Cancelar cohorte"
+        description={cancelTarget ? `¿Cancelar la cohorte de "${cancelTarget.package_name}"? Se cancelará la inscripción de los ${cancelTarget.current_students} alumno(s), quienes quedarán libres de elegir un nuevo paquete (individual u otra cohorte). También se cancelarán las sesiones futuras ya agendadas.` : ""}
+        confirmLabel="Cancelar cohorte"
+        variant="danger"
+        onClose={() => setCancelTarget(null)}
+        onConfirm={() => { if (cancelTarget) return handleCancel(cancelTarget) }}
+        loading={actionLoading}
+      />
+
+      <ConfirmModal
+        open={!!completeTarget}
+        title="Finalizar cohorte"
+        description={
+          completeTarget
+            ? (completeTarget.current_students < completeTarget.min_students
+              ? `Estás finalizando esta cohorte con ${completeTarget.current_students} de ${completeTarget.min_students} alumnos mínimos. Como quedó por debajo del mínimo, se cancelará la inscripción de todos y se les notificará para que elijan un nuevo paquete. ¿Confirmas?`
+              : "¿Marcar esta cohorte como finalizada? Se cancelará cualquier sesión futura que haya quedado agendada de más.")
+            : ""
+        }
+        confirmLabel="Finalizar"
+        variant={completeTarget && completeTarget.current_students < completeTarget.min_students ? "danger" : "primary"}
+        onClose={() => setCompleteTarget(null)}
+        onConfirm={() => { if (completeTarget) return handleComplete(completeTarget) }}
+        loading={actionLoading}
+      />
+
       <ChipiWidget screenName="teacher_cohorts" />
+      </div>
     </div>
   );
 }
