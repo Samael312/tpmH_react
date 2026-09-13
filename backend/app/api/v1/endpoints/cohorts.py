@@ -173,7 +173,17 @@ def close_cohort_endpoint(
         )
 
     close_cohort(cohort, data.start_date, db)
-    db.commit()
+
+    # Corrección QA: antes `start_date` quedaba solo como metadata de la
+    # cohorte (para mostrar "Inicia el ...") sin generar ninguna sesión
+    # real — el profesor tenía que ir aparte a "Agendar sesión" para que
+    # esa fecha existiera como Class de verdad. Ahora se reutiliza la misma
+    # lógica de creación de sesión que POST /{cohort_id}/sessions para que
+    # el cierre ya deje agendada la primera clase del grupo. Si la
+    # validación de esa sesión falla (sin disponibilidad, choque de
+    # horario, etc.), nada de esto se comitea y la cohorte sigue "filling".
+    _create_group_session(cohort, current_user, data.start_date, data.duration_minutes, db)
+
     db.refresh(cohort)
     return _to_cohort_response(cohort, db)
 
@@ -343,37 +353,30 @@ def _to_session_response(class_: Class) -> GroupSessionResponse:
     )
 
 
-@router.post(
-    "/{cohort_id}/sessions",
-    response_model=GroupSessionResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-def create_group_session(
-    cohort_id: int,
-    data: GroupSessionCreate,
-    current_user: User = Depends(get_current_teacher_or_teacher_admin),
-    db: Session = Depends(get_db),
-):
+def _create_group_session(
+    cohort: GroupCohort,
+    current_user: User,
+    start_time_utc,
+    duration_minutes: int,
+    db: Session,
+) -> Class:
     """
-    Agenda una sesión concreta de una cohorte ya confirmada. Se crea UNA
-    sola fila de Class (compartida) y se inscribe automáticamente a todos
-    los alumnos actualmente activos de la cohorte vía ClassParticipant —
-    el cupo/capacidad ya se definió al crear la cohorte, no por sesión.
+    Lógica compartida para agendar UNA sesión (Class) de una cohorte ya
+    confirmada, inscribiendo automáticamente a todos los alumnos
+    actualmente activos vía ClassParticipant — el cupo/capacidad ya se
+    definió al crear la cohorte, no por sesión.
+
+    La usan tanto POST /{cohort_id}/sessions (agendar una sesión adicional)
+    como POST /{cohort_id}/close (la primera sesión, correspondiente a la
+    fecha/hora de inicio elegida al cerrar el grupo — antes esa fecha
+    quedaba solo como metadata sin generar ninguna clase real).
+
+    Hace su propio commit al final (cubre también cualquier cambio
+    pendiente en `cohort`, como el cierre, ya que comparten la misma
+    sesión de SQLAlchemy) y devuelve la Class recién creada.
     """
     from app.api.v1.endpoints.payments import DAYS_ES, _sync_google_calendar_created
     from app.core.class_logic import validate_class_duration
-
-    cohort = db.query(GroupCohort).filter(
-        GroupCohort.id == cohort_id,
-        GroupCohort.teacher_id == current_user.teacher_profile.id,
-    ).first()
-    if not cohort:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
-    if cohort.status != CohortStatus.confirmed:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "Solo puedes agendar sesiones de una cohorte confirmada (ciérrala primero)."
-        )
 
     package = cohort.package
     existing_sessions = db.query(Class).filter(
@@ -386,7 +389,7 @@ def create_group_session(
             f"Ya agendaste las {package.classes_count} sesiones incluidas en este paquete grupal."
         )
 
-    can_duration, duration_msg = validate_class_duration(data.duration_minutes, db)
+    can_duration, duration_msg = validate_class_duration(duration_minutes, db)
     if not can_duration:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, duration_msg)
 
@@ -402,7 +405,7 @@ def create_group_session(
             "No hay alumnos con pago confirmado en esta cohorte todavía."
         )
 
-    end_time_utc = data.start_time_utc + timedelta(minutes=data.duration_minutes)
+    end_time_utc = start_time_utc + timedelta(minutes=duration_minutes)
 
     # Margen de preparación para clases grupales (mismo criterio que las
     # regulares, según confirmaste): se fija una sola vez al crear la
@@ -419,7 +422,7 @@ def create_group_session(
     # que debe caber en la disponibilidad incluye el margen de preparación.
     from app.core.class_logic import is_within_teacher_availability
     is_available, availability_msg = is_within_teacher_availability(
-        teacher_id, data.start_time_utc, occupied_end_time_utc, db
+        teacher_id, start_time_utc, occupied_end_time_utc, db
     )
     if not is_available:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, availability_msg)
@@ -439,7 +442,7 @@ def create_group_session(
         Class.status.notin_(["cancelled", "expired", "pending_trial"]),
     ).all()
     conflicting_individual_class = any(
-        data.start_time_utc < (c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0))
+        start_time_utc < (c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0))
         for c in candidate_individual
     )
     if conflicting_individual_class:
@@ -457,7 +460,7 @@ def create_group_session(
         Class.status.notin_(["cancelled"]),
     ).all()
     conflicting_group_session = any(
-        data.start_time_utc < (c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0))
+        start_time_utc < (c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0))
         for c in candidate_group
     )
     if conflicting_group_session:
@@ -470,14 +473,14 @@ def create_group_session(
         cohort_id=cohort.id,
         class_type=ClassType.group,
         subject=package.subject,
-        start_time_utc=data.start_time_utc,
+        start_time_utc=start_time_utc,
         end_time_utc=end_time_utc,
-        duration=data.duration_minutes,
+        duration=duration_minutes,
         buffer_minutes=group_buffer,
         teacher_timezone=current_user.teacher_profile.timezone,
         student_timezone=None,
         status="confirmed",
-        day_of_week=DAYS_ES[data.start_time_utc.weekday()],
+        day_of_week=DAYS_ES[start_time_utc.weekday()],
     )
     db.add(new_class)
     db.flush()
@@ -508,11 +511,44 @@ def create_group_session(
                 student_name=student_profile.user.name,
                 teacher_name=f"{current_user.name} {current_user.surname}",
                 subject=package.subject,
-                class_start_local=format_local_datetime(data.start_time_utc, student_profile.timezone),
-                duration_minutes=data.duration_minutes,
+                class_start_local=format_local_datetime(start_time_utc, student_profile.timezone),
+                duration_minutes=duration_minutes,
                 buffer_minutes=group_buffer,
             )
 
+    return new_class
+
+
+@router.post(
+    "/{cohort_id}/sessions",
+    response_model=GroupSessionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_group_session(
+    cohort_id: int,
+    data: GroupSessionCreate,
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Agenda una sesión concreta de una cohorte ya confirmada. Se crea UNA
+    sola fila de Class (compartida) y se inscribe automáticamente a todos
+    los alumnos actualmente activos de la cohorte vía ClassParticipant —
+    el cupo/capacidad ya se definió al crear la cohorte, no por sesión.
+    """
+    cohort = db.query(GroupCohort).filter(
+        GroupCohort.id == cohort_id,
+        GroupCohort.teacher_id == current_user.teacher_profile.id,
+    ).first()
+    if not cohort:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+    if cohort.status != CohortStatus.confirmed:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Solo puedes agendar sesiones de una cohorte confirmada (ciérrala primero)."
+        )
+
+    new_class = _create_group_session(cohort, current_user, data.start_time_utc, data.duration_minutes, db)
     return _to_session_response(new_class)
 
 

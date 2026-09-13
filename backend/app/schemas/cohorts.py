@@ -29,8 +29,17 @@ class CohortCreate(BaseModel):
 
 
 class CohortCloseRequest(BaseModel):
-    """El profesor cierra la cohorte con los integrantes actuales."""
+    """
+    El profesor cierra la cohorte con los integrantes actuales.
+
+    Corrección QA: la fecha/hora de inicio elegida acá ya no queda solo
+    como metadata de la cohorte (`GroupCohort.start_date`) — ahora también
+    genera la primera sesión real (Class) de la cohorte, igual que
+    POST /{cohort_id}/sessions, por lo que necesitamos la duración para
+    poder crear esa fila.
+    """
     start_date: datetime
+    duration_minutes: int = 50
 
 
 class CohortResponse(BaseModel):

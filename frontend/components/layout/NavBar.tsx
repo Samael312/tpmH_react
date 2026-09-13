@@ -63,6 +63,10 @@ const ADMIN_MORE: TabItem[] = [
 ];
 
 // ─── Top bar móvil (título de página + refresh, vía contexto) ───────────────
+// Corrección QA: se agrega el logo de la plataforma a la izquierda del
+// título, como referencia visual constante de marca — antes el topbar
+// móvil solo mostraba el nombre de la pantalla actual, sin logo (a
+// diferencia del sidebar de desktop, que sí lo tiene junto al nombre).
 function MobileTopBar() {
   const { title, onRefresh, isFetching } = useMobileTopBar();
   return (
@@ -74,7 +78,12 @@ function MobileTopBar() {
         paddingBottom: "0.75rem",
       }}
     >
-      <h1 className="text-sm font-black text-slate-800 truncate">{title || "TPM"}</h1>
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="relative w-7 h-7 bg-gradient-to-br from-pink-500 to-rose-400 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm shadow-pink-200 overflow-hidden">
+          <Image src="/assets/logo.png" alt="TPM" fill sizes="28px" className="object-contain p-1" />
+        </div>
+        <h1 className="text-sm font-black text-slate-800 truncate">{title || "TPM"}</h1>
+      </div>
       {onRefresh && <RefreshButton onRefresh={onRefresh} isFetching={isFetching} className="w-8 h-8" />}
     </header>
   );

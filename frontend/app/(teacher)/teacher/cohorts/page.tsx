@@ -109,7 +109,14 @@ export default function TeacherCohortsPage() {
   } = useCohortMembers(expandedId);
 
   const [closingCohort, setClosingCohort] = useState<Cohort | null>(null);
-  const [closeDate, setCloseDate] = useState("");
+  // Corrección QA: antes esto era un solo <input type="datetime-local">
+  // suelto (closeDate), sin validar contra la disponibilidad real del
+  // profesor — y la fecha elegida acá nunca generaba una Class de verdad,
+  // solo quedaba guardada como metadata en la cohorte. Ahora reutiliza el
+  // mismo selector de calendario + horarios reales que "Agendar sesión"
+  // (ver GroupSessionSlotPicker más abajo), porque esa fecha/hora también
+  // debe crear la primera sesión del grupo.
+  const [closeForm, setCloseForm] = useState<{ date: string; selectedSlot: AvailableSlot | null; duration: string }>({ date: "", selectedSlot: null, duration: "50" });
   const [actionLoading, setActionLoading] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<Cohort | null>(null);
   const [completeTarget, setCompleteTarget] = useState<Cohort | null>(null);
@@ -123,13 +130,21 @@ export default function TeacherCohortsPage() {
   const { slots: sessionSlots, loading: sessionSlotsLoading } = useAvailableSlots(
     sessionForm.date, Number(sessionForm.duration) || 50, teacherUsername, "group"
   );
+  const { slots: closeSlots, loading: closeSlotsLoading } = useAvailableSlots(
+    closeForm.date, Number(closeForm.duration) || 50, teacherUsername, "group"
+  );
   const myTz = getMyDisplayTimezone();
 
-  // La duración por defecto del form depende del catálogo configurado por
-  // el superadmin, que llega async — se sincroniza cuando esté disponible.
+  // La duración por defecto de ambos forms depende del catálogo configurado
+  // por el superadmin, que llega async — se sincroniza cuando esté disponible.
   useEffect(() => {
     if (rules.allowed_class_durations?.length) {
       setSessionForm(f => (
+        rules.allowed_class_durations.includes(Number(f.duration))
+          ? f
+          : { ...f, duration: String(rules.allowed_class_durations[0]) }
+      ));
+      setCloseForm(f => (
         rules.allowed_class_durations.includes(Number(f.duration))
           ? f
           : { ...f, duration: String(rules.allowed_class_durations[0]) }
@@ -174,14 +189,18 @@ export default function TeacherCohortsPage() {
   };
 
   const handleClose = async () => {
-    if (!closingCohort || !closeDate) return;
+    if (!closingCohort || !closeForm.selectedSlot) return;
     setActionLoading(true);
     try {
+      // La fecha/hora elegida acá ya no es solo metadata: el backend usa
+      // este mismo start_date + duration_minutes para crear de una vez la
+      // primera sesión (Class) real del grupo (ver close_cohort_endpoint).
       await api.post(`/cohorts/${closingCohort.id}/close`, {
-        start_date: new Date(closeDate).toISOString(),
+        start_date: closeForm.selectedSlot.start_time_utc,
+        duration_minutes: Number(closeForm.duration),
       });
       setClosingCohort(null);
-      setCloseDate("");
+      setCloseForm({ date: "", selectedSlot: null, duration: String(rules.allowed_class_durations?.[0] ?? 50) });
       await loadData();
       toast.success("Cohorte cerrada e iniciada correctamente");
     } catch (err) {
@@ -349,7 +368,7 @@ export default function TeacherCohortsPage() {
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => { setClosingCohort(cohort); setCloseDate(""); }}
+                  onClick={() => { setClosingCohort(cohort); setCloseForm({ date: "", selectedSlot: null, duration: String(rules.allowed_class_durations?.[0] ?? 50) }); }}
                   disabled={cohort.current_students === 0}
                 >
                   <Lock className="w-3.5 h-3.5" /> Cerrar con integrantes actuales
@@ -549,8 +568,8 @@ export default function TeacherCohortsPage() {
         onClose={() => setClosingCohort(null)}
         title="Cerrar cohorte"
         footer={
-          <Button className="w-full" onClick={handleClose} loading={actionLoading} disabled={!closeDate}>
-            <Lock className="w-4 h-4" /> Confirmar cierre
+          <Button className="w-full" onClick={handleClose} loading={actionLoading} disabled={!closeForm.selectedSlot}>
+            <Lock className="w-4 h-4" /> Confirmar cierre y agendar 1ª sesión
           </Button>
         }
       >
@@ -565,15 +584,29 @@ export default function TeacherCohortsPage() {
                 </span>
               </div>
             )}
-            <div>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Fecha y hora de inicio</label>
-              <input
-                type="datetime-local"
-                className="w-full mt-2 border border-slate-200 rounded-xl px-3 py-2.5 text-sm"
-                value={closeDate}
-                onChange={(e) => setCloseDate(e.target.value)}
-              />
-            </div>
+            <p className="text-xs text-slate-500">
+              La fecha y horario que elijas acá quedan como la fecha de inicio del grupo <strong>y</strong>{" "}
+              generan de una vez la primera sesión (clase) real de la cohorte.
+            </p>
+
+            {/* Corrección QA: antes esto era un <input type="datetime-local">
+                suelto, sin validar contra la disponibilidad real del
+                profesor, y la fecha elegida nunca generaba una Class de
+                verdad — solo quedaba como metadata de la cohorte. Ahora
+                reutiliza el mismo selector de calendario + horarios reales
+                que "Agendar sesión" (ver GroupSessionSlotPicker). */}
+            <GroupSessionSlotPicker
+              allowedDurations={rules.allowed_class_durations}
+              duration={closeForm.duration}
+              onDurationChange={(d) => setCloseForm({ ...closeForm, duration: d, selectedSlot: null })}
+              date={closeForm.date}
+              onDateChange={(d) => setCloseForm({ ...closeForm, date: d, selectedSlot: null })}
+              slots={closeSlots}
+              slotsLoading={closeSlotsLoading}
+              selectedSlot={closeForm.selectedSlot}
+              onSelectSlot={(slot) => setCloseForm({ ...closeForm, selectedSlot: slot })}
+              myTz={myTz}
+            />
           </div>
         )}
       </FullScreenModal>
@@ -599,93 +632,18 @@ export default function TeacherCohortsPage() {
             Se creará una sesión compartida e inscribirá automáticamente a todos los alumnos con pago confirmado de esta cohorte.
           </p>
 
-          <div>
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Duración</label>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {rules.allowed_class_durations.map(d => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setSessionForm({ ...sessionForm, duration: String(d), selectedSlot: null })}
-                  className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-colors ${
-                    Number(sessionForm.duration) === d
-                      ? "border-pink-400 bg-pink-50 text-pink-600"
-                      : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
-                  }`}
-                >
-                  {d} min
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Corrección QA: antes eran dos <input type="date"/"time"> sueltos,
-              sin validar contra la disponibilidad real del profesor. Ahora
-              reutiliza el mismo calendario + listado de huecos reales que ya
-              usa RescheduleModal/GodModeAvailabilityPicker. */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                1. Elige la fecha
-              </label>
-              <RescheduleCalendar
-                value={sessionForm.date}
-                onChange={(d) => setSessionForm({ ...sessionForm, date: d, selectedSlot: null })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                2. Elige el horario disponible
-              </label>
-
-              {!sessionForm.date ? (
-                <div className="flex flex-col items-center justify-center h-[240px] bg-slate-50/80 border border-slate-100 rounded-2xl p-6 text-center">
-                  <Calendar className="w-9 h-9 text-slate-300 mb-2" />
-                  <p className="text-xs text-slate-500 font-bold">Primero selecciona una fecha en el calendario</p>
-                </div>
-              ) : sessionSlotsLoading ? (
-                <div className="flex flex-col items-center justify-center h-[240px] bg-slate-50/80 rounded-2xl">
-                  <div className="w-8 h-8 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin mb-2" />
-                  <p className="text-xs font-semibold text-slate-400">Buscando horarios...</p>
-                </div>
-              ) : sessionSlots.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-[240px] bg-slate-50/80 border border-slate-100 rounded-2xl p-6 text-center">
-                  <AlertTriangle className="w-9 h-9 text-amber-400 mb-2" />
-                  <p className="text-xs text-slate-700 font-black mb-1">Sin disponibilidad</p>
-                  <p className="text-[11px] text-slate-400">No hay huecos libres en este día. Prueba con otra fecha.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2 h-[240px] overflow-y-auto pr-1">
-                  {sessionSlots.map((slot, i) => {
-                    const isSelected = sessionForm.selectedSlot?.start_time_utc === slot.start_time_utc;
-                    const blocked = !slot.is_available || slot.is_past || slot.too_soon;
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => !blocked && setSessionForm({ ...sessionForm, selectedSlot: slot })}
-                        disabled={blocked}
-                        className={`py-2.5 px-3 rounded-xl text-center border-2 flex flex-col items-center justify-center transition-all duration-200
-                          ${blocked ? "border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed"
-                            : isSelected ? "border-pink-500 bg-pink-50 shadow-md shadow-pink-100"
-                            : "border-slate-100 bg-white hover:border-pink-200 shadow-sm"}`}
-                      >
-                        <span className={`text-sm font-black tracking-tight ${blocked ? "text-slate-400" : isSelected ? "text-pink-600" : "text-slate-700"}`}>
-                          {formatTimeTz(slot.start_time_utc, myTz)}
-                        </span>
-                        {blocked && (
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-0.5">
-                            {slot.is_past ? "Pasado" : slot.too_soon ? "Muy pronto" : "Ocupado"}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
+          <GroupSessionSlotPicker
+            allowedDurations={rules.allowed_class_durations}
+            duration={sessionForm.duration}
+            onDurationChange={(d) => setSessionForm({ ...sessionForm, duration: d, selectedSlot: null })}
+            date={sessionForm.date}
+            onDateChange={(d) => setSessionForm({ ...sessionForm, date: d, selectedSlot: null })}
+            slots={sessionSlots}
+            slotsLoading={sessionSlotsLoading}
+            selectedSlot={sessionForm.selectedSlot}
+            onSelectSlot={(slot) => setSessionForm({ ...sessionForm, selectedSlot: slot })}
+            myTz={myTz}
+          />
         </div>
       </FullScreenModal>
 
@@ -748,7 +706,123 @@ export default function TeacherCohortsPage() {
   );
 }
 
-// ─── Modal: asistencia por alumno de una sesión grupal ─────────────────────
+// ─── Selector de fecha real + horario disponible para sesiones grupales ────
+// Corrección QA: antes tanto "Cerrar cohorte" (fecha de inicio) como
+// "Agendar sesión" tenían su propio formulario de fecha/hora — el primero
+// era un <input type="datetime-local"> suelto sin validar disponibilidad
+// real, y el segundo ya usaba RescheduleCalendar + useAvailableSlots. Se
+// extrae la UI compartida acá para que ambos flujos generen una sesión
+// real (Class) contra un horario que sabemos que existe de verdad.
+function GroupSessionSlotPicker({
+  allowedDurations,
+  duration,
+  onDurationChange,
+  date,
+  onDateChange,
+  slots,
+  slotsLoading,
+  selectedSlot,
+  onSelectSlot,
+  myTz,
+}: {
+  allowedDurations: number[];
+  duration: string;
+  onDurationChange: (d: string) => void;
+  date: string;
+  onDateChange: (d: string) => void;
+  slots: AvailableSlot[];
+  slotsLoading: boolean;
+  selectedSlot: AvailableSlot | null;
+  onSelectSlot: (slot: AvailableSlot) => void;
+  myTz: string;
+}) {
+  return (
+    <>
+      <div>
+        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Duración</label>
+        <div className="flex flex-wrap gap-2 mt-2">
+          {allowedDurations.map(d => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => onDurationChange(String(d))}
+              className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-colors ${
+                Number(duration) === d
+                  ? "border-pink-400 bg-pink-50 text-pink-600"
+                  : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+              }`}
+            >
+              {d} min
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
+        <div>
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+            1. Elige la fecha
+          </label>
+          <RescheduleCalendar value={date} onChange={onDateChange} />
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+            2. Elige el horario disponible
+          </label>
+
+          {!date ? (
+            <div className="flex flex-col items-center justify-center h-[240px] bg-slate-50/80 border border-slate-100 rounded-2xl p-6 text-center">
+              <Calendar className="w-9 h-9 text-slate-300 mb-2" />
+              <p className="text-xs text-slate-500 font-bold">Primero selecciona una fecha en el calendario</p>
+            </div>
+          ) : slotsLoading ? (
+            <div className="flex flex-col items-center justify-center h-[240px] bg-slate-50/80 rounded-2xl">
+              <div className="w-8 h-8 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin mb-2" />
+              <p className="text-xs font-semibold text-slate-400">Buscando horarios...</p>
+            </div>
+          ) : slots.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-[240px] bg-slate-50/80 border border-slate-100 rounded-2xl p-6 text-center">
+              <AlertTriangle className="w-9 h-9 text-amber-400 mb-2" />
+              <p className="text-xs text-slate-700 font-black mb-1">Sin disponibilidad</p>
+              <p className="text-[11px] text-slate-400">No hay huecos libres en este día. Prueba con otra fecha.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 h-[240px] overflow-y-auto pr-1">
+              {slots.map((slot, i) => {
+                const isSelected = selectedSlot?.start_time_utc === slot.start_time_utc;
+                const blocked = !slot.is_available || slot.is_past || slot.too_soon;
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => !blocked && onSelectSlot(slot)}
+                    disabled={blocked}
+                    className={`py-2.5 px-3 rounded-xl text-center border-2 flex flex-col items-center justify-center transition-all duration-200
+                      ${blocked ? "border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed"
+                        : isSelected ? "border-pink-500 bg-pink-50 shadow-md shadow-pink-100"
+                        : "border-slate-100 bg-white hover:border-pink-200 shadow-sm"}`}
+                  >
+                    <span className={`text-sm font-black tracking-tight ${blocked ? "text-slate-400" : isSelected ? "text-pink-600" : "text-slate-700"}`}>
+                      {formatTimeTz(slot.start_time_utc, myTz)}
+                    </span>
+                    {blocked && (
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-0.5">
+                        {slot.is_past ? "Pasado" : slot.too_soon ? "Muy pronto" : "Ocupado"}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Modal de asistencia por alumno de una sesión grupal ─────────────────────
 // Antes el único estado disponible era el de la Class compartida (todo el
 // grupo "completado" o "no_show" a la vez). Esto permite marcar
 // individualmente quién asistió a ESTA sesión puntual.

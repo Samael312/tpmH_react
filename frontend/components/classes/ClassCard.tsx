@@ -744,27 +744,40 @@ export default function ClassCard({
         />
       )}
 
-      <ConfirmModal
-        open={pendingConfirm === "leave_group"}
-        title="¿Salir del grupo?"
-        description="Esto te saca de TODO el grupo, no solo de esta clase. Perderás tu cupo en todas las próximas sesiones de esta cohorte y podrás elegir un nuevo paquete después."
-        confirmLabel="Salir del grupo"
-        variant="danger"
-        loading={updating}
-        onClose={() => setPendingConfirm(null)}
-        onConfirm={executeLeaveGroup}
-      />
+      {/* Feedback QA (ronda extra): estos ConfirmModal se portan a <body>
+          igual que el menú de "Acciones" de arriba. La card tiene
+          `overflow-hidden` y, al hacer hover, `transform` (por el
+          `hover:-translate-y-0.5`) — eso convierte a la card en el
+          "containing block" de cualquier hijo `position: fixed`, así que
+          sin el portal el modal se renderizaba encogido dentro de la
+          card en vez de ocupar la pantalla completa. */}
+      {pendingConfirm === "leave_group" && createPortal(
+        <ConfirmModal
+          open
+          title="¿Salir del grupo?"
+          description="Esto te saca de TODO el grupo, no solo de esta clase. Perderás tu cupo en todas las próximas sesiones de esta cohorte y podrás elegir un nuevo paquete después."
+          confirmLabel="Salir del grupo"
+          variant="danger"
+          loading={updating}
+          onClose={() => setPendingConfirm(null)}
+          onConfirm={executeLeaveGroup}
+        />,
+        document.body
+      )}
 
-      <ConfirmModal
-        open={pendingConfirm === "leave_session"}
-        title="¿Salir de esta clase?"
-        description="Vas a salir solo de esta sesión puntual. Seguirás inscrito en el resto de las clases de tu grupo."
-        confirmLabel="Salir de esta clase"
-        variant="danger"
-        loading={updating}
-        onClose={() => setPendingConfirm(null)}
-        onConfirm={executeLeaveSession}
-      />
+      {pendingConfirm === "leave_session" && createPortal(
+        <ConfirmModal
+          open
+          title="¿Salir de esta clase?"
+          description="Vas a salir solo de esta sesión puntual. Seguirás inscrito en el resto de las clases de tu grupo."
+          confirmLabel="Salir de esta clase"
+          variant="danger"
+          loading={updating}
+          onClose={() => setPendingConfirm(null)}
+          onConfirm={executeLeaveSession}
+        />,
+        document.body
+      )}
     </div>
   );
 }
