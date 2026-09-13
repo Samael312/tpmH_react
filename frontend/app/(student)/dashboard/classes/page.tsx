@@ -105,6 +105,10 @@ function CancelModal({
   onSaved: () => void;
 }) {
   const isGroup = !!cohortId;
+  // M10: para una clase grupal el alumno puede salir SOLO de esta sesión
+  // puntual (DELETE /classes/{id}/leave) o de toda la cohorte
+  // (POST /cohorts/{id}/leave). Antes solo existía la segunda opción.
+  const [scope, setScope] = useState<"session" | "group" | null>(isGroup ? null : "session");
   const [cancelling, setCancelling] = useState(false);
   const [error, setError]           = useState("");
   const [left, setLeft]             = useState(false);
@@ -115,13 +119,16 @@ function CancelModal({
     setCancelling(true);
     setError("");
     try {
-      if (isGroup) {
-        // Salir de UNA sesión no basta: sale del grupo por completo,
-        // liberando su cupo en todas las sesiones futuras de la cohorte.
+      if (scope === "group") {
         await api.post(`/cohorts/${cohortId}/leave`);
         setLeft(true);
         toast.success("Has salido del grupo correctamente");
         onSaved();
+      } else if (scope === "session" && isGroup) {
+        await api.delete(`/classes/${classId}/leave`);
+        toast.success("Saliste de esta sesión correctamente");
+        onSaved();
+        onClose();
       } else {
         await api.delete(`/classes/${classId}`);
         toast.success("Clase cancelada correctamente");
@@ -180,6 +187,53 @@ function CancelModal({
     );
   }
 
+  // Paso 0 (solo grupal): elegir si sale de esta sesión o de todo el grupo
+  if (isGroup && scope === null) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative w-full max-w-sm bg-white/95 backdrop-blur-2xl
+                        rounded-[2.5rem] shadow-2xl shadow-slate-200/60
+                        border border-white p-8
+                        animate-in fade-in zoom-in-95 duration-200">
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center mb-4">
+              <AlertCircle className="w-7 h-7 text-amber-500" />
+            </div>
+            <h2 className="text-xl font-black text-slate-800 tracking-tight mb-2">
+              ¿Qué quieres hacer?
+            </h2>
+            <p className="text-sm text-slate-500">
+              Clase del <span className="font-bold text-slate-700 capitalize">{dateFormatted}</span>
+            </p>
+          </div>
+          <div className="space-y-3">
+            <button
+              onClick={() => setScope("session")}
+              className="w-full text-left px-5 py-4 rounded-2xl border-2 border-slate-100 hover:border-amber-300 hover:bg-amber-50/50 transition-all"
+            >
+              <p className="text-sm font-black text-slate-800">Salir solo de esta clase</p>
+              <p className="text-xs text-slate-500 mt-0.5">Sigues inscrito en el resto de las sesiones del grupo.</p>
+            </button>
+            <button
+              onClick={() => setScope("group")}
+              className="w-full text-left px-5 py-4 rounded-2xl border-2 border-slate-100 hover:border-red-300 hover:bg-red-50/50 transition-all"
+            >
+              <p className="text-sm font-black text-slate-800">Salir de todo el grupo</p>
+              <p className="text-xs text-slate-500 mt-0.5">Pierdes tu cupo en todas las sesiones futuras de esta cohorte.</p>
+            </button>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-full mt-4 py-3 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+          >
+            Volver
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
@@ -198,16 +252,22 @@ function CancelModal({
             <AlertCircle className="w-7 h-7 text-red-500" />
           </div>
           <h2 className="text-xl font-black text-slate-800 tracking-tight mb-2">
-            {isGroup ? "¿Salir del grupo?" : "¿Cancelar clase?"}
+            {scope === "group" ? "¿Salir del grupo?" : isGroup ? "¿Salir de esta clase?" : "¿Cancelar clase?"}
           </h2>
           <p className="text-sm text-slate-500">
-            {isGroup ? (
+            {scope === "group" ? (
               <>
                 Esto te saca de <span className="font-bold text-slate-700">todo el grupo</span>,
                 no solo de la clase del{" "}
                 <span className="font-bold text-slate-700 capitalize">{dateFormatted}</span>.
                 Perderás tu cupo en todas las próximas sesiones de esta cohorte.
                 Podrás elegir un nuevo paquete después. Esta acción no se puede deshacer.
+              </>
+            ) : isGroup ? (
+              <>
+                Saldrás únicamente de la clase del{" "}
+                <span className="font-bold text-slate-700 capitalize">{dateFormatted}</span>.
+                Sigues inscrito en el resto de las sesiones de tu grupo. Esta acción no se puede deshacer.
               </>
             ) : (
               <>
@@ -230,7 +290,7 @@ function CancelModal({
 
         <div className="flex gap-3">
           <button
-            onClick={onClose}
+            onClick={() => (isGroup ? setScope(null) : onClose())}
             className="flex-1 py-3 text-sm font-bold text-slate-600
                        bg-slate-100 hover:bg-slate-200 rounded-xl
                        transition-colors"
@@ -249,7 +309,7 @@ function CancelModal({
               <div className="w-4 h-4 border-2 border-white/40
                               border-t-white rounded-full animate-spin" />
             ) : (
-              <><X className="w-4 h-4" /> {isGroup ? "Salir del grupo" : "Cancelar clase"}</>
+              <><X className="w-4 h-4" /> {scope === "group" ? "Salir del grupo" : isGroup ? "Salir de la clase" : "Cancelar clase"}</>
             )}
           </button>
         </div>

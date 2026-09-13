@@ -15,7 +15,7 @@ import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
 import { usePageTopBar } from '@/lib/mobileTopBar'
-import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { AlertTriangle, RefreshCw, Wallet, Coins, Landmark, Smartphone } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
 import { getErrorMessage } from '@/lib/errorMessage'
 
@@ -565,7 +565,9 @@ export default function SettingsPage() {
               <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 space-y-4 transition-all hover:border-slate-200">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">🅿️</span>
+                    <span className="w-11 h-11 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+                      <Wallet className="w-5 h-5 text-blue-600" />
+                    </span>
                     <div>
                       <p className="text-slate-800 text-sm font-bold">PayPal</p>
                       <p className="text-slate-500 text-xs font-medium mt-0.5">
@@ -610,7 +612,9 @@ export default function SettingsPage() {
               <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 space-y-4 transition-all hover:border-slate-200">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">🔸</span>
+                    <span className="w-11 h-11 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+                      <Coins className="w-5 h-5 text-amber-600" />
+                    </span>
                     <div>
                       <p className="text-slate-800 text-sm font-bold">Binance (USDT)</p>
                       <p className="text-slate-500 text-xs font-medium mt-0.5">
@@ -665,7 +669,9 @@ export default function SettingsPage() {
               <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 space-y-4 transition-all hover:border-slate-200">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">🏦</span>
+                    <span className="w-11 h-11 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                      <Landmark className="w-5 h-5 text-indigo-600" />
+                    </span>
                     <div>
                       <p className="text-slate-800 text-sm font-bold">Transferencia bancaria</p>
                       <p className="text-slate-500 text-xs font-medium mt-0.5">
@@ -710,7 +716,9 @@ export default function SettingsPage() {
               <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 space-y-4 transition-all hover:border-slate-200">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">📱</span>
+                    <span className="w-11 h-11 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                      <Smartphone className="w-5 h-5 text-emerald-600" />
+                    </span>
                     <div>
                       <p className="text-slate-800 text-sm font-bold">Pago móvil / Bizum</p>
                       <p className="text-slate-500 text-xs font-medium mt-0.5">

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Users2, Plus, Check, Calendar, Lock, Ban, ChevronRight,
-  AlertTriangle, Clock, X, UserCheck, UserX, RefreshCw,
+  AlertTriangle, Clock, X, UserCheck, UserX, RefreshCw, RotateCcw,
 } from "lucide-react";
 import api from "@/lib/api";
 import { Card, Badge, Button, Skeleton, FullScreenModal, ConfirmModal } from "@/components/ui";
@@ -18,6 +18,10 @@ import {
   type TeacherCohortItem as Cohort,
   type TeacherPackage as Package,
 } from "@/hooks/useTeacherData";
+import { RescheduleCalendar } from "@/components/classes/RescheduleModal";
+import { useAvailableSlots, type AvailableSlot } from "@/hooks/useStudentData";
+import { useAuthStore } from "@/store/authStore";
+import { getMyDisplayTimezone, formatTimeTz } from "@/lib/tzFormat";
 import { useBusinessRules } from "@/hooks/useBusinessRules";
 import { getErrorMessage } from "@/lib/errorMessage";
 import { useToast } from "@/hooks/useToast";
@@ -94,6 +98,7 @@ export default function TeacherCohortsPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [sessionsByCohort, setSessionsByCohort] = useState<Record<number, Session[]>>({});
   const [attendanceSession, setAttendanceSession] = useState<Session | null>(null);
+  const [attendanceSummaryCohort, setAttendanceSummaryCohort] = useState<Cohort | null>(null);
   // Integrantes de la cohorte expandida — se recargan cada vez que se
   // abre una cohorte distinta, así se ve en vivo quién se va uniendo
   // mientras el grupo todavía está "filling".
@@ -108,11 +113,17 @@ export default function TeacherCohortsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<Cohort | null>(null);
   const [completeTarget, setCompleteTarget] = useState<Cohort | null>(null);
+  const [reopenTarget, setReopenTarget] = useState<Cohort | null>(null);
 
   const [schedulingCohort, setSchedulingCohort] = useState<Cohort | null>(null);
   const { rules } = useBusinessRules();
-  const [sessionForm, setSessionForm] = useState({ date: "", time: "", duration: "50" });
+  const [sessionForm, setSessionForm] = useState<{ date: string; selectedSlot: AvailableSlot | null; duration: string }>({ date: "", selectedSlot: null, duration: "50" });
   const toast = useToast();
+  const teacherUsername = useAuthStore((s) => s.user?.username) ?? null;
+  const { slots: sessionSlots, loading: sessionSlotsLoading } = useAvailableSlots(
+    sessionForm.date, Number(sessionForm.duration) || 50, teacherUsername, "group"
+  );
+  const myTz = getMyDisplayTimezone();
 
   // La duración por defecto del form depende del catálogo configurado por
   // el superadmin, que llega async — se sincroniza cuando esté disponible.
@@ -208,19 +219,35 @@ export default function TeacherCohortsPage() {
     }
   };
 
-  const handleScheduleSession = async () => {
-    if (!schedulingCohort || !sessionForm.date || !sessionForm.time) return;
+  // Corrección QA: antes una cohorte cerrada por error (o que el profesor
+  // quiere reabrir para seguir aceptando inscripciones) se quedaba
+  // "confirmed" para siempre, sin forma de volver a "filling".
+  const handleReopen = async (cohort: Cohort) => {
     setActionLoading(true);
     try {
-      const startTimeUtc = new Date(`${sessionForm.date}T${sessionForm.time}:00`).toISOString();
+      await api.post(`/cohorts/${cohort.id}/reopen`);
+      await loadData();
+      toast.success("Cohorte reabierta — vuelve a aceptar inscripciones");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "No se pudo reabrir la cohorte"));
+    } finally {
+      setActionLoading(false);
+      setReopenTarget(null);
+    }
+  };
+
+  const handleScheduleSession = async () => {
+    if (!schedulingCohort || !sessionForm.date || !sessionForm.selectedSlot) return;
+    setActionLoading(true);
+    try {
       await api.post(`/cohorts/${schedulingCohort.id}/sessions`, {
-        start_time_utc: startTimeUtc,
+        start_time_utc: sessionForm.selectedSlot.start_time_utc,
         duration_minutes: Number(sessionForm.duration),
       });
       const res = await api.get<Session[]>(`/cohorts/${schedulingCohort.id}/sessions`);
       setSessionsByCohort((prev) => ({ ...prev, [schedulingCohort.id]: res.data }));
       setSchedulingCohort(null);
-      setSessionForm({ date: "", time: "", duration: String(rules.allowed_class_durations?.[0] ?? 50) });
+      setSessionForm({ date: "", selectedSlot: null, duration: String(rules.allowed_class_durations?.[0] ?? 50) });
       toast.success("Sesión agendada correctamente");
     } catch (err) {
       toast.error(getErrorMessage(err, "No se pudo agendar la sesión"));
@@ -340,6 +367,9 @@ export default function TeacherCohortsPage() {
                 <Button size="sm" variant="secondary" onClick={() => setCompleteTarget(cohort)}>
                   <Check className="w-3.5 h-3.5" /> Finalizar cohorte
                 </Button>
+                <Button size="sm" variant="secondary" onClick={() => setReopenTarget(cohort)}>
+                  <RotateCcw className="w-3.5 h-3.5" /> Reabrir
+                </Button>
                 <Button size="sm" variant="danger" onClick={() => setCancelTarget(cohort)}>
                   <Ban className="w-3.5 h-3.5" /> Cancelar cohorte
                 </Button>
@@ -405,23 +435,36 @@ export default function TeacherCohortsPage() {
                       : "Todavía no hay sesiones agendadas."}
                   </p>
                 ) : (
-                  <ul className="space-y-2">
-                    {sessionsByCohort[cohort.id].map((s) => (
-                      <li key={s.id} className="flex items-center justify-between text-xs bg-slate-50 rounded-xl px-3 py-2">
-                        <span className="flex items-center gap-1.5 text-slate-600">
-                          <Clock className="w-3.5 h-3.5" />
-                          {new Date(s.start_time_utc).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" })}
-                          {" · "}{s.duration} min
-                        </span>
-                        <button
-                          onClick={() => setAttendanceSession(s)}
-                          className="text-pink-600 font-bold hover:underline flex items-center gap-1"
-                        >
-                          {s.participant_count} alumno(s)
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                  <>
+                    <ul className="space-y-2">
+                      {sessionsByCohort[cohort.id].map((s) => (
+                        <li key={s.id} className="flex items-center justify-between text-xs bg-slate-50 rounded-xl px-3 py-2">
+                          <span className="flex items-center gap-1.5 text-slate-600">
+                            <Clock className="w-3.5 h-3.5" />
+                            {new Date(s.start_time_utc).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" })}
+                            {" · "}{s.duration} min
+                          </span>
+                          <button
+                            onClick={() => setAttendanceSession(s)}
+                            className="text-pink-600 font-bold hover:underline flex items-center gap-1"
+                          >
+                            {s.participant_count} alumno(s)
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    {/* Corrección QA: antes solo se podía ver/marcar asistencia
+                        sesión por sesión — no había un resumen acumulado que
+                        muestre patrones (ej. un alumno que falta seguido). */}
+                    {sessionsByCohort[cohort.id].some(s => new Date(s.start_time_utc) <= new Date()) && (
+                      <button
+                        onClick={() => setAttendanceSummaryCohort(cohort)}
+                        className="mt-3 w-full text-xs font-bold text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-xl px-3 py-2.5 flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <UserCheck className="w-3.5 h-3.5" /> Ver historial de asistencia
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -545,7 +588,7 @@ export default function TeacherCohortsPage() {
             className="w-full"
             onClick={handleScheduleSession}
             loading={actionLoading}
-            disabled={!sessionForm.date || !sessionForm.time}
+            disabled={!sessionForm.date || !sessionForm.selectedSlot}
           >
             <Calendar className="w-4 h-4" /> Agendar
           </Button>
@@ -555,26 +598,7 @@ export default function TeacherCohortsPage() {
           <p className="text-xs text-slate-500">
             Se creará una sesión compartida e inscribirá automáticamente a todos los alumnos con pago confirmado de esta cohorte.
           </p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Fecha</label>
-              <input
-                type="date"
-                className="w-full mt-2 border border-slate-200 rounded-xl px-3 py-2.5 text-sm"
-                value={sessionForm.date}
-                onChange={(e) => setSessionForm({ ...sessionForm, date: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Hora</label>
-              <input
-                type="time"
-                className="w-full mt-2 border border-slate-200 rounded-xl px-3 py-2.5 text-sm"
-                value={sessionForm.time}
-                onChange={(e) => setSessionForm({ ...sessionForm, time: e.target.value })}
-              />
-            </div>
-          </div>
+
           <div>
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Duración</label>
             <div className="flex flex-wrap gap-2 mt-2">
@@ -582,7 +606,7 @@ export default function TeacherCohortsPage() {
                 <button
                   key={d}
                   type="button"
-                  onClick={() => setSessionForm({ ...sessionForm, duration: String(d) })}
+                  onClick={() => setSessionForm({ ...sessionForm, duration: String(d), selectedSlot: null })}
                   className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-colors ${
                     Number(sessionForm.duration) === d
                       ? "border-pink-400 bg-pink-50 text-pink-600"
@@ -594,6 +618,74 @@ export default function TeacherCohortsPage() {
               ))}
             </div>
           </div>
+
+          {/* Corrección QA: antes eran dos <input type="date"/"time"> sueltos,
+              sin validar contra la disponibilidad real del profesor. Ahora
+              reutiliza el mismo calendario + listado de huecos reales que ya
+              usa RescheduleModal/GodModeAvailabilityPicker. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                1. Elige la fecha
+              </label>
+              <RescheduleCalendar
+                value={sessionForm.date}
+                onChange={(d) => setSessionForm({ ...sessionForm, date: d, selectedSlot: null })}
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                2. Elige el horario disponible
+              </label>
+
+              {!sessionForm.date ? (
+                <div className="flex flex-col items-center justify-center h-[240px] bg-slate-50/80 border border-slate-100 rounded-2xl p-6 text-center">
+                  <Calendar className="w-9 h-9 text-slate-300 mb-2" />
+                  <p className="text-xs text-slate-500 font-bold">Primero selecciona una fecha en el calendario</p>
+                </div>
+              ) : sessionSlotsLoading ? (
+                <div className="flex flex-col items-center justify-center h-[240px] bg-slate-50/80 rounded-2xl">
+                  <div className="w-8 h-8 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin mb-2" />
+                  <p className="text-xs font-semibold text-slate-400">Buscando horarios...</p>
+                </div>
+              ) : sessionSlots.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[240px] bg-slate-50/80 border border-slate-100 rounded-2xl p-6 text-center">
+                  <AlertTriangle className="w-9 h-9 text-amber-400 mb-2" />
+                  <p className="text-xs text-slate-700 font-black mb-1">Sin disponibilidad</p>
+                  <p className="text-[11px] text-slate-400">No hay huecos libres en este día. Prueba con otra fecha.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 h-[240px] overflow-y-auto pr-1">
+                  {sessionSlots.map((slot, i) => {
+                    const isSelected = sessionForm.selectedSlot?.start_time_utc === slot.start_time_utc;
+                    const blocked = !slot.is_available || slot.is_past || slot.too_soon;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => !blocked && setSessionForm({ ...sessionForm, selectedSlot: slot })}
+                        disabled={blocked}
+                        className={`py-2.5 px-3 rounded-xl text-center border-2 flex flex-col items-center justify-center transition-all duration-200
+                          ${blocked ? "border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed"
+                            : isSelected ? "border-pink-500 bg-pink-50 shadow-md shadow-pink-100"
+                            : "border-slate-100 bg-white hover:border-pink-200 shadow-sm"}`}
+                      >
+                        <span className={`text-sm font-black tracking-tight ${blocked ? "text-slate-400" : isSelected ? "text-pink-600" : "text-slate-700"}`}>
+                          {formatTimeTz(slot.start_time_utc, myTz)}
+                        </span>
+                        {blocked && (
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-0.5">
+                            {slot.is_past ? "Pasado" : slot.too_soon ? "Muy pronto" : "Ocupado"}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </FullScreenModal>
 
@@ -601,6 +693,13 @@ export default function TeacherCohortsPage() {
         <AttendanceModal
           session={attendanceSession}
           onClose={() => setAttendanceSession(null)}
+        />
+      )}
+
+      {attendanceSummaryCohort && (
+        <AttendanceSummaryModal
+          cohort={attendanceSummaryCohort}
+          onClose={() => setAttendanceSummaryCohort(null)}
         />
       )}
 
@@ -629,6 +728,17 @@ export default function TeacherCohortsPage() {
         variant={completeTarget && completeTarget.current_students < completeTarget.min_students ? "danger" : "primary"}
         onClose={() => setCompleteTarget(null)}
         onConfirm={() => { if (completeTarget) return handleComplete(completeTarget) }}
+        loading={actionLoading}
+      />
+
+      <ConfirmModal
+        open={!!reopenTarget}
+        title="Reabrir cohorte"
+        description={reopenTarget ? `¿Reabrir la cohorte de "${reopenTarget.package_name}"? Volverá a estar "abierta" (aceptando inscripciones nuevas) y tendrás que cerrarla de nuevo para fijar una fecha de inicio.` : ""}
+        confirmLabel="Reabrir"
+        variant="primary"
+        onClose={() => setReopenTarget(null)}
+        onConfirm={() => { if (reopenTarget) return handleReopen(reopenTarget) }}
         loading={actionLoading}
       />
 
@@ -722,6 +832,73 @@ function AttendanceModal({ session, onClose }: { session: Session; onClose: () =
                 </div>
               </li>
             ))}
+          </ul>
+        )}
+      </div>
+    </FullScreenModal>
+  );
+}
+
+// ─── Modal: historial de asistencia acumulado por alumno ───────────────────
+// Corrección QA: antes la única vista de asistencia era por sesión puntual
+// (AttendanceModal, arriba) — no existía un resumen a lo largo del ciclo
+// completo de la cohorte que le permita al profesor notar patrones (un
+// alumno que falta seguido, por ejemplo).
+interface AttendanceSummary {
+  student_id: number;
+  student_name: string;
+  sessions_confirmed: number;
+  sessions_no_show: number;
+  sessions_total: number;
+}
+
+function AttendanceSummaryModal({ cohort, onClose }: { cohort: Cohort; onClose: () => void }) {
+  const [summary, setSummary] = useState<AttendanceSummary[] | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api.get<AttendanceSummary[]>(`/cohorts/${cohort.id}/attendance-summary`)
+      .then(res => setSummary(res.data))
+      .catch((e) => setError(getErrorMessage(e, "No se pudo cargar el historial")));
+  }, [cohort.id]);
+
+  return (
+    <FullScreenModal open onClose={onClose} title="Historial de asistencia">
+      <div className="space-y-3">
+        <p className="text-xs text-slate-500">
+          Sesiones ya realizadas de la cohorte de &quot;{cohort.package_name}&quot;.
+        </p>
+        {error && <p className="text-xs font-bold text-rose-500">{error}</p>}
+        {!summary ? (
+          <p className="text-xs text-slate-400">Cargando…</p>
+        ) : summary.length === 0 ? (
+          <p className="text-xs text-slate-400">Todavía no hay sesiones pasadas para mostrar asistencia.</p>
+        ) : (
+          <ul className="space-y-2">
+            {summary.map((s) => {
+              const rate = s.sessions_total > 0 ? Math.round((s.sessions_confirmed / s.sessions_total) * 100) : 0;
+              return (
+                <li key={s.student_id} className="bg-slate-50 rounded-xl px-3.5 py-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-sm font-bold text-slate-700">{s.student_name}</span>
+                    <span className={`text-xs font-black ${rate >= 80 ? "text-emerald-600" : rate >= 50 ? "text-amber-600" : "text-rose-600"}`}>
+                      {s.sessions_confirmed}/{s.sessions_total} ({rate}%)
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${rate >= 80 ? "bg-emerald-400" : rate >= 50 ? "bg-amber-400" : "bg-rose-400"}`}
+                      style={{ width: `${rate}%` }}
+                    />
+                  </div>
+                  {s.sessions_no_show > 0 && (
+                    <p className="text-[11px] text-rose-500 font-semibold mt-1">
+                      {s.sessions_no_show} inasistencia{s.sessions_no_show !== 1 ? "s" : ""}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

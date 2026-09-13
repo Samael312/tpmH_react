@@ -295,6 +295,16 @@ function ProfileStatusBanner({ profile }: { profile: TeacherProfile | null }) {
   );
 }
 
+interface TeacherAppealItem {
+  id: number;
+  appeal_number: number;
+  message: string;
+  status: string; // "pending" | "approved" | "rejected"
+  admin_response: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
 function RejectionFeedbackBanner({ profile, onRefetch }: { profile: TeacherProfile | null; onRefetch: () => void }) {
   const [dismissing, setDismissing] = useState(false)
   const [showAppealForm, setShowAppealForm] = useState(false)
@@ -303,9 +313,26 @@ function RejectionFeedbackBanner({ profile, onRefetch }: { profile: TeacherProfi
   const [appealSent, setAppealSent] = useState(false)
   const [appealError, setAppealError] = useState('')
 
+  // Corrección QA: el profesor podía enviar apelaciones pero nunca veía si
+  // ya habían sido respondidas ni qué había dicho el admin — el backend
+  // (GET /teachers/me/appeals) ya guardaba todo esto, solo faltaba mostrarlo.
+  const [showHistory, setShowHistory] = useState(false)
+  const [appeals, setAppeals] = useState<TeacherAppealItem[] | null>(null)
+  const [loadingAppeals, setLoadingAppeals] = useState(false)
+
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const toast = useToast()
+
+  useEffect(() => {
+    if (profile?.status !== 'rejected') return
+    if (!showHistory || appeals !== null) return
+    setLoadingAppeals(true)
+    api.get<TeacherAppealItem[]>('/teachers/me/appeals')
+      .then(res => setAppeals(res.data))
+      .catch(() => setAppeals([]))
+      .finally(() => setLoadingAppeals(false))
+  }, [showHistory, profile?.status, appeals])
 
   if (profile?.status !== 'rejected') return null
 
@@ -328,6 +355,7 @@ function RejectionFeedbackBanner({ profile, onRefetch }: { profile: TeacherProfi
       setAppealSent(true)
       toast.success('Apelación enviada correctamente')
       setAppealMessage('')
+      setAppeals(null)
       onRefetch()
     } catch (e) {
       setAppealError(getErrorMessage(e, 'Error enviando la apelación'))
@@ -442,6 +470,60 @@ function RejectionFeedbackBanner({ profile, onRefetch }: { profile: TeacherProfi
           </div>
         )
       ) : null}
+
+      {/* Corrección QA: historial desplegable de apelaciones con la
+          respuesta del admin, si la hay — antes no se mostraba nada. */}
+      {(profile.appeal_count ?? 0) > 0 && (
+        <div className="pt-1">
+          <button
+            onClick={() => setShowHistory(v => !v)}
+            className="text-xs font-bold text-rose-500 hover:text-rose-700 flex items-center gap-1.5 transition-colors"
+          >
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showHistory ? "rotate-180" : ""}`} />
+            {showHistory ? "Ocultar" : "Ver"} historial de apelaciones ({profile.appeal_count ?? 0}/2)
+          </button>
+
+          {showHistory && (
+            <div className="mt-3 space-y-3">
+              {loadingAppeals ? (
+                <p className="text-xs text-rose-400">Cargando historial…</p>
+              ) : !appeals || appeals.length === 0 ? (
+                <p className="text-xs text-rose-400">No hay apelaciones registradas todavía.</p>
+              ) : (
+                [...appeals].sort((a, b) => a.appeal_number - b.appeal_number).map((a) => {
+                  const statusStyle = a.status === "approved"
+                    ? "bg-emerald-100 text-emerald-700"
+                    : a.status === "rejected"
+                      ? "bg-rose-100 text-rose-700"
+                      : "bg-amber-100 text-amber-700";
+                  const statusLabel = a.status === "approved" ? "Aprobada" : a.status === "rejected" ? "Rechazada" : "Pendiente";
+                  return (
+                    <div key={a.id} className="bg-white/70 rounded-2xl p-4 border border-rose-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest">
+                          Apelación {a.appeal_number}/2
+                        </span>
+                        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${statusStyle}`}>
+                          {statusLabel}
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-700">{a.message}</p>
+                      {a.admin_response && (
+                        <div className="bg-slate-50 rounded-xl px-3 py-2 border border-slate-100">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
+                            Respuesta del equipo
+                          </p>
+                          <p className="text-sm text-slate-700">{a.admin_response}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ChevronDown, Check, MessageCircle } from "lucide-react";
+import { ChevronDown, Check, MessageCircle, Wallet, Coins, Landmark, Smartphone } from "lucide-react";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 
@@ -22,9 +22,20 @@ interface PaymentConfig {
 interface MethodEntry {
   key: string;
   label: string;
-  icon: string;
+  icon: React.ComponentType<{ className?: string }>;
+  iconBg: string;
+  iconFg: string;
   rows: { label: string; value: string }[];
 }
+
+// Iconos propios (SVG vía lucide-react) en vez de emoji, cuyo render varía
+// entre sistemas operativos/navegadores y no encaja con el resto del UI.
+const METHOD_STYLES: Record<string, { icon: React.ComponentType<{ className?: string }>; bg: string; fg: string }> = {
+  paypal: { icon: Wallet, bg: "bg-blue-100", fg: "text-blue-600" },
+  binance: { icon: Coins, bg: "bg-amber-100", fg: "text-amber-600" },
+  bank_transfer: { icon: Landmark, bg: "bg-indigo-100", fg: "text-indigo-600" },
+  mobile_payment: { icon: Smartphone, bg: "bg-emerald-100", fg: "text-emerald-600" },
+};
 
 // Mapea las preferencias guardadas en el perfil del estudiante
 // (Paypal, Binance, Zelle, BankTransfer, MobilePayment) a las claves
@@ -43,7 +54,9 @@ function buildMethods(config: PaymentConfig): MethodEntry[] {
     methods.push({
       key: "paypal",
       label: "PayPal",
-      icon: "🅿️",
+      icon: METHOD_STYLES.paypal.icon,
+      iconBg: METHOD_STYLES.paypal.bg,
+      iconFg: METHOD_STYLES.paypal.fg,
       rows: [{ label: "Email", value: config.paypal_email || "No especificado" }],
     });
   }
@@ -51,7 +64,9 @@ function buildMethods(config: PaymentConfig): MethodEntry[] {
     methods.push({
       key: "binance",
       label: "Binance (USDT)",
-      icon: "🔸",
+      icon: METHOD_STYLES.binance.icon,
+      iconBg: METHOD_STYLES.binance.bg,
+      iconFg: METHOD_STYLES.binance.fg,
       rows: [
         { label: "Dirección", value: config.binance_address || "No especificada" },
         { label: "Red", value: config.binance_network || "No especificada" },
@@ -62,7 +77,9 @@ function buildMethods(config: PaymentConfig): MethodEntry[] {
     methods.push({
       key: "bank_transfer",
       label: "Transferencia bancaria",
-      icon: "🏦",
+      icon: METHOD_STYLES.bank_transfer.icon,
+      iconBg: METHOD_STYLES.bank_transfer.bg,
+      iconFg: METHOD_STYLES.bank_transfer.fg,
       rows: [{ label: "Datos", value: config.bank_transfer_details || "No especificados" }],
     });
   }
@@ -70,7 +87,9 @@ function buildMethods(config: PaymentConfig): MethodEntry[] {
     methods.push({
       key: "mobile_payment",
       label: "Pago móvil / Bizum",
-      icon: "📱",
+      icon: METHOD_STYLES.mobile_payment.icon,
+      iconBg: METHOD_STYLES.mobile_payment.bg,
+      iconFg: METHOD_STYLES.mobile_payment.fg,
       rows: [{ label: "Datos", value: config.mobile_payment_details || "No especificados" }],
     });
   }
@@ -131,7 +150,9 @@ export default function PaymentMethodsInfo() {
               className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left"
             >
               <span className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                <span className="text-lg">{m.icon}</span>
+                <span className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${m.iconBg}`}>
+                  <m.icon className={`w-4 h-4 ${m.iconFg}`} />
+                </span>
                 {m.label}
                 {isPreferred && (
                   <span className="text-[9px] font-black uppercase tracking-widest text-pink-600 bg-pink-100 px-2 py-0.5 rounded-full flex items-center gap-1">

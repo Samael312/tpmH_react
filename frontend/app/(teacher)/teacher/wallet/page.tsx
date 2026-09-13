@@ -6,7 +6,7 @@ import { Card, Badge, RefreshButton, Skeleton, DesktopOnly } from '@/components/
 import { usePageTopBar } from '@/lib/mobileTopBar'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
-import { Wallet as WalletIcon, TrendingUp, CheckCircle2, X, Loader2, ArrowDownLeft, ArrowUpRight, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Wallet as WalletIcon, TrendingUp, CheckCircle2, X, Loader2, ArrowDownLeft, ArrowUpRight, AlertTriangle, RefreshCw, Coins, Landmark } from 'lucide-react'
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 
@@ -27,9 +27,9 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const DESTINATION_METHODS = [
-  { value: 'paypal', label: 'PayPal', icon: '🅿️' },
-  { value: 'binance', label: 'Binance (USDT)', icon: '🔸' },
-  { value: 'bank', label: 'Transferencia', icon: '🏦' },
+  { value: 'paypal', label: 'PayPal', icon: WalletIcon, fg: 'text-blue-600' },
+  { value: 'binance', label: 'Binance (USDT)', icon: Coins, fg: 'text-amber-600' },
+  { value: 'bank', label: 'Transferencia', icon: Landmark, fg: 'text-indigo-600' },
 ]
 
 function RequestWithdrawalModal({
@@ -137,7 +137,7 @@ function RequestWithdrawalModal({
                     : 'bg-slate-50 border-slate-100 text-slate-600 hover:border-slate-200'
                 }`}
               >
-                <span className="text-lg mb-1">{m.icon}</span>
+                <m.icon className={`w-5 h-5 mb-1 ${method === m.value ? 'text-pink-600' : m.fg}`} />
                 <span>{m.label}</span>
               </button>
             ))}

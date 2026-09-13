@@ -30,6 +30,7 @@ import {
   X,
   AlertTriangle,
   Snowflake,
+  Users2,
 } from "lucide-react";
 import PackageCheckout from "@/components/payments/PackageCheckout";
 import BuyCreditsModal from "@/components/payments/BuyCreditsModal";
@@ -167,6 +168,11 @@ export default function StudentDashboard() {
   const activeGroupEnrollments = enrollments.filter(
     e => !!e.cohort_id && e.status !== "cancelled"
   );
+  // Corrección QA: antes individual y grupal vivían en dos grids separados
+  // (uno arriba del otro) en vez de compartir el mismo set de tabs por
+  // profesor — un estudiante con un paquete individual Y un grupo veía dos
+  // bloques distintos. Ahora comparten un solo arreglo para las tabs.
+  const allBannerEnrollments = [...activeOrChangingEnrollments, ...activeGroupEnrollments];
 
   const classList: StudentClass[] = Array.isArray(classesData) ? classesData : [];
   const hasTrial = classList.some(c => c.class_type === "trial");
@@ -412,21 +418,15 @@ export default function StudentDashboard() {
           </div>
         )}
 
-        {stage === "ready" && activeGroupEnrollments.length > 0 && (
-          <div className={`grid gap-4 ${activeGroupEnrollments.length > 1 ? "sm:grid-cols-2" : ""}`}>
-            {activeGroupEnrollments.map((enr) => (
-              <GroupWaitingPanel key={enr.id} enrollment={enr} onChanged={handleRefresh} />
-            ))}
-          </div>
-        )}
-
-        {stage === "ready" && activeOrChangingEnrollments.length > 0 && (() => {
+        {stage === "ready" && allBannerEnrollments.length > 0 && (() => {
           // Un único banner con tabs (uno por profesor) en vez de tarjetas
           // una al lado de la otra — así también podemos, en la misma
           // posición, cambiar el contenido de la tab por un aviso de
-          // "profesor suspendido" sin desarmar el layout.
-          const tabIndex = Math.min(activeBannerTab, activeOrChangingEnrollments.length - 1);
-          const enr = activeOrChangingEnrollments[tabIndex];
+          // "profesor suspendido" sin desarmar el layout. Incluye tanto
+          // paquetes individuales como cohortes grupales del mismo alumno.
+          const tabIndex = Math.min(activeBannerTab, allBannerEnrollments.length - 1);
+          const enr = allBannerEnrollments[tabIndex];
+          const isGroupEnr = !!enr.cohort_id;
           const teacherSuspended = !!enr.teacher_status && enr.teacher_status !== "approved";
           const isUnlimited = enr.package?.classes_count == null;
           const remainingCredits = enr.available_credits ?? (isUnlimited
@@ -438,9 +438,9 @@ export default function StudentDashboard() {
 
           return (
             <div className="space-y-3">
-              {activeOrChangingEnrollments.length > 1 && (
+              {allBannerEnrollments.length > 1 && (
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 animate-in fade-in duration-500">
-                  {activeOrChangingEnrollments.map((e, i) => {
+                  {allBannerEnrollments.map((e, i) => {
                     const suspended = !!e.teacher_status && e.teacher_status !== "approved";
                     return (
                       <button
@@ -452,6 +452,7 @@ export default function StudentDashboard() {
                             : "bg-white text-slate-500 border border-slate-200 hover:border-slate-300"}`}
                       >
                         {suspended && <Snowflake className="w-3.5 h-3.5 text-rose-400" />}
+                        {!!e.cohort_id && <Users2 className="w-3.5 h-3.5" />}
                         {e.teacher_name || "Profesor"}
                       </button>
                     );
@@ -459,7 +460,9 @@ export default function StudentDashboard() {
                 </div>
               )}
 
-              {teacherSuspended ? (
+              {isGroupEnr ? (
+                <GroupWaitingPanel enrollment={enr} onChanged={handleRefresh} />
+              ) : teacherSuspended ? (
                 <div className="bg-rose-50 border border-rose-200 rounded-[2rem] p-6 sm:p-8 relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div className="flex items-start gap-3">
@@ -679,7 +682,7 @@ export default function StudentDashboard() {
           ) : (
             <div className="space-y-3">
               {upcoming.slice(0, 3).map((cls) => (
-                <ClassCard key={cls.id} class_={cls} role="student" readOnly showTeacherWhatsapp={platformConfig?.show_teacher_whatsapp ?? true} />
+                <ClassCard key={cls.id} class_={cls} role="student" onUpdate={refetchClasses} showTeacherWhatsapp={platformConfig?.show_teacher_whatsapp ?? true} />
               ))}
             </div>
           )}

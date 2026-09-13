@@ -7,7 +7,7 @@ import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 import { getFlagForNationality } from '@/lib/nationalities'
 import Image from 'next/image'
-import { X, Video as VideoIcon, MessageSquare, Check, AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
+import { X, Video as VideoIcon, MessageSquare, Check, AlertTriangle, Loader2, RefreshCw, Maximize2 } from 'lucide-react'
 import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
@@ -95,6 +95,8 @@ function TeacherDetailModal({
   }
 
   const pendingAppeal = appeals.find(a => a.status === 'pending')
+  const [videoError, setVideoError] = useState(false)
+  const [videoExpanded, setVideoExpanded] = useState(false)
 
   return (
     <>
@@ -122,12 +124,35 @@ function TeacherDetailModal({
 
         {/* Video de presentación */}
         <div className="mb-6">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-            <VideoIcon className="w-3.5 h-3.5" /> Video de presentación
-          </p>
-          {teacher.video_url ? (
-            <div className="rounded-2xl overflow-hidden bg-slate-900 aspect-video max-w-md">
-              <video src={teacher.video_url} controls className="w-full h-full object-contain" />
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+              <VideoIcon className="w-3.5 h-3.5" /> Video de presentación
+            </p>
+            {teacher.video_url && !videoError && (
+              <button
+                onClick={() => setVideoExpanded(true)}
+                className="text-[10px] font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1 transition-colors"
+              >
+                <Maximize2 className="w-3 h-3" /> Ampliar
+              </button>
+            )}
+          </div>
+          {teacher.video_url && !videoError ? (
+            <div className="rounded-2xl overflow-hidden bg-slate-900 aspect-video w-full">
+              <video
+                src={teacher.video_url}
+                controls
+                preload="metadata"
+                className="w-full h-full object-contain"
+                onError={() => setVideoError(true)}
+              />
+            </div>
+          ) : teacher.video_url && videoError ? (
+            <div className="bg-rose-50 border border-rose-100 rounded-xl px-4 py-3 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-500 flex-shrink-0" />
+              <p className="text-xs font-bold text-rose-700">
+                No se pudo cargar el video (el enlace puede estar roto o vencido). Pide al profesor que lo vuelva a subir.
+              </p>
             </div>
           ) : (
             <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 flex items-center gap-2">
@@ -138,6 +163,23 @@ function TeacherDetailModal({
             </div>
           )}
         </div>
+
+        {videoExpanded && teacher.video_url && !videoError && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-8" onClick={() => setVideoExpanded(false)}>
+            <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm" />
+            <div className="relative w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => setVideoExpanded(false)}
+                className="absolute -top-11 right-0 w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center"
+              >
+                <X className="w-4 h-4 text-white" />
+              </button>
+              <div className="rounded-2xl overflow-hidden bg-black aspect-video">
+                <video src={teacher.video_url} controls autoPlay className="w-full h-full object-contain" />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Motivo de rechazo actual */}
         {teacher.status === 'rejected' && teacher.rejection_reason && (

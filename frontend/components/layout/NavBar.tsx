@@ -187,7 +187,15 @@ export default function DashboardSidebar() {
 
   // Prioridad para decidir qué tabs móviles mostrar
   const mobileMain = showStudentMenu ? STUDENT_MAIN : showTeacherMenu ? TEACHER_MAIN : ADMIN_MAIN;
-  const mobileMore = showStudentMenu ? STUDENT_MORE : showTeacherMenu ? TEACHER_MORE : ADMIN_MORE;
+  // M14: un teacher_admin es profesor Y staff a la vez — antes, al ser
+  // showTeacherMenu=true, se quedaba solo con el menú de profesor y nunca
+  // veía las opciones de admin en la barra inferior mobile. Se le agregan
+  // los ítems de admin al final de "Más".
+  const mobileMore = showStudentMenu
+    ? STUDENT_MORE
+    : showTeacherMenu
+      ? (role === "teacher_admin" ? [...TEACHER_MORE, ...ADMIN_MAIN, ...ADMIN_MORE] : TEACHER_MORE)
+      : ADMIN_MORE;
 
   return (
     <>

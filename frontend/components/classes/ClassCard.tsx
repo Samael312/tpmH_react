@@ -3,11 +3,12 @@
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { createPortal } from "react-dom";
-import { User, Video, X, Clock, RotateCcw, Check, AlertCircle, Phone, Users2, ChevronDown, MessageCircle, Calendar } from "lucide-react";
+import { User, Video, X, Clock, RotateCcw, Check, AlertCircle, Phone, Users2, ChevronDown, MessageCircle, Calendar, LogOut } from "lucide-react";
 import api from "@/lib/api";
 import { getFlagForNationality } from "@/lib/nationalities";
 import { formatTimeTz, formatWeekdayShortTz, formatMonthShortTz, getDayOfMonthTz, getMyDisplayTimezone } from "@/lib/tzFormat";
 import { MeetLinkModal } from "./MeetLinkModal";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 
@@ -177,6 +178,7 @@ export default function ClassCard({
   const [newTime, setNewTime] = useState("");
   const [error, setError] = useState("");
   const [showMeetLinkModal, setShowMeetLinkModal] = useState(false);
+  const [pendingConfirm, setPendingConfirm] = useState<"leave_group" | "leave_session" | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const actionsTriggerRef = useRef<HTMLButtonElement>(null);
@@ -302,24 +304,50 @@ export default function ClassCard({
   };
 
   const studentCancelInline = async () => {
+    if (isGroup) {
+      // M10 (feedback QA): antes usaba window.confirm(), que no se puede
+      // estilizar y se ve distinto por navegador/webview. Ahora se abre el
+      // ConfirmModal propio de la plataforma y la llamada real ocurre en
+      // executeLeaveGroup, disparada por su botón de confirmar.
+      setPendingConfirm("leave_group");
+      return;
+    }
     setUpdating(true); setError("");
     try {
-      if (isGroup) {
-        if (!class_.cohort_id) throw new Error("Esta clase grupal no tiene cohorte asociada");
-        const ok = window.confirm(
-          "Esto te saca de TODO el grupo, no solo de esta clase. " +
-          "Perderás tu cupo en todas las próximas sesiones de esta cohorte y " +
-          "podrás elegir un nuevo paquete después. ¿Deseas continuar?"
-        );
-        if (!ok) { setUpdating(false); return; }
-        await api.post(`/cohorts/${class_.cohort_id}/leave`);
-      } else {
-        await api.delete(`/classes/${class_.id}`);
-      }
+      await api.delete(`/classes/${class_.id}`);
       toast.success("Clase cancelada correctamente");
       onUpdate?.();
-    } catch (e) { const msg = getErrorMessage(e, "Error al cancelar"); setError(msg); toast.error(msg); } 
+    } catch (e) { const msg = getErrorMessage(e, "Error al cancelar"); setError(msg); toast.error(msg); }
     finally { setUpdating(false); }
+  };
+
+  const executeLeaveGroup = async () => {
+    setUpdating(true); setError("");
+    try {
+      if (!class_.cohort_id) throw new Error("Esta clase grupal no tiene cohorte asociada");
+      await api.post(`/cohorts/${class_.cohort_id}/leave`);
+      toast.success("Clase cancelada correctamente");
+      onUpdate?.();
+    } catch (e) { const msg = getErrorMessage(e, "Error al cancelar"); setError(msg); toast.error(msg); }
+    finally { setUpdating(false); setPendingConfirm(null); }
+  };
+
+  // M10: a diferencia de studentCancelInline (que saca al alumno de TODA
+  // la cohorte), esto libera únicamente su cupo en ESTA sesión puntual —
+  // usa DELETE /classes/{id}/leave, que ya existía en el backend pero no
+  // estaba conectado a ningún botón del frontend.
+  const studentLeaveSessionInline = () => {
+    setPendingConfirm("leave_session");
+  };
+
+  const executeLeaveSession = async () => {
+    setUpdating(true); setError("");
+    try {
+      await api.delete(`/classes/${class_.id}/leave`);
+      toast.success("Saliste de esta sesión correctamente");
+      onUpdate?.();
+    } catch (e) { const msg = getErrorMessage(e, "Error al salir de la sesión"); setError(msg); toast.error(msg); }
+    finally { setUpdating(false); setPendingConfirm(null); }
   };
 
   const teacherCancelInline = async () => {
@@ -457,11 +485,22 @@ export default function ClassCard({
     if (canCancel && (!isPast || role === "teacher")) {
       statusActions.push({
         key: "cancel",
-        label: isGroup && role === "student" ? "Salir" : "Cancelar",
+        label: isGroup && role === "student" ? "Salir del grupo" : "Cancelar",
         icon: <X className="w-3.5 h-3.5" />,
         onClick: handleCancelClick,
         pillClass: "text-red-500 bg-red-50 hover:bg-red-100",
         menuClass: "text-red-500 hover:bg-red-50",
+      });
+    }
+    // M10: salir de esta sesión puntual sin abandonar el resto del grupo.
+    if (isGroup && role === "student" && canCancel && !isPast) {
+      statusActions.push({
+        key: "leave_session",
+        label: "Salir de esta clase",
+        icon: <LogOut className="w-3.5 h-3.5" />,
+        onClick: studentLeaveSessionInline,
+        pillClass: "text-amber-600 bg-amber-50 hover:bg-amber-100",
+        menuClass: "text-amber-600 hover:bg-amber-50",
       });
     }
   }
@@ -704,6 +743,28 @@ export default function ClassCard({
           onSaved={() => onUpdate?.()}
         />
       )}
+
+      <ConfirmModal
+        open={pendingConfirm === "leave_group"}
+        title="¿Salir del grupo?"
+        description="Esto te saca de TODO el grupo, no solo de esta clase. Perderás tu cupo en todas las próximas sesiones de esta cohorte y podrás elegir un nuevo paquete después."
+        confirmLabel="Salir del grupo"
+        variant="danger"
+        loading={updating}
+        onClose={() => setPendingConfirm(null)}
+        onConfirm={executeLeaveGroup}
+      />
+
+      <ConfirmModal
+        open={pendingConfirm === "leave_session"}
+        title="¿Salir de esta clase?"
+        description="Vas a salir solo de esta sesión puntual. Seguirás inscrito en el resto de las clases de tu grupo."
+        confirmLabel="Salir de esta clase"
+        variant="danger"
+        loading={updating}
+        onClose={() => setPendingConfirm(null)}
+        onConfirm={executeLeaveSession}
+      />
     </div>
   );
 }

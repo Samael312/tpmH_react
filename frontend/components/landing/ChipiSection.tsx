@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { Sparkles, Zap, Clock, MessageCircle, Bot, Loader2 } from "lucide-react";
+import { useIsMobileOrReducedMotion } from "@/lib/useIsMobileOrReducedMotion";
 
 // Three.js necesita `window`, así que este chunk se carga solo en cliente.
 // Mientras se descarga (o mientras el .glb todavía está bajando dentro del
@@ -16,6 +18,28 @@ const ChipiMascot3D = dynamic(() => import("@/components/landing/ChipiMascot3D")
     </div>
   ),
 });
+
+// M17: en mobile no vale la pena pagar el costo de cargar three.js + el
+// .glb (varios MB) solo para la mascota del hero — se reemplaza por el
+// logo de la plataforma flotando con una animación CSS liviana, mismo
+// halo/anillo/sombra decorativos que ya tenía la versión 3D para que el
+// resto de la sección no se sienta distinta.
+function ChipiMascotFloatingLogo() {
+  return (
+    <div className="relative w-full max-w-[220px] mx-auto h-[280px] flex items-center justify-center">
+      <div className="absolute -inset-8 bg-gradient-to-br from-pink-500/30 via-rose-500/20 to-purple-500/30 rounded-full blur-2xl scale-90 animate-pulse pointer-events-none" />
+      <div className="absolute inset-2 rounded-full border-2 border-dashed border-pink-400/25 animate-spin-slow pointer-events-none" />
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-5 bg-slate-950/30 rounded-full blur-md pointer-events-none" />
+
+      <div className="relative w-32 h-32 animate-float">
+        <Image src="/assets/logo.png" alt="Chipi" fill sizes="128px" className="object-contain drop-shadow-[0_8px_24px_rgba(236,72,153,0.45)]" />
+      </div>
+
+      <span className="absolute top-[26%] right-[6%] w-2.5 h-2.5 rounded-full bg-pink-300 animate-ping" />
+      <span className="absolute top-[18%] right-[16%] w-1.5 h-1.5 rounded-full bg-purple-300 animate-ping" style={{ animationDelay: "0.6s" }} />
+    </div>
+  );
+}
 
 // ─── Conversación de ejemplo, en loop ──────────────────────────────────────
 const DEMO_EXCHANGES: { question: string; answer: string }[] = [
@@ -61,6 +85,7 @@ const FEATURES = [
 export default function ChipiSection() {
   const [phase, setPhase] = useState(0);
   const [exchangeIdx, setExchangeIdx] = useState(0);
+  const isMobileOrReducedMotion = useIsMobileOrReducedMotion();
 
   // Ciclo simple de la conversación de ejemplo, sin dependencias externas
   // de animación: solo setTimeout/interval encadenados por fase.
@@ -108,7 +133,7 @@ export default function ChipiSection() {
       <div className="relative max-w-6xl mx-auto px-4 sm:px-6 z-10 grid grid-cols-1 lg:grid-cols-[0.85fr_1.15fr] gap-14 lg:gap-10 items-center">
         {/* Mascota, sola en su columna */}
         <div className="flex justify-center lg:justify-start">
-          <ChipiMascot3D />
+          {isMobileOrReducedMotion === false ? <ChipiMascot3D /> : <ChipiMascotFloatingLogo />}
         </div>
 
         {/* Texto + mockup de chat, juntos en la otra columna */}

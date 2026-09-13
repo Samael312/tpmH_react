@@ -173,6 +173,19 @@ class SessionParticipantResponse(BaseModel):
         from_attributes = True
 
 
+class AttendanceSummaryResponse(BaseModel):
+    """
+    Historial de asistencia de UN alumno acumulado a lo largo de todas
+    las sesiones ya realizadas de la cohorte (no solo la sesión más
+    reciente) — antes solo existía la vista sesión por sesión.
+    """
+    student_id: int
+    student_name: str
+    sessions_confirmed: int
+    sessions_no_show: int
+    sessions_total: int
+
+
 class MarkAttendanceRequest(BaseModel):
     attendance_status: str  # "confirmed" (asistió) | "no_show" (no asistió)
 

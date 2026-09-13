@@ -25,6 +25,7 @@ from app.models.payment import Payment
 from app.models.teacher import TeacherProfile
 from app.models.user import User, UserRole
 from app.schemas.cohorts import (
+    AttendanceSummaryResponse,
     CohortCloseRequest,
     CohortCreate,
     CohortMemberResponse,
@@ -172,6 +173,38 @@ def close_cohort_endpoint(
         )
 
     close_cohort(cohort, data.start_date, db)
+    db.commit()
+    db.refresh(cohort)
+    return _to_cohort_response(cohort, db)
+
+
+@router.post("/{cohort_id}/reopen", response_model=CohortResponse)
+def reopen_cohort_endpoint(
+    cohort_id: int,
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Corrección QA: revierte un cierre manual (close_cohort_endpoint) si
+    todavía no arrancó ninguna sesión — por ejemplo si el profesor cerró
+    por error o decide seguir aceptando inscripciones. Vuelve la cohorte
+    a "filling" y limpia la fecha de inicio/cierre para que un cierre
+    posterior tenga que fijarlas de nuevo. Solo válido si sigue
+    "confirmed" (si ya está in_progress/completed/cancelled no se puede
+    revertir).
+    """
+    cohort = db.query(GroupCohort).filter(
+        GroupCohort.id == cohort_id,
+        GroupCohort.teacher_id == current_user.teacher_profile.id,
+    ).first()
+    if not cohort:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+    if cohort.status != CohortStatus.confirmed:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Solo puedes reabrir una cohorte que esté cerrada")
+
+    cohort.status = CohortStatus.filling
+    cohort.start_date = None
+    cohort.closed_at = None
     db.commit()
     db.refresh(cohort)
     return _to_cohort_response(cohort, db)
@@ -481,6 +514,63 @@ def create_group_session(
             )
 
     return _to_session_response(new_class)
+
+
+@router.get("/{cohort_id}/attendance-summary", response_model=List[AttendanceSummaryResponse])
+def get_cohort_attendance_summary(
+    cohort_id: int,
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Historial de asistencia agregado por alumno a lo largo de todas las
+    sesiones ya realizadas de la cohorte — antes solo se podía ver la
+    asistencia sesión por sesión (get_session_participants), sin un
+    resumen acumulado que le muestre al profesor patrones (ej. un
+    alumno que falta seguido).
+    """
+    cohort = db.query(GroupCohort).filter(
+        GroupCohort.id == cohort_id,
+        GroupCohort.teacher_id == current_user.teacher_profile.id,
+    ).first()
+    if not cohort:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+
+    past_sessions = db.query(Class).filter(
+        Class.cohort_id == cohort_id,
+        Class.status.notin_(["cancelled"]),
+        Class.start_time_utc <= utc_now(),
+    ).all()
+    total_sessions = len(past_sessions)
+
+    summary: dict[int, dict] = {}
+    for session in past_sessions:
+        for p in session.participants:
+            if p.attendance_status == "cancelled":
+                continue
+            if not p.student or not p.student.user:
+                continue
+            entry = summary.setdefault(p.student_id, {
+                "student_id": p.student_id,
+                "student_name": f"{p.student.user.name} {p.student.user.surname}",
+                "confirmed": 0,
+                "no_show": 0,
+            })
+            if p.attendance_status == "confirmed":
+                entry["confirmed"] += 1
+            elif p.attendance_status == "no_show":
+                entry["no_show"] += 1
+
+    return [
+        AttendanceSummaryResponse(
+            student_id=e["student_id"],
+            student_name=e["student_name"],
+            sessions_confirmed=e["confirmed"],
+            sessions_no_show=e["no_show"],
+            sessions_total=total_sessions,
+        )
+        for e in summary.values()
+    ]
 
 
 @router.get("/{cohort_id}/sessions", response_model=List[GroupSessionResponse])

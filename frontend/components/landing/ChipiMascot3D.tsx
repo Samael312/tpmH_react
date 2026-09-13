@@ -50,18 +50,20 @@ export default function ChipiMascot3D() {
     mount.appendChild(renderer.domElement);
 
     // ─── Luces con la misma paleta rosa/púrpura de la sección ───
-    const ambient = new THREE.AmbientLight("#fce7f3", 1.1); // pink-100, luz de relleno suave
+    // M18: intensidades subidas — se veía apagada comparada con el resto
+    // de la sección (fondo oscuro + halos muy saturados alrededor).
+    const ambient = new THREE.AmbientLight("#fce7f3", 1.6); // pink-100, luz de relleno suave
     scene.add(ambient);
 
-    const keyLight = new THREE.DirectionalLight("#ffffff", 1.4);
+    const keyLight = new THREE.DirectionalLight("#ffffff", 2.1);
     keyLight.position.set(2.5, 4, 5);
     scene.add(keyLight);
 
-    const pinkRim = new THREE.PointLight("#ec4899", 6, 15); // pink-500
+    const pinkRim = new THREE.PointLight("#ec4899", 8, 15); // pink-500
     pinkRim.position.set(-3, 1, 3);
     scene.add(pinkRim);
 
-    const purpleRim = new THREE.PointLight("#a855f7", 5, 15); // purple-500
+    const purpleRim = new THREE.PointLight("#a855f7", 7, 15); // purple-500
     purpleRim.position.set(3, -1, -2);
     scene.add(purpleRim);
 
@@ -163,14 +165,9 @@ export default function ChipiMascot3D() {
       }
     );
 
-    // ─── Interacción con mouse (parallax sutil, igual que HeroScene) ───
-    const mouse = { x: 0, y: 0 };
-    const handleMouseMove = (e: MouseEvent) => {
-      const rect = mount.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
-      mouse.y = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
-    };
-    window.addEventListener("mousemove", handleMouseMove);
+    // M18: ya no sigue el cursor (se sentía como que "perseguía" al mouse
+    // en vez de quedarse como una mascota animada de fondo). Se deja un
+    // balanceo autónomo muy sutil en su lugar, independiente del input.
 
     // ─── Loop de animación ───
     // Delta manual con performance.now() en vez de THREE.Clock (deprecado
@@ -197,7 +194,8 @@ export default function ChipiMascot3D() {
       }
 
       if (modelRoot) {
-        modelRoot.rotation.y += (mouse.x * 0.35 - modelRoot.rotation.y) * 0.04;
+        const idleSway = Math.sin(now / 1600) * 0.08;
+        modelRoot.rotation.y += (idleSway - modelRoot.rotation.y) * 0.04;
       }
 
       renderer.render(scene, camera);
@@ -219,7 +217,6 @@ export default function ChipiMascot3D() {
       cancelled = true;
       cancelAnimationFrame(frameId);
       window.removeEventListener("resize", handleResize);
-      window.removeEventListener("mousemove", handleMouseMove);
       mixer?.stopAllAction();
       scene.traverse((obj) => {
         if (obj instanceof THREE.Mesh) {

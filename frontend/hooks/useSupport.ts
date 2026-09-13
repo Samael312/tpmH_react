@@ -26,6 +26,15 @@ export function useMySupportTickets() {
       const res = await api.get("/support/tickets/me");
       return res.data as SupportTicket[];
     },
+    // M15: antes solo se refrescaba al montar/reenfocar (staleTime global de
+    // 60s + refetchOnWindowFocus desactivado), así que si el staff respondía
+    // mientras el estudiante/profesor ya tenía la vista abierta, no se
+    // enteraba hasta recargar la página a mano. Se sondea en segundo plano
+    // mientras la pestaña esté visible, igual que useUnreadSupportCount.
+    refetchInterval: (q) => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
+      return 20000;
+    },
   });
 
   return {

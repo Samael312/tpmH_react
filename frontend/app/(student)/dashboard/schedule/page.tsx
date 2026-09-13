@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import axios from "axios";
+import Image from "next/image";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useAvailableSlots,
@@ -36,6 +37,7 @@ import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import RejectedPaymentNotice from "@/components/payments/RejectedPaymentNotice";
+import ClassCard from "@/components/classes/ClassCard";
 import type { RejectedPaymentInfo } from "@/hooks/useStudentData";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
@@ -656,18 +658,7 @@ function PackagePendingPaymentScreen() {
   );
 }
 
-const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
-  pending: { label: "Pendiente de pago", cls: "bg-amber-100 text-amber-700" },
-  pending_payment: { label: "En revisión", cls: "bg-blue-100 text-blue-700" },
-  confirmed: { label: "Confirmada", cls: "bg-emerald-100 text-emerald-700" },
-  completed: { label: "Completada", cls: "bg-slate-100 text-slate-600" },
-  cancelled: { label: "Cancelada", cls: "bg-red-100 text-red-600" },
-  no_show: { label: "No asistió", cls: "bg-red-100 text-red-600" },
-  finalized: { label: "Finalizada", cls: "bg-slate-100 text-slate-600" },
-};
-
 function EnrollmentClassesList({ classes }: { classes: StudentClass[] }) {
-  const myTz = getMyDisplayTimezone();
   if (classes.length === 0) {
     return (
       <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-white shadow-lg p-6 text-center">
@@ -675,6 +666,16 @@ function EnrollmentClassesList({ classes }: { classes: StudentClass[] }) {
       </div>
     );
   }
+
+  // Próximas primero (más cercana arriba), luego pasadas (más reciente arriba)
+  // — antes venían en el orden crudo del backend, sin separar pasado/futuro.
+  const upcoming = classes
+    .filter(c => !["completed", "cancelled", "no_show", "finalized"].includes(c.status))
+    .sort((a, b) => new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime());
+  const past = classes
+    .filter(c => ["completed", "cancelled", "no_show", "finalized"].includes(c.status))
+    .sort((a, b) => new Date(b.start_time_utc).getTime() - new Date(a.start_time_utc).getTime());
+
   return (
     <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-white shadow-lg overflow-hidden">
       <div className="px-5 py-3.5 border-b border-slate-100">
@@ -682,26 +683,27 @@ function EnrollmentClassesList({ classes }: { classes: StudentClass[] }) {
           Clases agendadas con este paquete ({classes.length})
         </p>
       </div>
-      <div className="divide-y divide-slate-50 max-h-80 overflow-y-auto">
-        {classes.map((c) => {
-          const st = STATUS_LABELS[c.status] ?? { label: c.status, cls: "bg-slate-100 text-slate-500" };
-          return (
-            <div key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-slate-800 truncate capitalize">
-                  {formatDateHumanTz(c.start_time_utc, myTz)}
-                </p>
-                <p className="text-xs text-slate-500">
-                  {formatTimeTz(c.start_time_utc, myTz)} · {c.duration_minutes ?? 60} min
-                  {c.subject ? ` · ${c.subject}` : ""}
-                </p>
-              </div>
-              <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full flex-shrink-0 ${st.cls}`}>
-                {st.label}
-              </span>
-            </div>
-          );
-        })}
+      <div className="p-4 space-y-3 max-h-[28rem] overflow-y-auto">
+        {upcoming.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest px-1">
+              Próximas ({upcoming.length})
+            </p>
+            {upcoming.map((c) => (
+              <ClassCard key={c.id} class_={c} role="student" readOnly />
+            ))}
+          </div>
+        )}
+        {past.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 pt-1">
+              Anteriores ({past.length})
+            </p>
+            {past.map((c) => (
+              <ClassCard key={c.id} class_={c} role="student" readOnly />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1502,20 +1504,46 @@ export default function SchedulePage() {
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
               ¿Con cuál de tus profesores quieres agendar?
             </p>
-            <div className="flex flex-wrap gap-2">
-              {myTeachers.map(t => (
-                <button
-                  key={t.teacher_username}
-                  onClick={() => { setSelectedTeacherUsername(t.teacher_username); resetToSelect(); }}
-                  className={`px-4 py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
-                    selectedTeacherUsername === t.teacher_username
-                      ? "border-pink-400 bg-pink-50 text-pink-600"
-                      : "border-slate-100 bg-white text-slate-600 hover:border-pink-200"
-                  }`}
-                >
-                  {t.name} {t.surname}
-                </button>
-              ))}
+            <div className="flex flex-wrap gap-3">
+              {myTeachers.map(t => {
+                const fullName = [t.name, t.surname].filter(Boolean).join(" ") || t.teacher_username;
+                const initial = fullName[0]?.toUpperCase() ?? "T";
+                const isSelected = selectedTeacherUsername === t.teacher_username;
+                const enr = t.active_enrollment;
+                const creditsLabel = enr
+                  ? enr.classes_total != null
+                    ? `${Math.max(enr.classes_total - enr.classes_used, 0)} clases restantes`
+                    : "Plan ilimitado"
+                  : "Sin paquete activo";
+
+                return (
+                  <button
+                    key={t.teacher_username}
+                    onClick={() => { setSelectedTeacherUsername(t.teacher_username); resetToSelect(); }}
+                    className={`flex items-center gap-3 pl-2 pr-4 py-2 rounded-2xl border-2 text-left transition-all ${
+                      isSelected
+                        ? "border-pink-400 bg-pink-50 shadow-sm"
+                        : "border-slate-100 bg-white hover:border-pink-200"
+                    }`}
+                  >
+                    <div className="relative w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-pink-400 via-rose-400 to-purple-400 flex items-center justify-center">
+                      {t.profile_photo_url ? (
+                        <Image src={t.profile_photo_url} alt={fullName} fill sizes="40px" className="object-cover" />
+                      ) : (
+                        <span className="text-white font-black text-sm select-none">{initial}</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className={`text-sm font-bold truncate ${isSelected ? "text-pink-700" : "text-slate-700"}`}>
+                        {fullName}
+                      </p>
+                      <p className={`text-[11px] font-semibold truncate ${isSelected ? "text-pink-500" : "text-slate-400"}`}>
+                        {creditsLabel}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
