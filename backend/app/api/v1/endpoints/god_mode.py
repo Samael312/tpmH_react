@@ -811,11 +811,17 @@ def god_mode_create_class(
                 "El enrollment indicado no corresponde a este alumno y profesor.",
             )
 
+    # D5 fix: se necesita ANTES del chequeo de choques, para poder pasarle
+    # a can_book_slot el fin ocupado real del candidato.
+    class_type_enum = ClassType(data.class_type)
+    buffer_minutes = get_buffer_minutes_for_type(class_type_enum, db)
+
     if not data.skip_conflict_check:
         can_book, error_msg = can_book_slot(
             start_time_utc=data.start_time_utc,
             teacher_id=data.teacher_id,
             student_id=data.student_id,
+            end_time_utc=data.start_time_utc + timedelta(minutes=data.duration_minutes + buffer_minutes),
             db=db,
             enforce_min_notice=False,
         )
@@ -824,9 +830,6 @@ def god_mode_create_class(
                 status.HTTP_409_CONFLICT,
                 f"{error_msg}. Usa skip_conflict_check=true si igual quieres forzar la creación.",
             )
-
-    class_type_enum = ClassType(data.class_type)
-    buffer_minutes = get_buffer_minutes_for_type(class_type_enum, db)
 
     new_class = Class(
         enrollment_id=enrollment.id if enrollment else None,
@@ -904,11 +907,15 @@ def god_mode_reschedule_class(
 
     _require_class_scope(class_, current_user)
 
+    # D5 fix: se necesita ANTES del chequeo de choques.
+    duration = data.duration_minutes or class_.duration
+
     if not data.skip_conflict_check:
         can_book, error_msg = can_book_slot(
             start_time_utc=data.start_time_utc,
             teacher_id=class_.teacher_id,
             student_id=class_.student_id,
+            end_time_utc=data.start_time_utc + timedelta(minutes=duration + (class_.buffer_minutes or 0)),
             db=db,
             exclude_class_id=class_id,
             enforce_min_notice=False,
@@ -920,8 +927,6 @@ def god_mode_reschedule_class(
             )
 
     before = _class_snapshot(class_)
-
-    duration = data.duration_minutes or class_.duration
     class_.start_time_utc = data.start_time_utc
     class_.end_time_utc = data.start_time_utc + timedelta(minutes=duration)
     class_.duration = duration

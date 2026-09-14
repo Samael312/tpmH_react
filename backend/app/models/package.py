@@ -42,6 +42,23 @@ class Package(Base):
     min_students = Column(Integer, nullable=True)  # referencia al crear una cohorte
     max_students = Column(Integer, nullable=True)  # cupo máximo por cohorte
 
+    # D14: horario de las sesiones de un paquete grupal. "manual" (default,
+    # comportamiento de siempre) = el profesor agenda cada sesión a mano al
+    # cerrar el grupo / con "Agendar sesión". "fixed" = el paquete tiene un
+    # patrón semanal recurrente fijo (ej. lunes y jueves 18:00) — al cerrar
+    # el grupo, el profesor solo elige a partir de cuál coincidencia
+    # arrancar y TODAS las sesiones del paquete se generan automáticamente
+    # siguiendo ese patrón (ver cohorts.py::close_cohort_endpoint).
+    group_schedule_mode = Column(String, default="manual", server_default="manual")
+    # Días de la semana LOCALES (calendario del profesor, no UTC) que
+    # eligió al configurar el paquete — ISO 0=Lunes...6=Domingo. Se
+    # reconvierte a UTC en el momento de generar las sesiones usando la
+    # timezone ACTUAL del profesor (no una guardada de antes), igual que
+    # el resto del sistema de disponibilidad.
+    group_recurring_days_of_week = Column(JSONB, nullable=True)
+    # Hora LOCAL "HH:MM" compartida por todos esos días.
+    group_recurring_time_local = Column(String(5), nullable=True)
+
     # Campos para pagos en cuotas
     allow_installments = Column(Boolean, default=False)
     installment_count = Column(Integer, nullable=True)   # Número total de cuotas (ej. 3)

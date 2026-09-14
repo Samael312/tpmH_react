@@ -427,6 +427,19 @@ export default function StudentDashboard() {
           const tabIndex = Math.min(activeBannerTab, allBannerEnrollments.length - 1);
           const enr = allBannerEnrollments[tabIndex];
           const isGroupEnr = !!enr.cohort_id;
+          // D11 (decisión de negocio confirmada): en cuanto la cohorte
+          // tenga alguna sesión real agendada (status "confirmed" o
+          // "in_progress", ya con al menos una Class creada por
+          // close_cohort/schedule_session), se muestra esa sesión real
+          // -- no el panel de "esperando cohorte" -- igual que vería el
+          // alumno para cualquier clase individual. El panel de espera
+          // queda solo para el caso genuino de "todavía no hay nada
+          // agendado" (status "filling").
+          const cohortUpcomingClasses = isGroupEnr
+            ? classesData
+                .filter(c => c.cohort_id === enr.cohort_id && c.status !== "cancelled" && c.status !== "completed")
+                .sort((a, b) => new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime())
+            : [];
           const teacherSuspended = !!enr.teacher_status && enr.teacher_status !== "approved";
           const isUnlimited = enr.package?.classes_count == null;
           const remainingCredits = enr.available_credits ?? (isUnlimited
@@ -461,7 +474,15 @@ export default function StudentDashboard() {
               )}
 
               {isGroupEnr ? (
-                <GroupWaitingPanel enrollment={enr} onChanged={handleRefresh} />
+                cohortUpcomingClasses.length > 0 ? (
+                  <div className="space-y-3">
+                    {cohortUpcomingClasses.slice(0, 3).map(c => (
+                      <ClassCard key={c.id} class_={c} role="student" onUpdate={handleRefresh} />
+                    ))}
+                  </div>
+                ) : (
+                  <GroupWaitingPanel enrollment={enr} onChanged={handleRefresh} />
+                )
               ) : teacherSuspended ? (
                 <div className="bg-rose-50 border border-rose-200 rounded-[2rem] p-6 sm:p-8 relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

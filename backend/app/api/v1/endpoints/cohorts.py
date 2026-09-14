@@ -28,6 +28,7 @@ from app.schemas.cohorts import (
     AttendanceSummaryResponse,
     CohortCloseRequest,
     CohortCreate,
+    CohortEditRequest,
     CohortMemberResponse,
     CohortResponse,
     GroupEnrollRequest,
@@ -38,10 +39,106 @@ from app.schemas.cohorts import (
     SessionParticipantResponse,
 )
 
+def _generate_recurring_dates(local_days_of_week: list, time_local: str, tz_str: str, start_from_utc, count: int):
+    """
+    D14: genera las próximas `count` fechas UTC (incluyendo start_from_utc
+    si coincide) que siguen el patrón semanal configurado en el paquete
+    -- días LOCALES (calendario del profesor) + una hora local compartida.
+
+    Se recalcula la conversión a UTC para cada fecha puntual usando la
+    timezone ACTUAL del profesor (no una guardada de antes), igual que el
+    resto del sistema de disponibilidad — así se maneja bien el cambio de
+    horario de verano en vez de asumir un offset fijo.
+    """
+    from zoneinfo import ZoneInfo
+    from datetime import datetime as _dt, timezone as _tzmod
+
+    tz = ZoneInfo(tz_str)
+    hh, mm = map(int, time_local.split(":"))
+    days_set = set(local_days_of_week)
+
+    results = []
+    cursor_date = start_from_utc.astimezone(tz).date()
+    scanned = 0
+    while len(results) < count and scanned < 400:  # límite de seguridad (~1 año)
+        if cursor_date.weekday() in days_set:
+            candidate_local = _dt(cursor_date.year, cursor_date.month, cursor_date.day, hh, mm, tzinfo=tz)
+            candidate_utc = candidate_local.astimezone(_tzmod.utc)
+            if candidate_utc >= start_from_utc:
+                results.append(candidate_utc)
+        cursor_date += timedelta(days=1)
+        scanned += 1
+    return results
+
+
+def _check_recurring_slot_available(teacher_id: int, start_time_utc, duration_minutes: int, db: Session):
+    """
+    D14: para el listado de candidatos (GET /{cohort_id}/recurring-candidates)
+    -- versión de solo-lectura del mismo chequeo que hace
+    _create_group_session (disponibilidad declarada + choque con clases
+    individuales), sin llegar a crear nada.
+    """
+    from app.core.class_logic import is_within_teacher_availability, get_buffer_minutes_for_type
+
+    end_time_utc = start_time_utc + timedelta(minutes=duration_minutes)
+    buffer_minutes = get_buffer_minutes_for_type(ClassType.group, db)
+    occupied_end_time_utc = end_time_utc + timedelta(minutes=buffer_minutes)
+
+    is_available, msg = is_within_teacher_availability(teacher_id, start_time_utc, occupied_end_time_utc, db)
+    if not is_available:
+        return False, msg
+
+    candidate_individual = db.query(Class).filter(
+        Class.teacher_id == teacher_id,
+        Class.class_type != ClassType.group,
+        Class.start_time_utc < occupied_end_time_utc,
+        Class.status.notin_(["cancelled", "expired", "pending_trial"]),
+    ).all()
+    conflicting = any(
+        start_time_utc < (c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0))
+        for c in candidate_individual
+    )
+    if conflicting:
+        return False, "Ya tienes una clase individual agendada en ese horario"
+    return True, ""
+
+
 router = APIRouter()
 
 
+
+
+
+def _completed_sessions_count(cohort_id: int, db: Session) -> int:
+    return db.query(Class).filter(
+        Class.cohort_id == cohort_id,
+        Class.class_type == ClassType.group,
+        Class.status == "completed",
+    ).count()
+
+
+def _late_join_pricing(price: float, classes_count, completed_count: int):
+    """
+    D12: un alumno que se une a una cohorte que ya dictó `completed_count`
+    sesiones no paga el precio completo del paquete -- se le resta el
+    costo de esas clases ya dictadas (que nunca podrá tomar). Devuelve
+    (precio_efectivo, clases_restantes). Si el paquete no tiene un
+    classes_count fijo, o todavía no se dictó ninguna sesión, no hay nada
+    que prorratear.
+    """
+    if completed_count <= 0 or not classes_count:
+        return price, classes_count
+    price_per_class = price / classes_count
+    remaining_classes = max(classes_count - completed_count, 0)
+    effective_price = round(price_per_class * remaining_classes, 2)
+    return effective_price, remaining_classes
+
+
 def _to_cohort_response(cohort: GroupCohort, db: Session) -> CohortResponse:
+    completed = _completed_sessions_count(cohort.id, db)
+    price = cohort.package.price if cohort.package else 0.0
+    classes_count = cohort.package.classes_count if cohort.package else None
+    effective_price, _ = _late_join_pricing(price, classes_count, completed)
     return CohortResponse(
         id=cohort.id,
         package_id=cohort.package_id,
@@ -54,6 +151,11 @@ def _to_cohort_response(cohort: GroupCohort, db: Session) -> CohortResponse:
         current_students=get_cohort_active_count(cohort.id, db),
         created_at=cohort.created_at,
         closed_at=cohort.closed_at,
+        # D12: cuántas sesiones ya se dictaron y qué pagaría un alumno que
+        # se una A PARTIR DE AHORA -- coincide con package.price si la
+        # cohorte todavía no dictó ninguna clase.
+        completed_sessions=completed,
+        effective_price=effective_price,
     )
 
 
@@ -84,6 +186,62 @@ def create_cohort(
         max_students=data.max_students,
     )
     db.add(cohort)
+    db.commit()
+    db.refresh(cohort)
+    return _to_cohort_response(cohort, db)
+
+
+@router.patch("/{cohort_id}", response_model=CohortResponse)
+def edit_cohort(
+    cohort_id: int,
+    data: CohortEditRequest,
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    D12: el profesor edita min_students/max_students de una cohorte
+    propia. Antes esto solo existía vía Modo Dios (GodModeCohortEditRequest,
+    exclusivo de staff) -- el profesor no tenía forma de corregir el cupo
+    que definió al crear la cohorte (ej. subir el máximo porque llegaron
+    más interesados de los previstos, o bajarlo si se equivocó).
+
+    No se permite mientras la cohorte ya está 'completed'/'cancelled'
+    (no tiene sentido editar cupo de algo que ya terminó), y no se puede
+    bajar max_students por debajo de los alumnos ya activos.
+    """
+    cohort = db.query(GroupCohort).filter(
+        GroupCohort.id == cohort_id,
+        GroupCohort.teacher_id == current_user.teacher_profile.id,
+    ).first()
+    if not cohort:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada o no te pertenece")
+
+    if cohort.status in (CohortStatus.completed, CohortStatus.cancelled):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "No se puede editar el cupo de una cohorte completada o cancelada.",
+        )
+
+    if data.min_students is None and data.max_students is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No se envió ningún campo para modificar.")
+
+    new_min = data.min_students if data.min_students is not None else cohort.min_students
+    new_max = data.max_students if data.max_students is not None else cohort.max_students
+    if new_max < new_min:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "El máximo no puede ser menor que el mínimo")
+
+    if data.max_students is not None:
+        current_count = get_cohort_active_count(cohort.id, db)
+        if data.max_students < current_count:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"No puedes bajar el máximo a {data.max_students}: ya hay {current_count} "
+                "alumnos activos en esta cohorte.",
+            )
+        cohort.max_students = data.max_students
+    if data.min_students is not None:
+        cohort.min_students = data.min_students
+
     db.commit()
     db.refresh(cohort)
     return _to_cohort_response(cohort, db)
@@ -143,6 +301,51 @@ def get_cohort_members(
     return members
 
 
+@router.get("/{cohort_id}/recurring-candidates")
+def get_recurring_candidates(
+    cohort_id: int,
+    count: int = 8,
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    D14: para paquetes grupales con group_schedule_mode="fixed", devuelve
+    las próximas `count` fechas UTC que coinciden con el patrón semanal
+    configurado en el paquete, marcando cuáles ya están libres en la
+    agenda del profesor. El modal de cierre de cohorte usa esto para que
+    el profesor elija a partir de cuál arrancar -- desde ahí se generan
+    automáticamente TODAS las sesiones del paquete (ver close_cohort_endpoint).
+    """
+    cohort = db.query(GroupCohort).filter(
+        GroupCohort.id == cohort_id,
+        GroupCohort.teacher_id == current_user.teacher_profile.id,
+    ).first()
+    if not cohort:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+
+    package = cohort.package
+    if package.group_schedule_mode != "fixed":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este paquete no tiene horario fijo configurado")
+    if not package.group_recurring_days_of_week or not package.group_recurring_time_local:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "El paquete no tiene un horario recurrente válido configurado")
+
+    teacher = current_user.teacher_profile
+    tz_str = teacher.timezone or "UTC"
+    occurrences = _generate_recurring_dates(
+        package.group_recurring_days_of_week, package.group_recurring_time_local, tz_str,
+        utc_now(), max(1, min(count, 20)),
+    )
+    result = []
+    for occ in occurrences:
+        available, reason = _check_recurring_slot_available(teacher.id, occ, package.duration_minutes or 50, db)
+        result.append({
+            "start_time_utc": occ.isoformat(),
+            "available": available,
+            "reason": None if available else reason,
+        })
+    return result
+
+
 @router.post("/{cohort_id}/close", response_model=CohortResponse)
 def close_cohort_endpoint(
     cohort_id: int,
@@ -174,15 +377,56 @@ def close_cohort_endpoint(
 
     close_cohort(cohort, data.start_date, db)
 
-    # Corrección QA: antes `start_date` quedaba solo como metadata de la
-    # cohorte (para mostrar "Inicia el ...") sin generar ninguna sesión
-    # real — el profesor tenía que ir aparte a "Agendar sesión" para que
-    # esa fecha existiera como Class de verdad. Ahora se reutiliza la misma
-    # lógica de creación de sesión que POST /{cohort_id}/sessions para que
-    # el cierre ya deje agendada la primera clase del grupo. Si la
-    # validación de esa sesión falla (sin disponibilidad, choque de
-    # horario, etc.), nada de esto se comitea y la cohorte sigue "filling".
-    _create_group_session(cohort, current_user, data.start_date, data.duration_minutes, db)
+    package = cohort.package
+    if package.group_schedule_mode == "fixed":
+        # D14: horario fijo/recurrente -- se genera automáticamente TODA
+        # la serie de sesiones del paquete (no solo la primera) siguiendo
+        # el patrón configurado, a partir de la ocurrencia que el
+        # profesor eligió en data.start_date (debe ser una de las que
+        # devolvió GET /{cohort_id}/recurring-candidates).
+        if not package.group_recurring_days_of_week or not package.group_recurring_time_local:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "El paquete no tiene un horario recurrente válido configurado",
+            )
+        teacher = current_user.teacher_profile
+        tz_str = teacher.timezone or "UTC"
+        total_sessions = package.classes_count or 1
+        occurrences = _generate_recurring_dates(
+            package.group_recurring_days_of_week, package.group_recurring_time_local, tz_str,
+            data.start_date, total_sessions,
+        )
+        if not occurrences or abs((occurrences[0] - data.start_date).total_seconds()) > 60:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "La fecha elegida no coincide con el horario recurrente configurado para este paquete. "
+                "Elegí una de las opciones que te mostró el sistema.",
+            )
+        created_ids = []
+        try:
+            for occ in occurrences:
+                session = _create_group_session(cohort, current_user, occ, data.duration_minutes, db)
+                created_ids.append(session.id)
+        except HTTPException:
+            # Todo o nada: si una ocurrencia de la serie choca con algo,
+            # no dejamos la cohorte con solo una parte de sus sesiones
+            # agendadas -- se borra lo que sí se llegó a crear en este
+            # intento y se le informa al profesor cuál fue el problema.
+            if created_ids:
+                db.query(Class).filter(Class.id.in_(created_ids)).delete(synchronize_session=False)
+                db.commit()
+            raise
+    else:
+        # Corrección QA: antes `start_date` quedaba solo como metadata de
+        # la cohorte (para mostrar "Inicia el ...") sin generar ninguna
+        # sesión real — el profesor tenía que ir aparte a "Agendar
+        # sesión" para que esa fecha existiera como Class de verdad.
+        # Ahora se reutiliza la misma lógica de creación de sesión que
+        # POST /{cohort_id}/sessions para que el cierre ya deje agendada
+        # la primera clase del grupo. Si la validación de esa sesión
+        # falla (sin disponibilidad, choque de horario, etc.), nada de
+        # esto se comitea y la cohorte sigue "filling".
+        _create_group_session(cohort, current_user, data.start_date, data.duration_minutes, db)
 
     db.refresh(cohort)
     return _to_cohort_response(cohort, db)
@@ -721,10 +965,15 @@ def get_available_cohorts(
     package_id: int,
     db: Session = Depends(get_db),
 ):
-    """Cohortes abiertas (con cupo) para un paquete grupal específico."""
+    """
+    Cohortes con cupo para un paquete grupal específico. D12: antes solo
+    se listaban las 'filling' -- ahora también se listan 'confirmed'/
+    'in_progress' con cupo libre, para permitir inscripción tardía (con
+    precio prorrateado, ver _to_cohort_response / _late_join_pricing).
+    """
     cohorts = db.query(GroupCohort).filter(
         GroupCohort.package_id == package_id,
-        GroupCohort.status == CohortStatus.filling,
+        GroupCohort.status.in_([CohortStatus.filling, CohortStatus.confirmed, CohortStatus.in_progress]),
     ).order_by(GroupCohort.created_at.asc()).all()
 
     result = []
@@ -752,7 +1001,7 @@ def enroll_in_cohort(
 
     cohort = db.query(GroupCohort).filter(
         GroupCohort.id == data.cohort_id,
-        GroupCohort.status == CohortStatus.filling,
+        GroupCohort.status.in_([CohortStatus.filling, CohortStatus.confirmed, CohortStatus.in_progress]),
     ).first()
     if not cohort:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada o ya no acepta inscripciones")
@@ -772,6 +1021,20 @@ def enroll_in_cohort(
     if already_enrolled:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya estás inscrito en esta cohorte")
 
+    # D12: inscripción tardía -- si la cohorte ya está 'confirmed'/
+    # 'in_progress' y ya dictó sesiones, no se cobra el precio completo:
+    # se resta el costo de las clases ya dictadas (que este alumno nunca
+    # podrá tomar) tanto del precio a pagar como de los créditos que
+    # recibirá al aprobarse el pago (ver validate_payment, rama
+    # "group_enrollment").
+    completed_sessions = _completed_sessions_count(cohort.id, db)
+    effective_price, remaining_classes = _late_join_pricing(package.price, package.classes_count, completed_sessions)
+    if package.classes_count is not None and remaining_classes is not None and remaining_classes <= 0:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Esta cohorte ya dictó todas sus clases, no admite nuevas inscripciones.",
+        )
+
     from app.api.v1.endpoints.payments import _ensure_teacher_linked
     _ensure_teacher_linked(current_user, teacher, db)
 
@@ -781,7 +1044,7 @@ def enroll_in_cohort(
         teacher_id=teacher.id,
         cohort_id=cohort.id,
         classes_used=0,
-        classes_total=package.classes_count,
+        classes_total=remaining_classes,
         unlocked_credits=0,
         payment_status="unpaid",
         status=EnrollmentStatus.active,
@@ -793,7 +1056,7 @@ def enroll_in_cohort(
         enrollment_id=enrollment.id,
         student_id=student_id,
         teacher_id=teacher.id,
-        amount_total=package.price,
+        amount_total=effective_price,
         amount_teacher=0,
         amount_platform=0,
         payment_method="manual",
@@ -809,6 +1072,7 @@ def enroll_in_cohort(
         "message": "Inscripción registrada. Tu profesor(a) confirmará tu pago en breve.",
         "enrollment_id": enrollment.id,
         "cohort_id": cohort.id,
+        "amount_charged": effective_price,
     }
 
 

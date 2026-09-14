@@ -729,6 +729,12 @@ interface CohortLite {
   current_students: number;
   max_students: number;
   start_date?: string | null;
+  // D12: inscripción tardía -- cohorte con sesiones ya dictadas cobra
+  // precio prorrateado (effective_price < pkg.price cuando
+  // completed_sessions > 0).
+  status?: string;
+  completed_sessions?: number;
+  effective_price?: number;
 }
 
 function GroupPackagesBrowser({
@@ -785,78 +791,6 @@ function GroupPackagesBrowser({
 
   if (!groupPackages.length) return null;
 
-  if (joined) {
-    return (
-      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 flex gap-3 items-start">
-        <Check className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
-        <p className="text-sm font-bold text-emerald-700">
-          Te inscribiste en la cohorte. Tu profesor(a) confirmará tu pago en breve.
-        </p>
-      </div>
-    );
-  }
-
-  // Paso 2: confirmar el pago (instrucciones + referencia) antes de inscribir
-  if (confirming) {
-    return (
-      <div className="space-y-4 pt-2">
-        <div className="flex items-center gap-2">
-          <Users2 className="w-4 h-4 text-indigo-500" />
-          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">
-            Confirmar inscripción — {confirming.pkg.name}
-          </h3>
-        </div>
-
-        {error && (
-          <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
-            <X className="w-4 h-4 flex-shrink-0" /> {error}
-          </div>
-        )}
-
-        <div className="bg-gradient-to-br from-pink-50 to-rose-50 border border-pink-100 rounded-2xl p-4 text-center">
-          <p className="text-[10px] font-black text-pink-500 uppercase tracking-widest mb-1">
-            Monto total a transferir
-          </p>
-          <p className="text-3xl font-black text-pink-600">${confirming.pkg.price.toFixed(2)} USD</p>
-        </div>
-
-        <PaymentMethodsInfo />
-
-        <div>
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-            Mensaje de transacción (opcional)
-          </label>
-          <input
-            type="text" value={reference} onChange={(e) => setReference(e.target.value)}
-            placeholder="Ej: últimos 4 dígitos, ID de transacción..."
-            className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-xs font-bold
-                       text-slate-800 placeholder:text-slate-400 px-4 py-3.5 focus:outline-none
-                       focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
-          />
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={() => { setConfirming(null); setReference(""); setError(""); }}
-            disabled={joining}
-            className="flex-1 py-3 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
-          >
-            Volver
-          </button>
-          <button
-            onClick={confirmJoin}
-            disabled={joining}
-            className="flex-1 py-3 text-sm font-bold text-white rounded-xl bg-indigo-500 hover:bg-indigo-600 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {joining ? (
-              <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-            ) : "Confirmar inscripción"}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   const anyCohortAvailable = Object.values(cohortsByPackage).some(list => list.length > 0);
 
   return (
@@ -867,12 +801,6 @@ function GroupPackagesBrowser({
           O únete a un paquete grupal
         </h3>
       </div>
-
-      {error && (
-        <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
-          <X className="w-4 h-4 flex-shrink-0" /> {error}
-        </div>
-      )}
 
       {loadingCohorts ? (
         <Skeleton className="h-16 rounded-2xl" />
@@ -889,15 +817,136 @@ function GroupPackagesBrowser({
                 {cohort.current_students}/{cohort.max_students} inscritos
                 {cohort.start_date ? ` · Inicia ${new Date(cohort.start_date).toLocaleDateString()}` : " · Aún sin fecha fija"}
               </p>
-              <p className="text-xs text-slate-500">${pkg.price} {pkg.classes_count ? `· ${pkg.classes_count} clases` : ""}</p>
+              {!!cohort.completed_sessions && (
+                <p className="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
+                  Este grupo ya inició — {cohort.completed_sessions} clase(s) ya dictada(s). Tu precio se ajusta
+                  automáticamente por las clases que ya pasaron.
+                </p>
+              )}
+              <p className="text-xs text-slate-500">
+                {cohort.completed_sessions && cohort.effective_price !== pkg.price ? (
+                  <>
+                    <span className="line-through text-slate-400 mr-1">${pkg.price}</span>
+                    <span className="font-bold text-indigo-600">${cohort.effective_price}</span>
+                  </>
+                ) : (
+                  <>${pkg.price}</>
+                )} {pkg.classes_count ? `· ${pkg.classes_count} clases` : ""}
+              </p>
               <button
-                onClick={() => { setConfirming({ pkg, cohort }); setReference(""); setError(""); }}
+                onClick={() => { setJoined(false); setConfirming({ pkg, cohort }); setReference(""); setError(""); }}
                 className="mt-1 w-full py-2.5 text-xs font-bold text-white rounded-xl bg-indigo-500 hover:bg-indigo-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
               >
                 Unirme a esta cohorte
               </button>
             </div>
           )))}
+        </div>
+      )}
+
+      {/*
+        D8 fix: la inscripción a cohorte ahora abre un MODAL (mismo patrón
+        `fixed inset-0 z-50` que usa PackageCheckout más abajo en este
+        archivo), en vez de reemplazar por completo el browser de cohortes
+        disponibles con la pantalla de confirmación inline. Antes, al
+        hacer clic en "Unirme", toda la sección desaparecía y era
+        reemplazada por el paso de pago -- ahora el resto de la pantalla
+        (incluido el resto de paquetes individuales) sigue visible detrás
+        del modal, y "Volver"/cerrar el modal no pierde el contexto.
+      */}
+      {confirming && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => { if (!joining) { setConfirming(null); setReference(""); setError(""); } }}
+          />
+          <div className="relative w-full max-w-lg bg-white rounded-[2rem] shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between p-6 sm:px-8 sm:py-5 border-b border-slate-100 flex-shrink-0">
+              <h2 className="text-lg font-black text-slate-800">
+                {joined ? "¡Listo!" : "Confirmar inscripción"}
+              </h2>
+              <button
+                onClick={() => { setConfirming(null); setReference(""); setError(""); }}
+                disabled={joining}
+                className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors disabled:opacity-40"
+              >
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-4">
+              {joined ? (
+                <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 flex gap-3 items-start">
+                  <Check className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm font-bold text-emerald-700">
+                    Te inscribiste en la cohorte. Tu profesor(a) confirmará tu pago en breve.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Users2 className="w-4 h-4 text-indigo-500" />
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                      {confirming.pkg.name}
+                    </h3>
+                  </div>
+
+                  {error && (
+                    <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
+                      <X className="w-4 h-4 flex-shrink-0" /> {error}
+                    </div>
+                  )}
+
+                  <div className="bg-gradient-to-br from-pink-50 to-rose-50 border border-pink-100 rounded-2xl p-4 text-center">
+                    <p className="text-[10px] font-black text-pink-500 uppercase tracking-widest mb-1">
+                      Monto total a transferir
+                    </p>
+                    <p className="text-3xl font-black text-pink-600">
+                      ${(confirming.cohort.effective_price ?? confirming.pkg.price).toFixed(2)} USD
+                    </p>
+                    {!!confirming.cohort.completed_sessions && (
+                      <p className="text-[11px] text-pink-500 font-bold mt-1">
+                        Ajustado por {confirming.cohort.completed_sessions} clase(s) que este grupo ya dictó
+                      </p>
+                    )}
+                  </div>
+
+                  <PaymentMethodsInfo />
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                      Mensaje de transacción (opcional)
+                    </label>
+                    <input
+                      type="text" value={reference} onChange={(e) => setReference(e.target.value)}
+                      placeholder="Ej: últimos 4 dígitos, ID de transacción..."
+                      className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-xs font-bold
+                                 text-slate-800 placeholder:text-slate-400 px-4 py-3.5 focus:outline-none
+                                 focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
+                    />
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => { setConfirming(null); setReference(""); setError(""); }}
+                      disabled={joining}
+                      className="flex-1 py-3 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
+                    >
+                      Volver
+                    </button>
+                    <button
+                      onClick={confirmJoin}
+                      disabled={joining}
+                      className="flex-1 py-3 text-sm font-bold text-white rounded-xl bg-indigo-500 hover:bg-indigo-600 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {joining ? (
+                        <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      ) : "Confirmar inscripción"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1061,10 +1110,19 @@ function NeedsPackageScreen({
 // ─── Pantalla: renovación requerida ─────────────────────────────────────────
 function NeedsRenewalScreen({
   teacherUsername,
+  renewableEnrollmentId,
   onRequested,
   lastRejectedPayment,
 }: {
   teacherUsername: string | null;
+  // D4 fix: id del enrollment de ESTE profesor que /payments/booking-status
+  // ya identificó como el que motiva "needs_renewal". Antes este componente
+  // ignoraba esto y tomaba `enrollments[0]` de TODOS los enrollments del
+  // estudiante (sin filtrar por profesor ni por status) — si ese primero
+  // resultaba ser un enrollment 'cancelled' que nunca se activó (pago
+  // inicial rechazado), el backend rechazaba la "renovación" con
+  // "Solo puedes renovar un paquete activo o completado".
+  renewableEnrollmentId: number | null;
   onRequested: () => void;
   lastRejectedPayment: RejectedPaymentInfo | null;
 }) {
@@ -1074,7 +1132,13 @@ function NeedsRenewalScreen({
   const { packages, loading: packagesLoading } = useTeacherPackagesFor(teacherUsername ?? undefined, true);
   const { enrollments, loading: enrollmentsLoading } = useEnrollments();
   const loading = packagesLoading || enrollmentsLoading;
-  const lastEnrollmentId = enrollments[0]?.id ?? null;
+  // Preferimos el enrollment que booking-status ya resolvió para este
+  // profesor; si por algún motivo no vino, caemos al enrollment más
+  // reciente PERO filtrado por este profesor (nunca uno de otro profesor).
+  const lastEnrollmentId =
+    renewableEnrollmentId ??
+    enrollments.find(e => e.teacher_username === teacherUsername)?.id ??
+    null;
   const [requesting] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [checkoutTarget, setCheckoutTarget] = useState<{ pkg: PackageInfo; enrollmentId: number | null } | null>(null);
@@ -1287,6 +1351,12 @@ export default function SchedulePage() {
 
   const {
     stage,
+    // D4 fix: id del enrollment de ESTE profesor que booking-status ya
+    // resolvió (puede ser el mismo que quedó 'cancelled' tras un rechazo).
+    // Se lo pasamos a NeedsRenewalScreen para que no tenga que adivinar
+    // cuál de todos los enrollments del estudiante (de cualquier profesor)
+    // es el que corresponde renovar.
+    enrollmentId: bookingEnrollmentId,
     lastRejectedPayment,
     isFetching: stageFetching,
     refetch: refetchStage,
@@ -1382,7 +1452,7 @@ export default function SchedulePage() {
           </div>
 
           {/* Steps indicator */}
-          {stage === "ready" && (
+          {stage === "ready" && !activeEnrollment?.cohort_id && (
             <div className="flex items-center gap-3 mt-4">
               {[
                 { n: 1, label: "Seleccionar horario" },
@@ -1458,6 +1528,26 @@ export default function SchedulePage() {
           </div>
         )}
 
+        {/* D11 (decisión de negocio confirmada): un paquete grupal se
+            agenda por el profesor (ver teacher/cohorts), no por el propio
+            alumno eligiendo un slot cualquiera como en un paquete
+            individual -- todos los alumnos de la cohorte comparten el
+            mismo horario. Antes esta pantalla no distinguía el caso y
+            dejaba reservar un slot arbitrario con créditos de cohorte. */}
+        {stage === "ready" && activeEnrollment?.cohort_id && (
+          <div className="max-w-2xl mx-auto w-full bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-4 flex items-start gap-3">
+            <Users2 className="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-black text-indigo-800">Este es un paquete grupal</p>
+              <p className="text-xs text-indigo-700 mt-0.5">
+                Las sesiones de tu cohorte las agenda tu profesor(a) para todo el grupo — no eliges un horario
+                individual acá. Revisa tu <Link href="/dashboard" className="underline font-bold">panel principal</Link> para
+                ver tus próximas clases.
+              </p>
+            </div>
+          </div>
+        )}
+
         {stage === "ready" && step === "payment" && !activeEnrollment && (
           <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 max-w-lg mx-auto">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -1466,7 +1556,7 @@ export default function SchedulePage() {
         )}
 
         {/* Banner informativo del paquete / créditos */}
-        {stage === "ready" && activeEnrollment && (
+        {stage === "ready" && activeEnrollment && !activeEnrollment.cohort_id && (
           <div className="max-w-2xl mx-auto w-full">
             {activeEnrollment.package?.classes_count == null ? (
               <div className="bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-4 flex items-center justify-between gap-4">
@@ -1599,6 +1689,7 @@ export default function SchedulePage() {
             {(stage === "needs_renewal" || stage === "renew_required") && (
               <NeedsRenewalScreen
                 teacherUsername={selectedTeacherUsername}
+                renewableEnrollmentId={bookingEnrollmentId}
                 onRequested={refetchStage}
                 lastRejectedPayment={lastRejectedPayment}
               />
@@ -1606,14 +1697,14 @@ export default function SchedulePage() {
 
             {stage === "renewal_pending" && <RenewalPendingScreen />}
 
-            {stage === "ready" && step === "select" && (
+            {stage === "ready" && step === "select" && !activeEnrollment?.cohort_id && (
               <StepSelectSlot
                 onSelect={handleSlotSelect}
                 teacherUsername={selectedTeacherUsername}
               />
             )}
 
-            {stage === "ready" && step === "payment" && selectedSlot && (
+            {stage === "ready" && step === "payment" && selectedSlot && !activeEnrollment?.cohort_id && (
               <StepPayment
                 date={selectedDate}
                 slot={selectedSlot}

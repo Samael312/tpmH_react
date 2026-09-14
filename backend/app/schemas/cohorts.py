@@ -28,6 +28,25 @@ class CohortCreate(BaseModel):
         return v
 
 
+class CohortEditRequest(BaseModel):
+    """
+    D12: el profesor edita min_students/max_students de una cohorte propia
+    ya creada, sin necesitar Modo Dios (que ya tenía esto vía
+    GodModeCohortEditRequest, pero es exclusivo de staff). Solo estos dos
+    campos -- mover la fecha de inicio de una cohorte ya cerrada sigue
+    siendo una operación delicada reservada a Modo Dios.
+    """
+    min_students: Optional[int] = None
+    max_students: Optional[int] = None
+
+    @field_validator("min_students", "max_students")
+    @classmethod
+    def validate_positive(cls, v):
+        if v is not None and v < 1:
+            raise ValueError("Debe ser al menos 1 alumno")
+        return v
+
+
 class CohortCloseRequest(BaseModel):
     """
     El profesor cierra la cohorte con los integrantes actuales.
@@ -54,6 +73,12 @@ class CohortResponse(BaseModel):
     current_students: int
     created_at: datetime
     closed_at: Optional[datetime] = None
+    # D12: soporte para inscripción tardía (cohorte con status
+    # confirmed/in_progress que ya dictó alguna sesión). completed_sessions
+    # en 0 y effective_price == precio del paquete significa "cohorte
+    # todavía no dictó ninguna clase" (comportamiento de siempre).
+    completed_sessions: int = 0
+    effective_price: float = 0.0
 
     class Config:
         from_attributes = True

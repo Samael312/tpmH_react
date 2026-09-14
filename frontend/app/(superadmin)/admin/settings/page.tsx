@@ -1110,9 +1110,10 @@ export default function SettingsPage() {
               { key: 'min_reschedule_hours_student', label: 'Horas mínimas para reagendar (estudiante)' },
               { key: 'low_credit_threshold', label: 'Umbral de crédito bajo' },
               { key: 'low_credit_renotify_days', label: 'Días entre avisos de crédito bajo' },
+              { key: 'min_classes_before_package_change', label: 'Mínimo de clases completadas para cambiar de paquete' },
             ] as {
               key: 'min_booking_hours' | 'min_cancel_hours' | 'min_reschedule_hours_student'
-                 | 'low_credit_threshold' | 'low_credit_renotify_days';
+                 | 'low_credit_threshold' | 'low_credit_renotify_days' | 'min_classes_before_package_change';
               label: string;
             }[]).map(f => (
               <div key={f.key}>
@@ -1120,6 +1121,11 @@ export default function SettingsPage() {
                 <input type="number" value={businessRules[f.key]}
                   onChange={e => updateBusinessRules({ ...businessRules, [f.key]: parseInt(e.target.value) || 0 })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold" />
+                {f.key === 'min_classes_before_package_change' && (
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    0 = sin restricción. Aplica tanto a subir como a bajar de paquete.
+                  </p>
+                )}
               </div>
             ))}
             <DurationCheckboxEditor

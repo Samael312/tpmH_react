@@ -40,6 +40,9 @@ const emptyForm = {
   is_group: false,
   min_students: "3",
   max_students: "6",
+  group_schedule_mode: "manual" as "manual" | "fixed",
+  group_recurring_days_of_week: [] as number[],
+  group_recurring_time_local: "18:00",
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -161,6 +164,9 @@ export default function TeacherPackagesPage() {
       is_group: pkg.is_group ?? false,
       min_students: pkg.min_students != null ? String(pkg.min_students) : "3",
       max_students: pkg.max_students != null ? String(pkg.max_students) : "6",
+      group_schedule_mode: (pkg.group_schedule_mode as "manual" | "fixed") ?? "manual",
+      group_recurring_days_of_week: pkg.group_recurring_days_of_week ?? [],
+      group_recurring_time_local: pkg.group_recurring_time_local ?? "18:00",
     });
     setShowForm(true);
     scrollToForm();
@@ -194,6 +200,10 @@ export default function TeacherPackagesPage() {
         setError("El máximo de alumnos no puede ser menor que el mínimo");
         return;
       }
+      if (form.group_schedule_mode === "fixed" && form.group_recurring_days_of_week.length === 0) {
+        setError("Elige al menos un día de la semana para el horario fijo");
+        return;
+      }
     }
 
     setSaving(true);
@@ -215,6 +225,9 @@ export default function TeacherPackagesPage() {
         is_group: form.is_group,
         min_students: form.is_group ? minStudentsNum : null,
         max_students: form.is_group ? maxStudentsNum : null,
+        group_schedule_mode: form.is_group ? form.group_schedule_mode : "manual",
+        group_recurring_days_of_week: form.is_group && form.group_schedule_mode === "fixed" ? form.group_recurring_days_of_week : null,
+        group_recurring_time_local: form.is_group && form.group_schedule_mode === "fixed" ? form.group_recurring_time_local : null,
       };
       if (editingId) {
         await api.patch(`/packages/${editingId}`, payload);
@@ -527,6 +540,82 @@ export default function TeacherPackagesPage() {
                             className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold px-4 py-3 focus:outline-none focus:border-pink-500 focus:bg-white transition-all"
                           />
                         </div>
+                      </div>
+
+                      {/* D14: horario manual (default, de siempre) vs fijo/recurrente */}
+                      <div className="pt-2 border-t border-slate-100">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                          Horario de las sesiones
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setForm({ ...form, group_schedule_mode: "manual" })}
+                            className={`py-2.5 rounded-xl text-xs font-bold transition-colors ${
+                              form.group_schedule_mode === "manual"
+                                ? "bg-pink-500 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                            }`}
+                          >
+                            Libre (agendo yo cada sesión)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setForm({ ...form, group_schedule_mode: "fixed" })}
+                            className={`py-2.5 rounded-xl text-xs font-bold transition-colors ${
+                              form.group_schedule_mode === "fixed"
+                                ? "bg-pink-500 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                            }`}
+                          >
+                            Fijo y recurrente
+                          </button>
+                        </div>
+
+                        {form.group_schedule_mode === "fixed" && (
+                          <div className="mt-3 space-y-3 animate-in fade-in duration-300">
+                            <p className="text-[11px] text-slate-500 font-medium">
+                              Al cerrar un grupo con este paquete, elegirás a partir de cuál coincidencia arrancar
+                              y se agendarán automáticamente todas las sesiones siguiendo este patrón.
+                            </p>
+                            <div>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                                Días de la semana
+                              </label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((label, idx) => {
+                                  const selected = form.group_recurring_days_of_week.includes(idx);
+                                  return (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={() => setForm({
+                                        ...form,
+                                        group_recurring_days_of_week: selected
+                                          ? form.group_recurring_days_of_week.filter(d => d !== idx)
+                                          : [...form.group_recurring_days_of_week, idx],
+                                      })}
+                                      className={`w-10 h-9 rounded-lg text-[11px] font-bold transition-colors ${
+                                        selected ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                                      }`}
+                                    >
+                                      {label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                                Hora (tu zona horaria)
+                              </label>
+                              <input
+                                type="time"
+                                value={form.group_recurring_time_local}
+                                onChange={e => setForm({ ...form, group_recurring_time_local: e.target.value })}
+                                className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold px-4 py-3 focus:outline-none focus:border-pink-500 focus:bg-white transition-all"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

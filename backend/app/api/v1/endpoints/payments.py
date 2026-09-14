@@ -452,6 +452,9 @@ def book_class(
             start_time_utc=trial_start,
             teacher_id=teacher.id,
             student_id=student_id,
+            # D5 fix: fin ocupado real del candidato (duración de prueba +
+            # su propio margen), no solo su start.
+            end_time_utc=trial_end + timedelta(minutes=trial_buffer),
             db=db
         )
         if not can_book:
@@ -566,16 +569,20 @@ def book_class(
         if occupied_slots >= enrollment.unlocked_credits:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "No tienes créditos disponibles todavía")
 
+        # D5 fix: se necesita ANTES del chequeo de choques, para poder
+        # pasarle a can_book_slot el fin ocupado real del candidato
+        # (duración + su propio margen), no solo su start.
+        regular_buffer = get_buffer_minutes_for_type(ClassType.regular, db)
+
         can_book, error_msg = can_book_slot(
             start_time_utc=data.start_time_utc,
             teacher_id=enrollment.teacher_id,
             student_id=student_id,
+            end_time_utc=data.start_time_utc + timedelta(minutes=data.duration_minutes + regular_buffer),
             db=db
         )
         if not can_book:
             raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
-
-        regular_buffer = get_buffer_minutes_for_type(ClassType.regular, db)
 
         new_class = Class(
             enrollment_id=enrollment.id,
@@ -649,16 +656,19 @@ def book_class(
                 "No tienes créditos disponibles. Compra créditos para poder agendar."
             )
 
+        # D5 fix: ídem branch de paquete finito -- se necesita antes del
+        # chequeo de choques.
+        regular_buffer = get_buffer_minutes_for_type(ClassType.regular, db)
+
         can_book, error_msg = can_book_slot(
             start_time_utc=data.start_time_utc,
             teacher_id=enrollment.teacher_id,
             student_id=student_id,
+            end_time_utc=data.start_time_utc + timedelta(minutes=data.duration_minutes + regular_buffer),
             db=db
         )
         if not can_book:
             raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
-
-        regular_buffer = get_buffer_minutes_for_type(ClassType.regular, db)
 
         new_class = Class(
             enrollment_id=enrollment.id,
@@ -1019,11 +1029,23 @@ def validate_payment(
                     # vez de 'active' con un tope imposible de alcanzar.
                     enrollment.paid_via_installments = False
                     occupied_slots = _get_enrollment_occupied_slots(enrollment, db)
-                    if occupied_slots >= target_package.classes_count:
+                    # D12 fix: un alumno que se sumó tarde a una cohorte (ya
+                    # con sesiones dictadas) tiene su classes_total ya
+                    # reducido desde la inscripción (ver enroll_in_cohort +
+                    # _late_join_pricing) -- los créditos que recibe al
+                    # aprobarse el pago deben respetar ESE total, no el
+                    # classes_count completo del paquete (que es lo que
+                    # pagaría un alumno que se une desde el arranque).
+                    target_credits = (
+                        enrollment.classes_total
+                        if payment.payment_type == "group_enrollment"
+                        else target_package.classes_count
+                    )
+                    if occupied_slots >= target_credits:
                         enrollment.unlocked_credits = occupied_slots
                         enrollment.status = EnrollmentStatus.completed
                     else:
-                        enrollment.unlocked_credits = target_package.classes_count
+                        enrollment.unlocked_credits = target_credits
                     enrollment.installments_paid = target_package.installment_count or 1
                     enrollment.payment_status = "paid"
 
@@ -1591,6 +1613,20 @@ def notify_payment(
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 "No puedes unirte a un paquete grupal por esta vía. Inscríbete a una cohorte disponible."
+            )
+
+        # D7: mínimo de clases YA COMPLETADAS configurable por el admin
+        # antes de poder pedir CUALQUIER cambio de paquete (decisión de
+        # negocio confirmada: aplica tanto a upgrades como a downgrades,
+        # sin distinción). 0 = sin restricción (default).
+        from app.core.platform_config import get_or_create_platform_config
+        platform_config = get_or_create_platform_config(db)
+        min_classes_required = platform_config.min_classes_before_package_change or 0
+        if min_classes_required > 0 and current_enrollment.classes_used < min_classes_required:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Necesitas haber completado al menos {min_classes_required} clase(s) de tu paquete actual "
+                f"antes de poder cambiarlo (llevas {current_enrollment.classes_used})."
             )
 
         # ── Paquete nuevo ilimitado: cambio instantáneo, sin cobro ──

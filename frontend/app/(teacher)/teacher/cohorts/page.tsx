@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Users2, Plus, Check, Calendar, Lock, Ban, ChevronRight,
-  AlertTriangle, Clock, X, UserCheck, UserX, RefreshCw, RotateCcw,
+  AlertTriangle, Clock, X, UserCheck, UserX, RefreshCw, RotateCcw, Pencil,
 } from "lucide-react";
 import api from "@/lib/api";
 import { Card, Badge, Button, Skeleton, FullScreenModal, ConfirmModal } from "@/components/ui";
@@ -117,10 +117,27 @@ export default function TeacherCohortsPage() {
   // (ver GroupSessionSlotPicker más abajo), porque esa fecha/hora también
   // debe crear la primera sesión del grupo.
   const [closeForm, setCloseForm] = useState<{ date: string; selectedSlot: AvailableSlot | null; duration: string }>({ date: "", selectedSlot: null, duration: "50" });
+  // D14: cuando el paquete de la cohorte que se está cerrando tiene
+  // horario fijo/recurrente, en vez del selector libre de fecha/hora se
+  // muestran estas próximas coincidencias con el patrón configurado.
+  const [recurringCandidates, setRecurringCandidates] = useState<{ start_time_utc: string; available: boolean; reason: string | null }[]>([]);
+  const [loadingRecurringCandidates, setLoadingRecurringCandidates] = useState(false);
+  const [selectedRecurringStart, setSelectedRecurringStart] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<Cohort | null>(null);
   const [completeTarget, setCompleteTarget] = useState<Cohort | null>(null);
   const [reopenTarget, setReopenTarget] = useState<Cohort | null>(null);
+  // D13: antes las cohortes 'completed'/'cancelled' desaparecían del todo
+  // de la lista (solo se ocultaba 'cancelled', y 'completed' quedaba
+  // mezclada con las activas sin separación) -- ahora viven en su propio
+  // tab "Historial" en vez de perderse.
+  const [cohortTab, setCohortTab] = useState<"active" | "history">("active");
+  // D12: editar min/max de una cohorte ya creada -- antes esto solo
+  // existía vía Modo Dios (staff), el profesor no tenía forma de
+  // corregir el cupo que definió al crear la cohorte.
+  const [editingCohort, setEditingCohort] = useState<Cohort | null>(null);
+  const [editForm, setEditForm] = useState({ min_students: "", max_students: "" });
+  const [editing, setEditing] = useState(false);
 
   const [schedulingCohort, setSchedulingCohort] = useState<Cohort | null>(null);
   const { rules } = useBusinessRules();
@@ -134,6 +151,25 @@ export default function TeacherCohortsPage() {
     closeForm.date, Number(closeForm.duration) || 50, teacherUsername, "group"
   );
   const myTz = getMyDisplayTimezone();
+
+  // D14: si el paquete de la cohorte que se está cerrando tiene horario
+  // fijo/recurrente, se cargan las próximas coincidencias con ese patrón
+  // en vez de dejar elegir una fecha/hora libre.
+  const closingPackage = closingCohort ? allPackages.find(p => p.id === closingCohort.package_id) : null;
+  const isFixedSchedule = closingPackage?.group_schedule_mode === "fixed";
+
+  useEffect(() => {
+    if (!closingCohort || !isFixedSchedule) {
+      setRecurringCandidates([]);
+      setSelectedRecurringStart(null);
+      return;
+    }
+    setLoadingRecurringCandidates(true);
+    api.get(`/cohorts/${closingCohort.id}/recurring-candidates`)
+      .then(res => setRecurringCandidates(res.data))
+      .catch(() => setRecurringCandidates([]))
+      .finally(() => setLoadingRecurringCandidates(false));
+  }, [closingCohort?.id, isFixedSchedule]);
 
   // La duración por defecto de ambos forms depende del catálogo configurado
   // por el superadmin, que llega async — se sincroniza cuando esté disponible.
@@ -189,20 +225,26 @@ export default function TeacherCohortsPage() {
   };
 
   const handleClose = async () => {
-    if (!closingCohort || !closeForm.selectedSlot) return;
+    if (!closingCohort) return;
+    if (isFixedSchedule && !selectedRecurringStart) return;
+    if (!isFixedSchedule && !closeForm.selectedSlot) return;
     setActionLoading(true);
     try {
       // La fecha/hora elegida acá ya no es solo metadata: el backend usa
       // este mismo start_date + duration_minutes para crear de una vez la
       // primera sesión (Class) real del grupo (ver close_cohort_endpoint).
+      // D14: si el paquete es de horario fijo, start_date es la ocurrencia
+      // elegida del patrón recurrente y el backend genera TODA la serie
+      // de sesiones automáticamente (no solo la primera).
       await api.post(`/cohorts/${closingCohort.id}/close`, {
-        start_date: closeForm.selectedSlot.start_time_utc,
-        duration_minutes: Number(closeForm.duration),
+        start_date: isFixedSchedule ? selectedRecurringStart : closeForm.selectedSlot!.start_time_utc,
+        duration_minutes: isFixedSchedule ? (closingPackage?.duration_minutes ?? 50) : Number(closeForm.duration),
       });
       setClosingCohort(null);
       setCloseForm({ date: "", selectedSlot: null, duration: String(rules.allowed_class_durations?.[0] ?? 50) });
+      setSelectedRecurringStart(null);
       await loadData();
-      toast.success("Cohorte cerrada e iniciada correctamente");
+      toast.success(isFixedSchedule ? "Cohorte cerrada — se agendaron todas las sesiones automáticamente" : "Cohorte cerrada e iniciada correctamente");
     } catch (err) {
       toast.error(getErrorMessage(err, "No se pudo cerrar la cohorte"));
     } finally {
@@ -252,6 +294,24 @@ export default function TeacherCohortsPage() {
     } finally {
       setActionLoading(false);
       setReopenTarget(null);
+    }
+  };
+
+  const handleEditQuota = async () => {
+    if (!editingCohort) return;
+    setEditing(true);
+    try {
+      await api.patch(`/cohorts/${editingCohort.id}`, {
+        min_students: Number(editForm.min_students),
+        max_students: Number(editForm.max_students),
+      });
+      setEditingCohort(null);
+      await loadData();
+      toast.success("Cupo de la cohorte actualizado");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "No se pudo actualizar el cupo"));
+    } finally {
+      setEditing(false);
     }
   };
 
@@ -323,8 +383,44 @@ export default function TeacherCohortsPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {cohorts.filter(c => c.status !== "cancelled").map((cohort) => (
+      {(() => {
+        const activeCohorts = cohorts.filter(c => c.status === "filling" || c.status === "confirmed" || c.status === "in_progress");
+        const historyCohorts = cohorts.filter(c => c.status === "completed" || c.status === "cancelled");
+        const visibleCohorts = cohortTab === "active" ? activeCohorts : historyCohorts;
+
+        return (
+          <>
+            {!loading && !error && cohorts.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-slate-100 rounded-xl p-1 w-fit">
+                <button
+                  onClick={() => setCohortTab("active")}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                    cohortTab === "active" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  Activos ({activeCohorts.length})
+                </button>
+                <button
+                  onClick={() => setCohortTab("history")}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                    cohortTab === "history" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  Historial ({historyCohorts.length})
+                </button>
+              </div>
+            )}
+
+            {!loading && !error && cohorts.length > 0 && visibleCohorts.length === 0 && (
+              <Card className="p-8 text-center">
+                <p className="text-sm font-semibold text-slate-500">
+                  {cohortTab === "active" ? "No tienes cohortes activas por ahora." : "Todavía no hay cohortes en tu historial."}
+                </p>
+              </Card>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {visibleCohorts.map((cohort) => (
           <Card key={cohort.id} className="p-5" hover>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -373,6 +469,13 @@ export default function TeacherCohortsPage() {
                 >
                   <Lock className="w-3.5 h-3.5" /> Cerrar con integrantes actuales
                 </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => { setEditingCohort(cohort); setEditForm({ min_students: String(cohort.min_students), max_students: String(cohort.max_students) }); }}
+                >
+                  <Pencil className="w-3.5 h-3.5" /> Editar cupo
+                </Button>
                 <Button size="sm" variant="danger" onClick={() => setCancelTarget(cohort)}>
                   <Ban className="w-3.5 h-3.5" /> Cancelar cohorte
                 </Button>
@@ -385,6 +488,13 @@ export default function TeacherCohortsPage() {
                 </Button>
                 <Button size="sm" variant="secondary" onClick={() => setCompleteTarget(cohort)}>
                   <Check className="w-3.5 h-3.5" /> Finalizar cohorte
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => { setEditingCohort(cohort); setEditForm({ min_students: String(cohort.min_students), max_students: String(cohort.max_students) }); }}
+                >
+                  <Pencil className="w-3.5 h-3.5" /> Editar cupo
                 </Button>
                 <Button size="sm" variant="secondary" onClick={() => setReopenTarget(cohort)}>
                   <RotateCcw className="w-3.5 h-3.5" /> Reabrir
@@ -488,17 +598,20 @@ export default function TeacherCohortsPage() {
               </div>
             )}
           </Card>
-        ))}
-      </div>
+              ))}
+            </div>
+          </>
+        );
+      })()}
 
       {/* ── Modal: crear cohorte ── */}
       <FullScreenModal
         open={showCreate}
         onClose={() => setShowCreate(false)}
-        title="Nueva Grupo"
+        title="Nuevo Grupo"
         footer={
           <Button className="w-full" onClick={handleCreate} loading={creating} disabled={!form.package_id}>
-            <Check className="w-4 h-4" /> Crear cohorte
+            <Check className="w-4 h-4" /> Crear Grupo
           </Button>
         }
       >
@@ -568,8 +681,14 @@ export default function TeacherCohortsPage() {
         onClose={() => setClosingCohort(null)}
         title="Cerrar cohorte"
         footer={
-          <Button className="w-full" onClick={handleClose} loading={actionLoading} disabled={!closeForm.selectedSlot}>
-            <Lock className="w-4 h-4" /> Confirmar cierre y agendar 1ª sesión
+          <Button
+            className="w-full"
+            onClick={handleClose}
+            loading={actionLoading}
+            disabled={isFixedSchedule ? !selectedRecurringStart : !closeForm.selectedSlot}
+          >
+            <Lock className="w-4 h-4" />
+            {isFixedSchedule ? "Confirmar cierre y agendar todas las sesiones" : "Confirmar cierre y agendar 1ª sesión"}
           </Button>
         }
       >
@@ -584,29 +703,71 @@ export default function TeacherCohortsPage() {
                 </span>
               </div>
             )}
-            <p className="text-xs text-slate-500">
-              La fecha y horario que elijas acá quedan como la fecha de inicio del grupo <strong>y</strong>{" "}
-              generan de una vez la primera sesión (clase) real de la cohorte.
-            </p>
 
-            {/* Corrección QA: antes esto era un <input type="datetime-local">
-                suelto, sin validar contra la disponibilidad real del
-                profesor, y la fecha elegida nunca generaba una Class de
-                verdad — solo quedaba como metadata de la cohorte. Ahora
-                reutiliza el mismo selector de calendario + horarios reales
-                que "Agendar sesión" (ver GroupSessionSlotPicker). */}
-            <GroupSessionSlotPicker
-              allowedDurations={rules.allowed_class_durations}
-              duration={closeForm.duration}
-              onDurationChange={(d) => setCloseForm({ ...closeForm, duration: d, selectedSlot: null })}
-              date={closeForm.date}
-              onDateChange={(d) => setCloseForm({ ...closeForm, date: d, selectedSlot: null })}
-              slots={closeSlots}
-              slotsLoading={closeSlotsLoading}
-              selectedSlot={closeForm.selectedSlot}
-              onSelectSlot={(slot) => setCloseForm({ ...closeForm, selectedSlot: slot })}
-              myTz={myTz}
-            />
+            {isFixedSchedule ? (
+              <>
+                <p className="text-xs text-slate-500">
+                  Este paquete tiene horario fijo (
+                  {(closingPackage?.group_recurring_days_of_week ?? []).map(d => ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"][d]).join(", ")}
+                  {" "}{closingPackage?.group_recurring_time_local}). Elegí a partir de cuál coincidencia arrancar —
+                  se agendarán automáticamente las {closingPackage?.classes_count ?? "N"} sesiones del paquete.
+                </p>
+                {loadingRecurringCandidates ? (
+                  <Skeleton className="h-40 rounded-2xl" />
+                ) : recurringCandidates.length === 0 ? (
+                  <p className="text-xs text-rose-500 font-bold">
+                    No se encontraron próximas coincidencias con el patrón configurado.
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {recurringCandidates.map(c => (
+                      <button
+                        key={c.start_time_utc}
+                        type="button"
+                        disabled={!c.available}
+                        onClick={() => setSelectedRecurringStart(c.start_time_utc)}
+                        className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-colors flex items-center justify-between gap-2 ${
+                          !c.available
+                            ? "bg-slate-50 text-slate-300 cursor-not-allowed"
+                            : selectedRecurringStart === c.start_time_utc
+                              ? "bg-indigo-500 text-white"
+                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
+                      >
+                        <span>{new Date(c.start_time_utc).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" })}</span>
+                        {!c.available && <span className="text-[10px] normal-case font-medium">{c.reason}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-slate-500">
+                  La fecha y horario que elijas acá quedan como la fecha de inicio del grupo <strong>y</strong>{" "}
+                  generan de una vez la primera sesión (clase) real de la cohorte.
+                </p>
+
+                {/* Corrección QA: antes esto era un <input type="datetime-local">
+                    suelto, sin validar contra la disponibilidad real del
+                    profesor, y la fecha elegida nunca generaba una Class de
+                    verdad — solo quedaba como metadata de la cohorte. Ahora
+                    reutiliza el mismo selector de calendario + horarios reales
+                    que "Agendar sesión" (ver GroupSessionSlotPicker). */}
+                <GroupSessionSlotPicker
+                  allowedDurations={rules.allowed_class_durations}
+                  duration={closeForm.duration}
+                  onDurationChange={(d) => setCloseForm({ ...closeForm, duration: d, selectedSlot: null })}
+                  date={closeForm.date}
+                  onDateChange={(d) => setCloseForm({ ...closeForm, date: d, selectedSlot: null })}
+                  slots={closeSlots}
+                  slotsLoading={closeSlotsLoading}
+                  selectedSlot={closeForm.selectedSlot}
+                  onSelectSlot={(slot) => setCloseForm({ ...closeForm, selectedSlot: slot })}
+                  myTz={myTz}
+                />
+              </>
+            )}
           </div>
         )}
       </FullScreenModal>
@@ -699,6 +860,56 @@ export default function TeacherCohortsPage() {
         onConfirm={() => { if (reopenTarget) return handleReopen(reopenTarget) }}
         loading={actionLoading}
       />
+
+      {/* ── Modal: editar cupo (D12) ── */}
+      <FullScreenModal
+        open={!!editingCohort}
+        onClose={() => setEditingCohort(null)}
+        title="Editar cupo"
+        footer={
+          <Button
+            className="w-full"
+            onClick={handleEditQuota}
+            loading={editing}
+            disabled={!editForm.min_students || !editForm.max_students}
+          >
+            <Check className="w-4 h-4" /> Guardar cambios
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-slate-500">
+            {editingCohort?.package_name} — actualmente {editingCohort?.current_students} alumno(s) inscritos.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Mínimo de alumnos</label>
+              <input
+                type="number"
+                min={1}
+                className="w-full mt-2 border border-slate-200 rounded-xl px-3 py-2.5 text-sm"
+                value={editForm.min_students}
+                onChange={(e) => setEditForm({ ...editForm, min_students: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Máximo de alumnos</label>
+              <input
+                type="number"
+                min={1}
+                className="w-full mt-2 border border-slate-200 rounded-xl px-3 py-2.5 text-sm"
+                value={editForm.max_students}
+                onChange={(e) => setEditForm({ ...editForm, max_students: e.target.value })}
+              />
+              {editingCohort && (
+                <p className="text-[11px] text-slate-400 mt-1">
+                  No puede ser menor que los {editingCohort.current_students} ya inscritos.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </FullScreenModal>
 
       <ChipiWidget screenName="teacher_cohorts" />
       </div>

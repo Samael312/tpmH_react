@@ -30,7 +30,7 @@ const STUDENT_MORE: TabItem[] = [
   { href: "/dashboard/availability", label: "Disponibilidad", icon: <Users size={20} /> },
   { href: "/dashboard/materials", label: "Materiales", icon: <Book size={20} /> },
   { href: "/dashboard/homework", label: "Tareas", icon: <ClipboardEdit size={20} /> },
-  { href: "/dashboard/teachers", label: "Profesores", icon: <GraduationCap size={20} /> },
+  { href: "/dashboard/teachers", label: "Profesor", icon: <GraduationCap size={20} /> },
   { href: "/dashboard/support", label: "Soporte", icon: <LifeBuoy size={20} /> },
 ];
 

@@ -19,6 +19,10 @@ export interface BusinessRules {
   // Minutos antes del inicio de la clase en los que se auto-genera el
   // Meet link si todavía no tiene uno — ver backend core/scheduler.py.
   meet_link_autogen_minutes: number;
+  // D7: mínimo de clases YA COMPLETADAS antes de poder cambiar de
+  // paquete (aplica a upgrades y downgrades por igual). 0 = sin
+  // restricción.
+  min_classes_before_package_change: number;
 }
 
 // Pool fijo del que se eligen las duraciones de clase (regulares/paquetes)
@@ -38,6 +42,7 @@ const FALLBACK: BusinessRules = {
   buffer_regular_minutes: 10,
   buffer_group_minutes: 10,
   meet_link_autogen_minutes: 30,
+  min_classes_before_package_change: 0,
 };
 
 let cache: BusinessRules | null = null;

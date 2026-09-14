@@ -177,6 +177,18 @@ def can_book_slot(
     start_time_utc: datetime,
     teacher_id: int,
     student_id: int,
+    # D5 fix: fin del bloque que ocuparía la agenda del profesor con ESTE
+    # candidato (start + duración real + su propio margen de preparación
+    # — el mismo criterio que ya se usa para las clases existentes, ver
+    # `_occupied_end` más abajo). Antes esta función no sabía nada del
+    # fin del candidato y solo comparaba `start_time_utc` contra el fin
+    # ocupado de cada clase existente: cualquier solicitud que empezara
+    # ANTES de ese fin quedaba bloqueada, sin importar que el candidato
+    # mismo terminara mucho antes de que la clase existente empezara
+    # (ej.: una clase existente 8:30–9:20 con 10min de margen bloqueaba
+    # erróneamente 7:30–8:20, que no se solapa con nada). El chequeo de
+    # solape real de intervalos necesita las dos direcciones.
+    end_time_utc: datetime,
     db: Session,
     exclude_class_id: int = None,
     # God Mode (staff) reagenda/crea clases "sin restricciones normales",
@@ -227,7 +239,18 @@ def can_book_slot(
     )
     if exclude_class_id:
         query = query.filter(Class.id != exclude_class_id)
-    if any(start_time_utc < _occupied_end(c) for c in query.all()):
+    # D5 fix: dos intervalos [a_start, a_end) y [b_start, b_end) se
+    # solapan solo si a_start < b_end Y b_start < a_end -- las DOS
+    # condiciones. Antes solo se evaluaba la primera (candidato empieza
+    # antes de que termine, con margen, la clase existente), lo cual
+    # también es cierto para cualquier candidato bien anterior que ni
+    # siquiera llega a tocar esa clase. Con la segunda condición
+    # (la clase existente empieza antes de que termine, con margen, el
+    # candidato) se descarta ese falso positivo.
+    if any(
+        start_time_utc < _occupied_end(c) and c.start_time_utc < end_time_utc
+        for c in query.all()
+    ):
         return False, "El profesor ya tiene una clase en ese horario (o no ha pasado su margen de preparación)"
 
     query_student = db.query(Class).filter(
@@ -238,16 +261,29 @@ def can_book_slot(
     )
     if exclude_class_id:
         query_student = query_student.filter(Class.id != exclude_class_id)
-    if any(start_time_utc < _occupied_end(c) for c in query_student.all()):
+    # D5 fix: mismo problema y misma corrección que arriba, del lado del
+    # estudiante.
+    if any(
+        start_time_utc < _occupied_end(c) and c.start_time_utc < end_time_utc
+        for c in query_student.all()
+    ):
         return False, "Ya tienes una clase en ese horario"
 
     # Un alumno tampoco puede tener, a la misma hora, una participación
     # activa en una clase grupal (vía ClassParticipant) — el chequeo de
     # arriba solo cubre Class.student_id, que es NULL para clases grupales.
+    #
+    # Bug adicional (hallado auditando D5, no estaba en el backlog): esta
+    # query traía objetos ClassParticipant, que NO tienen los atributos
+    # end_time_utc/buffer_minutes/start_time_utc que usa _occupied_end() —
+    # de haber llegado a ejecutarse esta rama, reventaba con
+    # AttributeError. Se corrige seleccionando `Class` (vía el mismo
+    # join), que sí tiene esos campos. De paso se aplica el mismo fix de
+    # D5: el solape real de intervalos necesita las dos direcciones.
     from app.models.class_participant import ClassParticipant
     query_group_participation = (
-        db.query(ClassParticipant)
-        .join(Class, ClassParticipant.class_id == Class.id)
+        db.query(Class)
+        .join(ClassParticipant, ClassParticipant.class_id == Class.id)
         .filter(
             ClassParticipant.student_id == student_id,
             ClassParticipant.attendance_status != "cancelled",
@@ -256,7 +292,10 @@ def can_book_slot(
             Class.status.notin_(["cancelled", "expired"]),
         )
     )
-    if any(start_time_utc < _occupied_end(c) for c in query_group_participation.all()):
+    if any(
+        start_time_utc < _occupied_end(c) and c.start_time_utc < end_time_utc
+        for c in query_group_participation.all()
+    ):
         return False, "Ya tienes una clase en ese horario"
 
     return True, ""
@@ -504,17 +543,22 @@ def get_student_booking_stage(student_id: int, teacher_id: int, db: Session) -> 
         if not already_refunded:
             return "needs_group_refund"
 
+    # D4 fix (confirmado, no reabrir): un enrollment "cancelled" -- sea
+    # porque nunca se activó (pago inicial rechazado/nunca notificado) o
+    # porque sí se usó y luego se canceló por otro motivo (profesor
+    # suspendido y reembolsado, cohorte cancelada y reembolsada, etc.) --
+    # no debe forzar a este estudiante a "needs_renewal". Cualquier
+    # cancelación se considera un reinicio total de la relación con este
+    # profesor: la próxima vez elige un paquete desde cero, nunca ve
+    # "Renovar paquete" para algo que ya fue cancelado. Antes esto rompía
+    # la elección de paquete con "Paquete no encontrado o no disponible",
+    # o -- para el caso específico del pago inicial rechazado -- mandaba
+    # a needs_renewal con un enrollment que nunca fue active/completed,
+    # y el backend terminaba rechazando la "renovación" con "Solo puedes
+    # renovar un paquete activo o completado".
     any_enrollment_ever = db.query(Enrollment).filter(
         Enrollment.student_id == student_id,
         Enrollment.teacher_id == teacher_id,
-        # No cuenta un enrollment "cancelled": ese es el estado que queda
-        # tras un reembolso completo (ej. profesor suspendido) — la relación
-        # se considera reiniciada, así que un enrollment cancelado no debe
-        # forzar a este estudiante a "needs_renewal" si vuelve a elegir a
-        # este mismo profesor más adelante. Antes esto rompía la elección de
-        # paquete con "Paquete no encontrado o no disponible", porque el
-        # flujo de renovación exigía un enrollment activo/completado que ya
-        # no existía.
         Enrollment.status != EnrollmentStatus.cancelled,
     ).first()
     if any_enrollment_ever:

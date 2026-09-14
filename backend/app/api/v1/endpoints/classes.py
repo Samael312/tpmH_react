@@ -436,6 +436,9 @@ def reschedule_class_student(
         start_time_utc=data.start_time_utc,
         teacher_id=class_.teacher_id,
         student_id=student_id,
+        # D5 fix: fin ocupado real del candidato (misma duración+margen de
+        # la clase existente, que no cambian al reagendar).
+        end_time_utc=data.start_time_utc + timedelta(minutes=class_.duration + (class_.buffer_minutes or 0)),
         db=db,
         exclude_class_id=class_id
     )
@@ -519,6 +522,9 @@ def book_trial_class(
         start_time_utc=data.start_time_utc,
         teacher_id=teacher.id,
         student_id=data.student_id,
+        # D5 fix: fin ocupado real del candidato (duración de prueba + su
+        # propio margen).
+        end_time_utc=data.start_time_utc + timedelta(minutes=trial_duration + trial_buffer),
         db=db
     )
 
@@ -792,6 +798,8 @@ def reschedule_class_teacher(
         start_time_utc=data.start_time_utc,
         teacher_id=class_.teacher_id,
         student_id=class_.student_id,
+        # D5 fix: ver comentario equivalente en reschedule_class_student.
+        end_time_utc=data.start_time_utc + timedelta(minutes=class_.duration + (class_.buffer_minutes or 0)),
         db=db,
         exclude_class_id=class_id
     )
@@ -836,6 +844,8 @@ def reschedule_class_admin(
         start_time_utc=data.start_time_utc,
         teacher_id=class_.teacher_id,
         student_id=class_.student_id,
+        # D5 fix: ver comentario equivalente en reschedule_class_student.
+        end_time_utc=data.start_time_utc + timedelta(minutes=class_.duration + (class_.buffer_minutes or 0)),
         db=db,
         exclude_class_id=class_id
     )

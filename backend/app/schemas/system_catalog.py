@@ -35,6 +35,10 @@ class BusinessRulesResponse(BaseModel):
     # Minutos antes del inicio de la clase en los que se auto-genera el
     # Meet link si todavía no tiene uno (ver core/scheduler.py).
     meet_link_autogen_minutes: int
+    # D7: mínimo de clases YA COMPLETADAS antes de poder cambiar de
+    # paquete (aplica tanto a upgrades como a downgrades). 0 = sin
+    # restricción.
+    min_classes_before_package_change: int
 
 
 class UpdateBusinessRulesRequest(BaseModel):
@@ -50,6 +54,16 @@ class UpdateBusinessRulesRequest(BaseModel):
     buffer_regular_minutes: Optional[int] = None
     buffer_group_minutes: Optional[int] = None
     meet_link_autogen_minutes: Optional[int] = None
+    min_classes_before_package_change: Optional[int] = None
+
+    @field_validator("min_classes_before_package_change")
+    @classmethod
+    def validate_min_classes_before_package_change(cls, v):
+        if v is None:
+            return v
+        if v < 0:
+            raise ValueError("No puede ser negativo")
+        return v
 
     @field_validator("allowed_class_durations", "allowed_package_durations")
     @classmethod

@@ -569,6 +569,9 @@ export interface TeacherPackage {
   is_group?: boolean
   min_students?: number | null
   max_students?: number | null
+  group_schedule_mode?: "manual" | "fixed"
+  group_recurring_days_of_week?: number[] | null
+  group_recurring_time_local?: string | null
 }
 
 export function useTeacherPackages() {

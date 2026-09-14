@@ -86,6 +86,7 @@ def get_business_rules(db: Session = Depends(get_db)):
             if config.meet_link_autogen_minutes is not None
             else 30
         ),
+        min_classes_before_package_change=config.min_classes_before_package_change or 0,
     )
 
 

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator, Field
+from pydantic import BaseModel, field_validator, model_validator, Field
 from typing import Optional, List
 from datetime import datetime
 from app.schemas.god_mode import GodModeActionBase
@@ -29,6 +29,14 @@ class PackageCreate(BaseModel):
     is_group: bool = False
     min_students: Optional[int] = None
     max_students: Optional[int] = None
+    # D14: horario de las sesiones para un paquete grupal (decisión de
+    # negocio confirmada: deben existir las dos opciones). "manual"
+    # (default) = comportamiento de siempre, el profesor agenda cada
+    # sesión a mano. "fixed" = patrón semanal recurrente -- requiere
+    # group_recurring_days_of_week + group_recurring_time_local.
+    group_schedule_mode: str = "manual"
+    group_recurring_days_of_week: Optional[List[int]] = None
+    group_recurring_time_local: Optional[str] = None
 
     @field_validator("duration_minutes")
     @classmethod
@@ -65,6 +73,42 @@ class PackageCreate(BaseModel):
             raise ValueError(f"Tipo de descripción inválido. Opciones: {ALLOWED_DESCRIPTION_TYPES}")
         return v
 
+    @field_validator("group_schedule_mode")
+    @classmethod
+    def validate_group_schedule_mode(cls, v):
+        if v not in ("manual", "fixed"):
+            raise ValueError("group_schedule_mode debe ser 'manual' o 'fixed'")
+        return v
+
+    @field_validator("group_recurring_days_of_week")
+    @classmethod
+    def validate_recurring_days(cls, v):
+        if v is not None and any(d < 0 or d > 6 for d in v):
+            raise ValueError("Los días deben ser 0 (Lunes) a 6 (Domingo)")
+        return v
+
+    @field_validator("group_recurring_time_local")
+    @classmethod
+    def validate_recurring_time(cls, v):
+        if v is None:
+            return v
+        import re
+        if not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", v):
+            raise ValueError("group_recurring_time_local debe tener formato HH:MM")
+        return v
+
+    @model_validator(mode="after")
+    def validate_fixed_schedule_complete(self):
+        # D14: si se eligió horario fijo, el patrón (días + hora) es
+        # obligatorio -- de lo contrario no habría nada que usar para
+        # generar las sesiones al cerrar el grupo.
+        if self.group_schedule_mode == "fixed":
+            if not self.group_recurring_days_of_week or not self.group_recurring_time_local:
+                raise ValueError(
+                    "Un paquete con horario fijo necesita al menos un día de la semana y una hora configurados"
+                )
+        return self
+
 
 class PackageResponse(BaseModel):
     id: int
@@ -87,6 +131,9 @@ class PackageResponse(BaseModel):
     is_group: bool = False
     min_students: Optional[int] = None
     max_students: Optional[int] = None
+    group_schedule_mode: str = "manual"
+    group_recurring_days_of_week: Optional[List[int]] = None
+    group_recurring_time_local: Optional[str] = None
 
     class Config:
         from_attributes = True
