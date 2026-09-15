@@ -562,6 +562,7 @@ export interface TeacherPackage {
   color: string
   classes_count: number | null
   price: number
+  price_per_class: number | null
   duration_minutes: number
   is_active: boolean
   allow_installments?: boolean

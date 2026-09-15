@@ -31,6 +31,7 @@ import { formatTimeTz, formatDateHumanTz, getMyDisplayTimezone } from "@/lib/tzF
 import { priceLabelSuffix } from "@/lib/packageThemes";
 import BuyCreditsModal from "@/components/payments/BuyCreditsModal";
 import PaymentMethodsInfo from "@/components/payments/PaymentMethodsInfo";
+import PaymentMethodPicker from "@/components/payments/PaymentMethodPicker";
 import { useBusinessRules } from "@/hooks/useBusinessRules";
 import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
@@ -754,6 +755,8 @@ function GroupPackagesBrowser({
   // pedir referencia de comprobante (a diferencia del checkout individual).
   const [confirming, setConfirming] = useState<{ pkg: GroupPackageLite; cohort: CohortLite } | null>(null);
   const [reference, setReference] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
+  const [paymentMethodError, setPaymentMethodError] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -771,11 +774,17 @@ function GroupPackagesBrowser({
 
   const confirmJoin = async () => {
     if (!confirming) return;
+    if (!paymentMethod) {
+      setPaymentMethodError(true);
+      setError("Indica con qué método pagaste antes de continuar.");
+      return;
+    }
     setError("");
     setJoining(true);
     try {
       await api.post(`/cohorts/${confirming.cohort.id}/enroll`, {
         cohort_id: confirming.cohort.id,
+        payment_method: paymentMethod,
         transaction_reference: reference.trim() || undefined,
       });
       setJoined(true);
@@ -910,6 +919,11 @@ function GroupPackagesBrowser({
                     )}
                   </div>
 
+                  <PaymentMethodPicker
+                    value={paymentMethod}
+                    onChange={(k) => { setPaymentMethod(k); setPaymentMethodError(false); }}
+                    showError={paymentMethodError}
+                  />
                   <PaymentMethodsInfo />
 
                   <div>

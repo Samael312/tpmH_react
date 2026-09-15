@@ -34,7 +34,7 @@ const emptyForm = {
   description_items: [] as string[],
   icon: DEFAULT_PACKAGE_THEME.icon,
   color: DEFAULT_PACKAGE_THEME.color,
-  classes_count: "4", price: "10", duration_minutes: 50,
+  classes_count: "4", price: "10", price_per_class: "2.50", duration_minutes: 50,
   allow_installments: false,
   installment_count: "3",
   is_group: false,
@@ -116,6 +116,12 @@ export default function TeacherPackagesPage() {
 
   const [kind, setKind] = useState<"subject" | "language">("subject");
   const [unlimited, setUnlimited] = useState(false);
+  // Correcciones Extra: mientras el profesor no toque a mano el precio de
+  // clase unitaria, lo recalculamos solos cada vez que cambia el precio
+  // total o el número de clases (para que casi nunca tenga que hacer la
+  // cuenta). Si lo edita directamente, dejamos de pisarlo -- pero el
+  // backend igual exige que precio_unitario × clases == precio total.
+  const [pricePerClassTouched, setPricePerClassTouched] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
   const [saving, setSaving] = useState(false);
   const [approvingId, setApprovingId] = useState<number | null>(null);
@@ -139,6 +145,7 @@ export default function TeacherPackagesPage() {
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setPricePerClassTouched(false);
     setShowForm(true);
     scrollToForm();
   };
@@ -158,6 +165,12 @@ export default function TeacherPackagesPage() {
       color: pkg.color || DEFAULT_PACKAGE_THEME.color,
       classes_count: String(pkg.classes_count),
       price: String(pkg.price),
+      price_per_class:
+        pkg.price_per_class != null
+          ? String(pkg.price_per_class)
+          : pkg.classes_count
+            ? (pkg.price / pkg.classes_count).toFixed(2)
+            : "",
       duration_minutes: pkg.duration_minutes,
       allow_installments: pkg.allow_installments ?? false,
       installment_count: pkg.installment_count ? String(pkg.installment_count) : "3",
@@ -168,6 +181,10 @@ export default function TeacherPackagesPage() {
       group_recurring_days_of_week: pkg.group_recurring_days_of_week ?? [],
       group_recurring_time_local: pkg.group_recurring_time_local ?? "18:00",
     });
+    // Un paquete ya guardado siempre trae un valor consistente (propio o
+    // derivado) -- lo tratamos como "tocado" para no recalcularlo solo
+    // hasta que el profesor edite precio o número de clases de nuevo.
+    setPricePerClassTouched(true);
     setShowForm(true);
     scrollToForm();
   };
@@ -185,6 +202,22 @@ export default function TeacherPackagesPage() {
     if (!Number.isFinite(priceNum) || priceNum <= 0) {
       setError("Introduce un precio válido (mayor que 0)");
       return;
+    }
+
+    let pricePerClassNum: number | null = null;
+    if (!unlimited) {
+      pricePerClassNum = parseFloat(form.price_per_class);
+      if (!Number.isFinite(pricePerClassNum) || pricePerClassNum <= 0) {
+        setError("Introduce el precio de una clase suelta de este paquete");
+        return;
+      }
+      const expectedTotal = Math.round(pricePerClassNum * classesCountNum! * 100) / 100;
+      if (Math.abs(expectedTotal - Math.round(priceNum * 100) / 100) > 0.01) {
+        setError(
+          `El precio de clase unitaria no coincide con el precio total: ${classesCountNum} × $${pricePerClassNum.toFixed(2)} = $${expectedTotal.toFixed(2)}, pero el precio del paquete es $${priceNum.toFixed(2)}.`
+        );
+        return;
+      }
     }
 
     let minStudentsNum: number | null = null;
@@ -219,6 +252,7 @@ export default function TeacherPackagesPage() {
         color: form.color,
         classes_count: classesCountNum,
         price: priceNum,
+        price_per_class: unlimited ? null : pricePerClassNum,
         duration_minutes: form.duration_minutes,
         allow_installments: form.is_group ? false : form.allow_installments,
         installment_count: (unlimited || form.is_group) ? null : (form.allow_installments ? parseInt(form.installment_count, 10) : null),
@@ -441,7 +475,17 @@ export default function TeacherPackagesPage() {
                     value={unlimited ? "" : form.classes_count}
                     onChange={e => {
                       const v = e.target.value;
-                      if (v === "" || /^[0-9]*$/.test(v)) setForm({ ...form, classes_count: v });
+                      if (v === "" || /^[0-9]*$/.test(v)) {
+                        const next = { ...form, classes_count: v };
+                        if (!pricePerClassTouched) {
+                          const n = parseInt(v, 10);
+                          const p = parseFloat(form.price);
+                          if (Number.isFinite(n) && n > 0 && Number.isFinite(p)) {
+                            next.price_per_class = (p / n).toFixed(2);
+                          }
+                        }
+                        setForm(next);
+                      }
                     }}
                     placeholder={unlimited ? "Ilimitadas" : "Ej: 8"}
                     className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold
@@ -461,7 +505,15 @@ export default function TeacherPackagesPage() {
                     onChange={e => {
                       const v = e.target.value;
                       if (v === "" || /^[0-9]*\.?[0-9]*$/.test(v)) {
-                        setForm({ ...form, price: v });
+                        const next = { ...form, price: v };
+                        if (!pricePerClassTouched && !unlimited) {
+                          const n = parseInt(form.classes_count, 10);
+                          const p = parseFloat(v);
+                          if (Number.isFinite(n) && n > 0 && Number.isFinite(p)) {
+                            next.price_per_class = (p / n).toFixed(2);
+                          }
+                        }
+                        setForm(next);
                       }
                     }}
                     placeholder="Ej: 50.00"
@@ -470,6 +522,44 @@ export default function TeacherPackagesPage() {
                                focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
                   />
                 </div>
+
+                {!unlimited && (
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                      Precio de clase unitaria ($)
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={form.price_per_class}
+                      onChange={e => {
+                        const v = e.target.value;
+                        if (v === "" || /^[0-9]*\.?[0-9]*$/.test(v)) {
+                          setPricePerClassTouched(true);
+                          setForm({ ...form, price_per_class: v });
+                        }
+                      }}
+                      placeholder="Ej: 6.25"
+                      className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold
+                                 text-slate-800 placeholder:text-slate-400 px-4 py-3 focus:outline-none focus:bg-white
+                                 focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all"
+                    />
+                    {(() => {
+                      const n = parseInt(form.classes_count, 10);
+                      const p = parseFloat(form.price);
+                      const ppc = parseFloat(form.price_per_class);
+                      if (!Number.isFinite(n) || n <= 0 || !Number.isFinite(p) || !Number.isFinite(ppc)) return null;
+                      const expected = Math.round(ppc * n * 100) / 100;
+                      const mismatch = Math.abs(expected - Math.round(p * 100) / 100) > 0.01;
+                      if (!mismatch) return null;
+                      return (
+                        <p className="text-[11px] font-bold text-rose-500 mt-1">
+                          {n} × ${ppc.toFixed(2)} = ${expected.toFixed(2)}, pero el precio total es ${p.toFixed(2)}. Ajusta uno de los dos.
+                        </p>
+                      );
+                    })()}
+                  </div>
+                )}
 
                 <div className="sm:col-span-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">

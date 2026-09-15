@@ -18,9 +18,15 @@ const STATUS_LABEL: Record<string, string> = {
 interface Props {
   enrollment: StudentEnrollment;
   onChanged: () => void;
+  // Correcciones Extra: conteo de clases completadas de esta cohorte, para
+  // mostrarlo en el banner sin importar en qué estado esté el grupo
+  // (antes esta info sólo se podía ver indirectamente contando las
+  // ClassCard sueltas que se mostraban en el lugar del banner).
+  completedClasses?: number;
+  totalClasses?: number | null;
 }
 
-export default function GroupWaitingPanel({ enrollment, onChanged }: Props) {
+export default function GroupWaitingPanel({ enrollment, onChanged, completedClasses = 0, totalClasses = null }: Props) {
   const [showMigration, setShowMigration] = useState(false);
 
   const status = enrollment.cohort_status ?? "filling";
@@ -84,6 +90,36 @@ export default function GroupWaitingPanel({ enrollment, onChanged }: Props) {
           <div className="bg-white/10 rounded-2xl p-4 flex items-center gap-3">
             <Clock className="w-5 h-5 text-emerald-300 flex-shrink-0" />
             <p className="text-sm font-bold text-white">Tu grupo ya está en curso.</p>
+          </div>
+        )}
+
+        {status === "completed" && (
+          <div className="bg-white/10 rounded-2xl p-4 flex items-center gap-3">
+            <Clock className="w-5 h-5 text-emerald-300 flex-shrink-0" />
+            <p className="text-sm font-bold text-white">Este grupo ya terminó.</p>
+          </div>
+        )}
+
+        {status === "cancelled" && (
+          <div className="bg-white/10 rounded-2xl p-4 flex items-center gap-3">
+            <Clock className="w-5 h-5 text-rose-300 flex-shrink-0" />
+            <p className="text-sm font-bold text-white">Este grupo fue cancelado.</p>
+          </div>
+        )}
+
+        {totalClasses != null && (status === "in_progress" || status === "completed") && (
+          <div className="bg-white/10 rounded-2xl p-4 space-y-2">
+            <div className="flex items-end justify-between">
+              <p className="text-2xl font-black text-white leading-none">
+                {completedClasses}<span className="text-sm text-slate-400 font-bold">/{totalClasses} clases completadas</span>
+              </p>
+            </div>
+            <div className="w-full h-2 bg-slate-800/80 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-700"
+                style={{ width: `${totalClasses > 0 ? Math.min((completedClasses / totalClasses) * 100, 100) : 0}%` }}
+              />
+            </div>
           </div>
         )}
 

@@ -29,6 +29,16 @@ class Package(Base):
     description = Column(String, nullable=True)
     classes_count = Column(Integer, nullable=True)  # NULL si es paquete ilimitado/mensual
     price = Column(Float, nullable=False)
+    # Correcciones Extra (informe D1-D14): precio de una clase suelta
+    # dentro de este paquete, cargado a mano por el profesor en vez de
+    # derivarse siempre como price/classes_count (evita arrastrar el
+    # redondeo de esa división en cada cálculo de diferencia de upgrade/
+    # downgrade). Obligatorio para paquetes finitos (debe cumplir
+    # price_per_class * classes_count == price, validado en el schema);
+    # no aplica a paquetes ilimitados (classes_count NULL). Paquetes
+    # creados antes de este campo quedan en NULL — ver
+    # app.core.class_logic.get_price_per_class para el fallback.
+    price_per_class = Column(Float, nullable=True)
     duration_minutes = Column(Integer, default=50)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

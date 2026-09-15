@@ -87,6 +87,9 @@ class CohortResponse(BaseModel):
 class GroupEnrollRequest(BaseModel):
     """El estudiante se inscribe a una cohorte abierta (status='filling')."""
     cohort_id: int
+    # Correcciones Extra: igual que en /payments/notify-payment, obligatorio
+    # -- no se puede notificar el pago sin indicar el método.
+    payment_method: str
     # Igual que en /payments/notify-payment: referencia del comprobante de
     # pago (últimos dígitos, ID de transacción, etc). Antes este endpoint
     # no lo pedía en absoluto — el Payment quedaba pending_review sin

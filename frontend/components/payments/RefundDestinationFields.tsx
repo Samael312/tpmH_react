@@ -30,6 +30,14 @@ export function refundFormToPayload(form: RefundDestinationForm): Record<string,
   return Object.keys(cleaned).length ? cleaned : undefined;
 }
 
+// Correcciones Extra: la solicitud de reembolso debe tener como mínimo 1
+// campo lleno -- antes se podía enviar completamente vacía y el staff se
+// quedaba sin ninguna forma de contactar al estudiante para coordinar la
+// devolución.
+export function hasAtLeastOneRefundField(form: RefundDestinationForm): boolean {
+  return Object.values(form).some((v) => v.trim() !== "");
+}
+
 export default function RefundDestinationFields({
   value,
   onChange,

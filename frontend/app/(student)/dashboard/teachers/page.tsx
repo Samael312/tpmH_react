@@ -12,7 +12,7 @@ import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import FullScreenModal from "@/components/ui/FullScreenModal";
 import Button from "@/components/ui/Button";
-import RefundDestinationFields, { emptyRefundDestinationForm, refundFormToPayload } from "@/components/payments/RefundDestinationFields";
+import RefundDestinationFields, { emptyRefundDestinationForm, refundFormToPayload, hasAtLeastOneRefundField } from "@/components/payments/RefundDestinationFields";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
@@ -56,6 +56,10 @@ export default function ChooseTeacherPage() {
 
   const submitRefund = async () => {
     if (!refundTarget?.active_enrollment) return;
+    if (!hasAtLeastOneRefundField(refundForm)) {
+      toast.error("Completa al menos un dato de contacto o de cuenta para poder procesar tu reembolso");
+      return;
+    }
     setSubmittingRefund(true);
     try {
       await api.post("/payments/request-refund-teacher-suspended", {

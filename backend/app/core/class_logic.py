@@ -1,6 +1,7 @@
 # backend/app/core/class_logic.py
 
 from datetime import datetime, timedelta
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from app.models.class_ import Class, ClassType
 from app.models.package import Enrollment, EnrollmentStatus
@@ -83,6 +84,71 @@ def is_within_teacher_availability(
             return True, ""
 
     return False, "Ese horario está fuera de tu disponibilidad declarada"
+
+
+PAYMENT_METHOD_LABELS = {
+    "paypal": "PayPal",
+    "binance": "Binance (USDT)",
+    "bank_transfer": "Transferencia bancaria",
+    "mobile_payment": "Pago móvil / Bizum",
+}
+
+# Correcciones Extra (informe D1-D14): "toda la info enviada en los emails
+# debe estar normalizada, no nombres de variables salidos directamente del
+# backend" -- los emails de pago mostraban el `payment_type` crudo (ej.
+# "unlimited_recharge") en vez de un texto legible. Un solo mapa
+# compartido para no repetirlo (y desincronizarlo) en cada endpoint.
+PAYMENT_CONCEPT_LABELS = {
+    "package": "Paquete", "renewal": "Renovación", "package_change": "Cambio de paquete",
+    "unlimited_recharge": "Recarga de créditos", "refund": "Reembolso",
+    "group_enrollment": "Inscripción a clase grupal",
+}
+
+
+def validate_payment_method(payment_method: str, db: Session) -> str:
+    """
+    Correcciones Extra (informe D1-D14): el método de pago que indica el
+    estudiante al notificar un pago tiene que ser uno de los métodos que
+    el admin tiene efectivamente habilitados en ese momento (no alcanza
+    con que sea una de las 4 claves conocidas -- si el admin apagó
+    "bank_transfer", ya no es un método válido para notificar).
+    """
+    from app.models.payment_config import PaymentConfig
+
+    if payment_method not in PAYMENT_METHOD_LABELS:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Método de pago inválido: {payment_method}",
+        )
+    config = db.query(PaymentConfig).first()
+    enabled = {
+        "paypal": bool(config and config.paypal_enabled),
+        "binance": bool(config and config.binance_enabled),
+        "bank_transfer": bool(config and config.bank_transfer_enabled),
+        "mobile_payment": bool(config and config.mobile_payment_enabled),
+    }
+    if not enabled.get(payment_method):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"El método de pago \"{PAYMENT_METHOD_LABELS[payment_method]}\" no está habilitado actualmente.",
+        )
+    return payment_method
+
+
+def get_price_per_class(package) -> float | None:
+    """
+    Correcciones Extra (informe D1-D14): precio de una clase suelta dentro
+    de `package`. Usa el campo `price_per_class` guardado a mano por el
+    profesor si existe; si es un paquete creado antes de que ese campo
+    existiera (queda NULL), cae al cálculo derivado de siempre
+    (price/classes_count) para no romper paquetes ya creados. Paquetes
+    ilimitados (classes_count None) no tienen un precio por clase fijo.
+    """
+    if package.classes_count is None:
+        return None
+    if package.price_per_class is not None:
+        return package.price_per_class
+    return package.price / package.classes_count
 
 
 def get_business_rules(db: Session) -> dict:

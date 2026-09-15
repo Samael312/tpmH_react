@@ -19,6 +19,10 @@ from app.core.class_logic import (
     validate_class_duration,
     get_business_rules,
     get_buffer_minutes_for_type,
+    get_price_per_class,
+    validate_payment_method,
+    PAYMENT_METHOD_LABELS,
+    PAYMENT_CONCEPT_LABELS,
     )
 from app.core.email import (
     send_class_booking_confirmation,
@@ -744,6 +748,8 @@ def get_payments_pending_review(
             "payment_type": p.payment_type,
             "installment_index": p.installment_index,
             "amount": p.amount_total,
+            "payment_method": p.payment_method,
+            "payment_method_label": PAYMENT_METHOD_LABELS.get(p.payment_method, p.payment_method),
             "transaction_reference": p.transaction_id,
             "submitted_at": p.created_at,
             "student_name": f"{student_user.name} {student_user.surname}" if student_user else "Desconocido",
@@ -797,6 +803,8 @@ def get_payments_history(
             "payment_type": p.payment_type,
             "installment_index": p.installment_index,
             "amount": p.amount_total,
+            "payment_method": p.payment_method,
+            "payment_method_label": PAYMENT_METHOD_LABELS.get(p.payment_method, p.payment_method),
             "transaction_reference": p.transaction_id,
             "submitted_at": p.created_at,
             "validated_at": p.validated_at,
@@ -844,11 +852,7 @@ def validate_payment(
 
     now = utc_now()
 
-    CONCEPT_MAP = {
-        "package": "Paquete", "renewal": "Renovación", "package_change": "Cambio de paquete",
-        "unlimited_recharge": "Recarga de créditos", "refund": "Reembolso",
-        "group_enrollment": "Inscripción a clase grupal",
-    }
+    CONCEPT_MAP = PAYMENT_CONCEPT_LABELS
 
     # ── RECHAZAR PAGO ──
     if data.action == "reject":
@@ -868,7 +872,18 @@ def validate_payment(
             if enrollment and enrollment.status in (
                 EnrollmentStatus.pending_renewal, EnrollmentStatus.pending_package_change
             ):
-                enrollment.status = EnrollmentStatus.active
+                # D1 fix: no forzar siempre "active". Si el paquete que
+                # tenía ANTES de pedir la renovación ya estaba agotado
+                # (classes_used >= classes_total), hay que devolverlo a
+                # "completed" -- así get_student_booking_stage lo vuelve a
+                # mandar por "needs_renewal" (banner "Renovar paquete") en
+                # vez de tratarlo como un paquete activo utilizable con 0
+                # créditos restantes (lo que lo dejaba mostrando solo
+                # "Cambiar paquete", sin forma de reintentar la renovación).
+                if enrollment.classes_total is not None and enrollment.classes_used >= enrollment.classes_total:
+                    enrollment.status = EnrollmentStatus.completed
+                else:
+                    enrollment.status = EnrollmentStatus.active
                 enrollment.renewal_requested_package_id = None
                 enrollment.change_requested_package_id = None
 
@@ -1062,7 +1077,13 @@ def validate_payment(
     if payment.payment_type == "group_enrollment":
         enrollment_after = db.query(Enrollment).filter(Enrollment.id == payment.enrollment_id).first()
         if enrollment_after and enrollment_after.cohort_id and enrollment_after.payment_status == "paid":
-            from app.models.class_ import Class, ClassType
+            # NOTA: no reimportar Class/ClassType acá -- ya están importados
+            # a nivel de módulo (línea ~39). Un import local dentro de esta
+            # función hace que Python trate "Class" como variable LOCAL en
+            # toda la función (incluyendo los usos de más arriba, ej. línea
+            # ~968), lo que producía "UnboundLocalError: cannot access
+            # local variable 'Class'" en cualquier camino que llegara a este
+            # bloque después de haber referenciado Class antes.
             from app.models.class_participant import ClassParticipant
             from app.core.timezone import utc_now as _utc_now
 
@@ -1098,7 +1119,7 @@ def validate_payment(
             student_name=student_user.name,
             concept=CONCEPT_MAP.get(payment.payment_type, "Pago"),
             amount=payment.amount_total,
-            payment_method=payment.payment_method,
+            payment_method=PAYMENT_METHOD_LABELS.get(payment.payment_method, payment.payment_method),
             transaction_reference=payment.transaction_id,
         )
 
@@ -1443,6 +1464,9 @@ def notify_payment(
     if data.type == "unlimited_recharge":
         if not data.enrollment_id or not data.credits_requested:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "enrollment_id y credits_requested son requeridos")
+        if not data.payment_method:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "payment_method es requerido")
+        method = validate_payment_method(data.payment_method, db)
 
         enrollment = db.query(Enrollment).filter(
             Enrollment.id == data.enrollment_id, Enrollment.student_id == student_id,
@@ -1461,7 +1485,7 @@ def notify_payment(
         payment = Payment(
             enrollment_id=enrollment.id, student_id=student_id, teacher_id=enrollment.teacher_id,
             amount_total=amount, amount_teacher=0, amount_platform=0,
-            payment_method="manual", transaction_id=data.transaction_reference,
+            payment_method=method, transaction_id=data.transaction_reference,
             status="pending_review", payment_type="unlimited_recharge",
         )
         payment.installment_index = data.credits_requested
@@ -1475,8 +1499,8 @@ def notify_payment(
                 to_email=admin_email,
                 student_name=current_user.name,
                 amount=amount,
-                concept="unlimited_recharge",
-                payment_method="manual",
+                concept=PAYMENT_CONCEPT_LABELS["unlimited_recharge"],
+                payment_method=PAYMENT_METHOD_LABELS.get(method, method),
                 transaction_reference=data.transaction_reference,
             )
             
@@ -1640,7 +1664,10 @@ def notify_payment(
 
         old_total = current_enrollment.classes_total or 1
         old_price = current_enrollment.package.price
-        price_per_class_old = old_price / old_total
+        # Correcciones Extra: usa el precio de clase unitaria guardado en
+        # el paquete en vez de re-derivarlo siempre de price/classes_count
+        # (más preciso -- evita arrastrar redondeo -- y más rápido).
+        price_per_class_old = get_price_per_class(current_enrollment.package) or (old_price / old_total)
         occupied_slots = _get_enrollment_occupied_slots(current_enrollment, db)
         is_downgrade = new_package.classes_count < old_total
 
@@ -1658,7 +1685,9 @@ def notify_payment(
             if deficit == 0:
                 _apply_instant_package_change(current_enrollment, new_package, occupied_slots, db)
                 return {"message": "Cambio de paquete aplicado sin costo adicional (tus créditos ya cubren el nuevo paquete)."}
-            amount = round((new_package.price / new_package.classes_count) * deficit, 2)
+            amount = round(
+                (get_price_per_class(new_package) or (new_package.price / new_package.classes_count)) * deficit, 2
+            )
             payment_type = "package_change"
             apply_new_package = True
             notify_msg = f"Pago notificado por {deficit} créditos faltantes (${amount:.2f}). En espera de aprobación."
@@ -1715,6 +1744,24 @@ def notify_payment(
         if duplicate:
             return {"payment_id": duplicate.id, "message": notify_msg}
 
+        # Correcciones Extra: solo se exige/valida payment_method cuando el
+        # estudiante es quien paga (payment_type == "package_change"). Si
+        # terminó siendo un reembolso a su favor, lo que importa es
+        # payment_info (a dónde depositarle), no cómo pagó.
+        method = "manual"
+        if payment_type == "package_change":
+            if not data.payment_method:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "payment_method es requerido")
+            method = validate_payment_method(data.payment_method, db)
+        elif payment_type == "refund" and not data.payment_info:
+            # Correcciones Extra: mismo requisito que en las solicitudes de
+            # reembolso independientes -- no se puede generar un reembolso
+            # sin al menos un dato de contacto para procesarlo.
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Completa al menos un dato de contacto o de cuenta para poder procesar tu reembolso"
+            )
+
         current_enrollment.status = EnrollmentStatus.pending_package_change
         current_enrollment.change_requested_package_id = new_package.id if apply_new_package else None
         db.commit()
@@ -1722,7 +1769,7 @@ def notify_payment(
         payment = Payment(
             enrollment_id=current_enrollment.id, student_id=student_id, teacher_id=current_enrollment.teacher_id,
             amount_total=amount, amount_teacher=0, amount_platform=0,
-            payment_method="manual", transaction_id=data.transaction_reference,
+            payment_method=method, transaction_id=data.transaction_reference,
             status="pending_review", payment_type=payment_type,
             installment_index=None,
             refund_payment_info=(
@@ -1740,8 +1787,8 @@ def notify_payment(
                 to_email=admin_email,
                 student_name=current_user.name,
                 amount=amount,
-                concept=payment_type,
-                payment_method="manual",
+                concept=PAYMENT_CONCEPT_LABELS.get(payment_type, payment_type),
+                payment_method=PAYMENT_METHOD_LABELS.get(method, method),
                 transaction_reference=data.transaction_reference,
             )
 
@@ -1763,6 +1810,9 @@ def notify_payment(
                 status.HTTP_400_BAD_REQUEST,
                 "credits_requested es requerido para paquetes ilimitados"
             )
+        if not data.payment_method:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "payment_method es requerido")
+        method = validate_payment_method(data.payment_method, db)
         if db.query(Payment).filter(
             Payment.enrollment_id == enrollment.id,
             Payment.status == "pending_review",
@@ -1781,7 +1831,7 @@ def notify_payment(
         payment = Payment(
             enrollment_id=enrollment.id, student_id=student_id, teacher_id=enrollment.teacher_id,
             amount_total=amount, amount_teacher=0, amount_platform=0,
-            payment_method="manual", transaction_id=data.transaction_reference,
+            payment_method=method, transaction_id=data.transaction_reference,
             status="pending_review", payment_type=payment_type,
             installment_index=data.credits_requested,
         )
@@ -1795,14 +1845,18 @@ def notify_payment(
                 to_email=admin_email,
                 student_name=current_user.name,
                 amount=amount,
-                concept=payment_type,
-                payment_method="manual",
+                concept=PAYMENT_CONCEPT_LABELS.get(payment_type, payment_type),
+                payment_method=PAYMENT_METHOD_LABELS.get(method, method),
                 transaction_reference=data.transaction_reference,
             )
 
         return {"payment_id": payment.id, "message": "Pago notificado, en espera de aprobación"}
 
     use_installments = data.installment_index is not None
+
+    if not data.payment_method:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "payment_method es requerido")
+    method = validate_payment_method(data.payment_method, db)
 
     if use_installments and not package.allow_installments:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este paquete no admite pago en cuotas")
@@ -1838,7 +1892,7 @@ def notify_payment(
     payment = Payment(
         enrollment_id=enrollment.id, student_id=student_id, teacher_id=enrollment.teacher_id,
         amount_total=amount, amount_teacher=0, amount_platform=0,
-        payment_method="manual", transaction_id=data.transaction_reference,
+        payment_method=method, transaction_id=data.transaction_reference,
         status="pending_review", payment_type=payment_type,
         installment_index=data.installment_index,
     )
@@ -1852,8 +1906,8 @@ def notify_payment(
             to_email=admin_email,
             student_name=current_user.name,
             amount=amount,
-            concept=payment_type,
-            payment_method="manual",
+            concept=PAYMENT_CONCEPT_LABELS.get(payment_type, payment_type),
+            payment_method=PAYMENT_METHOD_LABELS.get(method, method),
             transaction_reference=data.transaction_reference,
         )
         
@@ -1933,7 +1987,7 @@ def request_refund_teacher_suspended(
             "devolución; podrás elegir un profesor nuevo cuando quieras."
         )
     else:
-        price_per_class = old_price / old_total
+        price_per_class = get_price_per_class(enrollment.package) or (old_price / old_total)
         amount = round(price_per_class * (old_total - occupied_slots), 2)
         if amount <= 0:
             raise HTTPException(
@@ -1974,7 +2028,7 @@ def request_refund_teacher_suspended(
             to_email=admin_email,
             student_name=current_user.name,
             amount=amount,
-            concept="refund",
+            concept=PAYMENT_CONCEPT_LABELS["refund"],
             payment_method="manual",
             transaction_reference=None,
         )
@@ -2053,7 +2107,7 @@ def request_refund_cohort_cancelled(
             to_email=admin_email,
             student_name=current_user.name,
             amount=amount,
-            concept="refund",
+            concept=PAYMENT_CONCEPT_LABELS["refund"],
             payment_method="manual",
             transaction_reference=None,
         )

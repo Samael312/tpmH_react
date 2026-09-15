@@ -49,6 +49,37 @@ const TYPE_BADGE: Record<string, { label: (p: PendingPayment | PaymentHistoryIte
   },
 }
 
+// Correcciones Extra: el destino que el estudiante indicó para recibir su
+// reembolso -- antes esta info se guardaba (refund_payment_info) pero
+// nunca se mostraba en la card del pago, así que el staff no tenía cómo
+// verla sin ir a buscarla a mano.
+const REFUND_FIELD_LABELS: Record<string, string> = {
+  bank_name: "Banco",
+  bank_account: "Cuenta bancaria",
+  account_holder: "Titular",
+  mobile_payment: "Pago móvil",
+  paypal_or_zelle: "PayPal / Zelle",
+  other_notes: "Nota",
+}
+
+function RefundDestinationInfo({ info }: { info: PendingPayment["refund_payment_info"] }) {
+  if (!info) return null
+  const entries = Object.entries(info).filter(([, v]) => (v ?? "").toString().trim() !== "")
+  if (entries.length === 0) return null
+  return (
+    <div className="bg-rose-50 border border-rose-100 rounded-2xl p-3 mb-3 space-y-1">
+      <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1">
+        Destino del reembolso
+      </p>
+      {entries.map(([key, value]) => (
+        <p key={key} className="text-xs text-rose-700">
+          {REFUND_FIELD_LABELS[key] || key}: <strong>{value}</strong>
+        </p>
+      ))}
+    </div>
+  )
+}
+
 export default function PaymentsPage() {
   const toast = useToast()
   const [activeTab, setActiveTab] = useState<'payments' | 'withdrawals' | 'teachers' | 'history'>('payments')
@@ -264,6 +295,11 @@ export default function PaymentsPage() {
                           Profesor: <strong className="text-slate-700">{p.teacher_name}</strong>
                         </div>
                       )}
+                      {p.payment_method_label && (
+                        <div>
+                          Método: <strong className="text-slate-700">{p.payment_method_label}</strong>
+                        </div>
+                      )}
                       {p.transaction_reference && (
                         <div className="font-mono text-slate-400">
                           Ref: <strong className="text-slate-600">{p.transaction_reference}</strong>
@@ -282,6 +318,8 @@ export default function PaymentsPage() {
                         <Clock className="w-3.5 h-3.5" /> Expira: {new Date(p.payment_expires_at).toLocaleString('es')}
                       </p>
                     )}
+
+                    <RefundDestinationInfo info={p.refund_payment_info} />
 
                     {/* Acciones */}
                     <div className="flex gap-3">
@@ -473,6 +511,11 @@ export default function PaymentsPage() {
                           Profesor: <strong className="text-slate-700">{p.teacher_name}</strong>
                         </div>
                       )}
+                      {p.payment_method_label && (
+                        <div>
+                          Método: <strong className="text-slate-700">{p.payment_method_label}</strong>
+                        </div>
+                      )}
                       {p.transaction_reference && (
                         <div className="font-mono text-slate-400">
                           Ref: <strong className="text-slate-600">{p.transaction_reference}</strong>
@@ -485,6 +528,8 @@ export default function PaymentsPage() {
                         </div>
                       )}
                     </div>
+
+                    <RefundDestinationInfo info={p.refund_payment_info} />
 
                     {/* Estado / Historial Badge */}
                     <div>

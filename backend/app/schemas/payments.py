@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator, Field
+from pydantic import BaseModel, field_validator, model_validator, Field
 from typing import Optional, List
 from datetime import datetime
 from app.schemas.god_mode import GodModeActionBase
@@ -109,9 +109,10 @@ class WalletResponse(BaseModel):
 class RefundPaymentInfo(BaseModel):
     """
     Datos de destino para el reembolso, tal como los completa el estudiante
-    en el modal de "Solicitar reembolso". Todos los campos son opcionales
-    (el alumno llena el/los que tenga) — si no tiene ninguno de los métodos
-    predefinidos, puede usar `other_notes` como texto libre para el staff.
+    en el modal de "Solicitar reembolso". El estudiante llena el/los campo(s)
+    que tenga -- pero al menos uno es obligatorio (antes se podía enviar
+    el formulario completamente vacío y el staff se quedaba sin ninguna
+    forma de contactar al estudiante para coordinar la devolución).
     """
     bank_name: Optional[str] = None
     bank_account: Optional[str] = None
@@ -120,15 +121,29 @@ class RefundPaymentInfo(BaseModel):
     paypal_or_zelle: Optional[str] = None
     other_notes: Optional[str] = None
 
+    @model_validator(mode="after")
+    def validate_at_least_one_field(self):
+        if not any((v or "").strip() for v in (
+            self.bank_name, self.bank_account, self.account_holder,
+            self.mobile_payment, self.paypal_or_zelle, self.other_notes,
+        )):
+            raise ValueError(
+                "Completa al menos un dato de contacto o de cuenta para poder procesar tu reembolso"
+            )
+        return self
+
 
 class RequestRefundTeacherSuspendedRequest(BaseModel):
     enrollment_id: int
-    payment_info: Optional[RefundPaymentInfo] = None
+    # Correcciones Extra: obligatorio (con al menos 1 campo lleno, ver
+    # RefundPaymentInfo) -- antes se podía enviar la solicitud sin ningún
+    # dato de contacto para la devolución.
+    payment_info: RefundPaymentInfo
 
 
 class RequestRefundCohortCancelledRequest(BaseModel):
     enrollment_id: int
-    payment_info: Optional[RefundPaymentInfo] = None
+    payment_info: RefundPaymentInfo
 
 
 class WithdrawalRequest(BaseModel):
@@ -162,6 +177,11 @@ class NotifyPaymentRequest(BaseModel):
     class_id: Optional[int] = None
     installment_index: Optional[int] = None
     credits_requested: Optional[int] = None
+    # Correcciones Extra: obligatorio salvo en los caminos donde termina
+    # siendo un reembolso al estudiante (isRefund en el frontend) o un
+    # cambio instantáneo sin costo -- ahí el frontend no lo manda y el
+    # backend no lo exige (ver notify_payment).
+    payment_method: Optional[str] = None
     transaction_reference: Optional[str] = None
     # Regla de negocio 3.1 (downgrade sin créditos usados, Caso A): el
     # estudiante elige entre reembolso completo o ajuste por diferencia.

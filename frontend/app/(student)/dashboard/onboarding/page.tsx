@@ -8,7 +8,7 @@ import {
   Clock, Check, ChevronRight, ChevronLeft,
   Globe, Target, CreditCard, CalendarDays,
   Sparkles, ChevronDown, X, Trash2,
-  BookOpen, Rocket, Camera, User
+  BookOpen, Camera, User
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -17,7 +17,7 @@ import { NATIONALITIES } from "@/lib/nationalities";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 // in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
-import { GOALS as FALLBACK_GOALS, GOAL_CATEGORIES, PAYMENT_METHODS as FALLBACK_METHODS, normalizeGoalsCatalog, flattenGoals } from "@/lib/teacherOptions";
+import { GOALS as FALLBACK_GOALS, GOAL_CATEGORIES, normalizeGoalsCatalog, flattenGoals } from "@/lib/teacherOptions";
 
 
 
@@ -70,7 +70,6 @@ function SidebarProgress({ step, name }: { step: number; name: string }) {
     { num: 1, title: "Bienvenida", desc: "Conociéndonos" },
     { num: 2, title: "Preferencias", desc: "Tus objetivos" },
     { num: 3, title: "Disponibilidad", desc: "Tus horarios" },
-    { num: 4, title: "Pagos", desc: "Métodos preferidos" },
   ];
 
   return (
@@ -651,62 +650,7 @@ function StepSchedule({ blocks, setBlocks, onNext, onBack }: StepScheduleProps) 
   );
 }
 
-// ─── Paso 4: Métodos de pago ──────────────────────────────────────────────────
-interface StepPaymentMethodsProps {
-  selected: string[];
-  setSelected: (v: string[]) => void;
-  onNext: () => void;
-  onBack: () => void;
-  saving: boolean;
-}
-
-function StepPaymentMethods({ selected, setSelected, onNext, onBack, saving }: StepPaymentMethodsProps) {
-  const toggle = (v: string) => setSelected(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]);
-  const { catalogs } = useSystemCatalogs();
-  const PAYMENT_METHODS = catalogs.student_payment_methods.length ? catalogs.student_payment_methods : FALLBACK_METHODS;
-  return (
-    <div className="animate-in fade-in slide-in-from-right-4 duration-300 w-full max-w-3xl mx-auto space-y-8">
-      <div>
-        <h2 className="text-4xl font-black text-slate-800 tracking-tight">Métodos de pago</h2>
-        <p className="text-slate-500 text-lg mt-2">Selecciona cómo prefieres pagar a tus profesores (opcional).</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {PAYMENT_METHODS.map((pm) => (
-          <button key={pm.value} onClick={() => toggle(pm.value)} className={`flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all duration-200 text-center ${selected.includes(pm.value) ? "border-pink-500 bg-pink-50 shadow-md" : "border-slate-100 bg-white hover:border-slate-200"}`}>
-            <span className="text-4xl">{pm.icon}</span>
-            <span className={`text-base font-bold ${selected.includes(pm.value) ? "text-pink-700" : "text-slate-700"}`}>{pm.label}</span>
-            <div className={`w-6 h-6 mt-2 rounded-full border-2 flex items-center justify-center transition-all ${selected.includes(pm.value) ? "border-pink-500 bg-pink-500" : "border-slate-300"}`}>
-              {selected.includes(pm.value) && <Check className="w-4 h-4 text-white" />}
-            </div>
-          </button>
-        ))}
-      </div>
-
-      <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex gap-4 items-start">
-        <span className="text-xl">💡</span>
-        <p className="text-sm font-bold text-amber-800 leading-relaxed">
-          El pago se hace directamente en la plataforma: transfieres por el método que elijas y notificas el pago para que lo validen. Esta selección es solo tu preferencia guardada en el perfil, puedes cambiarla cuando quieras.
-        </p>
-      </div>
-
-      <div className="flex gap-4 pt-6 border-t border-slate-100">
-        <button onClick={onBack} disabled={saving} className="px-8 py-4 text-base font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
-          <ChevronLeft className="w-5 h-5" /> Volver
-        </button>
-        <button onClick={onNext} disabled={saving} className="flex-1 py-4 text-base font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-70 flex items-center justify-center gap-2">
-          {saving ? (
-            <div className="w-6 h-6 border-4 border-white/40 border-t-white rounded-full animate-spin" />
-          ) : (
-            <>{selected.length === 0 ? "Saltar y finalizar" : "Finalizar"}<Rocket className="w-5 h-5" /></>
-          )}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Paso 5: Éxito ────────────────────────────────────────────────────────────
+// ─── Paso 4: Éxito ────────────────────────────────────────────────────────────
 function StepSuccess({ name }: { name: string }) {
   return (
     <div className="flex flex-col items-center text-center py-10 animate-in fade-in zoom-in-95 duration-500 max-w-2xl mx-auto">
@@ -741,7 +685,12 @@ export default function OnboardingPage() {
   const { user, setUser, logout } = useAuthStore();
   const [nationality, setNationality] = useState("");
   const [step, setStep] = useState(1);
-  const TOTAL_STEPS = 5;
+  // Correcciones Extra: se quitó el paso de "métodos de pago preferidos"
+  // del onboarding de student -- el onboarding de teacher nunca lo tuvo,
+  // y el estudiante igual puede configurar esta preferencia después desde
+  // su perfil (dashboard/profile). TOTAL_STEPS pasa de 5 a 4 (3 pasos de
+  // formulario + la pantalla de éxito).
+  const TOTAL_STEPS = 4;
 
   const [timezone, setTimezone] = useState(
     typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC"
@@ -754,7 +703,6 @@ export default function OnboardingPage() {
   const [phone, setPhone] = useState(""); 
   const [goal, setGoal] = useState("");
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
-  const [payMethods, setPayMethods] = useState<string[]>([]);
 
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -812,7 +760,7 @@ export default function OnboardingPage() {
       await api.patch("/users/me/student-profile", {
         timezone,
         goal,
-        preferred_payment_methods: payMethods,
+        preferred_payment_methods: [],
       });
 
       // 4. Guardar bloques de horario
@@ -832,7 +780,7 @@ export default function OnboardingPage() {
           ...user,
           timezone,
           goal,
-          preferred_payment_methods: payMethods,
+          preferred_payment_methods: [],
           onboarding_completed: true, 
         });
       }
@@ -899,10 +847,9 @@ export default function OnboardingPage() {
                 onBack={back}
               />
             )}
-            {step === 3 && <StepSchedule blocks={blocks} setBlocks={setBlocks} onNext={next} onBack={back} />}
-            {step === 4 && <StepPaymentMethods selected={payMethods} setSelected={setPayMethods} onNext={finish} onBack={back} saving={saving} />}
-            
-            {step === 5 && (
+            {step === 3 && <StepSchedule blocks={blocks} setBlocks={setBlocks} onNext={finish} onBack={back} />}
+
+            {step === 4 && (
               <div className="w-full">
                 <StepSuccess name={name} />
                 <div className="max-w-md mx-auto mt-8">
@@ -918,13 +865,13 @@ export default function OnboardingPage() {
             )}
           </div>
 
-          {step < 5 && (
+          {step < 4 && (
             <div className="lg:hidden mt-12 text-center">
               <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
-                {step === 1 ? "Paso 1 de 4" : `Paso ${step} de 4`}
+                {step === 1 ? "Paso 1 de 3" : `Paso ${step} de 3`}
               </p>
               <div className="flex justify-center gap-2 mt-3">
-                {[1, 2, 3, 4].map((s) => (
+                {[1, 2, 3].map((s) => (
                   <div key={s} className={`h-1.5 rounded-full transition-all duration-300 ${step >= s ? "w-8 bg-pink-500" : "w-4 bg-slate-200"}`} />
                 ))}
               </div>

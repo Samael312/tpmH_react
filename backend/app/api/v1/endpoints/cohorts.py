@@ -71,12 +71,31 @@ def _generate_recurring_dates(local_days_of_week: list, time_local: str, tz_str:
     return results
 
 
-def _check_recurring_slot_available(teacher_id: int, start_time_utc, duration_minutes: int, db: Session):
+def _check_recurring_slot_available(
+    teacher_id: int, start_time_utc, duration_minutes: int, db: Session,
+    exclude_cohort_id: int | None = None, already_planned: list | None = None,
+):
     """
-    D14: para el listado de candidatos (GET /{cohort_id}/recurring-candidates)
-    -- versión de solo-lectura del mismo chequeo que hace
+    D14: versión de solo-lectura del mismo chequeo que hace
     _create_group_session (disponibilidad declarada + choque con clases
-    individuales), sin llegar a crear nada.
+    individuales + choque con OTRAS cohortes), sin llegar a crear nada.
+
+    La usa tanto GET /{cohort_id}/recurring-candidates (listado informativo
+    para el profesor) como close_cohort_endpoint, que ahora valida TODA la
+    serie de ocurrencias antes de crear ninguna sesión -- así evita quedar
+    a mitad de camino si una ocurrencia posterior de la serie no es viable
+    (ver bug de FK violation reportado en QA: antes se creaba sesión por
+    sesión y se intentaba "deshacer" borrando Class ya comiteadas, lo que
+    rompía por los ClassParticipant que ya referenciaban esos ids).
+
+    `exclude_cohort_id`: no contar como conflicto las sesiones de la propia
+    cohorte que se está cerrando (irrelevante hoy porque una cohorte nueva
+    no tiene sesiones propias todavía, pero deja la función lista para
+    reusarse en "agregar sesión" de una cohorte que ya tiene otras).
+    `already_planned`: lista de (start, end) ya validados en esta misma
+    corrida (las otras ocurrencias de la serie que se están por crear),
+    para detectar que el propio patrón no se choque consigo mismo con un
+    duration_minutes más largo que el intervalo entre ocurrencias.
     """
     from app.core.class_logic import is_within_teacher_availability, get_buffer_minutes_for_type
 
@@ -100,6 +119,26 @@ def _check_recurring_slot_available(teacher_id: int, start_time_utc, duration_mi
     )
     if conflicting:
         return False, "Ya tienes una clase individual agendada en ese horario"
+
+    group_query = db.query(Class).filter(
+        Class.teacher_id == teacher_id,
+        Class.class_type == ClassType.group,
+        Class.start_time_utc < occupied_end_time_utc,
+        Class.status.notin_(["cancelled"]),
+    )
+    if exclude_cohort_id is not None:
+        group_query = group_query.filter(Class.cohort_id != exclude_cohort_id)
+    conflicting_group = any(
+        start_time_utc < (c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0))
+        for c in group_query.all()
+    )
+    if conflicting_group:
+        return False, "Ya tienes otra sesión grupal agendada en ese horario"
+
+    for planned_start, planned_end in (already_planned or []):
+        if start_time_utc < planned_end and planned_start < occupied_end_time_utc:
+            return False, "Esa ocurrencia se solapa con otra sesión de la misma serie"
+
     return True, ""
 
 
@@ -117,7 +156,7 @@ def _completed_sessions_count(cohort_id: int, db: Session) -> int:
     ).count()
 
 
-def _late_join_pricing(price: float, classes_count, completed_count: int):
+def _late_join_pricing(package, completed_count: int):
     """
     D12: un alumno que se une a una cohorte que ya dictó `completed_count`
     sesiones no paga el precio completo del paquete -- se le resta el
@@ -125,10 +164,17 @@ def _late_join_pricing(price: float, classes_count, completed_count: int):
     (precio_efectivo, clases_restantes). Si el paquete no tiene un
     classes_count fijo, o todavía no se dictó ninguna sesión, no hay nada
     que prorratear.
+
+    Correcciones Extra: recibe el `package` completo (en vez de price +
+    classes_count sueltos) para poder usar su price_per_class guardado en
+    vez de siempre re-derivarlo.
     """
+    price = package.price
+    classes_count = package.classes_count
     if completed_count <= 0 or not classes_count:
         return price, classes_count
-    price_per_class = price / classes_count
+    from app.core.class_logic import get_price_per_class
+    price_per_class = get_price_per_class(package) or (price / classes_count)
     remaining_classes = max(classes_count - completed_count, 0)
     effective_price = round(price_per_class * remaining_classes, 2)
     return effective_price, remaining_classes
@@ -137,8 +183,10 @@ def _late_join_pricing(price: float, classes_count, completed_count: int):
 def _to_cohort_response(cohort: GroupCohort, db: Session) -> CohortResponse:
     completed = _completed_sessions_count(cohort.id, db)
     price = cohort.package.price if cohort.package else 0.0
-    classes_count = cohort.package.classes_count if cohort.package else None
-    effective_price, _ = _late_join_pricing(price, classes_count, completed)
+    if cohort.package:
+        effective_price, _ = _late_join_pricing(cohort.package, completed)
+    else:
+        effective_price = price
     return CohortResponse(
         id=cohort.id,
         package_id=cohort.package_id,
@@ -402,17 +450,48 @@ def close_cohort_endpoint(
                 "La fecha elegida no coincide con el horario recurrente configurado para este paquete. "
                 "Elegí una de las opciones que te mostró el sistema.",
             )
+
+        # Todo o nada: validamos las N ocurrencias ANTES de crear ninguna
+        # sesión. _create_group_session comitea y manda email por cada
+        # sesión que crea, así que "crear y deshacer si una falla" no era
+        # realmente atómico -- alumnos ya habían recibido el email de una
+        # sesión que después se borraba, y el borrado mismo rompía por FK
+        # (ClassParticipant ya apuntaba a la Class comiteada). Validando
+        # todo primero, el loop de creación de abajo solo corre si ya
+        # sabemos que las N ocurrencias son viables.
+        from app.core.class_logic import get_buffer_minutes_for_type
+        teacher_id = current_user.teacher_profile.id
+        group_buffer_minutes = get_buffer_minutes_for_type(ClassType.group, db)
+        planned_ranges: list = []
+        for idx, occ in enumerate(occurrences, start=1):
+            available, reason = _check_recurring_slot_available(
+                teacher_id, occ, data.duration_minutes, db,
+                exclude_cohort_id=cohort.id, already_planned=planned_ranges,
+            )
+            if not available:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"No se puede agendar la sesión {idx} de {len(occurrences)} "
+                    f"({occ.isoformat()}): {reason}",
+                )
+            planned_ranges.append((
+                occ,
+                occ + timedelta(minutes=data.duration_minutes + group_buffer_minutes),
+            ))
+
         created_ids = []
         try:
             for occ in occurrences:
                 session = _create_group_session(cohort, current_user, occ, data.duration_minutes, db)
                 created_ids.append(session.id)
         except HTTPException:
-            # Todo o nada: si una ocurrencia de la serie choca con algo,
-            # no dejamos la cohorte con solo una parte de sus sesiones
-            # agendadas -- se borra lo que sí se llegó a crear en este
-            # intento y se le informa al profesor cuál fue el problema.
+            # Red de seguridad ante una condición de carrera (otra reserva
+            # tomó el horario entre la validación de arriba y la creación
+            # real): se deshace lo que sí se llegó a crear en este intento,
+            # borrando primero los ClassParticipant (si no, el DELETE de
+            # Class rompe por la foreign key que los referencia).
             if created_ids:
+                db.query(ClassParticipant).filter(ClassParticipant.class_id.in_(created_ids)).delete(synchronize_session=False)
                 db.query(Class).filter(Class.id.in_(created_ids)).delete(synchronize_session=False)
                 db.commit()
             raise
@@ -998,6 +1077,8 @@ def enroll_in_cohort(
     otro pago de la plataforma.
     """
     student_id = current_user.student_profile.id
+    from app.core.class_logic import validate_payment_method, PAYMENT_METHOD_LABELS
+    method = validate_payment_method(data.payment_method, db)
 
     cohort = db.query(GroupCohort).filter(
         GroupCohort.id == data.cohort_id,
@@ -1028,7 +1109,7 @@ def enroll_in_cohort(
     # recibirá al aprobarse el pago (ver validate_payment, rama
     # "group_enrollment").
     completed_sessions = _completed_sessions_count(cohort.id, db)
-    effective_price, remaining_classes = _late_join_pricing(package.price, package.classes_count, completed_sessions)
+    effective_price, remaining_classes = _late_join_pricing(package, completed_sessions)
     if package.classes_count is not None and remaining_classes is not None and remaining_classes <= 0:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
@@ -1059,7 +1140,7 @@ def enroll_in_cohort(
         amount_total=effective_price,
         amount_teacher=0,
         amount_platform=0,
-        payment_method="manual",
+        payment_method=method,
         status="pending_review",
         payment_type="group_enrollment",
         transaction_id=data.transaction_reference,

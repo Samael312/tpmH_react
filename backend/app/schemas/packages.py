@@ -16,6 +16,11 @@ class PackageCreate(BaseModel):
     color: Optional[str] = "#ec4899"
     classes_count: Optional[int] = None
     price: float
+    # Correcciones Extra (informe D1-D14, decisión de negocio confirmada):
+    # precio de una clase suelta, obligatorio para paquetes finitos y
+    # validado contra `price` (ver validate_price_per_class más abajo).
+    # No aplica a paquetes ilimitados (classes_count=None).
+    price_per_class: Optional[float] = None
     duration_minutes: int = 50
     allow_installments: bool = False
     installment_count: Optional[int] = None
@@ -98,6 +103,31 @@ class PackageCreate(BaseModel):
         return v
 
     @model_validator(mode="after")
+    def validate_price_per_class(self):
+        # Correcciones Extra (decisión de negocio confirmada): obligatorio
+        # y debe coincidir exactamente (redondeado a centavos) con el
+        # precio total -- price_per_class * classes_count == price. Los
+        # paquetes ilimitados no tienen un precio por clase fijo, así que
+        # se ignora cualquier valor recibido en vez de exigirlo.
+        if self.classes_count is None:
+            self.price_per_class = None
+            return self
+        if self.price_per_class is None:
+            raise ValueError(
+                "Debes indicar el precio de una clase suelta de este paquete (price_per_class)"
+            )
+        if self.price_per_class <= 0:
+            raise ValueError("El precio de clase unitaria debe ser mayor que 0")
+        expected_total = round(self.price_per_class * self.classes_count, 2)
+        if abs(expected_total - round(self.price, 2)) > 0.01:
+            raise ValueError(
+                f"El precio de clase unitaria (${self.price_per_class:.2f}) no coincide con el precio "
+                f"total: {self.classes_count} × ${self.price_per_class:.2f} = ${expected_total:.2f}, "
+                f"pero el precio del paquete es ${self.price:.2f}. Ajusta uno de los dos."
+            )
+        return self
+
+    @model_validator(mode="after")
     def validate_fixed_schedule_complete(self):
         # D14: si se eligió horario fijo, el patrón (días + hora) es
         # obligatorio -- de lo contrario no habría nada que usar para
@@ -122,6 +152,7 @@ class PackageResponse(BaseModel):
     color: Optional[str] = "#ec4899"
     classes_count: Optional[int]
     price: float
+    price_per_class: Optional[float] = None
     duration_minutes: int
     allow_installments: bool = False
     installment_count: Optional[int] = None

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Check, X, Loader2, CreditCard, Split, Building2, Smartphone, Wallet, StickyNote } from "lucide-react";
 import api from "@/lib/api";
 import PaymentMethodsInfo from "./PaymentMethodsInfo";
+import PaymentMethodPicker from "./PaymentMethodPicker";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 
@@ -60,6 +61,8 @@ export default function PackageCheckout({
   const [creditsRequested, setCreditsRequested] = useState(5);
   const [useInstallments, setUseInstallments] = useState(installmentsPaid > 0);
   const [reference, setReference] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
+  const [paymentMethodError, setPaymentMethodError] = useState(false);
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
@@ -142,6 +145,15 @@ export default function PackageCheckout({
   const noAdditionalCost = (isChange && !isDowngrade && changeDeficit === 0) || isInstantSwitchToUnlimited;
 
   const notify = async () => {
+    if (!isRefund && !isInstantSwitchToUnlimited && !paymentMethod) {
+      setPaymentMethodError(true);
+      setError("Indica con qué método pagaste antes de continuar.");
+      return;
+    }
+    if (isRefund && !Object.values(refundForm).some((v) => v.trim() !== "")) {
+      setError("Completa al menos un dato de contacto o de cuenta para poder procesar tu reembolso.");
+      return;
+    }
     setSending(true);
     setError("");
     try {
@@ -153,6 +165,7 @@ export default function PackageCheckout({
         type: typeMap[mode],
         enrollment_id: enrollmentId ?? undefined,
         package_id: pkg.id,
+        payment_method: !isRefund && !isInstantSwitchToUnlimited ? paymentMethod : undefined,
         installment_index: !isChange && !isUnlimited && (useInstallments || alreadyMidInstallments) ? nextIndex : null,
         // BUG-18 fix: para paquetes ilimitados (compra inicial o renovación,
         // nunca "change" — ese caso es el switch instantáneo y gratuito de
@@ -439,7 +452,14 @@ export default function PackageCheckout({
                 para coordinar el método de pago.
               </p>
             ) : (
-              <PaymentMethodsInfo />
+              <div className="space-y-3">
+                <PaymentMethodPicker
+                  value={paymentMethod}
+                  onChange={(k) => { setPaymentMethod(k); setPaymentMethodError(false); }}
+                  showError={paymentMethodError}
+                />
+                <PaymentMethodsInfo />
+              </div>
             )}
           </div>
         </div>

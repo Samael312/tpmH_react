@@ -678,7 +678,7 @@ export default function TeacherCohortsPage() {
       {/* ── Modal: cerrar cohorte ── */}
       <FullScreenModal
         open={!!closingCohort}
-        onClose={() => setClosingCohort(null)}
+        onClose={() => !actionLoading && setClosingCohort(null)}
         title="Cerrar cohorte"
         footer={
           <Button
@@ -724,7 +724,7 @@ export default function TeacherCohortsPage() {
                       <button
                         key={c.start_time_utc}
                         type="button"
-                        disabled={!c.available}
+                        disabled={!c.available || actionLoading}
                         onClick={() => setSelectedRecurringStart(c.start_time_utc)}
                         className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-colors flex items-center justify-between gap-2 ${
                           !c.available
@@ -732,7 +732,7 @@ export default function TeacherCohortsPage() {
                             : selectedRecurringStart === c.start_time_utc
                               ? "bg-indigo-500 text-white"
                               : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                        }`}
+                        } ${actionLoading ? "opacity-50 cursor-not-allowed" : ""}`}
                       >
                         <span>{new Date(c.start_time_utc).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" })}</span>
                         {!c.available && <span className="text-[10px] normal-case font-medium">{c.reason}</span>}
@@ -765,6 +765,7 @@ export default function TeacherCohortsPage() {
                   selectedSlot={closeForm.selectedSlot}
                   onSelectSlot={(slot) => setCloseForm({ ...closeForm, selectedSlot: slot })}
                   myTz={myTz}
+                  disabled={actionLoading}
                 />
               </>
             )}
@@ -935,6 +936,7 @@ function GroupSessionSlotPicker({
   selectedSlot,
   onSelectSlot,
   myTz,
+  disabled = false,
 }: {
   allowedDurations: number[];
   duration: string;
@@ -946,9 +948,16 @@ function GroupSessionSlotPicker({
   selectedSlot: AvailableSlot | null;
   onSelectSlot: (slot: AvailableSlot) => void;
   myTz: string;
+  // Correcciones Extra: al confirmar el cierre de la cohorte, los
+  // horarios quedan bloqueados mientras la petición está en curso -- antes
+  // se podía seguir cambiando fecha/duración/horario mientras el POST
+  // /close ya estaba en vuelo, lo que podía terminar mandando una
+  // selección distinta a la que el profesor vio en pantalla al confirmar.
+  disabled?: boolean;
 }) {
   return (
     <>
+      <div className={disabled ? "pointer-events-none opacity-50" : undefined}>
       <div>
         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Duración</label>
         <div className="flex flex-wrap gap-2 mt-2">
@@ -956,6 +965,7 @@ function GroupSessionSlotPicker({
             <button
               key={d}
               type="button"
+              disabled={disabled}
               onClick={() => onDurationChange(String(d))}
               className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-colors ${
                 Number(duration) === d
@@ -1008,7 +1018,7 @@ function GroupSessionSlotPicker({
                     key={i}
                     type="button"
                     onClick={() => !blocked && onSelectSlot(slot)}
-                    disabled={blocked}
+                    disabled={blocked || disabled}
                     className={`py-2.5 px-3 rounded-xl text-center border-2 flex flex-col items-center justify-center transition-all duration-200
                       ${blocked ? "border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed"
                         : isSelected ? "border-pink-500 bg-pink-50 shadow-md shadow-pink-100"
@@ -1028,6 +1038,7 @@ function GroupSessionSlotPicker({
             </div>
           )}
         </div>
+      </div>
       </div>
     </>
   );

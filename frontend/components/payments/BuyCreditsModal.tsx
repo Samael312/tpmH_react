@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, X, Loader2 } from "lucide-react";
 import api from "@/lib/api";
 import PaymentMethodsInfo from "./PaymentMethodsInfo";
+import PaymentMethodPicker from "./PaymentMethodPicker";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 
@@ -23,11 +24,18 @@ export default function BuyCreditsModal({
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
+  const [paymentMethodError, setPaymentMethodError] = useState(false);
   const toast = useToast();
 
   const amount = Math.round(creditsRequested * pricePerClass * 100) / 100;
 
   const notify = async () => {
+    if (!paymentMethod) {
+      setPaymentMethodError(true);
+      setError("Indica con qué método pagaste antes de continuar.");
+      return;
+    }
     setSending(true);
     setError("");
     try {
@@ -35,6 +43,7 @@ export default function BuyCreditsModal({
         type: "unlimited_recharge",
         enrollment_id: enrollmentId,
         credits_requested: creditsRequested,
+        payment_method: paymentMethod,
         transaction_reference: reference.trim() || undefined,
       });
       setDone(true);
@@ -126,7 +135,12 @@ export default function BuyCreditsModal({
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
             Métodos de pago disponibles
           </p>
-          <div className="max-h-[300px] overflow-y-auto pr-1">
+          <div className="max-h-[300px] overflow-y-auto pr-1 space-y-3">
+            <PaymentMethodPicker
+              value={paymentMethod}
+              onChange={(k) => { setPaymentMethod(k); setPaymentMethodError(false); }}
+              showError={paymentMethodError}
+            />
             <PaymentMethodsInfo />
           </div>
         </div>

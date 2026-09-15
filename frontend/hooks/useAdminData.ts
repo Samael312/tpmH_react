@@ -28,6 +28,16 @@ export interface PendingPayment {
   student_name: string
   student_username: string | null
   amount: number
+  payment_method?: string | null
+  payment_method_label?: string | null
+  refund_payment_info?: {
+    bank_name?: string | null
+    bank_account?: string | null
+    account_holder?: string | null
+    mobile_payment?: string | null
+    paypal_or_zelle?: string | null
+    other_notes?: string | null
+  } | null
   transaction_reference: string | null
   submitted_at: string
   class_start_utc?: string | null

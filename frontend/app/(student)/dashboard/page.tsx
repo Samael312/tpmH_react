@@ -40,7 +40,7 @@ import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import FullScreenModal from "@/components/ui/FullScreenModal";
 import Button from "@/components/ui/Button";
-import RefundDestinationFields, { emptyRefundDestinationForm, refundFormToPayload } from "@/components/payments/RefundDestinationFields";
+import RefundDestinationFields, { emptyRefundDestinationForm, refundFormToPayload, hasAtLeastOneRefundField } from "@/components/payments/RefundDestinationFields";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
@@ -145,6 +145,10 @@ export default function StudentDashboard() {
 
   const submitGroupRefund = async () => {
     if (!refundEnrollmentId) return;
+    if (!hasAtLeastOneRefundField(groupRefundForm)) {
+      toast.error("Completa al menos un dato de contacto o de cuenta para poder procesar tu reembolso");
+      return;
+    }
     setSubmittingGroupRefund(true);
     try {
       await api.post("/payments/request-refund-cohort-cancelled", {
@@ -435,11 +439,13 @@ export default function StudentDashboard() {
           // alumno para cualquier clase individual. El panel de espera
           // queda solo para el caso genuino de "todavía no hay nada
           // agendado" (status "filling").
-          const cohortUpcomingClasses = isGroupEnr
-            ? classesData
-                .filter(c => c.cohort_id === enr.cohort_id && c.status !== "cancelled" && c.status !== "completed")
-                .sort((a, b) => new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime())
-            : [];
+          // Correcciones Extra: ya no se listan las ClassCard de la cohorte
+          // acá (redundante con "Próximas clases") -- solo se necesita el
+          // conteo de completadas para el banner de abajo.
+          const cohortCompletedClasses = isGroupEnr
+            ? classesData.filter(c => c.cohort_id === enr.cohort_id && c.status === "completed").length
+            : 0;
+          const cohortTotalClasses = enr.package?.classes_count ?? null;
           const teacherSuspended = !!enr.teacher_status && enr.teacher_status !== "approved";
           const isUnlimited = enr.package?.classes_count == null;
           const remainingCredits = enr.available_credits ?? (isUnlimited
@@ -474,15 +480,18 @@ export default function StudentDashboard() {
               )}
 
               {isGroupEnr ? (
-                cohortUpcomingClasses.length > 0 ? (
-                  <div className="space-y-3">
-                    {cohortUpcomingClasses.slice(0, 3).map(c => (
-                      <ClassCard key={c.id} class_={c} role="student" onUpdate={handleRefresh} />
-                    ))}
-                  </div>
-                ) : (
-                  <GroupWaitingPanel enrollment={enr} onChanged={handleRefresh} />
-                )
+                // Correcciones Extra: las clases del grupo ya se ven en la
+                // sección "Próximas clases" -- repetirlas acá era
+                // redundante. En este lugar solo va un banner con info del
+                // paquete (profesor, estado del grupo, progreso), sin
+                // importar si hay sesiones próximas, en curso o ya
+                // completadas.
+                <GroupWaitingPanel
+                  enrollment={enr}
+                  onChanged={handleRefresh}
+                  completedClasses={cohortCompletedClasses}
+                  totalClasses={cohortTotalClasses}
+                />
               ) : teacherSuspended ? (
                 <div className="bg-rose-50 border border-rose-200 rounded-[2rem] p-6 sm:p-8 relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
