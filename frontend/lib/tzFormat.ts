@@ -90,3 +90,11 @@ export function formatDateHumanTz(utcIso: string, timeZone: string): string {
     timeZone,
   });
 }
+
+/** "2026-01-13" — clave de fecha (año-mes-día) correcta para una zona
+ *  horaria específica, para comparar/agrupar por "día calendario" tal como
+ *  lo percibe la persona (no el día UTC crudo). Usa "en-CA" porque ese
+ *  locale es el único que Intl formatea nativamente como YYYY-MM-DD. */
+export function getDateKeyTz(utcIso: string, timeZone: string): string {
+  return new Date(utcIso).toLocaleDateString("en-CA", { timeZone });
+}

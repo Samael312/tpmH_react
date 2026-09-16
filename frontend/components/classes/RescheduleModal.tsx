@@ -19,9 +19,27 @@ import { getErrorMessage } from "@/lib/errorMessage";
 export function RescheduleCalendar({
   value,
   onChange,
+  highlightedDates,
+  unavailableDates,
+  restrictToHighlighted,
 }: {
   value: string;
   onChange: (v: string) => void;
+  /**
+   * D14/QA calendario horario fijo: fechas (YYYY-MM-DD) que coinciden con
+   * el patrón recurrente configurado (ej. todos los lunes y viernes
+   * disponibles del mes) y por eso se resaltan visualmente. Si no se pasa,
+   * el calendario se comporta exactamente igual que antes (reagendar libre).
+   */
+  highlightedDates?: Set<string>;
+  /** Subconjunto de `highlightedDates` que coincide con el patrón pero ya
+   *  está ocupado en la agenda del profesor — se muestra resaltado pero no
+   *  seleccionable. */
+  unavailableDates?: Set<string>;
+  /** Cuando hay `highlightedDates`, solo permite hacer click en esos días
+   *  (el resto queda visible pero deshabilitado) — usado en el flujo de
+   *  horario fijo, donde solo tiene sentido arrancar en un día del patrón. */
+  restrictToHighlighted?: boolean;
 }) {
   const today = new Date();
   const [year, setYear]   = useState(today.getFullYear());
@@ -86,22 +104,30 @@ export function RescheduleCalendar({
           const isSelected = dateStr === value;
           const isPast     = new Date(dateStr) < new Date(today.toDateString());
           const isToday    = dateStr === today.toISOString().split("T")[0];
+          const isHighlighted = highlightedDates?.has(dateStr) ?? false;
+          const isUnavailable = unavailableDates?.has(dateStr) ?? false;
+          const isDisabled = isPast || (restrictToHighlighted && !isHighlighted) || (isHighlighted && isUnavailable);
 
           return (
             <button
               key={i}
-              disabled={isPast}
+              disabled={isDisabled}
+              title={isHighlighted && isUnavailable ? "Ese día ya está ocupado en tu agenda" : undefined}
               onClick={() => onChange(dateStr)}
               className={`
                 w-full aspect-square rounded-xl text-xs font-black
-                transition-all duration-200 flex items-center justify-center
+                transition-all duration-200 flex items-center justify-center relative
                 ${isSelected
                   ? "bg-gradient-to-br from-pink-500 to-rose-400 text-white shadow-md shadow-pink-200 scale-105"
-                  : isPast
-                    ? "text-slate-300 cursor-not-allowed bg-transparent"
-                    : isToday
-                      ? "bg-pink-100 text-pink-600 border border-pink-200"
-                      : "text-slate-600 bg-white border border-slate-100 hover:border-pink-300 hover:text-pink-600 shadow-sm"
+                  : isDisabled
+                    ? (isHighlighted
+                        ? "text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed line-through"
+                        : "text-slate-300 cursor-not-allowed bg-transparent")
+                    : isHighlighted
+                      ? "text-indigo-700 bg-indigo-50 border-2 border-indigo-300 hover:border-indigo-400 hover:bg-indigo-100 shadow-sm"
+                      : isToday
+                        ? "bg-pink-100 text-pink-600 border border-pink-200"
+                        : "text-slate-600 bg-white border border-slate-100 hover:border-pink-300 hover:text-pink-600 shadow-sm"
                 }
               `}
             >

@@ -21,7 +21,7 @@ import {
 import { RescheduleCalendar } from "@/components/classes/RescheduleModal";
 import { useAvailableSlots, type AvailableSlot } from "@/hooks/useStudentData";
 import { useAuthStore } from "@/store/authStore";
-import { getMyDisplayTimezone, formatTimeTz } from "@/lib/tzFormat";
+import { getMyDisplayTimezone, formatTimeTz, getDateKeyTz } from "@/lib/tzFormat";
 import { useBusinessRules } from "@/hooks/useBusinessRules";
 import { getErrorMessage } from "@/lib/errorMessage";
 import { useToast } from "@/hooks/useToast";
@@ -158,6 +158,22 @@ export default function TeacherCohortsPage() {
   const closingPackage = closingCohort ? allPackages.find(p => p.id === closingCohort.package_id) : null;
   const isFixedSchedule = closingPackage?.group_schedule_mode === "fixed";
 
+  // Corrección QA (UX calendario horario fijo): antes `recurringCandidates`
+  // solo se mostraba como una lista plana de botones (máx. 8-20 fechas
+  // sueltas), lo que no dejaba ver de un vistazo qué días de la semana
+  // coinciden con el patrón. Ahora se deriva un mapa fecha→candidato (clave
+  // YYYY-MM-DD en la zona horaria del profesor) para poder resaltar esos
+  // días directamente en un calendario mensual real.
+  const recurringByDate = new Map<string, { start_time_utc: string; available: boolean; reason: string | null }>();
+  for (const c of recurringCandidates) {
+    recurringByDate.set(getDateKeyTz(c.start_time_utc, myTz), c);
+  }
+  const recurringHighlightedDates = new Set(recurringByDate.keys());
+  const recurringUnavailableDates = new Set(
+    recurringCandidates.filter(c => !c.available).map(c => getDateKeyTz(c.start_time_utc, myTz))
+  );
+  const selectedRecurringDateKey = closeForm.date || null;
+
   useEffect(() => {
     if (!closingCohort || !isFixedSchedule) {
       setRecurringCandidates([]);
@@ -165,7 +181,10 @@ export default function TeacherCohortsPage() {
       return;
     }
     setLoadingRecurringCandidates(true);
-    api.get(`/cohorts/${closingCohort.id}/recurring-candidates`)
+    // count=20 (tope máximo que acepta el backend): así el calendario tiene
+    // suficientes ocurrencias resaltadas para cubrir ~2-3 meses hacia
+    // adelante según la frecuencia del patrón, sin necesidad de paginar.
+    api.get(`/cohorts/${closingCohort.id}/recurring-candidates?count=20`)
       .then(res => setRecurringCandidates(res.data))
       .catch(() => setRecurringCandidates([]))
       .finally(() => setLoadingRecurringCandidates(false));
@@ -483,8 +502,13 @@ export default function TeacherCohortsPage() {
                 >
                   <Pencil className="w-3.5 h-3.5" /> Editar cupo
                 </Button>
-                <Button size="sm" variant="danger" onClick={() => setCancelTarget(cohort)}>
-                  <Ban className="w-3.5 h-3.5" /> Cancelar grupo
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={() => setCancelTarget(cohort)}
+                  title="El grupo todavía no arrancó ninguna clase — se cancela por completo y los alumnos inscritos quedan libres de elegir otro paquete"
+                >
+                  <Ban className="w-3.5 h-3.5" /> Abortar / Cancelar (sin empezar clases)
                 </Button>
               </div>
             )}
@@ -493,7 +517,12 @@ export default function TeacherCohortsPage() {
                 <Button size="sm" onClick={() => setSchedulingCohort(cohort)}>
                   <Plus className="w-3.5 h-3.5" /> Agendar sesión
                 </Button>
-                <Button size="sm" variant="secondary" onClick={() => setCompleteTarget(cohort)}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setCompleteTarget(cohort)}
+                  title="Marca el grupo como terminado. Si llegó al mínimo de alumnos, cada alumno sigue su ciclo normal; si quedó por debajo, se cancela la inscripción de los que quedan y se les notifica"
+                >
                   <Check className="w-3.5 h-3.5" /> Finalizar grupo
                 </Button>
                 <Button
@@ -506,8 +535,25 @@ export default function TeacherCohortsPage() {
                 <Button size="sm" variant="secondary" onClick={() => setReopenTarget(cohort)}>
                   <RotateCcw className="w-3.5 h-3.5" /> Reabrir
                 </Button>
-                <Button size="sm" variant="danger" onClick={() => setCancelTarget(cohort)}>
-                  <Ban className="w-3.5 h-3.5" /> Cancelar grupo
+              </div>
+            )}
+
+            {cohort.status === "in_progress" && (
+              <div className="flex flex-wrap gap-2 mt-4">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setCompleteTarget(cohort)}
+                  title="Marca el grupo como terminado. Si llegó al mínimo de alumnos, cada alumno sigue su ciclo normal; si quedó por debajo, se cancela la inscripción de los que quedan y se les notifica"
+                >
+                  <Check className="w-3.5 h-3.5" /> Finalizar grupo
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => { setEditingCohort(cohort); setEditForm({ min_students: String(cohort.min_students), max_students: String(cohort.max_students) }); }}
+                >
+                  <Pencil className="w-3.5 h-3.5" /> Editar cupo
                 </Button>
               </div>
             )}
@@ -716,7 +762,7 @@ export default function TeacherCohortsPage() {
                 <p className="text-xs text-slate-500">
                   Este paquete tiene horario fijo (
                   {(closingPackage?.group_recurring_days_of_week ?? []).map(d => ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"][d]).join(", ")}
-                  {" "}{closingPackage?.group_recurring_time_local}). Elegí a partir de cuál coincidencia arrancar —
+                  {" "}{closingPackage?.group_recurring_time_local}). Elegí en el calendario a partir de cuál día arrancar —
                   se agendarán automáticamente las {closingPackage?.classes_count ?? "N"} sesiones del paquete.
                 </p>
                 {loadingRecurringCandidates ? (
@@ -726,25 +772,69 @@ export default function TeacherCohortsPage() {
                     No se encontraron próximas coincidencias con el patrón configurado.
                   </p>
                 ) : (
-                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                    {recurringCandidates.map(c => (
-                      <button
-                        key={c.start_time_utc}
-                        type="button"
-                        disabled={!c.available || actionLoading}
-                        onClick={() => setSelectedRecurringStart(c.start_time_utc)}
-                        className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-colors flex items-center justify-between gap-2 ${
-                          !c.available
-                            ? "bg-slate-50 text-slate-300 cursor-not-allowed"
-                            : selectedRecurringStart === c.start_time_utc
-                              ? "bg-indigo-500 text-white"
-                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                        } ${actionLoading ? "opacity-50 cursor-not-allowed" : ""}`}
-                      >
-                        <span>{new Date(c.start_time_utc).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" })}</span>
-                        {!c.available && <span className="text-[10px] normal-case font-medium">{c.reason}</span>}
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                        1. Elegí el día de inicio
+                      </label>
+                      {/* Corrección QA: antes esto era una lista vertical plana
+                          con las próximas ~8 coincidencias sueltas -- no se
+                          veía de un vistazo qué días de la semana coinciden
+                          con el patrón (ej. lunes y viernes). Ahora se
+                          resaltan directamente en el calendario mensual los
+                          días que coinciden, igual que en "Agendar sesión" /
+                          reagendar. */}
+                      <RescheduleCalendar
+                        value={selectedRecurringDateKey ?? ""}
+                        onChange={(dateStr) => {
+                          const candidate = recurringByDate.get(dateStr);
+                          setCloseForm({ ...closeForm, date: dateStr });
+                          if (candidate?.available) setSelectedRecurringStart(candidate.start_time_utc);
+                          else setSelectedRecurringStart(null);
+                        }}
+                        highlightedDates={recurringHighlightedDates}
+                        unavailableDates={recurringUnavailableDates}
+                        restrictToHighlighted
+                      />
+                      <div className="flex items-center gap-3 mt-2 text-[10px] font-bold text-slate-400">
+                        <span className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded bg-indigo-50 border-2 border-indigo-300 inline-block" /> Día del patrón, libre
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded bg-slate-100 border border-slate-200 inline-block" /> Día del patrón, ocupado
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                        2. Vista previa de las sesiones
+                      </label>
+                      <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1 bg-slate-50/80 border border-slate-100 rounded-2xl p-2.5">
+                        {recurringCandidates.map(c => {
+                          const dateKey = getDateKeyTz(c.start_time_utc, myTz);
+                          const isSelectedStart = selectedRecurringStart === c.start_time_utc;
+                          // Preview: si ya eligieron un día de inicio, las sesiones
+                          // anteriores a esa fecha no formarían parte del grupo.
+                          const beforeStart = selectedRecurringDateKey ? dateKey < selectedRecurringDateKey : false;
+                          return (
+                            <div
+                              key={c.start_time_utc}
+                              className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-between gap-2 ${
+                                isSelectedStart
+                                  ? "bg-indigo-500 text-white"
+                                  : beforeStart || !c.available
+                                    ? "text-slate-300 bg-transparent line-through"
+                                    : "text-slate-600 bg-white border border-slate-100"
+                              }`}
+                            >
+                              <span className="capitalize">{new Date(c.start_time_utc).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" })}</span>
+                              {!c.available && <span className="text-[10px] normal-case font-medium">{c.reason}</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 )}
               </>
@@ -832,9 +922,9 @@ export default function TeacherCohortsPage() {
 
       <ConfirmModal
         open={!!cancelTarget}
-        title="Cancelar grupo"
-        description={cancelTarget ? `¿Cancelar el grupo de "${cancelTarget.package_name}"? Se cancelará la inscripción de los ${cancelTarget.current_students} alumno(s), quienes quedarán libres de elegir un nuevo paquete (individual u otro grupo). También se cancelarán las sesiones futuras ya agendadas.` : ""}
-        confirmLabel="Cancelar grupo"
+        title="Abortar / Cancelar grupo (sin empezar clases)"
+        description={cancelTarget ? `¿Abortar el grupo de "${cancelTarget.package_name}"? Todavía no arrancó ninguna clase. Se cancelará la inscripción de los ${cancelTarget.current_students} alumno(s), quienes quedarán libres de elegir un nuevo paquete (individual u otro grupo).` : ""}
+        confirmLabel="Abortar grupo"
         variant="danger"
         onClose={() => setCancelTarget(null)}
         onConfirm={() => { if (cancelTarget) return handleCancel(cancelTarget) }}
@@ -847,8 +937,8 @@ export default function TeacherCohortsPage() {
         description={
           completeTarget
             ? (completeTarget.current_students < completeTarget.min_students
-              ? `Estás finalizando este grupo con ${completeTarget.current_students} de ${completeTarget.min_students} alumnos mínimos. Como quedó por debajo del mínimo, se cancelará la inscripción de todos y se les notificará para que elijan un nuevo paquete. ¿Confirmas?`
-              : "¿Marcar este grupo como finalizado? Se cancelará cualquier sesión futura que haya quedado agendada de más.")
+              ? `⚠️ Este grupo NO llegó al mínimo (${completeTarget.current_students} de ${completeTarget.min_students} alumnos). Al finalizarlo, se cancelará la inscripción de los ${completeTarget.current_students} alumno(s) que quedan y se les notificará para que elijan un nuevo paquete — el efecto es el mismo que cancelarlo. Úsalo cuando el grupo ya tuvo clases y quieras cerrarlo por no haber alcanzado el cupo.`
+              : "El grupo alcanzó el mínimo de alumnos y se marcará como finalizado normalmente. Se cancelará cualquier sesión futura que haya quedado agendada de más, pero los alumnos mantienen su inscripción.")
             : ""
         }
         confirmLabel="Finalizar"

@@ -52,6 +52,16 @@ export interface LandingGroupStep {
   desc: string;
 }
 
+/**
+ * Mapa campo de título → id de gradiente predefinido (ver
+ * lib/gradientTitle.tsx). Clave = nombre del campo en LandingContent
+ * (ej. "hero_title_single"), valor = uno de GRADIENT_PRESETS.id. Un campo
+ * ausente de este mapa (o con valor vacío) se muestra sin gradiente. Las
+ * palabras que llevan el color se marcan directamente en el texto del
+ * campo con `{{palabra}}`.
+ */
+export type TitleGradientMap = Partial<Record<string, string>>;
+
 export interface LandingContent {
   hero_title_single: string;
   hero_title_multi: string;
@@ -77,6 +87,7 @@ export interface LandingContent {
   cta_title: string;
   cta_subtitle: string;
   footer_tagline: string;
+  title_gradients: TitleGradientMap;
 }
 
 interface LandingData {
@@ -126,6 +137,7 @@ export const LANDING_CONTENT_DEFAULTS: LandingContent = {
   cta_title: "¿Listo para empezar?",
   cta_subtitle: "Tu primera clase de prueba es gratuita. Sin compromisos, sin tarjeta de crédito.",
   footer_tagline: "Empoderando estudiantes",
+  title_gradients: {},
 };
 
 async function fetchLandingData(): Promise<LandingData> {

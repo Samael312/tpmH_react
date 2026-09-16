@@ -18,6 +18,7 @@ import TeacherVideosCarousel from "@/components/landing/TeacherVideosCarousel";
 import { priceLabelSuffix } from "@/lib/packageThemes";
 import Skeleton from "@/components/ui/Skeleton";
 import Reveal from "@/components/ui/Reveal";
+import { renderGradientTitle } from "@/lib/gradientTitle";
 
 // Three.js pesa bastante y es puramente decorativo: se carga solo en el
 // cliente (nunca en SSR) y, más abajo, solo se monta si el viewport no
@@ -121,6 +122,12 @@ function TeacherAvatar({ teacher, className, sizes = "200px", priority = false, 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function LandingPageClient({ initialData }: { initialData?: LandingData | null }) {
   const { loading, isError, refetch, isSingleTenant, teachers, reviews, packages, platformName, platformTagline, landingContent: lc } = useLandingData(initialData);
+
+  // Helper: resuelve un título del CMS del landing (con soporte de
+  // palabras en gradiente vía {{palabra}}) usando el gradiente predefinido
+  // que el admin haya elegido para ese campo específico en /admin/settings.
+  const gTitle = (fieldKey: keyof typeof lc) =>
+    renderGradientTitle(String(lc[fieldKey] ?? ""), lc.title_gradients?.[fieldKey as string]);
   const isMobileOrReducedMotion = useIsMobileOrReducedMotion();
   // null = todavía no se sabe (primer paint) -> no montamos nada hasta confirmar
   // que corresponde, así el chunk de three.js ni se descarga en mobile.
@@ -198,7 +205,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.1] mb-6 drop-shadow-sm text-balance">
-              {isSingleTenant ? lc.hero_title_single : lc.hero_title_multi}
+              {gTitle(isSingleTenant ? "hero_title_single" : "hero_title_multi")}
             </h1>
 
             <p className="text-xl text-slate-700 leading-relaxed mb-8 max-w-xl mx-auto lg:mx-0 font-semibold">
@@ -330,7 +337,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                 <VideoIcon className="w-3.5 h-3.5" /> Presentaciones
               </p>
               <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tight mb-4">
-                {isSingleTenant ? lc.videos_title_single : lc.videos_title_multi}
+                {gTitle(isSingleTenant ? "videos_title_single" : "videos_title_multi")}
               </h2>
               <div className="w-20 h-1 bg-gradient-to-r from-rose-500 to-transparent rounded-full mx-auto my-4" />
               <p className="text-slate-400 max-w-lg mx-auto text-lg font-light">
@@ -363,7 +370,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
               {isSingleTenant ? lc.about_label_single : lc.about_label_multi}
             </p>
             <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">
-              {isSingleTenant ? lc.about_title_single : lc.about_title_multi}
+              {gTitle(isSingleTenant ? "about_title_single" : "about_title_multi")}
             </h2>
             <p className="text-slate-500 max-w-xl mx-auto leading-relaxed text-lg">
               {isSingleTenant ? lc.about_description_single : lc.about_description_multi}
@@ -471,7 +478,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 z-10">
           <Reveal className="text-center mb-20">
             <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-3">{lc.plans_label}</p>
-            <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">{lc.plans_title}</h2>
+            <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">{gTitle("plans_title")}</h2>
             <p className="text-slate-500 max-w-xl mx-auto text-lg">{lc.plans_subtitle}</p>
           </Reveal>
 
@@ -568,7 +575,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                 <Users className="w-3.5 h-3.5" /> Clases grupales
               </p>
               <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">
-                {lc.group_plans_title}
+                {gTitle("group_plans_title")}
               </h2>
               <p className="text-slate-500 max-w-xl mx-auto text-lg">
                 {isSingleTenant ? lc.group_plans_subtitle_single : lc.group_plans_subtitle_multi}
@@ -602,7 +609,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
           <Reveal className="text-center mb-16">
             <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-3">Testimonios</p>
             <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">
-              {isSingleTenant ? lc.reviews_title_single : lc.reviews_title_multi}
+              {gTitle(isSingleTenant ? "reviews_title_single" : "reviews_title_multi")}
             </h2>
             <div className="flex items-center justify-center gap-2">
               <div className="flex">{[1,2,3,4,5].map(i => <Star key={i} className="w-5 h-5 text-amber-400 fill-amber-400" />)}</div>
@@ -653,7 +660,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[40rem] h-[40rem] bg-rose-200/40 rounded-full mix-blend-multiply blur-3xl pointer-events-none" />
 
         <Reveal className="relative max-w-2xl mx-auto px-4 sm:px-6 text-center z-10">
-          <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">{lc.cta_title}</h2>
+          <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">{gTitle("cta_title")}</h2>
           <p className="text-slate-500 text-lg mb-8 leading-relaxed font-medium">
             {lc.cta_subtitle}
           </p>

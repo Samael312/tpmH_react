@@ -15,9 +15,10 @@ import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
 import { usePageTopBar } from '@/lib/mobileTopBar'
-import { AlertTriangle, RefreshCw, Wallet, Coins, Landmark, Smartphone } from 'lucide-react'
+import { AlertTriangle, RefreshCw, Wallet, Coins, Landmark, Smartphone, Palette } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
 import { getErrorMessage } from '@/lib/errorMessage'
+import { GRADIENT_PRESETS, renderGradientTitle } from '@/lib/gradientTitle'
 
 function CatalogEditor({ label, items, onSave }: {
   catalogKey: string; label: string; items: string[]; onSave: (v: string[]) => Promise<void>;
@@ -366,6 +367,49 @@ function LandingTextArea({ label, value, onChange }: {
   )
 }
 
+// Campo de título del landing con soporte de gradiente (punto pedido: poder
+// poner títulos con color, no solo unicolor, y elegir qué palabras del
+// título lo llevan). El admin marca las palabras envolviéndolas con
+// {{dobles llaves}} directamente en el texto, y elige acá el gradiente
+// predefinido (o "Sin color") que se les aplica -- se previsualiza en vivo
+// abajo, igual a como se ve en el landing real.
+function LandingTitleField({ label, value, onChange, gradientId, onGradientChange }: {
+  label: string; value: string; onChange: (v: string) => void;
+  gradientId: string; onGradientChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder="Ej: Aprende {{idiomas}} a tu ritmo"
+        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300 transition-all"
+      />
+      <div className="flex items-center gap-2">
+        <Palette className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+        <select
+          value={gradientId || ''}
+          onChange={e => onGradientChange(e.target.value)}
+          className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-600 focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300 transition-all"
+        >
+          <option value="">Sin color (texto plano)</option>
+          {GRADIENT_PRESETS.map(g => (
+            <option key={g.id} value={g.id}>{g.label}</option>
+          ))}
+        </select>
+      </div>
+      {value && (
+        <p className="text-xs font-bold text-slate-400 ml-1">
+          Vista previa: envolvé las palabras con dobles llaves para que lleven el color —{' '}
+          <span className="text-sm">{renderGradientTitle(value, gradientId)}</span>
+        </p>
+      )}
+    </div>
+  )
+}
+
 const TABS = [
   { key: 'platform', label: 'Plataforma', icon: '🏳️', dot: 'bg-pink-500' },
   { key: 'payments', label: 'Pagos', icon: '💳', dot: 'bg-emerald-400' },
@@ -442,6 +486,20 @@ export default function SettingsPage() {
     updatePlatformConfig({
       ...platformConfig,
       landing_content: { ...platformConfig.landing_content, [key]: value },
+    })
+  }
+
+  // Gradiente elegido para un campo de título específico (ver
+  // LandingTitleField / lib/gradientTitle.tsx). Se guarda como parte del
+  // mismo objeto landing_content, bajo la clave title_gradients.
+  const updateTitleGradient = (fieldKey: string, gradientId: string) => {
+    if (!platformConfig) return
+    updatePlatformConfig({
+      ...platformConfig,
+      landing_content: {
+        ...platformConfig.landing_content,
+        title_gradients: { ...platformConfig.landing_content.title_gradients, [fieldKey]: gradientId },
+      },
     })
   }
 
@@ -1055,10 +1113,14 @@ export default function SettingsPage() {
                 <div>
                   <p className="text-xs font-black text-rose-600 uppercase tracking-widest mb-3">Hero</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <LandingField label="Título (modo individual)" value={platformConfig.landing_content.hero_title_single}
-                      onChange={v => updateLandingField('hero_title_single', v)} />
-                    <LandingField label="Título (modo multi-profesor)" value={platformConfig.landing_content.hero_title_multi}
-                      onChange={v => updateLandingField('hero_title_multi', v)} />
+                    <LandingTitleField label="Título (modo individual)" value={platformConfig.landing_content.hero_title_single}
+                      onChange={v => updateLandingField('hero_title_single', v)}
+                      gradientId={platformConfig.landing_content.title_gradients?.hero_title_single || ''}
+                      onGradientChange={v => updateTitleGradient('hero_title_single', v)} />
+                    <LandingTitleField label="Título (modo multi-profesor)" value={platformConfig.landing_content.hero_title_multi}
+                      onChange={v => updateLandingField('hero_title_multi', v)}
+                      gradientId={platformConfig.landing_content.title_gradients?.hero_title_multi || ''}
+                      onGradientChange={v => updateTitleGradient('hero_title_multi', v)} />
                   </div>
                 </div>
 
@@ -1069,10 +1131,14 @@ export default function SettingsPage() {
                       onChange={v => updateLandingField('about_label_single', v)} />
                     <LandingField label="Etiqueta (multi-profesor)" value={platformConfig.landing_content.about_label_multi}
                       onChange={v => updateLandingField('about_label_multi', v)} />
-                    <LandingField label="Título (individual)" value={platformConfig.landing_content.about_title_single}
-                      onChange={v => updateLandingField('about_title_single', v)} />
-                    <LandingField label="Título (multi-profesor)" value={platformConfig.landing_content.about_title_multi}
-                      onChange={v => updateLandingField('about_title_multi', v)} />
+                    <LandingTitleField label="Título (individual)" value={platformConfig.landing_content.about_title_single}
+                      onChange={v => updateLandingField('about_title_single', v)}
+                      gradientId={platformConfig.landing_content.title_gradients?.about_title_single || ''}
+                      onGradientChange={v => updateTitleGradient('about_title_single', v)} />
+                    <LandingTitleField label="Título (multi-profesor)" value={platformConfig.landing_content.about_title_multi}
+                      onChange={v => updateLandingField('about_title_multi', v)}
+                      gradientId={platformConfig.landing_content.title_gradients?.about_title_multi || ''}
+                      onGradientChange={v => updateTitleGradient('about_title_multi', v)} />
                     <LandingTextArea label="Descripción (individual)" value={platformConfig.landing_content.about_description_single}
                       onChange={v => updateLandingField('about_description_single', v)} />
                     <LandingTextArea label="Descripción (multi-profesor)" value={platformConfig.landing_content.about_description_multi}
@@ -1083,10 +1149,14 @@ export default function SettingsPage() {
                 <div>
                   <p className="text-xs font-black text-rose-600 uppercase tracking-widest mb-3">Videos</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <LandingField label="Título (individual)" value={platformConfig.landing_content.videos_title_single}
-                      onChange={v => updateLandingField('videos_title_single', v)} />
-                    <LandingField label="Título (multi-profesor)" value={platformConfig.landing_content.videos_title_multi}
-                      onChange={v => updateLandingField('videos_title_multi', v)} />
+                    <LandingTitleField label="Título (individual)" value={platformConfig.landing_content.videos_title_single}
+                      onChange={v => updateLandingField('videos_title_single', v)}
+                      gradientId={platformConfig.landing_content.title_gradients?.videos_title_single || ''}
+                      onGradientChange={v => updateTitleGradient('videos_title_single', v)} />
+                    <LandingTitleField label="Título (multi-profesor)" value={platformConfig.landing_content.videos_title_multi}
+                      onChange={v => updateLandingField('videos_title_multi', v)}
+                      gradientId={platformConfig.landing_content.title_gradients?.videos_title_multi || ''}
+                      onGradientChange={v => updateTitleGradient('videos_title_multi', v)} />
                     <div className="md:col-span-2">
                       <LandingTextArea label="Subtítulo" value={platformConfig.landing_content.videos_subtitle}
                         onChange={v => updateLandingField('videos_subtitle', v)} />
@@ -1099,8 +1169,10 @@ export default function SettingsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <LandingField label="Etiqueta" value={platformConfig.landing_content.plans_label}
                       onChange={v => updateLandingField('plans_label', v)} />
-                    <LandingField label="Título" value={platformConfig.landing_content.plans_title}
-                      onChange={v => updateLandingField('plans_title', v)} />
+                    <LandingTitleField label="Título" value={platformConfig.landing_content.plans_title}
+                      onChange={v => updateLandingField('plans_title', v)}
+                      gradientId={platformConfig.landing_content.title_gradients?.plans_title || ''}
+                      onGradientChange={v => updateTitleGradient('plans_title', v)} />
                     <div className="md:col-span-2">
                       <LandingTextArea label="Subtítulo" value={platformConfig.landing_content.plans_subtitle}
                         onChange={v => updateLandingField('plans_subtitle', v)} />
@@ -1112,8 +1184,10 @@ export default function SettingsPage() {
                   <p className="text-xs font-black text-rose-600 uppercase tracking-widest mb-3">Clases grupales</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="md:col-span-2">
-                      <LandingField label="Título" value={platformConfig.landing_content.group_plans_title}
-                        onChange={v => updateLandingField('group_plans_title', v)} />
+                      <LandingTitleField label="Título" value={platformConfig.landing_content.group_plans_title}
+                        onChange={v => updateLandingField('group_plans_title', v)}
+                        gradientId={platformConfig.landing_content.title_gradients?.group_plans_title || ''}
+                        onGradientChange={v => updateTitleGradient('group_plans_title', v)} />
                     </div>
                     <LandingTextArea label="Subtítulo (individual)" value={platformConfig.landing_content.group_plans_subtitle_single}
                       onChange={v => updateLandingField('group_plans_subtitle_single', v)} />
@@ -1136,10 +1210,14 @@ export default function SettingsPage() {
                 <div>
                   <p className="text-xs font-black text-rose-600 uppercase tracking-widest mb-3">Reseñas</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <LandingField label="Título (individual)" value={platformConfig.landing_content.reviews_title_single}
-                      onChange={v => updateLandingField('reviews_title_single', v)} />
-                    <LandingField label="Título (multi-profesor)" value={platformConfig.landing_content.reviews_title_multi}
-                      onChange={v => updateLandingField('reviews_title_multi', v)} />
+                    <LandingTitleField label="Título (individual)" value={platformConfig.landing_content.reviews_title_single}
+                      onChange={v => updateLandingField('reviews_title_single', v)}
+                      gradientId={platformConfig.landing_content.title_gradients?.reviews_title_single || ''}
+                      onGradientChange={v => updateTitleGradient('reviews_title_single', v)} />
+                    <LandingTitleField label="Título (multi-profesor)" value={platformConfig.landing_content.reviews_title_multi}
+                      onChange={v => updateLandingField('reviews_title_multi', v)}
+                      gradientId={platformConfig.landing_content.title_gradients?.reviews_title_multi || ''}
+                      onGradientChange={v => updateTitleGradient('reviews_title_multi', v)} />
                     <div className="md:col-span-2">
                       <LandingField label="Subtítulo" value={platformConfig.landing_content.reviews_subtitle}
                         onChange={v => updateLandingField('reviews_subtitle', v)} />
@@ -1150,8 +1228,10 @@ export default function SettingsPage() {
                 <div>
                   <p className="text-xs font-black text-rose-600 uppercase tracking-widest mb-3">Llamado a la acción final</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <LandingField label="Título" value={platformConfig.landing_content.cta_title}
-                      onChange={v => updateLandingField('cta_title', v)} />
+                    <LandingTitleField label="Título" value={platformConfig.landing_content.cta_title}
+                      onChange={v => updateLandingField('cta_title', v)}
+                      gradientId={platformConfig.landing_content.title_gradients?.cta_title || ''}
+                      onGradientChange={v => updateTitleGradient('cta_title', v)} />
                     <div className="md:col-span-2">
                       <LandingTextArea label="Subtítulo" value={platformConfig.landing_content.cta_subtitle}
                         onChange={v => updateLandingField('cta_subtitle', v)} />

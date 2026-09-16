@@ -526,7 +526,7 @@ export default function TeachersPage() {
                       </div>
                       
                       <div className="flex flex-col">
-                        <span className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Balance</span>
+                        <span className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Saldo disponible</span>
                         <span className="text-sm font-black text-emerald-500">
                           ${teacher.balance.toFixed(2)}
                         </span>

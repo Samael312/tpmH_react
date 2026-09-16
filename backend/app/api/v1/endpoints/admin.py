@@ -12,7 +12,7 @@ from app.models.user import User, UserRole
 from app.models.teacher import TeacherProfile, TeacherStatus
 from app.models.student import StudentProfile
 from app.models.class_ import Class
-from app.models.payment import Payment, Withdrawal
+from app.models.payment import Payment, Withdrawal, TeacherWallet
 from app.models.package import Enrollment, EnrollmentStatus
 from app.models.teacher_appeal import TeacherAppeal
 from app.models.notification import Notification
@@ -45,6 +45,20 @@ from app.schemas.support import (
 from app.models.payment_config import PlatformConfig
 from app.core.platform_config import get_or_create_platform_config, serialize_platform_config
 from app.api.v1.endpoints.public import invalidate_landing_cache
+
+
+def _get_teacher_wallet_balance(teacher_id: int, db: Session) -> float:
+    """
+    Corrección QA: TeacherProfile.balance es un campo legacy que nunca se
+    actualiza en ningún flujo (pagos, retiros, etc.) — el saldo real vive
+    en TeacherWallet.available_balance, que sí se mantiene al día con cada
+    pago validado. El listado/detalle de profesores en el panel de
+    superadmin debe reflejar ese saldo real, no el campo muerto.
+    Si el profesor todavía no tiene wallet creado (nunca cobró nada), el
+    saldo disponible es 0.0.
+    """
+    wallet = db.query(TeacherWallet).filter(TeacherWallet.teacher_id == teacher_id).first()
+    return wallet.available_balance if wallet else 0.0
 
 
 router = APIRouter()
@@ -238,7 +252,7 @@ def list_all_teachers(
             email=teacher.user.email,
             status=teacher.status,
             commission_rate=teacher.commission_rate,
-            balance=teacher.balance,
+            balance=_get_teacher_wallet_balance(teacher.id, db),
             total_classes=total_classes,
             total_students=total_students,
             created_at=teacher.created_at,
@@ -290,7 +304,7 @@ def get_teacher_detail(
         email=teacher.user.email,
         status=teacher.status,
         commission_rate=teacher.commission_rate,
-        balance=teacher.balance,
+        balance=_get_teacher_wallet_balance(teacher.id, db),
         total_classes=total_classes,
         total_students=total_students,
         created_at=teacher.created_at,

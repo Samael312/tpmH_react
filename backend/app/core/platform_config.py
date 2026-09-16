@@ -58,6 +58,11 @@ LANDING_CONTENT_DEFAULTS: dict = {
     "cta_title": "¿Listo para empezar?",
     "cta_subtitle": "Tu primera clase de prueba es gratuita. Sin compromisos, sin tarjeta de crédito.",
     "footer_tagline": "Empoderando estudiantes",
+    # Mapa campo_de_título -> id de gradiente predefinido (ver
+    # frontend/lib/gradientTitle.tsx). Las palabras a resaltar se marcan
+    # directamente en el texto de cada campo con {{palabra}}; acá solo se
+    # guarda qué gradiente aplica a cada campo (o ninguno).
+    "title_gradients": {},
 }
 
 
