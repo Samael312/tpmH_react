@@ -224,7 +224,7 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
       case "cohort-select":
         return (
           <SelectShell value={value} onChange={v => setValue(field.name, v)} disabled={!teacherId} loading={loadingCohorts}
-            placeholder={!teacherId ? "Elige un profesor primero" : "— sin cohorte (individual) —"}>
+            placeholder={!teacherId ? "Elige un profesor primero" : "— sin grupo (individual) —"}>
             {cohorts.map(c => (
               <option key={c.id} value={c.id}>
                 #{c.id} · {c.package_name} ({c.subject ?? "sin materia"}) · {c.current_students}/{c.max_students} · {c.status}

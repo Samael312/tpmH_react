@@ -174,7 +174,7 @@ def _require_cohort_scope(cohort: GroupCohort, current_user: User) -> None:
         if not teacher_profile or cohort.teacher_id != teacher_profile.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Como teacher_admin solo puedes usar el Modo Dios sobre tus propias cohortes.",
+                detail="Como teacher_admin solo puedes usar el Modo Dios sobre tus propios grupos.",
             )
 
 
@@ -501,7 +501,7 @@ def god_mode_change_package(
     if enrollment.cohort_id:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Este enrollment es grupal. Usa las herramientas de Modo Dios de cohortes "
+            "Este enrollment es grupal. Usa las herramientas de Modo Dios de grupos "
             "para mover/migrar alumnos de clases grupales.",
         )
 
@@ -512,7 +512,7 @@ def god_mode_change_package(
     if new_package.is_group:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "No se puede asignar un paquete grupal por esta vía. Usa las herramientas de cohortes.",
+            "No se puede asignar un paquete grupal por esta vía. Usa las herramientas de grupos.",
         )
 
     if new_package.teacher_id != enrollment.teacher_id:
@@ -590,24 +590,24 @@ def god_mode_move_cohort(
     if data.new_cohort_id is not None:
         new_cohort = db.query(GroupCohort).filter(GroupCohort.id == data.new_cohort_id).first()
         if not new_cohort:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte destino no encontrada")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Grupo destino no encontrado")
 
         if new_cohort.teacher_id != enrollment.teacher_id:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "La cohorte destino pertenece a otro profesor. Transfiere primero al "
+                "El grupo destino pertenece a otro profesor. Transfiere primero al "
                 "alumno de profesor con la herramienta correspondiente del Modo Dios.",
             )
 
         if new_cohort.id == old_cohort_id:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "El alumno ya está en esta cohorte")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "El alumno ya está en este grupo")
 
         if not data.force:
             current_count = get_cohort_active_count(new_cohort.id, db)
             if current_count >= new_cohort.max_students:
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    f"La cohorte destino ya está al máximo de cupo ({new_cohort.max_students}). "
+                    f"El grupo destino ya está al máximo de cupo ({new_cohort.max_students}). "
                     "Usa force=true si igual quieres moverlo.",
                 )
 
@@ -642,8 +642,8 @@ def god_mode_move_cohort(
     db.commit()
 
     if new_cohort:
-        return {"message": f"Alumno movido a la cohorte #{new_cohort.id} por Modo Dios."}
-    return {"message": "Alumno convertido a individual (fuera de cohorte) por Modo Dios."}
+        return {"message": f"Alumno movido al grupo #{new_cohort.id} por Modo Dios."}
+    return {"message": "Alumno convertido a individual (fuera de grupo) por Modo Dios."}
 
 
 @router.patch("/cohorts/{cohort_id}", response_model=GodModeCohortActionResponse)
@@ -662,7 +662,7 @@ def god_mode_edit_cohort(
     """
     cohort = db.query(GroupCohort).filter(GroupCohort.id == cohort_id).first()
     if not cohort:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Grupo no encontrado")
 
     _require_cohort_scope(cohort, current_user)
 
@@ -674,7 +674,7 @@ def god_mode_edit_cohort(
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 f"No puedes bajar el máximo a {data.max_students}: ya hay {current_count} "
-                "alumnos activos en esta cohorte.",
+                "alumnos activos en este grupo.",
             )
         cohort.max_students = data.max_students
     if data.min_students is not None:
@@ -701,7 +701,7 @@ def god_mode_edit_cohort(
     db.commit()
     db.refresh(cohort)
 
-    return {"message": "Cohorte editada por Modo Dios.", "cohort": _to_cohort_response(cohort, db)}
+    return {"message": "Grupo editado por Modo Dios.", "cohort": _to_cohort_response(cohort, db)}
 
 
 @router.post("/cohorts/{cohort_id}/reopen", response_model=GodModeCohortActionResponse)
@@ -726,14 +726,14 @@ def god_mode_reopen_cohort(
     """
     cohort = db.query(GroupCohort).filter(GroupCohort.id == cohort_id).first()
     if not cohort:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Grupo no encontrado")
 
     _require_cohort_scope(cohort, current_user)
 
     if cohort.status not in (CohortStatus.cancelled, CohortStatus.completed):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            f"Solo se pueden reabrir cohortes canceladas o completadas (estado actual: "
+            f"Solo se pueden reabrir grupos cancelados o completados (estado actual: "
             f"{cohort.status.value if hasattr(cohort.status, 'value') else cohort.status}).",
         )
 
@@ -760,7 +760,7 @@ def god_mode_reopen_cohort(
     db.commit()
     db.refresh(cohort)
 
-    return {"message": "Cohorte reabierta por Modo Dios.", "cohort": _to_cohort_response(cohort, db)}
+    return {"message": "Grupo reabierto por Modo Dios.", "cohort": _to_cohort_response(cohort, db)}
 
 
 # ─── CLASES ────────────────────────────────────────────────────────────────
@@ -1055,8 +1055,8 @@ def god_mode_hard_delete_class(
     if class_.class_type == ClassType.group:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "No se pueden eliminar sesiones grupales por esta vía. Cancela la cohorte "
-            "o la sesión puntual desde las herramientas de cohortes.",
+            "No se pueden eliminar sesiones grupales por esta vía. Cancela el grupo "
+            "o la sesión puntual desde las herramientas de grupos.",
         )
 
     before = _class_snapshot(class_)
@@ -1782,7 +1782,7 @@ def god_mode_lookup_teacher_cohorts(
     if current_user.role == UserRole.teacher_admin:
         teacher_profile = current_user.teacher_profile
         if not teacher_profile or teacher_id != teacher_profile.id:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Como teacher_admin solo puedes ver tus propias cohortes.")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Como teacher_admin solo puedes ver tus propios grupos.")
 
     cohorts = db.query(GroupCohort).filter(GroupCohort.teacher_id == teacher_id).order_by(GroupCohort.created_at.desc()).all()
     return [

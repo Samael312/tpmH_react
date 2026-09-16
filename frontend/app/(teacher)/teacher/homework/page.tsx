@@ -1125,7 +1125,7 @@ export default function HomeworkPage() {
                       <option value="">Ninguno (solo estudiantes seleccionados abajo)</option>
                       {cohorts.map(c => (
                         <option key={c.id} value={c.id}>
-                          {c.package_name ?? "Cohorte"} — {c.current_students} alumno{c.current_students !== 1 ? "s" : ""} ({c.status === "filling" ? "llenándose" : c.status === "confirmed" ? "confirmada" : "en curso"})
+                          {c.package_name ?? "Grupo"} — {c.current_students} alumno{c.current_students !== 1 ? "s" : ""} ({c.status === "filling" ? "llenándose" : c.status === "confirmed" ? "confirmado" : "en curso"})
                         </option>
                       ))}
                     </select>

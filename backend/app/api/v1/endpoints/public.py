@@ -58,6 +58,7 @@ class LandingResponse(BaseModel):
     platform_name: str
     platform_tagline: Optional[str] = None
     is_single_tenant: bool
+    landing_content: dict
     teachers: List[TeacherPublicResponse]
     reviews: List[LandingReviewOut]
     packages: List[LandingPackageOut]
@@ -182,6 +183,7 @@ def _build_landing_response(db: Session) -> LandingResponse:
         platform_name=cfg_data["platform_name"] or "TuProfeMaria",
         platform_tagline=cfg_data["platform_tagline"],
         is_single_tenant=is_single_tenant,
+        landing_content=cfg_data["landing_content"],
         teachers=teachers_out,
         reviews=reviews_out,
         packages=packages_out,

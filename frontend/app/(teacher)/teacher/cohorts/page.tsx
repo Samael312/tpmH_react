@@ -44,10 +44,10 @@ interface SessionParticipant {
 
 const STATUS_LABEL: Record<Cohort["status"], string> = {
   filling: "Llenándose",
-  confirmed: "Confirmada",
+  confirmed: "Confirmado",
   in_progress: "En curso",
-  completed: "Completada",
-  cancelled: "Cancelada",
+  completed: "Completado",
+  cancelled: "Cancelado",
 };
 
 const STATUS_BADGE: Record<Cohort["status"], "success" | "warning" | "info" | "neutral" | "danger"> = {
@@ -78,7 +78,7 @@ export default function TeacherCohortsPage() {
   const loading = loadingCohorts || loadingPackages;
   const isFetching = fetchingCohorts || fetchingPackages;
   const error = (cohortsError || packagesError)
-    ? "No pudimos cargar tus cohortes. Intenta de nuevo."
+    ? "No pudimos cargar tus grupos. Intenta de nuevo."
     : null;
 
   const loadData = useCallback(async () => {
@@ -216,9 +216,9 @@ export default function TeacherCohortsPage() {
       setShowCreate(false);
       setForm({ package_id: "", min_students: "3", max_students: "6" });
       await loadData();
-      toast.success("Cohorte creada correctamente");
+      toast.success("Grupo creado correctamente");
     } catch (err) {
-      toast.error(getErrorMessage(err, "No se pudo crear la cohorte"));
+      toast.error(getErrorMessage(err, "No se pudo crear el grupo"));
     } finally {
       setCreating(false);
     }
@@ -228,6 +228,13 @@ export default function TeacherCohortsPage() {
     if (!closingCohort) return;
     if (isFixedSchedule && !selectedRecurringStart) return;
     if (!isFixedSchedule && !closeForm.selectedSlot) return;
+    if (closingCohort.current_students < closingCohort.min_students) {
+      const ok = window.confirm(
+        `Estás cerrando este grupo con ${closingCohort.current_students} de ${closingCohort.min_students} alumnos mínimos sugeridos. ` +
+        `¿Confirmas que quieres iniciarla igual con menos integrantes?`
+      );
+      if (!ok) return;
+    }
     setActionLoading(true);
     try {
       // La fecha/hora elegida acá ya no es solo metadata: el backend usa
@@ -244,9 +251,9 @@ export default function TeacherCohortsPage() {
       setCloseForm({ date: "", selectedSlot: null, duration: String(rules.allowed_class_durations?.[0] ?? 50) });
       setSelectedRecurringStart(null);
       await loadData();
-      toast.success(isFixedSchedule ? "Cohorte cerrada — se agendaron todas las sesiones automáticamente" : "Cohorte cerrada e iniciada correctamente");
+      toast.success(isFixedSchedule ? "Grupo cerrado — se agendaron todas las sesiones automáticamente" : "Grupo cerrado e iniciado correctamente");
     } catch (err) {
-      toast.error(getErrorMessage(err, "No se pudo cerrar la cohorte"));
+      toast.error(getErrorMessage(err, "No se pudo cerrar el grupo"));
     } finally {
       setActionLoading(false);
     }
@@ -257,9 +264,9 @@ export default function TeacherCohortsPage() {
     try {
       await api.post(`/cohorts/${cohort.id}/cancel`);
       await loadData();
-      toast.success("Cohorte cancelada correctamente");
+      toast.success("Grupo cancelado correctamente");
     } catch (err) {
-      toast.error(getErrorMessage(err, "No se pudo cancelar la cohorte"));
+      toast.error(getErrorMessage(err, "No se pudo cancelar el grupo"));
     } finally {
       setActionLoading(false);
       setCancelTarget(null);
@@ -271,16 +278,16 @@ export default function TeacherCohortsPage() {
     try {
       await api.post(`/cohorts/${cohort.id}/complete`);
       await loadData();
-      toast.success("Cohorte finalizada correctamente");
+      toast.success("Grupo finalizado correctamente");
     } catch (err) {
-      toast.error(getErrorMessage(err, "No se pudo finalizar la cohorte"));
+      toast.error(getErrorMessage(err, "No se pudo finalizar el grupo"));
     } finally {
       setActionLoading(false);
       setCompleteTarget(null);
     }
   };
 
-  // Corrección QA: antes una cohorte cerrada por error (o que el profesor
+  // Corrección QA: antes un grupo cerrado por error (o que el profesor
   // quiere reabrir para seguir aceptando inscripciones) se quedaba
   // "confirmed" para siempre, sin forma de volver a "filling".
   const handleReopen = async (cohort: Cohort) => {
@@ -288,9 +295,9 @@ export default function TeacherCohortsPage() {
     try {
       await api.post(`/cohorts/${cohort.id}/reopen`);
       await loadData();
-      toast.success("Cohorte reabierta — vuelve a aceptar inscripciones");
+      toast.success("Grupo reabierto — vuelve a aceptar inscripciones");
     } catch (err) {
-      toast.error(getErrorMessage(err, "No se pudo reabrir la cohorte"));
+      toast.error(getErrorMessage(err, "No se pudo reabrir el grupo"));
     } finally {
       setActionLoading(false);
       setReopenTarget(null);
@@ -307,7 +314,7 @@ export default function TeacherCohortsPage() {
       });
       setEditingCohort(null);
       await loadData();
-      toast.success("Cupo de la cohorte actualizado");
+      toast.success("Cupo del grupo actualizado");
     } catch (err) {
       toast.error(getErrorMessage(err, "No se pudo actualizar el cupo"));
     } finally {
@@ -343,14 +350,14 @@ export default function TeacherCohortsPage() {
           <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2.5">
             <Users2 className="w-7 h-7 text-pink-500" /> Clases grupales
           </h1>
-          <p className="text-slate-500 mt-1">Gestiona tus cohortes: cupos, fecha de inicio y sesiones.</p>
+          <p className="text-sm text-slate-500 mt-1">Gestiona tus grupos: cupos, fecha de inicio y sesiones.</p>
         </div>
         <div className="flex items-center gap-2">
           <DesktopOnly>
             <RefreshButton onRefresh={loadData} isFetching={isFetching} />
           </DesktopOnly>
           <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus className="w-4 h-4" /> Nueva Grupo
+            <Plus className="w-4 h-4" /> Nuevo grupo
           </Button>
         </div>
       </div>
@@ -376,9 +383,9 @@ export default function TeacherCohortsPage() {
       {!loading && !error && cohorts.length === 0 && (
         <Card className="p-10 text-center">
           <Users2 className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-slate-600">Aún no tienes cohortes grupales</p>
+          <p className="text-sm font-semibold text-slate-600">Aún no tienes grupos</p>
           <p className="text-xs text-slate-400 mt-1">
-            Necesitas al menos un paquete marcado como grupal para poder abrir una cohorte.
+            Necesitas al menos un paquete marcado como grupal para poder abrir un grupo.
           </p>
         </Card>
       )}
@@ -414,7 +421,7 @@ export default function TeacherCohortsPage() {
             {!loading && !error && cohorts.length > 0 && visibleCohorts.length === 0 && (
               <Card className="p-8 text-center">
                 <p className="text-sm font-semibold text-slate-500">
-                  {cohortTab === "active" ? "No tienes cohortes activas por ahora." : "Todavía no hay cohortes en tu historial."}
+                  {cohortTab === "active" ? "No tienes grupos activos por ahora." : "Todavía no hay grupos en tu historial."}
                 </p>
               </Card>
             )}
@@ -477,7 +484,7 @@ export default function TeacherCohortsPage() {
                   <Pencil className="w-3.5 h-3.5" /> Editar cupo
                 </Button>
                 <Button size="sm" variant="danger" onClick={() => setCancelTarget(cohort)}>
-                  <Ban className="w-3.5 h-3.5" /> Cancelar cohorte
+                  <Ban className="w-3.5 h-3.5" /> Cancelar grupo
                 </Button>
               </div>
             )}
@@ -487,7 +494,7 @@ export default function TeacherCohortsPage() {
                   <Plus className="w-3.5 h-3.5" /> Agendar sesión
                 </Button>
                 <Button size="sm" variant="secondary" onClick={() => setCompleteTarget(cohort)}>
-                  <Check className="w-3.5 h-3.5" /> Finalizar cohorte
+                  <Check className="w-3.5 h-3.5" /> Finalizar grupo
                 </Button>
                 <Button
                   size="sm"
@@ -500,7 +507,7 @@ export default function TeacherCohortsPage() {
                   <RotateCcw className="w-3.5 h-3.5" /> Reabrir
                 </Button>
                 <Button size="sm" variant="danger" onClick={() => setCancelTarget(cohort)}>
-                  <Ban className="w-3.5 h-3.5" /> Cancelar cohorte
+                  <Ban className="w-3.5 h-3.5" /> Cancelar grupo
                 </Button>
               </div>
             )}
@@ -560,7 +567,7 @@ export default function TeacherCohortsPage() {
                 ) : sessionsByCohort[cohort.id].length === 0 ? (
                   <p className="text-xs text-slate-400">
                     {cohort.status === "filling"
-                      ? "Cierra la cohorte para poder agendar sesiones."
+                      ? "Cierra el grupo para poder agendar sesiones."
                       : "Todavía no hay sesiones agendadas."}
                   </p>
                 ) : (
@@ -679,7 +686,7 @@ export default function TeacherCohortsPage() {
       <FullScreenModal
         open={!!closingCohort}
         onClose={() => !actionLoading && setClosingCohort(null)}
-        title="Cerrar cohorte"
+        title="Cerrar grupo"
         footer={
           <Button
             className="w-full"
@@ -791,7 +798,7 @@ export default function TeacherCohortsPage() {
       >
         <div className="space-y-4">
           <p className="text-xs text-slate-500">
-            Se creará una sesión compartida e inscribirá automáticamente a todos los alumnos con pago confirmado de esta cohorte.
+            Se creará una sesión compartida e inscribirá automáticamente a todos los alumnos con pago confirmado de este grupo.
           </p>
 
           <GroupSessionSlotPicker
@@ -825,9 +832,9 @@ export default function TeacherCohortsPage() {
 
       <ConfirmModal
         open={!!cancelTarget}
-        title="Cancelar cohorte"
-        description={cancelTarget ? `¿Cancelar la cohorte de "${cancelTarget.package_name}"? Se cancelará la inscripción de los ${cancelTarget.current_students} alumno(s), quienes quedarán libres de elegir un nuevo paquete (individual u otra cohorte). También se cancelarán las sesiones futuras ya agendadas.` : ""}
-        confirmLabel="Cancelar cohorte"
+        title="Cancelar grupo"
+        description={cancelTarget ? `¿Cancelar el grupo de "${cancelTarget.package_name}"? Se cancelará la inscripción de los ${cancelTarget.current_students} alumno(s), quienes quedarán libres de elegir un nuevo paquete (individual u otro grupo). También se cancelarán las sesiones futuras ya agendadas.` : ""}
+        confirmLabel="Cancelar grupo"
         variant="danger"
         onClose={() => setCancelTarget(null)}
         onConfirm={() => { if (cancelTarget) return handleCancel(cancelTarget) }}
@@ -836,12 +843,12 @@ export default function TeacherCohortsPage() {
 
       <ConfirmModal
         open={!!completeTarget}
-        title="Finalizar cohorte"
+        title="Finalizar grupo"
         description={
           completeTarget
             ? (completeTarget.current_students < completeTarget.min_students
-              ? `Estás finalizando esta cohorte con ${completeTarget.current_students} de ${completeTarget.min_students} alumnos mínimos. Como quedó por debajo del mínimo, se cancelará la inscripción de todos y se les notificará para que elijan un nuevo paquete. ¿Confirmas?`
-              : "¿Marcar esta cohorte como finalizada? Se cancelará cualquier sesión futura que haya quedado agendada de más.")
+              ? `Estás finalizando este grupo con ${completeTarget.current_students} de ${completeTarget.min_students} alumnos mínimos. Como quedó por debajo del mínimo, se cancelará la inscripción de todos y se les notificará para que elijan un nuevo paquete. ¿Confirmas?`
+              : "¿Marcar este grupo como finalizado? Se cancelará cualquier sesión futura que haya quedado agendada de más.")
             : ""
         }
         confirmLabel="Finalizar"
@@ -853,8 +860,8 @@ export default function TeacherCohortsPage() {
 
       <ConfirmModal
         open={!!reopenTarget}
-        title="Reabrir cohorte"
-        description={reopenTarget ? `¿Reabrir la cohorte de "${reopenTarget.package_name}"? Volverá a estar "abierta" (aceptando inscripciones nuevas) y tendrás que cerrarla de nuevo para fijar una fecha de inicio.` : ""}
+        title="Reabrir grupo"
+        description={reopenTarget ? `¿Reabrir el grupo de "${reopenTarget.package_name}"? Volverá a estar "abierta" (aceptando inscripciones nuevas) y tendrás que cerrarla de nuevo para fijar una fecha de inicio.` : ""}
         confirmLabel="Reabrir"
         variant="primary"
         onClose={() => setReopenTarget(null)}
@@ -1162,7 +1169,7 @@ function AttendanceSummaryModal({ cohort, onClose }: { cohort: Cohort; onClose: 
     <FullScreenModal open onClose={onClose} title="Historial de asistencia">
       <div className="space-y-3">
         <p className="text-xs text-slate-500">
-          Sesiones ya realizadas de la cohorte de &quot;{cohort.package_name}&quot;.
+          Sesiones ya realizadas del grupo de &quot;{cohort.package_name}&quot;.
         </p>
         {error && <p className="text-xs font-bold text-rose-500">{error}</p>}
         {!summary ? (

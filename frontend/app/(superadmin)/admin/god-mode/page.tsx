@@ -31,7 +31,7 @@ export default function GodModePage() {
         <div>
           <h1 className="text-lg font-black">Modo Dios</h1>
           <p className="text-xs text-slate-300 mt-1 max-w-2xl">
-            Acciones que se saltan las reglas normales de negocio: créditos, paquetes, cohortes, clases, pagos y reseñas.
+            Acciones que se saltan las reglas normales de negocio: créditos, paquetes, grupos, clases, pagos y reseñas.
             Cada acción queda registrada con tu usuario y el motivo que escribas — no se puede deshacer desde acá.
           </p>
         </div>
@@ -41,7 +41,7 @@ export default function GodModePage() {
         <ShieldAlert className="w-4 h-4 flex-shrink-0" />
         {isSuperadmin
           ? "Como superadmin, estas acciones aplican sobre cualquier profesor o alumno de la plataforma."
-          : "Como teacher_admin, estas acciones solo aplican sobre tus propios alumnos y cohortes."}
+          : "Como teacher_admin, estas acciones solo aplican sobre tus propios alumnos y grupos."}
       </div>
 
       {/* Categorías: fila horizontal arriba, separadas visualmente de las acciones */}

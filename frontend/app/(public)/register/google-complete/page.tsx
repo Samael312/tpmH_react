@@ -11,10 +11,12 @@ import { usePlatformTenantMode } from "@/lib/platformTenantMode";
 import Skeleton from "@/components/ui/Skeleton";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { getErrorMessage } from "@/lib/errorMessage";
+import { useLandingData } from "@/hooks/useLandingData";
 
 export default function GoogleCompleteSignupPage() {
   const router = useRouter();
   const { login } = useAuthStore();
+  const { platformName } = useLandingData();
 
   const [idToken, setIdToken] = useState<string | null>(null);
   const [prefill, setPrefill] = useState<{ name?: string; surname?: string; email?: string; avatar?: string }>({});
@@ -120,7 +122,7 @@ export default function GoogleCompleteSignupPage() {
             </svg>
           </div>
           <span className="text-xl font-black tracking-tight text-slate-800 group-hover:text-pink-600 transition-colors">
-            TuProfeMaria
+            {platformName}
           </span>
         </Link>
       </header>

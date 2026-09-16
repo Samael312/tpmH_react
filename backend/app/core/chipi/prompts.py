@@ -81,10 +81,17 @@ def get_platform_context(platform_data: Optional[dict]) -> str:
         who = featured_name or "la profesora destacada de la plataforma"
         mode_block = f"""
 MODO DE PLATAFORMA: single-tenant ("{platform_name}")
-Esta instancia tiene UN SOLO profesor/a destacado: {who}.
-No existe pantalla de "elegir profesor" — todo estudiante nuevo se inscribe
-directamente con {who}. No le ofrezcas al usuario "elegir entre varios
-profesores": en este modo no aplica.
+Esta instancia tiene UN SOLO profesor/a: {who}. No hay marketplace, no hay
+directorio de profesores, y no existe pantalla de "elegir profesor" — todo
+estudiante nuevo se inscribe directamente con {who}.
+REGLA DURA para este modo: si te preguntan por "el profesor", "los
+profesores", o piden "elegir profesor"/"cambiar de profesor", la respuesta
+es siempre sobre {who} en singular. NUNCA menciones explorar, comparar,
+elegir entre varios profesores, ni un marketplace/directorio — esas
+funciones no existen en esta instancia, sin importar qué texto veas más
+abajo sobre "modo multi-tenant" en la descripción de alguna pantalla
+específica (esas aclaraciones son justamente para el caso contrario al
+actual).
 """
     else:
         mode_block = f"""
@@ -272,9 +279,20 @@ registrarse o escribir directamente al staff.
 # los que el usuario realmente ve en el menú (ver components/layout/NavBar.tsx
 # — si se agrega/renombra un ítem del menú, actualizar aquí también).
 
-def get_navigation_map(role: Optional[str]) -> str:
+def get_navigation_map(role: Optional[str], platform_data: Optional[dict] = None) -> str:
     if role == "student":
-        return """
+        is_single = bool((platform_data or {}).get("is_single_tenant", False))
+        featured_name = (platform_data or {}).get("featured_teacher_name")
+        if is_single:
+            teacher_line = (
+                f'- "Profesores" → perfil de {featured_name or "tu profesor/a"} '
+                "(en este modo hay un solo profesor en toda la plataforma; esta "
+                "pantalla NO es un directorio ni permite elegir entre varios, "
+                "solo muestra su perfil)"
+            )
+        else:
+            teacher_line = '- "Profesores" → explorar/elegir profesor'
+        return f"""
 MAPA DE NAVEGACIÓN DEL ESTUDIANTE (nombres reales del menú lateral/inferior):
 - "Inicio" → resumen general (próximas clases, progreso del paquete)
 - "Horario" → agendar una clase nueva
@@ -283,7 +301,7 @@ MAPA DE NAVEGACIÓN DEL ESTUDIANTE (nombres reales del menú lateral/inferior):
 - "Mis Clases" → historial completo, reagendar o cancelar
 - "Materiales" → recursos que asignó el profesor
 - "Mis Tareas" → tareas pendientes y calificadas
-- "Profesores" → explorar/elegir profesor (solo aplica en modo multi-tenant)
+{teacher_line}
 - "Soporte" → historial de tickets (los nuevos se abren desde el botón de
   Chipi, no desde esta pantalla)
 - "Mi Perfil" → datos personales, zona horaria, contraseña
@@ -794,7 +812,7 @@ def build_system_prompt(
         parts.append(get_public_context())
 
     # Mapa de navegación (una sola vez, no se repite por pantalla)
-    nav_map = get_navigation_map(role)
+    nav_map = get_navigation_map(role, platform_data)
     if nav_map:
         parts.append(nav_map)
 

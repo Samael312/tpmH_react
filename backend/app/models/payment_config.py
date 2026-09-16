@@ -20,6 +20,11 @@ class PlatformConfig(Base):
     # Nombre de la plataforma (personalizable)
     platform_name = Column(String, default="TPM")
     platform_tagline = Column(String, nullable=True)
+    # Contenido editable del landing (mini-CMS, ver N3). Estructura completa
+    # en app.core.platform_config.LANDING_CONTENT_DEFAULTS — acá solo se
+    # guardan los campos que el admin sobreescribió; el resto se completa
+    # con esos defaults en serialize_platform_config().
+    landing_content = Column(JSONB, nullable=True)
     # Modo de la plataforma
     is_single_tenant = Column(Boolean, default=True)
     # True  → un solo profesor featured, flujo directo

@@ -262,12 +262,12 @@ def edit_cohort(
         GroupCohort.teacher_id == current_user.teacher_profile.id,
     ).first()
     if not cohort:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada o no te pertenece")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Grupo no encontrado o no te pertenece")
 
     if cohort.status in (CohortStatus.completed, CohortStatus.cancelled):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "No se puede editar el cupo de una cohorte completada o cancelada.",
+            "No se puede editar el cupo de un grupo completado o cancelado.",
         )
 
     if data.min_students is None and data.max_students is None:
@@ -284,7 +284,7 @@ def edit_cohort(
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 f"No puedes bajar el máximo a {data.max_students}: ya hay {current_count} "
-                "alumnos activos en esta cohorte.",
+                "alumnos activos en este grupo.",
             )
         cohort.max_students = data.max_students
     if data.min_students is not None:
@@ -325,7 +325,7 @@ def get_cohort_members(
         GroupCohort.teacher_id == current_user.teacher_profile.id,
     ).first()
     if not cohort:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Grupo no encontrado")
 
     enrollments = db.query(Enrollment).filter(
         Enrollment.cohort_id == cohort.id,
@@ -369,7 +369,7 @@ def get_recurring_candidates(
         GroupCohort.teacher_id == current_user.teacher_profile.id,
     ).first()
     if not cohort:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Grupo no encontrado")
 
     package = cohort.package
     if package.group_schedule_mode != "fixed":
@@ -412,15 +412,15 @@ def close_cohort_endpoint(
         GroupCohort.teacher_id == current_user.teacher_profile.id,
     ).first()
     if not cohort:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Grupo no encontrado")
     if cohort.status != CohortStatus.filling:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Solo puedes cerrar una cohorte que esté abierta")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Solo puedes cerrar un grupo que esté abierto")
 
     current_count = get_cohort_active_count(cohort.id, db)
     if current_count == 0:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "No puedes cerrar una cohorte sin alumnos inscritos. Cancélala en su lugar."
+            "No puedes cerrar un grupo sin alumnos inscritos. Cancélalo en su lugar."
         )
 
     close_cohort(cohort, data.start_date, db)
@@ -531,9 +531,9 @@ def reopen_cohort_endpoint(
         GroupCohort.teacher_id == current_user.teacher_profile.id,
     ).first()
     if not cohort:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Grupo no encontrado")
     if cohort.status != CohortStatus.confirmed:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Solo puedes reabrir una cohorte que esté cerrada")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Solo puedes reabrir un grupo que esté cerrado")
 
     cohort.status = CohortStatus.filling
     cohort.start_date = None
@@ -559,9 +559,9 @@ def cancel_cohort_endpoint(
         GroupCohort.teacher_id == current_user.teacher_profile.id,
     ).first()
     if not cohort:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Grupo no encontrado")
     if cohort.status not in (CohortStatus.filling, CohortStatus.confirmed):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Esta cohorte ya no se puede cancelar")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este grupo ya no se puede cancelar")
 
     package_name = cohort.package.name if cohort.package else "el paquete grupal"
     affected = cancel_cohort(cohort, db)
@@ -612,11 +612,11 @@ def complete_cohort_endpoint(
         GroupCohort.teacher_id == current_user.teacher_profile.id,
     ).first()
     if not cohort:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Grupo no encontrado")
     if cohort.status not in (CohortStatus.confirmed, CohortStatus.in_progress):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Solo se puede finalizar una cohorte confirmada o en curso"
+            "Solo se puede finalizar un grupo confirmado o en curso"
         )
 
     active_count = get_cohort_active_count(cohort.id, db)
@@ -725,7 +725,7 @@ def _create_group_session(
     if not active_enrollments:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "No hay alumnos con pago confirmado en esta cohorte todavía."
+            "No hay alumnos con pago confirmado en este grupo todavía."
         )
 
     end_time_utc = start_time_utc + timedelta(minutes=duration_minutes)
@@ -864,11 +864,11 @@ def create_group_session(
         GroupCohort.teacher_id == current_user.teacher_profile.id,
     ).first()
     if not cohort:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Grupo no encontrado")
     if cohort.status != CohortStatus.confirmed:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Solo puedes agendar sesiones de una cohorte confirmada (ciérrala primero)."
+            "Solo puedes agendar sesiones de un grupo confirmado (ciérralo primero)."
         )
 
     new_class = _create_group_session(cohort, current_user, data.start_time_utc, data.duration_minutes, db)
@@ -893,7 +893,7 @@ def get_cohort_attendance_summary(
         GroupCohort.teacher_id == current_user.teacher_profile.id,
     ).first()
     if not cohort:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Grupo no encontrado")
 
     past_sessions = db.query(Class).filter(
         Class.cohort_id == cohort_id,
@@ -941,7 +941,7 @@ def get_cohort_sessions(
     """Visible tanto para el profesor como para los alumnos de la cohorte."""
     cohort = db.query(GroupCohort).filter(GroupCohort.id == cohort_id).first()
     if not cohort:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Grupo no encontrado")
 
     is_owner_teacher = (
         current_user.teacher_profile is not None
@@ -955,7 +955,7 @@ def get_cohort_sessions(
         ).first() is not None
 
     if not (is_owner_teacher or is_enrolled_student or current_user.role == UserRole.superadmin):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "No tenés acceso a esta cohorte")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "No tenés acceso a este grupo")
 
     sessions = db.query(Class).filter(
         Class.cohort_id == cohort_id,
@@ -1085,14 +1085,14 @@ def enroll_in_cohort(
         GroupCohort.status.in_([CohortStatus.filling, CohortStatus.confirmed, CohortStatus.in_progress]),
     ).first()
     if not cohort:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cohorte no encontrada o ya no acepta inscripciones")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Grupo no encontrado o ya no acepta inscripciones")
 
     package = db.query(Package).filter(Package.id == cohort.package_id).first()
     teacher = db.query(TeacherProfile).filter(TeacherProfile.id == cohort.teacher_id).first()
 
     current_count = get_cohort_active_count(cohort.id, db)
     if current_count >= cohort.max_students:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Esta cohorte ya no tiene cupo disponible")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este grupo ya no tiene cupo disponible")
 
     already_enrolled = db.query(Enrollment).filter(
         Enrollment.cohort_id == cohort.id,
@@ -1100,7 +1100,7 @@ def enroll_in_cohort(
         Enrollment.status.notin_(["cancelled"]),
     ).first()
     if already_enrolled:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya estás inscrito en esta cohorte")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya estás inscrito en este grupo")
 
     # D12: inscripción tardía -- si la cohorte ya está 'confirmed'/
     # 'in_progress' y ya dictó sesiones, no se cobra el precio completo:
@@ -1113,7 +1113,7 @@ def enroll_in_cohort(
     if package.classes_count is not None and remaining_classes is not None and remaining_classes <= 0:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Esta cohorte ya dictó todas sus clases, no admite nuevas inscripciones.",
+            "Este grupo ya dictó todas sus clases, no admite nuevas inscripciones.",
         )
 
     from app.api.v1.endpoints.payments import _ensure_teacher_linked
@@ -1180,7 +1180,7 @@ def leave_cohort(
         Enrollment.status.notin_(["cancelled"]),
     ).first()
     if not enrollment:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No estás inscrito en esta cohorte")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No estás inscrito en este grupo")
 
     release_cohort_seat(enrollment, db)
     enrollment.status = EnrollmentStatus.cancelled

@@ -1,5 +1,6 @@
 import { cache } from "react";
 import type { LandingData } from "@/hooks/useLandingData";
+import { LANDING_CONTENT_DEFAULTS } from "@/hooks/useLandingData";
 
 // Solo se importa desde Server Components (app/page.tsx). No usar desde
 // código "use client" — ahí corresponde el hook useLandingData/axios normal.
@@ -46,6 +47,7 @@ export const getLandingDataServer = cache(async (): Promise<LandingData | null> 
       teachers: data.teachers ?? [],
       reviews: data.reviews ?? [],
       packages: data.packages ?? [],
+      landingContent: { ...LANDING_CONTENT_DEFAULTS, ...(data.landing_content ?? {}) },
     };
   } catch (err) {
     // Server logs (Railway/Vercel/etc): esto es lo único que nos avisa si

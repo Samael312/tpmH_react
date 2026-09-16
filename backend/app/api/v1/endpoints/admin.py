@@ -58,6 +58,10 @@ class PlatformConfigUpdate(BaseModel):
     is_single_tenant: Optional[bool] = None
     featured_teacher_username: Optional[str] = None
     show_teacher_whatsapp: Optional[bool] = None
+    # Mini-CMS del landing (N3). El admin siempre manda el objeto completo
+    # (todas las claves de LANDING_CONTENT_DEFAULTS) — se guarda tal cual,
+    # se completa contra los defaults recién al leer (ver get_landing_content).
+    landing_content: Optional[dict] = None
 
 
 # ─── DEPENDENCIES ───────────────────────────────────────────────────────────
@@ -1006,6 +1010,8 @@ def update_platform_config(
         config.is_single_tenant = data.is_single_tenant
     if data.show_teacher_whatsapp is not None:
         config.show_teacher_whatsapp = data.show_teacher_whatsapp
+    if data.landing_content is not None:
+        config.landing_content = data.landing_content
 
     switching_to_multi = (
         was_single_tenant

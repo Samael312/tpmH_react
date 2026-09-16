@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useLandingData } from "@/hooks/useLandingData";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -47,17 +48,18 @@ const GOOGLE_POLICY_LINK_EN = (
   </a>
 );
 
-const SECTIONS_ES: LegalSection[] = [
+function getSectionsEs(platformName: string): LegalSection[] {
+  return [
   {
     title: "1. Responsable del tratamiento",
     body: (
       <>
         <p>
-          Esta plataforma (&quot;TuProfeMaria&quot;, &quot;la
+          Esta plataforma (&quot;{platformName}&quot;, &quot;la
           Plataforma&quot;, &quot;nosotros&quot;) es operada por{" "}
           <strong>María Farías</strong>, persona física, con residencia
           fiscal en <strong>Venezuela</strong>, actuando bajo el nombre
-          comercial <strong>TuProfeMaria</strong>, accesible en{" "}
+          comercial <strong>{platformName}</strong>, accesible en{" "}
           <strong>tuprofemaria.com</strong>.
         </p>
         <p>
@@ -128,10 +130,10 @@ const SECTIONS_ES: LegalSection[] = [
           <li><strong>Resend</strong> — envío de correos transaccionales.</li>
           <li>Nuestro proveedor de hosting y base de datos.</li>
         </ul>
-        <p className="mt-2">También podemos divulgar datos si la ley lo exige, o para proteger derechos, seguridad o propiedad de TuProfeMaria, sus usuarios o terceros.</p>
+        <p className="mt-2">También podemos divulgar datos si la ley lo exige, o para proteger derechos, seguridad o propiedad de {platformName}, sus usuarios o terceros.</p>
         <p className="mt-2 text-slate-500 italic">
           El uso y la transferencia de información recibida a través de las
-          APIs de Google por parte de TuProfeMaria se adhiere a la{" "}
+          APIs de Google por parte de {platformName} se adhiere a la{" "}
           {GOOGLE_POLICY_LINK_ES}, incluyendo los requisitos de Uso Limitado
           (Limited Use).
         </p>
@@ -226,19 +228,21 @@ const SECTIONS_ES: LegalSection[] = [
     title: "13. Contacto",
     body: <p>Para cualquier consulta, escribinos a {MAIL_LINK}.</p>,
   },
-];
+  ];
+}
 
-const SECTIONS_EN: LegalSection[] = [
+function getSectionsEn(platformName: string): LegalSection[] {
+  return [
   {
     title: "1. Data Controller",
     body: (
       <>
         <p>
-          This platform (&quot;TuProfeMaria&quot;, &quot;the
+          This platform (&quot;{platformName}&quot;, &quot;the
           Platform&quot;, &quot;we&quot;) is operated by{" "}
           <strong>María Farías</strong>, a natural person with tax
           residency in <strong>Venezuela</strong>, doing business as{" "}
-          <strong>TuProfeMaria</strong>, available at{" "}
+          <strong>{platformName}</strong>, available at{" "}
           <strong>tuprofemaria.com</strong>.
         </p>
         <p>
@@ -308,9 +312,9 @@ const SECTIONS_EN: LegalSection[] = [
           <li><strong>Resend</strong> — transactional email delivery.</li>
           <li>Our hosting and database provider.</li>
         </ul>
-        <p className="mt-2">We may also disclose data when required by law, or to protect the rights, safety, or property of TuProfeMaria, our users, or third parties.</p>
+        <p className="mt-2">We may also disclose data when required by law, or to protect the rights, safety, or property of {platformName}, our users, or third parties.</p>
         <p className="mt-2 text-slate-500 italic">
-          TuProfeMaria&apos;s use and transfer of information received
+          {platformName}&apos;s use and transfer of information received
           from Google APIs adheres to the {GOOGLE_POLICY_LINK_EN},
           including the Limited Use requirements.
         </p>
@@ -401,11 +405,13 @@ const SECTIONS_EN: LegalSection[] = [
     title: "13. Contact",
     body: <p>For any question, write to us at {MAIL_LINK}.</p>,
   },
-];
+  ];
+}
 
 export default function PrivacyContent() {
+  const { platformName } = useLandingData();
   const [lang, setLang] = useState<"es" | "en">("es");
-  const sections = lang === "es" ? SECTIONS_ES : SECTIONS_EN;
+  const sections = lang === "es" ? getSectionsEs(platformName) : getSectionsEn(platformName);
   const lastUpdated =
     lang === "es"
       ? "Última actualización: 4 de septiembre de 2026"
@@ -421,7 +427,7 @@ export default function PrivacyContent() {
             </svg>
           </div>
           <span className="text-xl font-black tracking-tight text-slate-800 group-hover:text-pink-600 transition-colors">
-            TuProfeMaria
+            {platformName}
           </span>
         </Link>
 

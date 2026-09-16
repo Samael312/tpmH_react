@@ -12,11 +12,13 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { getErrorMessage } from "@/lib/errorMessage";
 import { useToast } from "@/hooks/useToast";
+import { useLandingData } from "@/hooks/useLandingData";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuthStore();
   const toast = useToast();
+  const { platformName } = useLandingData();
 
   const [form, setForm] = useState({ login: "", password: "" });
   const [showPw, setShowPw] = useState(false);
@@ -218,7 +220,7 @@ export default function LoginPage() {
             </svg>
           </div>
           <span className="text-xl font-black tracking-tight text-slate-800 group-hover:text-pink-600 transition-colors">
-            TuProfeMaria
+            {platformName}
           </span>
         </Link>
       </header>

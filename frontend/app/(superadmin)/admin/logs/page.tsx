@@ -15,7 +15,7 @@ export default function LogsPage() {
           <h1 className="text-lg font-black">Logs</h1>
           <p className="text-xs text-slate-300 mt-1 max-w-2xl">
             Errores de backend (excepciones no controladas y problemas de negocio en pagos,
-            clases, cohortes y paquetes) y de frontend (crashes de React y llamadas a la API
+            clases, grupos y paquetes) y de frontend (crashes de React y llamadas a la API
             fallidas), con la pantalla donde ocurrieron y el usuario afectado cuando se pudo
             identificar.
           </p>

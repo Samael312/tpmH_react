@@ -584,7 +584,7 @@ export default function TeacherPackagesPage() {
                 <div className="sm:col-span-2 space-y-3 pt-2 border-t border-slate-100">
                   <div className="flex items-center justify-between">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      Paquete grupal (clases compartidas por cohorte)
+                      Paquete grupal (clases compartidas por grupo)
                     </label>
                     <button
                       type="button"
@@ -602,13 +602,13 @@ export default function TeacherPackagesPage() {
                   {form.is_group && (
                     <div className="animate-in fade-in duration-300 space-y-3">
                       <p className="text-[11px] text-slate-500 font-medium">
-                        Los alumnos se inscriben en cohortes con cupo mínimo/máximo; no admite pago en cuotas
-                        (se cobra el total al inscribirse). Crea las cohortes desde la pestaña &quot;Grupos&quot;.
+                        Los alumnos se inscriben en grupos con cupo mínimo/máximo; no admite pago en cuotas
+                        (se cobra el total al inscribirse). Crea los grupos desde la pestaña &quot;Grupos&quot;.
                       </p>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                            Mín. alumnos por cohorte
+                            Mín. alumnos por grupo
                           </label>
                           <input
                             type="text"
@@ -620,7 +620,7 @@ export default function TeacherPackagesPage() {
                         </div>
                         <div>
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                            Máx. alumnos por cohorte
+                            Máx. alumnos por grupo
                           </label>
                           <input
                             type="text"

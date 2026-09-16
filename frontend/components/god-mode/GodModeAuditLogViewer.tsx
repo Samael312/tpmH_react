@@ -8,6 +8,13 @@ import RefreshButton from "@/components/ui/RefreshButton";
 
 const ENTITY_TYPES = ["enrollment", "cohort", "class", "payment", "student", "review"];
 
+// Solo para mostrar: el valor interno ("cohort") sigue siendo el que espera
+// el filtro del backend, esto únicamente traduce el texto visible al admin.
+const ENTITY_LABELS: Record<string, string> = { cohort: "Grupo" };
+function entityLabel(entityType: string) {
+  return ENTITY_LABELS[entityType] ?? entityType;
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("es-ES", {
     day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
@@ -24,7 +31,7 @@ function DiffRow({ entry }: { entry: GodModeAuditLogEntry }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="pink">{entry.action}</Badge>
-            <Badge variant="neutral">{entry.entity_type} #{entry.entity_id}</Badge>
+            <Badge variant="neutral">{entityLabel(entry.entity_type)} #{entry.entity_id}</Badge>
             <Badge variant={entry.actor_role === "superadmin" ? "gold" : "info"}>{entry.actor_role}</Badge>
           </div>
           <p className="text-sm text-slate-700 mt-2">{entry.reason}</p>
@@ -85,7 +92,7 @@ export default function GodModeAuditLogViewer() {
             className="text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600"
           >
             <option value="">Todas las entidades</option>
-            {ENTITY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            {ENTITY_TYPES.map(t => <option key={t} value={t}>{entityLabel(t)}</option>)}
           </select>
           <RefreshButton onRefresh={refetch} isFetching={isFetching} />
         </div>

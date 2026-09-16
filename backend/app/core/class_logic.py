@@ -381,7 +381,7 @@ def can_join_group_class(
         return False, "Esta clase no es grupal"
 
     if not class_.cohort_id:
-        return False, "Esta clase grupal no está asociada a ninguna cohorte"
+        return False, "Esta clase grupal no está asociada a ningún grupo"
 
     active_participants = len([
         p for p in class_.participants if p.attendance_status != "cancelled"

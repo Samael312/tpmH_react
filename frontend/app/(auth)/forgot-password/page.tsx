@@ -7,10 +7,12 @@ import { Mail, ArrowLeft, Check, User } from "lucide-react";
 import axios from "axios";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import { useLandingData } from "@/hooks/useLandingData";
 
 type Mode = "password" | "username";
 
 export default function ForgotPasswordPage() {
+  const { platformName } = useLandingData();
   const [mode, setMode] = useState<Mode>("password");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -63,7 +65,7 @@ const handleSubmit = async (e: React.SubmitEvent) => {
                           bg-white p-2">
             <Image
               src="/assets/logo.png"
-              alt="TuProfeMaria"
+              alt={platformName}
               width={56}
               height={56}
               className="object-contain w-full h-full"

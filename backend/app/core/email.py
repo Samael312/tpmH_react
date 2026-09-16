@@ -273,7 +273,7 @@ def send_cohort_ended_email(
     body = f"""
       <p>Hola {student_name}, tu grupo de <strong style="color:{COLOR_INK};">{package_name}</strong> terminó porque {reason_text}.</p>
       {credit_line}
-      <p style="font-size:13px;color:{COLOR_MUTED};">Puedes elegir un paquete individual u otra cohorte con cupo disponible desde tu panel.</p>
+      <p style="font-size:13px;color:{COLOR_MUTED};">Puedes elegir un paquete individual u otro grupo con cupo disponible desde tu panel.</p>
       {_cta_button("Elegir nuevo paquete", f"{settings.FRONTEND_URL}/dashboard/schedule")}
     """
     html = _base_template("Tu grupo terminó", _badge("Grupo finalizado", COLOR_AMBER), "Tu grupo terminó 👥", body)

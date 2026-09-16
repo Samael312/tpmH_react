@@ -69,7 +69,7 @@ def create_homework(
         if not cohort_student_ids:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Cohorte no encontrada, no te pertenece, o no tiene integrantes activos"
+                detail="Grupo no encontrado, no te pertenece, o no tiene integrantes activos"
             )
         for sid in cohort_student_ids:
             if sid not in target_ids:
@@ -78,7 +78,7 @@ def create_homework(
     if not target_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Debes indicar al menos un estudiante o una cohorte"
+            detail="Debes indicar al menos un estudiante o un grupo"
         )
 
     homework = Homework(

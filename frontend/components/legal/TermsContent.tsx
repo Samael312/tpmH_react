@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useLandingData } from "@/hooks/useLandingData";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -25,13 +26,14 @@ const MAIL_LINK = (
   </a>
 );
 
-const SECTIONS_ES: LegalSection[] = [
+function getSectionsEs(platformName: string): LegalSection[] {
+  return [
   {
     title: "1. Aceptación de los Términos",
     body: (
       <p>
         Estos Términos de Servicio (&quot;Términos&quot;) regulan el uso
-        de la plataforma <strong>TuProfeMaria</strong>, disponible en{" "}
+        de la plataforma <strong>{platformName}</strong>, disponible en{" "}
         <strong>tuprofemaria.com</strong> (&quot;la Plataforma&quot;),
         operada por <strong>María Farías</strong>, persona física con
         residencia fiscal en <strong>Venezuela</strong>. Al registrarte o
@@ -45,7 +47,7 @@ const SECTIONS_ES: LegalSection[] = [
     body: (
       <>
         <p>
-          TuProfeMaria es una plataforma que conecta estudiantes con
+          {platformName} es una plataforma que conecta estudiantes con
           profesores de idiomas o diversas áreas para clases individuales y grupales,
           gestiona la disponibilidad de los profesores, la reserva de
           clases, paquetes de crédito, tareas y materiales de estudio, y
@@ -53,7 +55,7 @@ const SECTIONS_ES: LegalSection[] = [
           profesores.
         </p>
         <p>
-          TuProfeMaria actúa como <strong>intermediario</strong> entre
+          {platformName} actúa como <strong>intermediario</strong> entre
           estudiantes y profesores independientes. No somos empleadores de
           los profesores ni garantizamos resultados académicos
           específicos.
@@ -78,7 +80,7 @@ const SECTIONS_ES: LegalSection[] = [
       <p>
         Los profesores se registran de forma independiente y su perfil
         queda sujeto a un proceso de aprobación (que incluye la
-        presentación de un video de presentación). TuProfeMaria puede
+        presentación de un video de presentación). {platformName} puede
         rechazar o suspender un perfil de profesor a su discreción. Los
         profesores son responsables del contenido y la calidad de las
         clases que imparten.
@@ -90,7 +92,7 @@ const SECTIONS_ES: LegalSection[] = [
     body: (
       <ul className="list-disc pl-5 space-y-1">
         <li>Los pagos se gestionan de forma <strong>manual</strong>: el estudiante sube un comprobante de pago, que es revisado y validado antes de acreditar el paquete o las clases.</li>
-        <li>TuProfeMaria no procesa ni almacena datos de tarjetas de pago directamente.</li>
+        <li>{platformName} no procesa ni almacena datos de tarjetas de pago directamente.</li>
         <li>Los paquetes pueden pagarse en cuotas. El acceso a determinados beneficios puede estar condicionado a estar al día con las cuotas pendientes.</li>
         <li>Las políticas de cancelación, reprogramación y reembolso específicas se comunican dentro de la Plataforma y pueden variar según el profesor o el tipo de paquete contratado.</li>
       </ul>
@@ -127,10 +129,10 @@ const SECTIONS_ES: LegalSection[] = [
     title: "8. Propiedad intelectual",
     body: (
       <p>
-        El nombre TuProfeMaria, su logo, diseño y el software subyacente
-        son propiedad de María Farías / TuProfeMaria. Los materiales
+        El nombre {platformName}, su logo, diseño y el software subyacente
+        son propiedad de María Farías / {platformName}. Los materiales
         educativos subidos por los profesores siguen siendo propiedad de
-        sus autores, quienes otorgan a TuProfeMaria una licencia limitada
+        sus autores, quienes otorgan a {platformName} una licencia limitada
         para almacenarlos y mostrarlos dentro de la Plataforma.
       </p>
     ),
@@ -141,7 +143,7 @@ const SECTIONS_ES: LegalSection[] = [
       <p>
         La Plataforma se ofrece &quot;tal cual&quot; y &quot;según
         disponibilidad&quot;. En la medida permitida por la ley aplicable,
-        TuProfeMaria no será responsable por daños indirectos,
+        {platformName} no será responsable por daños indirectos,
         incidentales o consecuentes derivados del uso de la Plataforma.
         Nada en esta cláusula limita derechos que no puedan excluirse
         legalmente en tu jurisdicción.
@@ -183,15 +185,17 @@ const SECTIONS_ES: LegalSection[] = [
     title: "13. Contacto",
     body: <p>Para cualquier consulta, escribinos a {MAIL_LINK}.</p>,
   },
-];
+  ];
+}
 
-const SECTIONS_EN: LegalSection[] = [
+function getSectionsEn(platformName: string): LegalSection[] {
+  return [
   {
     title: "1. Acceptance of Terms",
     body: (
       <p>
         These Terms of Service (&quot;Terms&quot;) govern the use of the{" "}
-        <strong>TuProfeMaria</strong> platform, available at{" "}
+        <strong>{platformName}</strong> platform, available at{" "}
         <strong>tuprofemaria.com</strong> (&quot;the Platform&quot;),
         operated by <strong>María Farías</strong>, a natural person with
         tax residency in <strong>Venezuela</strong>. By registering or
@@ -205,14 +209,14 @@ const SECTIONS_EN: LegalSection[] = [
     body: (
       <>
         <p>
-          TuProfeMaria is a platform that connects students with language
+          {platformName} is a platform that connects students with language
           teachers for individual and group classes, manages teacher
           availability, class booking, credit packages, homework and
           study materials, and facilitates manual payment validation
           between students and teachers.
         </p>
         <p>
-          TuProfeMaria acts as an <strong>intermediary</strong> between
+          {platformName} acts as an <strong>intermediary</strong> between
           students and independent teachers. We are not the teachers&apos;
           employer and do not guarantee specific academic outcomes.
         </p>
@@ -236,7 +240,7 @@ const SECTIONS_EN: LegalSection[] = [
       <p>
         Teachers register independently and their profile is subject to
         an approval process (including submitting a presentation video).
-        TuProfeMaria may reject or suspend a teacher profile at its
+        {platformName} may reject or suspend a teacher profile at its
         discretion. Teachers are responsible for the content and quality
         of the classes they teach.
       </p>
@@ -247,7 +251,7 @@ const SECTIONS_EN: LegalSection[] = [
     body: (
       <ul className="list-disc pl-5 space-y-1">
         <li>Payments are handled <strong>manually</strong>: the student uploads a payment receipt, which is reviewed and validated before the package or classes are credited.</li>
-        <li>TuProfeMaria does not process or store card payment data directly.</li>
+        <li>{platformName} does not process or store card payment data directly.</li>
         <li>Packages may be paid in installments. Access to certain benefits may be conditioned on being up to date with pending installments.</li>
         <li>Specific cancellation, rescheduling, and refund policies are communicated within the Platform and may vary by teacher or package type.</li>
       </ul>
@@ -284,10 +288,10 @@ const SECTIONS_EN: LegalSection[] = [
     title: "8. Intellectual Property",
     body: (
       <p>
-        The TuProfeMaria name, logo, design, and underlying software are
-        the property of María Farías / TuProfeMaria. Educational
+        The {platformName} name, logo, design, and underlying software are
+        the property of María Farías / {platformName}. Educational
         materials uploaded by teachers remain the property of their
-        authors, who grant TuProfeMaria a limited license to store and
+        authors, who grant {platformName} a limited license to store and
         display them within the Platform.
       </p>
     ),
@@ -298,7 +302,7 @@ const SECTIONS_EN: LegalSection[] = [
       <p>
         The Platform is provided &quot;as is&quot; and &quot;as
         available&quot;. To the extent permitted by applicable law,
-        TuProfeMaria is not liable for indirect, incidental, or
+        {platformName} is not liable for indirect, incidental, or
         consequential damages arising from use of the Platform. Nothing
         in this clause limits rights that cannot be legally excluded in
         your jurisdiction.
@@ -338,11 +342,13 @@ const SECTIONS_EN: LegalSection[] = [
     title: "13. Contact",
     body: <p>For any question, write to us at {MAIL_LINK}.</p>,
   },
-];
+  ];
+}
 
 export default function TermsContent() {
+  const { platformName } = useLandingData();
   const [lang, setLang] = useState<"es" | "en">("es");
-  const sections = lang === "es" ? SECTIONS_ES : SECTIONS_EN;
+  const sections = lang === "es" ? getSectionsEs(platformName) : getSectionsEn(platformName);
   const lastUpdated =
     lang === "es"
       ? "Última actualización: 4 de septiembre de 2026"
@@ -358,7 +364,7 @@ export default function TermsContent() {
             </svg>
           </div>
           <span className="text-xl font-black tracking-tight text-slate-800 group-hover:text-pink-600 transition-colors">
-            TuProfeMaria
+            {platformName}
           </span>
         </Link>
 

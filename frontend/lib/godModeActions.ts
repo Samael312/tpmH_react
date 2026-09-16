@@ -65,7 +65,7 @@ export interface GodModeAction {
   id: string;
   label: string;
   description: string;
-  category: "Créditos y Paquetes" | "Cohortes" | "Clases" | "Pagos" | "Alumnos" | "Reseñas";
+  category: "Créditos y Paquetes" | "Grupos" | "Clases" | "Pagos" | "Alumnos" | "Reseñas";
   method: "patch" | "post" | "delete";
   /** Construye la URL a partir de los valores de los campos marcados isPathParam */
   buildUrl: (v: Record<string, string>) => string;
@@ -138,9 +138,9 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
   // ── Cohortes ──────────────────────────────────────────────────────
   {
     id: "enrollment.move_cohort",
-    label: "Mover alumno a otra cohorte / a individual",
-    description: "Cambia al alumno de cohorte (mismo profesor) o lo convierte a individual si dejas la cohorte destino vacía.",
-    category: "Cohortes",
+    label: "Mover alumno a otro grupo / a individual",
+    description: "Cambia al alumno de grupo (mismo profesor) o lo convierte a individual si dejas el grupo destino vacío.",
+    category: "Grupos",
     method: "post",
     buildUrl: v => `/god-mode/enrollments/${v.enrollment_id}/move-cohort`,
     fields: [
@@ -148,21 +148,21 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
       { name: "student_id", label: "Alumno", type: "student-select", required: true, dependsOn: ["teacher_id"], excludeFromPayload: true },
       { name: "enrollment_id", label: "Enrollment del alumno", type: "enrollment-select", required: true, dependsOn: ["teacher_id", "student_id"], isPathParam: true },
       { name: "credit_info", label: "", type: "credit-info", dependsOn: ["enrollment_id"], excludeFromPayload: true },
-      { name: "new_cohort_id", label: "Cohorte destino (vacío = individual)", type: "cohort-select", dependsOn: ["teacher_id"] },
-      { name: "force", label: "Forzar aunque la cohorte destino no tenga cupo", type: "checkbox" },
+      { name: "new_cohort_id", label: "Grupo destino (vacío = individual)", type: "cohort-select", dependsOn: ["teacher_id"] },
+      { name: "force", label: "Forzar aunque el grupo destino no tenga cupo", type: "checkbox" },
       { name: "reset_classes_used", label: "Reiniciar clases usadas a 0", type: "checkbox" },
     ],
   },
   {
     id: "cohort.edit",
-    label: "Editar cupos / fecha de una cohorte",
-    description: "Edita min/max de alumnos o la fecha de inicio de una cohorte ya creada.",
-    category: "Cohortes",
+    label: "Editar cupos / fecha de un grupo",
+    description: "Edita min/max de alumnos o la fecha de inicio de un grupo ya creado.",
+    category: "Grupos",
     method: "patch",
     buildUrl: v => `/god-mode/cohorts/${v.cohort_id}`,
     fields: [
       { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true, excludeFromPayload: true },
-      { name: "cohort_id", label: "Cohorte", type: "cohort-select", required: true, dependsOn: ["teacher_id"], isPathParam: true },
+      { name: "cohort_id", label: "Grupo", type: "cohort-select", required: true, dependsOn: ["teacher_id"], isPathParam: true },
       { name: "min_students", label: "Mínimo de alumnos", type: "number", optionalNumber: true },
       { name: "max_students", label: "Máximo de alumnos", type: "number", optionalNumber: true },
       { name: "start_date", label: "Fecha de inicio", type: "datetime" },
@@ -170,14 +170,14 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
   },
   {
     id: "cohort.reopen",
-    label: "Reabrir cohorte cancelada / completada",
-    description: "Devuelve la cohorte a 'filling' (acepta inscripciones) o 'confirmed'. No revive enrollments/clases ya canceladas.",
-    category: "Cohortes",
+    label: "Reabrir grupo cancelado / completado",
+    description: "Devuelve el grupo a 'filling' (acepta inscripciones) o 'confirmed'. No revive enrollments/clases ya canceladas.",
+    category: "Grupos",
     method: "post",
     buildUrl: v => `/god-mode/cohorts/${v.cohort_id}/reopen`,
     fields: [
       { name: "teacher_id", label: "Profesor", type: "teacher-select", required: true, excludeFromPayload: true },
-      { name: "cohort_id", label: "Cohorte", type: "cohort-select", required: true, dependsOn: ["teacher_id"], isPathParam: true },
+      { name: "cohort_id", label: "Grupo", type: "cohort-select", required: true, dependsOn: ["teacher_id"], isPathParam: true },
       { name: "new_status", label: "Nuevo estado", type: "select", options: [
         { value: "filling", label: "filling (vuelve a aceptar inscripciones)" },
         { value: "confirmed", label: "confirmed (fecha ya fija)" },
@@ -382,5 +382,5 @@ export const GOD_MODE_ACTIONS: GodModeAction[] = [
 ];
 
 export const GOD_MODE_CATEGORIES = [
-  "Créditos y Paquetes", "Cohortes", "Clases", "Pagos", "Alumnos", "Reseñas",
+  "Créditos y Paquetes", "Grupos", "Clases", "Pagos", "Alumnos", "Reseñas",
 ] as const;

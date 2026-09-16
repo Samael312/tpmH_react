@@ -9,8 +9,10 @@ import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import Skeleton from "@/components/ui/Skeleton";
 import { getErrorMessage } from "@/lib/errorMessage";
+import { useLandingData } from "@/hooks/useLandingData";
 
 function ResetPasswordForm() {
+  const { platformName } = useLandingData();
   const searchParams = useSearchParams();
   const router = useRouter();
   const token = searchParams.get("token");
@@ -176,7 +178,7 @@ export default function ResetPasswordPage() {
         <div className="relative w-full max-w-sm sm:max-w-md animate-in fade-in slide-in-from-bottom-6 duration-500">
           <div className="flex flex-col items-center mb-8">
             <div className="w-14 h-14 rounded-[1.25rem] overflow-hidden shadow-xl shadow-pink-200 mb-4 bg-white p-2">
-              <Image src="/assets/logo.png" alt="TuProfeMaria" width={56} height={56} className="object-contain w-full h-full" />
+              <Image src="/assets/logo.png" alt={platformName} width={56} height={56} className="object-contain w-full h-full" />
             </div>
             <h1 className="text-2xl font-black text-slate-800 tracking-tight">Nueva contraseña</h1>
             <p className="text-slate-500 text-sm mt-1 text-center">Elige una contraseña segura</p>

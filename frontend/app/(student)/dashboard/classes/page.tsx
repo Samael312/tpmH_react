@@ -161,7 +161,7 @@ function CancelModal({
               Saliste del grupo
             </h2>
             <p className="text-sm text-slate-500">
-              Ya no formas parte de esa cohorte. Cuando quieras, puedes elegir un
+              Ya no formas parte de ese grupo. Cuando quieras, puedes elegir un
               nuevo paquete individual o unirte a otro grupo.
             </p>
           </div>
@@ -220,7 +220,7 @@ function CancelModal({
               className="w-full text-left px-5 py-4 rounded-2xl border-2 border-slate-100 hover:border-red-300 hover:bg-red-50/50 transition-all"
             >
               <p className="text-sm font-black text-slate-800">Salir de todo el grupo</p>
-              <p className="text-xs text-slate-500 mt-0.5">Pierdes tu cupo en todas las sesiones futuras de esta cohorte.</p>
+              <p className="text-xs text-slate-500 mt-0.5">Pierdes tu cupo en todas las sesiones futuras de este grupo.</p>
             </button>
           </div>
           <button
@@ -260,7 +260,7 @@ function CancelModal({
                 Esto te saca de <span className="font-bold text-slate-700">todo el grupo</span>,
                 no solo de la clase del{" "}
                 <span className="font-bold text-slate-700 capitalize">{dateFormatted}</span>.
-                Perderás tu cupo en todas las próximas sesiones de esta cohorte.
+                Perderás tu cupo en todas las próximas sesiones de este grupo.
                 Podrás elegir un nuevo paquete después. Esta acción no se puede deshacer.
               </>
             ) : isGroup ? (

@@ -25,6 +25,7 @@ import { usePlatformTenantMode } from "@/lib/platformTenantMode";
 import Skeleton from "@/components/ui/Skeleton";
 import { getErrorMessage } from "@/lib/errorMessage";
 import { capitalizeWords } from "@/lib/textFormat";
+import { useLandingData } from "@/hooks/useLandingData";
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
   return (
@@ -61,6 +62,7 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { platformName } = useLandingData();
   const login = useAuthStore((state) => state.login);
   const [step, setStep] = useState(1);
 
@@ -225,7 +227,7 @@ export default function RegisterPage() {
               </svg>
             </div>
             <span className="text-xl font-black tracking-tight text-slate-800 group-hover:text-pink-600 transition-colors">
-              TuProfeMaria
+              {platformName}
             </span>
           </Link>
         </header>

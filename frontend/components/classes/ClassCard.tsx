@@ -324,7 +324,7 @@ export default function ClassCard({
   const executeLeaveGroup = async () => {
     setUpdating(true); setError("");
     try {
-      if (!class_.cohort_id) throw new Error("Esta clase grupal no tiene cohorte asociada");
+      if (!class_.cohort_id) throw new Error("Esta clase grupal no tiene grupo asociado");
       await api.post(`/cohorts/${class_.cohort_id}/leave`);
       toast.success("Clase cancelada correctamente");
       onUpdate?.();
@@ -755,7 +755,7 @@ export default function ClassCard({
         <ConfirmModal
           open
           title="¿Salir del grupo?"
-          description="Esto te saca de TODO el grupo, no solo de esta clase. Perderás tu cupo en todas las próximas sesiones de esta cohorte y podrás elegir un nuevo paquete después."
+          description="Esto te saca de TODO el grupo, no solo de esta clase. Perderás tu cupo en todas las próximas sesiones de este grupo y podrás elegir un nuevo paquete después."
           confirmLabel="Salir del grupo"
           variant="danger"
           loading={updating}

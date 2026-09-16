@@ -514,6 +514,7 @@ export interface AdminPlatformConfig {
     subjects: string[] | null
   } | null
   featured_teacher_username?: string
+  landing_content: import("./useLandingData").LandingContent
 }
 
 export function useAdminPlatformConfig() {

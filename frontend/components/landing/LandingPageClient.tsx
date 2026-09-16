@@ -120,7 +120,7 @@ function TeacherAvatar({ teacher, className, sizes = "200px", priority = false, 
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function LandingPageClient({ initialData }: { initialData?: LandingData | null }) {
-  const { loading, isError, refetch, isSingleTenant, teachers, reviews, packages, platformName, platformTagline } = useLandingData(initialData);
+  const { loading, isError, refetch, isSingleTenant, teachers, reviews, packages, platformName, platformTagline, landingContent: lc } = useLandingData(initialData);
   const isMobileOrReducedMotion = useIsMobileOrReducedMotion();
   // null = todavía no se sabe (primer paint) -> no montamos nada hasta confirmar
   // que corresponde, así el chunk de three.js ni se descarga en mobile.
@@ -198,21 +198,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.1] mb-6 drop-shadow-sm text-balance">
-              {isSingleTenant ? (
-                <>
-                  Aprende idiomas{" "}
-                  <span className="bg-gradient-to-r from-rose-500 to-pink-500 bg-clip-text text-transparent">
-                    a tu ritmo
-                  </span>
-                </>
-              ) : (
-                <>
-                  El conocimiento que buscas,{" "}
-                  <span className="bg-gradient-to-r from-rose-500 to-pink-500 bg-clip-text text-transparent">
-                    como tú lo prefieres
-                  </span>
-                </>
-              )}
+              {isSingleTenant ? lc.hero_title_single : lc.hero_title_multi}
             </h1>
 
             <p className="text-xl text-slate-700 leading-relaxed mb-8 max-w-xl mx-auto lg:mx-0 font-semibold">
@@ -344,11 +330,11 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                 <VideoIcon className="w-3.5 h-3.5" /> Presentaciones
               </p>
               <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tight mb-4">
-                {isSingleTenant ? "Escucha a tu profesora" : "Escucha a nuestros profesores"}
+                {isSingleTenant ? lc.videos_title_single : lc.videos_title_multi}
               </h2>
               <div className="w-20 h-1 bg-gradient-to-r from-rose-500 to-transparent rounded-full mx-auto my-4" />
               <p className="text-slate-400 max-w-lg mx-auto text-lg font-light">
-                Antes de reservar tu clase, mira quién estará al otro lado de la pantalla.
+                {lc.videos_subtitle}
               </p>
             </Reveal>
 
@@ -374,15 +360,13 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 z-10">
           <Reveal className="text-center mb-16">
             <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-3">
-              {isSingleTenant ? "Sobre mí" : "Nuestro equipo"}
+              {isSingleTenant ? lc.about_label_single : lc.about_label_multi}
             </p>
             <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">
-              {isSingleTenant ? "Conoceme un poco mejor" : "Conoce a nuestros profesores"}
+              {isSingleTenant ? lc.about_title_single : lc.about_title_multi}
             </h2>
             <p className="text-slate-500 max-w-xl mx-auto leading-relaxed text-lg">
-              {isSingleTenant
-                ? "Una apasionada del idioma con años de experiencia enseñando a estudiantes de todos los niveles y países."
-                : "Un equipo de profesores certificados, cada uno con su propia especialidad, listos para acompañarte."}
+              {isSingleTenant ? lc.about_description_single : lc.about_description_multi}
             </p>
           </Reveal>
 
@@ -486,9 +470,9 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-200/40 mix-blend-multiply rounded-full blur-[120px] pointer-events-none" />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 z-10">
           <Reveal className="text-center mb-20">
-            <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-3">Planes y precios</p>
-            <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">Elige tu plan</h2>
-            <p className="text-slate-500 max-w-xl mx-auto text-lg">Sin contratos. Sin letra pequeña. Solo aprendizaje.</p>
+            <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-3">{lc.plans_label}</p>
+            <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">{lc.plans_title}</h2>
+            <p className="text-slate-500 max-w-xl mx-auto text-lg">{lc.plans_subtitle}</p>
           </Reveal>
 
           {loading ? (
@@ -584,37 +568,19 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                 <Users className="w-3.5 h-3.5" /> Clases grupales
               </p>
               <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">
-                Aprende en grupo, paga menos
+                {lc.group_plans_title}
               </h2>
               <p className="text-slate-500 max-w-xl mx-auto text-lg">
-                {isSingleTenant
-                  ? "Comparte la clase con otros estudiantes de tu nivel y ahorra frente al plan individual."
-                  : "Varios de nuestros profesores arman grupos reducidos por nivel e idioma. Comparten la clase, comparten el precio."}
+                {isSingleTenant ? lc.group_plans_subtitle_single : lc.group_plans_subtitle_multi}
               </p>
             </Reveal>
 
             {/* Cómo funciona */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-16">
-              {[
-                {
-                  step: "1",
-                  title: "Te inscribes",
-                  desc: "Eliges un paquete grupal y reservas tu cupo. Cada grupo tiene un mínimo y un máximo de alumnos.",
-                },
-                {
-                  step: "2",
-                  title: "Se completa el grupo",
-                  desc: "Cuando se alcanza el mínimo de estudiantes, el horario del grupo queda confirmado para todos.",
-                },
-                {
-                  step: "3",
-                  title: "Empiezan las clases",
-                  desc: "Si el grupo no se llega a completar, siempre puedes pasar tu cupo a clases individuales.",
-                },
-              ].map((s, idx) => (
-                <Reveal key={s.step} delay={idx * 120} className="bg-white rounded-[1.75rem] border border-slate-100 shadow-sm p-6 flex flex-col items-center text-center">
+              {lc.group_steps.map((s, idx) => (
+                <Reveal key={idx} delay={idx * 120} className="bg-white rounded-[1.75rem] border border-slate-100 shadow-sm p-6 flex flex-col items-center text-center">
                   <div className="w-10 h-10 rounded-full bg-rose-600 text-white font-black flex items-center justify-center mb-4">
-                    {s.step}
+                    {idx + 1}
                   </div>
                   <h3 className="font-extrabold text-slate-900 mb-2">{s.title}</h3>
                   <p className="text-sm text-slate-500 leading-relaxed">{s.desc}</p>
@@ -636,12 +602,12 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
           <Reveal className="text-center mb-16">
             <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-3">Testimonios</p>
             <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">
-              {isSingleTenant ? "Lo que dicen mis alumnos" : "Historias de Éxito"}
+              {isSingleTenant ? lc.reviews_title_single : lc.reviews_title_multi}
             </h2>
             <div className="flex items-center justify-center gap-2">
               <div className="flex">{[1,2,3,4,5].map(i => <Star key={i} className="w-5 h-5 text-amber-400 fill-amber-400" />)}</div>
               <span className="text-slate-900 font-extrabold">{avgRating.toFixed(1)}</span>
-              <span className="text-slate-500 text-lg">Personas reales, resultados reales.</span>
+              <span className="text-slate-500 text-lg">{lc.reviews_subtitle}</span>
             </div>
           </Reveal>
 
@@ -687,9 +653,9 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[40rem] h-[40rem] bg-rose-200/40 rounded-full mix-blend-multiply blur-3xl pointer-events-none" />
 
         <Reveal className="relative max-w-2xl mx-auto px-4 sm:px-6 text-center z-10">
-          <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">¿Listo para empezar?</h2>
+          <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">{lc.cta_title}</h2>
           <p className="text-slate-500 text-lg mb-8 leading-relaxed font-medium">
-            Tu primera clase de prueba es gratuita. Sin compromisos, sin tarjeta de crédito.
+            {lc.cta_subtitle}
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/register" className="px-8 py-4 bg-slate-900 text-white font-bold text-sm rounded-full shadow-xl shadow-slate-900/10 hover:shadow-2xl hover:scale-105 transition-all duration-300">
@@ -732,7 +698,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
                 Contacto
               </a>
             </div>
-            <p className="text-slate-600 text-xs uppercase tracking-widest font-bold">Empoderando estudiantes</p>
+            <p className="text-slate-600 text-xs uppercase tracking-widest font-bold">{lc.footer_tagline}</p>
           </div>
         </div>
       </footer>

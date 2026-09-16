@@ -525,7 +525,7 @@ def request_package_change(
     if new_package.is_group:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No puedes cambiarte a un paquete grupal por esta vía. Inscríbete a una cohorte disponible desde el perfil del profesor."
+            detail="No puedes cambiarte a un paquete grupal por esta vía. Inscríbete a un grupo disponible desde el perfil del profesor."
         )
 
     if new_package.id == current_enrollment.package_id:

@@ -47,6 +47,38 @@ export interface LandingPackage {
   max_students: number | null;
 }
 
+export interface LandingGroupStep {
+  title: string;
+  desc: string;
+}
+
+export interface LandingContent {
+  hero_title_single: string;
+  hero_title_multi: string;
+  about_label_single: string;
+  about_label_multi: string;
+  about_title_single: string;
+  about_title_multi: string;
+  about_description_single: string;
+  about_description_multi: string;
+  videos_title_single: string;
+  videos_title_multi: string;
+  videos_subtitle: string;
+  plans_label: string;
+  plans_title: string;
+  plans_subtitle: string;
+  group_plans_title: string;
+  group_plans_subtitle_single: string;
+  group_plans_subtitle_multi: string;
+  group_steps: LandingGroupStep[];
+  reviews_title_single: string;
+  reviews_title_multi: string;
+  reviews_subtitle: string;
+  cta_title: string;
+  cta_subtitle: string;
+  footer_tagline: string;
+}
+
 interface LandingData {
   isSingleTenant: boolean;
   teachers: LandingTeacher[];
@@ -54,7 +86,47 @@ interface LandingData {
   packages: LandingPackage[];
   platformName: string;
   platformTagline: string | null;
+  landingContent: LandingContent;
 }
+
+// Espejo de LANDING_CONTENT_DEFAULTS en backend/app/core/platform_config.py —
+// se usa como fallback antes de que cargue el fetch, o si falla del todo.
+// El backend siempre manda el objeto completo (mergeado con lo que haya
+// guardado el admin), así que en la práctica esto solo se ve un instante.
+export const LANDING_CONTENT_DEFAULTS: LandingContent = {
+  hero_title_single: "Aprende idiomas a tu ritmo",
+  hero_title_multi: "El conocimiento que buscas, como tú lo prefieres",
+  about_label_single: "Sobre mí",
+  about_label_multi: "Nuestro equipo",
+  about_title_single: "Conoceme un poco mejor",
+  about_title_multi: "Conoce a nuestros profesores",
+  about_description_single:
+    "Una apasionada del idioma con años de experiencia enseñando a estudiantes de todos los niveles y países.",
+  about_description_multi:
+    "Un equipo de profesores certificados, cada uno con su propia especialidad, listos para acompañarte.",
+  videos_title_single: "Escucha a tu profesora",
+  videos_title_multi: "Escucha a nuestros profesores",
+  videos_subtitle: "Antes de reservar tu clase, mira quién estará al otro lado de la pantalla.",
+  plans_label: "Planes y precios",
+  plans_title: "Elige tu plan",
+  plans_subtitle: "Sin contratos. Sin letra pequeña. Solo aprendizaje.",
+  group_plans_title: "Aprende en grupo, paga menos",
+  group_plans_subtitle_single:
+    "Comparte la clase con otros estudiantes de tu nivel y ahorra frente al plan individual.",
+  group_plans_subtitle_multi:
+    "Varios de nuestros profesores arman grupos reducidos por nivel e idioma. Comparten la clase, comparten el precio.",
+  group_steps: [
+    { title: "Te inscribes", desc: "Eliges un paquete grupal y reservas tu cupo. Cada grupo tiene un mínimo y un máximo de alumnos." },
+    { title: "Se completa el grupo", desc: "Cuando se alcanza el mínimo de estudiantes, el horario del grupo queda confirmado para todos." },
+    { title: "Empiezan las clases", desc: "Si el grupo no se llega a completar, siempre puedes pasar tu cupo a clases individuales." },
+  ],
+  reviews_title_single: "Lo que dicen mis alumnos",
+  reviews_title_multi: "Historias de Éxito",
+  reviews_subtitle: "Personas reales, resultados reales.",
+  cta_title: "¿Listo para empezar?",
+  cta_subtitle: "Tu primera clase de prueba es gratuita. Sin compromisos, sin tarjeta de crédito.",
+  footer_tagline: "Empoderando estudiantes",
+};
 
 async function fetchLandingData(): Promise<LandingData> {
   try {
@@ -68,6 +140,7 @@ async function fetchLandingData(): Promise<LandingData> {
       teachers: data.teachers ?? [],
       reviews: data.reviews ?? [],
       packages: data.packages ?? [],
+      landingContent: { ...LANDING_CONTENT_DEFAULTS, ...(data.landing_content ?? {}) },
     };
   } catch (err) {
     // Antes esto se perdía en un .catch(() => []) silencioso por cada
@@ -120,6 +193,7 @@ export function useLandingData(initialData?: LandingData | null) {
     packages: data?.packages ?? [],
     platformName: data?.platformName ?? "TuProfeMaria",
     platformTagline: data?.platformTagline ?? null,
+    landingContent: data?.landingContent ?? LANDING_CONTENT_DEFAULTS,
     refetch,
   };
 }

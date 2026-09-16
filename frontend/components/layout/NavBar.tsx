@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useUnreadNotificationCount } from "@/hooks/useAdminData";
 import { useUnreadSupportCount } from "@/hooks/useSupport";
+import { useLandingData } from "@/hooks/useLandingData";
 
 import { useMobileTopBar } from "@/lib/mobileTopBar";
 import RefreshButton from "@/components/ui/RefreshButton";
@@ -170,6 +171,7 @@ function getServerMountedSnapshot() { return false; }
 export default function DashboardSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
+  const { platformName } = useLandingData();
   const [collapsed, setCollapsed] = useState(false);
   const isMounted = useSyncExternalStore(subscribeNoop, getMountedSnapshot, getServerMountedSnapshot);
 
@@ -224,7 +226,7 @@ export default function DashboardSidebar() {
             <div className="relative w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-400 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-lg shadow-pink-200 transform hover:rotate-12 transition-transform overflow-hidden">
               <Image
                 src="/assets/logo.png"
-                alt="TPM"
+                alt={platformName}
                 fill
                 sizes="40px"
                 className="object-contain p-1.5"
@@ -232,7 +234,7 @@ export default function DashboardSidebar() {
             </div>
             {!collapsed && (
               <div className="animate-in fade-in duration-300">
-                <span className="font-black text-lg text-slate-800 tracking-tight block leading-none">TuProfeMaria</span>
+                <span className="font-black text-lg text-slate-800 tracking-tight block leading-none">{platformName}</span>
                 <span className="text-[11px] font-bold text-pink-400 uppercase tracking-widest">Portal</span>
               </div>
             )}

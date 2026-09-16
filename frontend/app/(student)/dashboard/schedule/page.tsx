@@ -791,7 +791,7 @@ function GroupPackagesBrowser({
       toast.success("Inscripción al grupo enviada correctamente");
       setTimeout(onEnrolled, 1200);
     } catch (e) {
-      const msg = getErrorMessage(e, "Error al inscribirte en la cohorte");
+      const msg = getErrorMessage(e, "Error al inscribirte en el grupo");
       setError(msg);
     } finally {
       setJoining(false);
@@ -815,7 +815,7 @@ function GroupPackagesBrowser({
         <Skeleton className="h-16 rounded-2xl" />
       ) : !anyCohortAvailable ? (
         <p className="text-xs text-slate-400 font-bold">
-          No hay cohortes con cupo disponible en este momento.
+          No hay grupos con cupo disponible en este momento.
         </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -846,7 +846,7 @@ function GroupPackagesBrowser({
                 onClick={() => { setJoined(false); setConfirming({ pkg, cohort }); setReference(""); setError(""); }}
                 className="mt-1 w-full py-2.5 text-xs font-bold text-white rounded-xl bg-indigo-500 hover:bg-indigo-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
               >
-                Unirme a esta cohorte
+                Unirme a este grupo
               </button>
             </div>
           )))}
@@ -887,7 +887,7 @@ function GroupPackagesBrowser({
                 <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 flex gap-3 items-start">
                   <Check className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
                   <p className="text-sm font-bold text-emerald-700">
-                    Te inscribiste en la cohorte. Tu profesor(a) confirmará tu pago en breve.
+                    Te inscribiste en el grupo. Tu profesor(a) confirmará tu pago en breve.
                   </p>
                 </div>
               ) : (
@@ -1554,7 +1554,7 @@ export default function SchedulePage() {
             <div>
               <p className="text-sm font-black text-indigo-800">Este es un paquete grupal</p>
               <p className="text-xs text-indigo-700 mt-0.5">
-                Las sesiones de tu cohorte las agenda tu profesor(a) para todo el grupo — no eliges un horario
+                Las sesiones de tu grupo las agenda tu profesor(a) para todo el grupo — no eliges un horario
                 individual acá. Revisa tu <Link href="/dashboard" className="underline font-bold">panel principal</Link> para
                 ver tus próximas clases.
               </p>

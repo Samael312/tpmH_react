@@ -1529,7 +1529,7 @@ def notify_payment(
             if package.is_group:
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    "No puedes unirte a un paquete grupal por esta vía. Inscríbete a una cohorte disponible."
+                    "No puedes unirte a un paquete grupal por esta vía. Inscríbete a un grupo disponible."
                 )
 
             stage = get_student_booking_stage(student_id, package.teacher_id, db)
@@ -1575,7 +1575,7 @@ def notify_payment(
         if new_package.is_group:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "No puedes renovar hacia un paquete grupal por esta vía. Inscríbete a una cohorte disponible."
+                "No puedes renovar hacia un paquete grupal por esta vía. Inscríbete a un grupo disponible."
             )
 
         existing_renewal = db.query(Enrollment).filter(
@@ -1636,7 +1636,7 @@ def notify_payment(
         if new_package.is_group:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "No puedes unirte a un paquete grupal por esta vía. Inscríbete a una cohorte disponible."
+                "No puedes unirte a un paquete grupal por esta vía. Inscríbete a un grupo disponible."
             )
 
         # D7: mínimo de clases YA COMPLETADAS configurable por el admin
@@ -2064,13 +2064,13 @@ def request_refund_cohort_cancelled(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado")
 
     if not enrollment.cohort_id:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este paquete no es una cohorte grupal")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este paquete no es grupal")
 
     cohort = db.query(GroupCohort).filter(GroupCohort.id == enrollment.cohort_id).first()
     if not cohort or cohort.status != CohortStatus.cancelled:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Este reembolso solo aplica cuando la cohorte fue cancelada por el profesor."
+            "Este reembolso solo aplica cuando el grupo fue cancelado por el profesor."
         )
 
     if enrollment.payment_status != "paid":

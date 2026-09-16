@@ -249,7 +249,7 @@ function AssignModal({
                   <option value="">Ninguno (solo estudiantes seleccionados abajo)</option>
                   {cohorts.map(c => (
                     <option key={c.id} value={c.id}>
-                      {c.package_name ?? "Cohorte"} — {c.current_students} alumno{c.current_students !== 1 ? "s" : ""}
+                      {c.package_name ?? "Grupo"} — {c.current_students} alumno{c.current_students !== 1 ? "s" : ""}
                     </option>
                   ))}
                 </select>

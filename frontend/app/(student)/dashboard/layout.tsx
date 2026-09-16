@@ -6,6 +6,7 @@ import { useAuthStore } from "@/store/authStore";
 import api from "@/lib/api";
 import NavBar from "@/components/layout/NavBar";
 import DashboardTopbar from "@/components/layout/DashboardTopbar";
+import { useLandingData } from "@/hooks/useLandingData";
 
 const FULLSCREEN_ROUTES = ["/dashboard/onboarding"];
 
@@ -13,6 +14,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   const router = useRouter();
   const pathname = usePathname();
   const { user, token, setUser, hasHydrated } = useAuthStore();
+  const { platformName } = useLandingData();
   const [checked, setChecked] = useState(false);
 
   const isFullscreen = FULLSCREEN_ROUTES.some((r) => pathname.startsWith(r));
@@ -108,7 +110,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
           <div className="max-w-7xl mx-auto px-6 py-8 md:px-10 md:py-4 min-h-full flex flex-col">
             <div className="flex-1">{children}</div>
             <footer className="text-center py-6 mt-12 text-slate-400 text-sm font-medium border-t border-slate-200/60">
-              © {new Date().getFullYear()} TuProfeMaria. Todos los derechos reservados.
+              © {new Date().getFullYear()} {platformName}. Todos los derechos reservados.
             </footer>
           </div>
         </div>

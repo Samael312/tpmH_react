@@ -332,6 +332,40 @@ function BufferMinutesEditor({ label, value, onChange, hint }: {
   )
 }
 
+// Input de una línea para un campo de texto del CMS del landing (N3).
+function LandingField({ label, value, onChange }: {
+  label: string; value: string; onChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300 transition-all"
+      />
+    </div>
+  )
+}
+
+// Igual que LandingField pero para textos más largos (descripciones, subtítulos).
+function LandingTextArea({ label, value, onChange }: {
+  label: string; value: string; onChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        rows={2}
+        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300 transition-all resize-none"
+      />
+    </div>
+  )
+}
+
 const TABS = [
   { key: 'platform', label: 'Plataforma', icon: '🏳️', dot: 'bg-pink-500' },
   { key: 'payments', label: 'Pagos', icon: '💳', dot: 'bg-emerald-400' },
@@ -403,6 +437,25 @@ export default function SettingsPage() {
     setPlatformDirty(true)
   }
 
+  const updateLandingField = (key: keyof AdminPlatformConfig['landing_content'], value: string) => {
+    if (!platformConfig) return
+    updatePlatformConfig({
+      ...platformConfig,
+      landing_content: { ...platformConfig.landing_content, [key]: value },
+    })
+  }
+
+  const updateGroupStep = (idx: number, field: 'title' | 'desc', value: string) => {
+    if (!platformConfig) return
+    const steps = platformConfig.landing_content.group_steps.map((s, i) =>
+      i === idx ? { ...s, [field]: value } : s
+    )
+    updatePlatformConfig({
+      ...platformConfig,
+      landing_content: { ...platformConfig.landing_content, group_steps: steps },
+    })
+  }
+
   const updateBusinessRules = (next: BusinessRules) => {
     setBusinessRules(next)
     setRulesDirty(true)
@@ -467,6 +520,7 @@ export default function SettingsPage() {
         is_single_tenant: platformConfig?.is_single_tenant,
         show_teacher_whatsapp: platformConfig?.show_teacher_whatsapp,
         featured_teacher_username: platformConfig?.featured_teacher_username || null,
+        landing_content: platformConfig?.landing_content,
       })
       setPlatformDirty(false)
       await refetchPlatformConfig()
@@ -985,6 +1039,132 @@ export default function SettingsPage() {
                   </p>
                 </div>
               )}
+
+              {/* ─── N3: Contenido editable del landing (mini-CMS) ─── */}
+              <div className="pt-6 mt-2 border-t border-slate-100 space-y-6">
+                <div>
+                  <p className="text-sm font-black text-slate-800">Contenido del Landing</p>
+                  <p className="text-xs text-slate-500 font-medium mt-1">
+                    Textos que se muestran en la página pública. Los campos marcados
+                    &quot;individual&quot;/&quot;multi-profesor&quot; varían según el modo de
+                    plataforma de arriba — podés completar ambos aunque el modo activo
+                    sea solo uno.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs font-black text-rose-600 uppercase tracking-widest mb-3">Hero</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <LandingField label="Título (modo individual)" value={platformConfig.landing_content.hero_title_single}
+                      onChange={v => updateLandingField('hero_title_single', v)} />
+                    <LandingField label="Título (modo multi-profesor)" value={platformConfig.landing_content.hero_title_multi}
+                      onChange={v => updateLandingField('hero_title_multi', v)} />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-black text-rose-600 uppercase tracking-widest mb-3">Sobre nosotros</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <LandingField label="Etiqueta (individual)" value={platformConfig.landing_content.about_label_single}
+                      onChange={v => updateLandingField('about_label_single', v)} />
+                    <LandingField label="Etiqueta (multi-profesor)" value={platformConfig.landing_content.about_label_multi}
+                      onChange={v => updateLandingField('about_label_multi', v)} />
+                    <LandingField label="Título (individual)" value={platformConfig.landing_content.about_title_single}
+                      onChange={v => updateLandingField('about_title_single', v)} />
+                    <LandingField label="Título (multi-profesor)" value={platformConfig.landing_content.about_title_multi}
+                      onChange={v => updateLandingField('about_title_multi', v)} />
+                    <LandingTextArea label="Descripción (individual)" value={platformConfig.landing_content.about_description_single}
+                      onChange={v => updateLandingField('about_description_single', v)} />
+                    <LandingTextArea label="Descripción (multi-profesor)" value={platformConfig.landing_content.about_description_multi}
+                      onChange={v => updateLandingField('about_description_multi', v)} />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-black text-rose-600 uppercase tracking-widest mb-3">Videos</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <LandingField label="Título (individual)" value={platformConfig.landing_content.videos_title_single}
+                      onChange={v => updateLandingField('videos_title_single', v)} />
+                    <LandingField label="Título (multi-profesor)" value={platformConfig.landing_content.videos_title_multi}
+                      onChange={v => updateLandingField('videos_title_multi', v)} />
+                    <div className="md:col-span-2">
+                      <LandingTextArea label="Subtítulo" value={platformConfig.landing_content.videos_subtitle}
+                        onChange={v => updateLandingField('videos_subtitle', v)} />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-black text-rose-600 uppercase tracking-widest mb-3">Planes</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <LandingField label="Etiqueta" value={platformConfig.landing_content.plans_label}
+                      onChange={v => updateLandingField('plans_label', v)} />
+                    <LandingField label="Título" value={platformConfig.landing_content.plans_title}
+                      onChange={v => updateLandingField('plans_title', v)} />
+                    <div className="md:col-span-2">
+                      <LandingTextArea label="Subtítulo" value={platformConfig.landing_content.plans_subtitle}
+                        onChange={v => updateLandingField('plans_subtitle', v)} />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-black text-rose-600 uppercase tracking-widest mb-3">Clases grupales</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="md:col-span-2">
+                      <LandingField label="Título" value={platformConfig.landing_content.group_plans_title}
+                        onChange={v => updateLandingField('group_plans_title', v)} />
+                    </div>
+                    <LandingTextArea label="Subtítulo (individual)" value={platformConfig.landing_content.group_plans_subtitle_single}
+                      onChange={v => updateLandingField('group_plans_subtitle_single', v)} />
+                    <LandingTextArea label="Subtítulo (multi-profesor)" value={platformConfig.landing_content.group_plans_subtitle_multi}
+                      onChange={v => updateLandingField('group_plans_subtitle_multi', v)} />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    {platformConfig.landing_content.group_steps.map((step, idx) => (
+                      <div key={idx} className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Paso {idx + 1}</p>
+                        <LandingField label="Título" value={step.title}
+                          onChange={v => updateGroupStep(idx, 'title', v)} />
+                        <LandingTextArea label="Descripción" value={step.desc}
+                          onChange={v => updateGroupStep(idx, 'desc', v)} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-black text-rose-600 uppercase tracking-widest mb-3">Reseñas</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <LandingField label="Título (individual)" value={platformConfig.landing_content.reviews_title_single}
+                      onChange={v => updateLandingField('reviews_title_single', v)} />
+                    <LandingField label="Título (multi-profesor)" value={platformConfig.landing_content.reviews_title_multi}
+                      onChange={v => updateLandingField('reviews_title_multi', v)} />
+                    <div className="md:col-span-2">
+                      <LandingField label="Subtítulo" value={platformConfig.landing_content.reviews_subtitle}
+                        onChange={v => updateLandingField('reviews_subtitle', v)} />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-black text-rose-600 uppercase tracking-widest mb-3">Llamado a la acción final</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <LandingField label="Título" value={platformConfig.landing_content.cta_title}
+                      onChange={v => updateLandingField('cta_title', v)} />
+                    <div className="md:col-span-2">
+                      <LandingTextArea label="Subtítulo" value={platformConfig.landing_content.cta_subtitle}
+                        onChange={v => updateLandingField('cta_subtitle', v)} />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-black text-rose-600 uppercase tracking-widest mb-3">Footer</p>
+                  <LandingField label="Tagline del footer" value={platformConfig.landing_content.footer_tagline}
+                    onChange={v => updateLandingField('footer_tagline', v)} />
+                </div>
+              </div>
 
               <div className="pt-2 flex justify-end">
                 <Button
