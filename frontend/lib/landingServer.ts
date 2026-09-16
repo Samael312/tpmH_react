@@ -57,3 +57,29 @@ export const getLandingDataServer = cache(async (): Promise<LandingData | null> 
     return null;
   }
 });
+
+/**
+ * Corrección QA: título por defecto de la pestaña del navegador, para
+ * TODA la plataforma (usado por el RootLayout en generateMetadata).
+ *
+ * Antes el tagline configurado por el admin (Settings → Tagline) solo se
+ * incorporaba al título en app/page.tsx (la landing "/"), porque ese
+ * archivo arma su propio `title` en su generateMetadata. Next.js resuelve
+ * el <title> por ruta: cualquier página que NO define su propio `title`
+ * hereda el del layout más cercano -- y el RootLayout tenía un título fijo
+ * sin tagline. Resultado: en cuanto el usuario salía de "/" (dashboard,
+ * login, perfil de profesor, admin, etc.) la pestaña volvía al título
+ * genérico, como si el tagline solo existiera en la landing.
+ *
+ * Esta función centraliza el título "por defecto" (con tagline si el admin
+ * configuró uno) para que sea consistente en todo el sitio, no solo en "/".
+ * Páginas que necesiten su propio título específico (ej. terms/privacy)
+ * siguen pudiendo sobreescribirlo con su propio generateMetadata/metadata,
+ * como ya hacían.
+ */
+export function buildDefaultSiteTitle(data: LandingData | null): string {
+  const platformName = data?.platformName || "TuProfeMaria";
+  return data?.platformTagline
+    ? `${platformName} — ${data.platformTagline}`
+    : `${platformName} - Plataforma de clases`;
+}

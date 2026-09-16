@@ -2,16 +2,19 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
-import { getLandingDataServer } from "@/lib/landingServer";
+import { getLandingDataServer, buildDefaultSiteTitle } from "@/lib/landingServer";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export async function generateMetadata(): Promise<Metadata> {
   const data = await getLandingDataServer();
-  const platformName = data?.platformName || "TuProfeMaria";
+  // Corrección QA: antes era un título fijo sin tagline -- por eso el
+  // tagline configurado por el admin solo se veía en la pestaña estando en
+  // "/" y desaparecía en el resto de la plataforma (ver buildDefaultSiteTitle
+  // para el detalle de por qué pasaba esto).
   return {
-    title: `${platformName} - Plataforma de clases`,
-    description: "Aprende idiomas con los mejores profesores",
+    title: buildDefaultSiteTitle(data),
+    description: data?.platformTagline || "Aprende idiomas con los mejores profesores",
   };
 }
 
