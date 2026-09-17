@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Card from "@/components/ui/Card";
 import ConversationList from "@/components/chat/ConversationList";
 import ChatThreadView from "@/components/chat/ChatThreadView";
-import ChipiWidget from "@/components/chipi/ChipiWidget";
 import RefreshButton from "@/components/ui/RefreshButton";
 import { useChatConversations, ChatConversation } from "@/hooks/useChat";
 import { usePlatformConfig } from "@/hooks/useStudentData";
@@ -90,8 +89,6 @@ export default function StudentChatPage() {
           </div>
         </div>
       </Card>
-
-      <ChipiWidget screenName="chat_student" />
     </div>
   );
 }

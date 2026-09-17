@@ -17,7 +17,6 @@ import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import { usePlatformConfig } from "@/hooks/useStudentData";
-import { openDirectConversation } from "@/hooks/useChat";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "Todos los estados" },
@@ -102,15 +101,9 @@ function StudentCard({ student }: { student: TeacherStudentFull }) {
             {(platformConfig?.chat_enabled ?? true) && (
               <button
                 type="button"
-                onClick={async (e) => {
+                onClick={(e) => {
                   e.stopPropagation();
-                  try {
-                    const convo = await openDirectConversation(student.username);
-                    router.push(`/teacher/chat?conversation=${convo.id}`);
-                  } catch {
-                    // el link a /teacher/chat sigue funcionando aunque falle el prefetch
-                    router.push("/teacher/chat");
-                  }
+                  router.push(`/teacher/chat?student=${encodeURIComponent(student.username)}`);
                 }}
                 className="inline-flex items-center gap-1.5 text-xs font-black text-white
                            bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500

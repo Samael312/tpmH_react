@@ -5,11 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Card from "@/components/ui/Card";
 import ConversationList from "@/components/chat/ConversationList";
 import ChatThreadView from "@/components/chat/ChatThreadView";
-import ChipiWidget from "@/components/chipi/ChipiWidget";
 import RefreshButton from "@/components/ui/RefreshButton";
-import { useChatConversations, ChatConversation } from "@/hooks/useChat";
+import { useChatConversations, openDirectConversation, ChatConversation } from "@/hooks/useChat";
 import { usePlatformConfig } from "@/hooks/useStudentData";
-import { MessageCircle } from "lucide-react";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
+import { MessageCircle, Loader2 } from "lucide-react";
 
 export default function TeacherChatPage() {
   const router = useRouter();
@@ -29,6 +30,8 @@ export default function TeacherChatPage() {
   const searchParams = useSearchParams();
   const threadRefetchRef = useRef<(() => void) | null>(null);
   const [threadFetching, setThreadFetching] = useState(false);
+  const [creatingWith, setCreatingWith] = useState<string | null>(null);
+  const toast = useToast();
 
   const registerThreadRefetch = useCallback((fn: () => void) => {
     threadRefetchRef.current = fn;
@@ -52,6 +55,32 @@ export default function TeacherChatPage() {
     Promise.resolve().then(() => setActive(found));
   }, [searchParams, conversations, loading]);
 
+  // Deep-link desde el botón "Chat" de /teacher/students: ese botón navega
+  // de inmediato con ?student=<username> (sin esperar al backend), y acá
+  // recién se crea/abre la conversación — mientras tanto se ve el loading
+  // de abajo en vez de quedarse la pantalla anterior sin reaccionar al click.
+  useEffect(() => {
+    const studentUsername = searchParams.get("student");
+    if (!studentUsername) return;
+    let cancelled = false;
+    setCreatingWith(studentUsername);
+    openDirectConversation(studentUsername)
+      .then((convo) => {
+        if (cancelled) return;
+        setActive(convo);
+        refetch();
+        router.replace(`/teacher/chat?conversation=${convo.id}`);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        toast.error(getErrorMessage(e, "No se pudo abrir el chat con este estudiante."));
+        router.replace("/teacher/chat");
+      })
+      .finally(() => { if (!cancelled) setCreatingWith(null); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   if (loadingConfig || (config && !config.chat_enabled)) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -73,7 +102,7 @@ export default function TeacherChatPage() {
       <Card className="overflow-hidden h-[calc(100vh-240px)] min-h-[420px]">
         <div className="flex h-full">
           <div className={`w-full md:w-80 md:flex-shrink-0 border-r border-slate-100 flex flex-col
-            ${active ? "hidden md:flex" : "flex"}`}>
+            ${active || creatingWith ? "hidden md:flex" : "flex"}`}>
             <ConversationList
               conversations={conversations}
               loading={loading}
@@ -82,13 +111,18 @@ export default function TeacherChatPage() {
             />
           </div>
 
-          <div className={`flex-1 min-w-0 ${active ? "flex" : "hidden md:flex"} flex-col`}>
+          <div className={`flex-1 min-w-0 ${active || creatingWith ? "flex" : "hidden md:flex"} flex-col`}>
             {active ? (
               <ChatThreadView
                 conversation={active}
                 onBack={() => setActive(null)}
                 onRegisterRefetch={registerThreadRefetch}
               />
+            ) : creatingWith ? (
+              <div className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-300">
+                <Loader2 size={32} className="animate-spin text-pink-400" />
+                <p className="text-sm font-semibold text-slate-400">Abriendo conversación...</p>
+              </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-300">
                 <MessageCircle size={40} />
@@ -98,8 +132,6 @@ export default function TeacherChatPage() {
           </div>
         </div>
       </Card>
-
-      <ChipiWidget screenName="chat_teacher" />
     </div>
   );
 }
