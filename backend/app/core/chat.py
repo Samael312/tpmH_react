@@ -12,7 +12,7 @@ from sqlalchemy import or_
 
 from app.models.chat import ChatConversation, ChatConversationType, ChatMessage, ChatReadState
 from app.models.user import User, UserRole
-from app.models.teacher import TeacherProfile
+from app.models.teacher import TeacherProfile, TeacherStatus
 from app.models.student import StudentProfile
 from app.models.group_cohort import GroupCohort
 from app.models.package import Enrollment, EnrollmentStatus
@@ -73,8 +73,12 @@ def get_direct_conversation_or_404(
 ) -> ChatConversation:
     """
     Resuelve (creando si hace falta) la conversación 1:1 entre el usuario
-    actual y `other_username`, validando que el vínculo profesor-alumno
-    realmente exista.
+    actual y `other_username`.
+
+    - Estudiante → profesor: permitido si ya están vinculados, o si el
+      profesor está aprobado/visible en la plataforma (aunque todavía no
+      lo haya elegido — ver comentario más abajo).
+    - Profesor → estudiante: solo si ya están vinculados (sin cambios).
     """
     if current_user.role == UserRole.student:
         student_profile: StudentProfile = current_user.student_profile
@@ -83,11 +87,19 @@ def get_direct_conversation_or_404(
         ).first()
         if not teacher_profile:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesor no encontrado")
-        if not _teacher_has_student(teacher_profile, student_profile.id):
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                "Solo podés chatear con tu profesor asignado.",
-            )
+        # Antes exigía que ya estuvieran vinculados (_teacher_has_student).
+        # Se relaja a propósito: un estudiante tiene que poder escribirle a
+        # un profesor ANTES de elegirlo (típicamente desde su perfil
+        # público, para resolver dudas antes de decidir) — no solo
+        # después. Si ya están vinculados, siempre puede. Si no, igual
+        # puede mientras el profesor esté aprobado/visible en la
+        # plataforma — uno que no lo esté no es alcanzable ni siquiera
+        # adivinando el username.
+        if (
+            not _teacher_has_student(teacher_profile, student_profile.id)
+            and teacher_profile.status != TeacherStatus.approved
+        ):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesor no encontrado")
         return _get_or_create_direct(db, student_profile.id, teacher_profile.id)
 
     if current_user.role in (UserRole.teacher, UserRole.teacher_admin):

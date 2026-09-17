@@ -168,14 +168,30 @@ function MessageBubble({ msg }: { msg: Message }) {
 // ─── Props del widget ─────────────────────────────────────────────────────────
 interface ChipiWidgetProps {
   screenName?: string;
+  // En /dashboard/chat y /teacher/chat el botón de enviar del chat interno
+  // vive pegado a la esquina inferior derecha del contenedor, justo donde
+  // flota Chipi por defecto — así que esas dos pantallas piden `raised`
+  // para que flote más arriba y no lo tape.
+  //
+  // OJO: NO usar un anchor a la izquierda para esto — la probamos y
+  // termina superpuesta con el sidebar de navegación (NavBar.tsx), que
+  // también vive pegado al borde izquierdo y tiene su propio botón de
+  // "Cerrar sesión" abajo del todo.
+  raised?: boolean;
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function ChipiWidget({ screenName }: ChipiWidgetProps) {
+export default function ChipiWidget({ screenName, raised = false }: ChipiWidgetProps) {
   const autoScreen  = useScreenName();
   const screen      = screenName ?? autoScreen;
   const { user }    = useAuthStore();
   const canReportToSupport = user?.role === "student" || user?.role === "teacher";
+  const bubbleBottom = raised
+    ? "bottom-[calc(10.5rem+env(safe-area-inset-bottom))] md:bottom-40"
+    : "bottom-[calc(6.5rem+env(safe-area-inset-bottom))] md:bottom-24";
+  const buttonBottom = raised
+    ? "bottom-[calc(8.75rem+env(safe-area-inset-bottom))] md:bottom-24"
+    : "bottom-[calc(4.75rem+env(safe-area-inset-bottom))] md:bottom-6";
 
   const [open, setOpen]                 = useState(false);
   const [supportOpen, setSupportOpen]   = useState(false);
@@ -310,7 +326,7 @@ export default function ChipiWidget({ screenName }: ChipiWidgetProps) {
       {/* ─── Burbuja de Inactividad (Tooltip Flotante) ─── */}
       <div
         onClick={handleToggle}
-        className={`fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] right-4 md:bottom-24 md:right-6 z-40 max-w-[240px] cursor-pointer
+        className={`fixed ${bubbleBottom} right-4 md:right-6 z-40 max-w-[240px] cursor-pointer
           bg-white/95 backdrop-blur-md border border-pink-100
           shadow-xl shadow-pink-500/10 rounded-2xl rounded-br-none
           p-3.5 transition-all duration-300 hover:scale-105 active:scale-95
@@ -342,7 +358,7 @@ export default function ChipiWidget({ screenName }: ChipiWidgetProps) {
 
       {/* ─── Ventana Principal de Chat ─── */}
       <div
-        className={`fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] right-4 sm:right-6 md:bottom-24 z-50 
+        className={`fixed ${bubbleBottom} right-4 md:right-6 z-50 
           w-[calc(100vw-2rem)] sm:w-[370px]
           bg-white/95 backdrop-blur-2xl rounded-[2rem]
           border border-slate-100 shadow-2xl shadow-slate-900/15
@@ -470,7 +486,7 @@ export default function ChipiWidget({ screenName }: ChipiWidgetProps) {
       {/* ─── Botón Flotante Principal ─── */}
       <button
         onClick={handleToggle}
-        className={`fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 md:bottom-6 md:right-6 z-50
+        className={`fixed ${buttonBottom} right-4 md:right-6 z-50
           w-14 h-14 rounded-2xl overflow-hidden
           shadow-xl shadow-pink-500/25 hover:shadow-pink-500/40
           border-2 border-white

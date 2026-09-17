@@ -8,7 +8,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { useMyTeachers, usePlatformConfig } from "@/hooks/useStudentData";
-import { openDirectConversation } from "@/hooks/useChat";
 import PublicProfileView, { PublicProfileTeacher, PublicProfileReview } from "@/components/teacher/PublicProfileView";
 import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
@@ -229,16 +228,9 @@ export default function TeacherBrowsePage() {
               </div>
             )}
 
-            {isMine && (platformConfig?.chat_enabled ?? true) && (
+            {(platformConfig?.chat_enabled ?? true) && (
               <button
-                onClick={async () => {
-                  try {
-                    await openDirectConversation(username);
-                    router.push("/dashboard/chat");
-                  } catch {
-                    toast.error("No se pudo abrir el chat. Intenta de nuevo.");
-                  }
-                }}
+                onClick={() => router.push(`/dashboard/chat?teacher=${encodeURIComponent(username)}`)}
                 className="flex items-center justify-center gap-2 bg-white/20 hover:bg-white/30 backdrop-blur-md px-5 py-3 rounded-2xl text-sm font-bold transition-all duration-200 shadow-lg"
               >
                 <MessagesSquare className="w-4 h-4" /> Chat

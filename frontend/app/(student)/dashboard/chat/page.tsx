@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Card from "@/components/ui/Card";
 import ConversationList from "@/components/chat/ConversationList";
 import ChatThreadView from "@/components/chat/ChatThreadView";
 import RefreshButton from "@/components/ui/RefreshButton";
-import { useChatConversations, ChatConversation } from "@/hooks/useChat";
+import { useChatConversations, openDirectConversation, ChatConversation } from "@/hooks/useChat";
 import { usePlatformConfig } from "@/hooks/useStudentData";
-import { MessageCircle } from "lucide-react";
+import { useToast } from "@/hooks/useToast";
+import { getErrorMessage } from "@/lib/errorMessage";
+import { MessageCircle, Loader2 } from "lucide-react";
 
 export default function StudentChatPage() {
   const router = useRouter();
@@ -27,8 +29,11 @@ export default function StudentChatPage() {
 
   const { conversations, loading, isFetching, refetch } = useChatConversations(true);
   const [active, setActive] = useState<ChatConversation | null>(null);
+  const searchParams = useSearchParams();
   const threadRefetchRef = useRef<(() => void) | null>(null);
   const [threadFetching, setThreadFetching] = useState(false);
+  const [creatingWith, setCreatingWith] = useState<string | null>(null);
+  const toast = useToast();
 
   const registerThreadRefetch = useCallback((fn: () => void) => {
     threadRefetchRef.current = fn;
@@ -40,6 +45,43 @@ export default function StudentChatPage() {
     threadRefetchRef.current?.();
     setThreadFetching(false);
   }, [refetch]);
+
+  // Deep-link desde ?conversation=<id> (email de nuevo mensaje).
+  useEffect(() => {
+    const conversationId = searchParams.get("conversation");
+    if (!conversationId || loading || conversations.length === 0) return;
+    const found = conversations.find((c) => c.id === Number(conversationId));
+    if (!found) return;
+    Promise.resolve().then(() => setActive(found));
+  }, [searchParams, conversations, loading]);
+
+  // Deep-link desde ?teacher=<username> (botón "Chat" del perfil público de
+  // un profesor — ver teachers/[username]/page.tsx). Ese botón navega de
+  // inmediato sin esperar al backend, y acá recién se crea/abre la
+  // conversación (mismo patrón que ?student= en teacher/chat/page.tsx).
+  // Funciona tanto si ya está vinculado a ese profesor como si no — ver
+  // core/chat.py::get_direct_conversation_or_404.
+  useEffect(() => {
+    const teacherUsername = searchParams.get("teacher");
+    if (!teacherUsername) return;
+    let cancelled = false;
+    setCreatingWith(teacherUsername);
+    openDirectConversation(teacherUsername)
+      .then((convo) => {
+        if (cancelled) return;
+        setActive(convo);
+        refetch();
+        router.replace(`/dashboard/chat?conversation=${convo.id}`);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        toast.error(getErrorMessage(e, "No se pudo abrir el chat con este profesor."));
+        router.replace("/dashboard/chat");
+      })
+      .finally(() => { if (!cancelled) setCreatingWith(null); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   if (loadingConfig || (config && !config.chat_enabled)) {
     return (
@@ -63,7 +105,7 @@ export default function StudentChatPage() {
         <div className="flex h-full">
           {/* Lista — en mobile se oculta si hay una conversación activa */}
           <div className={`w-full md:w-80 md:flex-shrink-0 border-r border-slate-100 flex flex-col
-            ${active ? "hidden md:flex" : "flex"}`}>
+            ${active || creatingWith ? "hidden md:flex" : "flex"}`}>
             <ConversationList
               conversations={conversations}
               loading={loading}
@@ -73,13 +115,18 @@ export default function StudentChatPage() {
           </div>
 
           {/* Hilo */}
-          <div className={`flex-1 min-w-0 ${active ? "flex" : "hidden md:flex"} flex-col`}>
+          <div className={`flex-1 min-w-0 ${active || creatingWith ? "flex" : "hidden md:flex"} flex-col`}>
             {active ? (
               <ChatThreadView
                 conversation={active}
                 onBack={() => setActive(null)}
                 onRegisterRefetch={registerThreadRefetch}
               />
+            ) : creatingWith ? (
+              <div className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-300">
+                <Loader2 size={32} className="animate-spin text-pink-400" />
+                <p className="text-sm font-semibold text-slate-400">Abriendo conversación...</p>
+              </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-300">
                 <MessageCircle size={40} />

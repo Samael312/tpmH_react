@@ -1,17 +1,27 @@
 # app/models/chat.py
 #
 # N1 — Chat interno. Dos tipos de conversación:
-#   - "direct": 1:1 entre un student y un teacher vinculados. OJO: la
-#     fuente de verdad del vínculo NO es StudentTeacherLink (esa tabla
-#     queda vacía en modo single-tenant — ver su propio docstring y
-#     endpoints/payments.py::_ensure_teacher_linked, que hace return
-#     inmediato si is_single_tenant). La fuente que SÍ se puebla en
-#     ambos modos es TeacherProfile.students (JSONB), actualizada por
-#     core/teacher_students.py::link_student_to_teacher tanto en
-#     checkout multi-tenant como en single-tenant
-#     (payments.py::_sync_student_teacher_username). La autorización de
-#     conversaciones "direct" se resuelve contra esa lista — ver
-#     core/chat.py::assert_can_open_direct_conversation.
+#   - "direct": 1:1 entre un student y un teacher. Se puede abrir en dos
+#     situaciones distintas — ver core/chat.py::get_direct_conversation_or_404:
+#       1) Ya vinculados: la fuente de verdad del vínculo NO es
+#          StudentTeacherLink (esa tabla queda vacía en modo single-tenant
+#          — ver su propio docstring y endpoints/payments.py::
+#          _ensure_teacher_linked, que hace return inmediato si
+#          is_single_tenant). La fuente que SÍ se puebla en ambos modos es
+#          TeacherProfile.students (JSONB), actualizada por
+#          core/teacher_students.py::link_student_to_teacher tanto en
+#          checkout multi-tenant como en single-tenant
+#          (payments.py::_sync_student_teacher_username).
+#       2) Todavía NO vinculados (a propósito): un estudiante puede
+#          escribirle a cualquier profesor con status "approved" ANTES de
+#          elegirlo (ej. desde su perfil público) — la conversación se
+#          crea igual, solo que sin que TeacherProfile.students se toque.
+#          Un profesor, en cambio, solo puede abrir/participar de
+#          conversaciones con estudiantes YA vinculados a él.
+#     Una vez creada la fila en chat_conversations, assert_participant()
+#     autoriza contra sus student_id/teacher_id directamente — no vuelve
+#     a mirar el vínculo, así que sigue siendo válida aunque el vínculo
+#     cambie después.
 #   - "group": 1 conversación por GroupCohort, con el profesor de la
 #     cohorte y todos los estudiantes con Enrollment activo en ella
 #     (Enrollment.teacher_id / cohort_id son directos, no dependen del
