@@ -12,7 +12,6 @@ import { getErrorMessage } from "@/lib/errorMessage";
 import { useLandingData } from "@/hooks/useLandingData";
 
 function ResetPasswordForm() {
-  const { platformName } = useLandingData();
   const searchParams = useSearchParams();
   const router = useRouter();
   const token = searchParams.get("token");
@@ -170,6 +169,8 @@ function ResetPasswordForm() {
 }
 
 export default function ResetPasswordPage() {
+  const { platformName } = useLandingData();
+
   return (
     <>
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
