@@ -1166,6 +1166,21 @@ export default function TeacherProfilePage() {
             <div className="lg:col-span-5 space-y-6">
 
               <Section title="Seguridad" subtitle="Actualiza tu contraseña de acceso" icon={<Lock className="w-5 h-5" />}>
+                {isGoogleAccount ? (
+                  // Corrección QA (mismo bug que en el perfil de estudiante):
+                  // si el profesor se registró/vinculó con Google nunca se
+                  // le asignó una contraseña (password_hash queda null en
+                  // el backend) -- el formulario pedía una "contraseña
+                  // actual" que nunca existió. Se reemplaza por un mensaje
+                  // explicativo, igual que ya se hace con el campo de email.
+                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex items-start gap-3">
+                    <Lock className="w-5 h-5 text-slate-300 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-slate-500 font-bold leading-relaxed">
+                      Iniciás sesión con Google — tu cuenta no tiene una contraseña propia que actualizar acá.
+                      Para cambiar tu acceso, gestionalo directamente desde tu cuenta de Google.
+                    </p>
+                  </div>
+                ) : (
                 <div className="space-y-4">
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Contraseña actual</label>
@@ -1238,6 +1253,7 @@ export default function TeacherProfilePage() {
                     )}
                   </button>
                 </div>
+                )}
               </Section>
 
               {/* Sincronización de calendario */}

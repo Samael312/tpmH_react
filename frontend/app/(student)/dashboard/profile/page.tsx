@@ -814,6 +814,22 @@ export default function StudentProfilePage() {
             
             {/* ─── Seguridad ─── */}
             <Section title="Seguridad" subtitle="Actualiza tu contraseña de acceso">
+              {isGoogleAccount ? (
+                // Corrección QA: si el usuario se registró/vinculó con
+                // Google nunca se le asignó una contraseña (password_hash
+                // queda null en el backend) -- mostrar el formulario igual
+                // llevaba a un error confuso al intentar guardar, porque
+                // pedía una "contraseña actual" que nunca existió. Se
+                // reemplaza por un mensaje explicativo, igual que ya se
+                // hace con el campo de email más arriba.
+                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex items-start gap-3">
+                  <Lock className="w-5 h-5 text-slate-300 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-slate-500 font-bold leading-relaxed">
+                    Iniciás sesión con Google — tu cuenta no tiene una contraseña propia que actualizar acá.
+                    Para cambiar tu acceso, gestionalo directamente desde tu cuenta de Google.
+                  </p>
+                </div>
+              ) : (
               <div className="space-y-4">
                 <Field label="Contraseña actual" icon={<Lock className="w-5 h-5" />}>
                   <input type={showOld ? "text" : "password"} value={oldPw} onChange={e => setOldPw(e.target.value)} className={inputCls()} placeholder="••••••••" disabled={savingPw} />
@@ -863,6 +879,7 @@ export default function StudentProfilePage() {
                   )}
                 </button>
               </div>
+              )}
             </Section>
 
             {/* ─── Zona de peligro ─── */}

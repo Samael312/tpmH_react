@@ -1033,13 +1033,23 @@ def update_platform_config(
         and previous_featured_id is not None
     )
     if switching_to_multi:
+        # Corrección QA: Class.student_id es NULL por diseño para clases de
+        # grupo (el alumno vive en ClassParticipant, no acá) y para clases
+        # externas importadas del Google Calendar del profesor (class_type
+        # == "external", que ni siquiera tienen student_id ni enrollment_id).
+        # Sin el filtro .isnot(None), ese NULL entraba al set de abajo y
+        # terminaba en un INSERT a student_teacher_links con student_id=None,
+        # violando el NOT NULL de la columna. Los alumnos de grupo ya quedan
+        # cubiertos igual por su propio Enrollment (se crea uno por cada
+        # inscripción a cohorte), así que este filtro no pierde cobertura.
         student_ids_with_history = {
             e.student_id for e in db.query(Enrollment).filter(
                 Enrollment.teacher_id == previous_featured_id
             ).all()
         } | {
             c.student_id for c in db.query(Class).filter(
-                Class.teacher_id == previous_featured_id
+                Class.teacher_id == previous_featured_id,
+                Class.student_id.isnot(None),
             ).all()
         }
 
