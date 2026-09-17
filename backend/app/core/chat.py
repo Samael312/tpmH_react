@@ -108,6 +108,15 @@ def get_direct_conversation_or_404(
     raise HTTPException(status.HTTP_403_FORBIDDEN, "Rol sin acceso al chat interno")
 
 
+def ensure_direct_conversation(db: Session, student_id: int, teacher_id: int) -> ChatConversation:
+    """
+    Wrapper público de `_get_or_create_direct` para llamarse desde fuera de
+    este módulo (ver core/teacher_students.py::link_student_to_teacher) sin
+    tocar un nombre "privado". Idempotente: no crea duplicados si ya existe.
+    """
+    return _get_or_create_direct(db, student_id, teacher_id)
+
+
 def _get_or_create_direct(db: Session, student_id: int, teacher_id: int) -> ChatConversation:
     convo = db.query(ChatConversation).filter(
         ChatConversation.conversation_type == ChatConversationType.direct,

@@ -522,6 +522,18 @@ El estudiante marca en qué franjas horarias (en su hora local) prefiere
 tomar clases. Esto solo afecta qué slots se destacan al agendar — no
 bloquea ni reserva nada por sí solo, es una preferencia informativa.
 """,
+    "chat_student": """
+PANTALLA: Chat (estudiante)
+El estudiante habla en tiempo real con su profesor asignado (chat directo)
+y, si está inscripto en un grupo, con el chat grupal de ese grupo. La
+conversación con su profesor se crea automáticamente en cuanto queda
+vinculado a él — no hace falta hacer nada para que exista, solo elegirla
+de la lista de la izquierda y escribir. Si no ve ninguna conversación es
+porque todavía no tiene profesor asignado ni está en ningún grupo. Esto
+es un chat interno de la plataforma, no reemplaza a este mismo asistente
+(Chipi): acá es para hablar con personas, no para hacer preguntas sobre
+cómo usar la plataforma.
+""",
     "support_student": """
 PANTALLA: Soporte (estudiante)
 El estudiante ve el historial de sus tickets de soporte enviados y sus
@@ -677,6 +689,17 @@ PANTALLA: Mis estudiantes
 El profesor ve la lista de sus estudiantes (activos e históricos), con su
 paquete actual, progreso y datos de contacto. Desde aquí puede acceder al
 detalle de cada uno para ver su historial de clases y pagos.
+""",
+    "chat_teacher": """
+PANTALLA: Chat (profesor)
+El profesor habla en tiempo real con sus estudiantes asignados (chat
+directo, uno por estudiante) y con el chat grupal de cada una de sus
+cohortes. La conversación con cada estudiante se crea automáticamente en
+cuanto queda vinculado a él (checkout, God Mode, admin, etc.) — no hace
+falta hacer nada para que exista, solo elegirla de la lista de la
+izquierda y escribir. Esto es un chat interno de la plataforma, no
+reemplaza a este mismo asistente (Chipi): acá es para hablar con
+personas, no para hacer preguntas sobre cómo usar la plataforma.
 """,
     "support_teacher": """
 PANTALLA: Soporte (profesor)

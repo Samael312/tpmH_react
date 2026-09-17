@@ -58,6 +58,7 @@ const SCREEN_ROUTES: Array<[string, string]> = ([
   ["/dashboard/profile", "student_profile"],
   ["/dashboard/availability", "student-preferences"],
   ["/dashboard/support", "support_student"],
+  ["/dashboard/chat", "chat_student"],
   ["/dashboard", "student_home"],
 
   // Profesor
@@ -73,6 +74,7 @@ const SCREEN_ROUTES: Array<[string, string]> = ([
   ["/teacher/cohorts", "teacher_cohorts"],
   ["/teacher/students", "teacher_students"],
   ["/teacher/support", "support_teacher"],
+  ["/teacher/chat", "chat_teacher"],
   ["/teacher/payments", "teacher_payments"],
   ["/teacher/calendar/callback", "teacher_calendar_callback"],
 

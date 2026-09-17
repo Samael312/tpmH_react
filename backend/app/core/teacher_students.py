@@ -11,7 +11,13 @@ def link_student_to_teacher(
 ) -> None:
     """
     Mantiene sincronizado teacher_profiles.students (lista de StudentProfile.id)
-    cada vez que un estudiante queda vinculado a un profesor.
+    cada vez que un estudiante queda vinculado a un profesor, y crea (si no
+    existe todavía) la conversación de chat directa entre ambos — así no
+    hace falta que ninguno de los dos entre a apretar "Chat" para que la
+    conversación exista (N1/N2, ver core/chat.py::ensure_direct_conversation).
+    Esto pasa sin importar si PlatformConfig.chat_enabled está prendido o
+    no: el gate del chat es solo para USARLO, no para que la conversación
+    exista quieta esperando a que se habilite.
 
     - Si tenía un profesor anterior distinto, lo remueve de esa lista
       (un estudiante solo pertenece a un profesor a la vez).
@@ -33,3 +39,10 @@ def link_student_to_teacher(
         new_teacher.students = current
 
     db.commit()
+
+    # Import diferido para evitar un ciclo de imports a nivel de módulo
+    # (core/chat.py no depende de este archivo, así que no hay ciclo real,
+    # pero se mantiene el import acá adentro por si en el futuro alguno de
+    # los dos empieza a importar del otro en el nivel superior).
+    from app.core.chat import ensure_direct_conversation
+    ensure_direct_conversation(db, student_profile.id, new_teacher.id)

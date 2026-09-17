@@ -113,7 +113,10 @@ export default function TeacherLayout({
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
       <NavBar />
-      <ChatWidget />
+      {/* En /teacher/chat el widget flotante sería redundante (ya estás
+          en la pantalla completa del chat) — ahí solo va el ChipiWidget,
+          que cada página monta por su cuenta. */}
+      {!pathname.startsWith('/teacher/chat') && <ChatWidget />}
 
       <main className="flex-1 flex flex-col min-w-0 bg-slate-50 pt-14 pb-20 md:pt-0 md:pb-0">
         <DashboardTopbar variant="teacher" />

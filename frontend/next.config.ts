@@ -25,8 +25,19 @@ function backendOrigin(): string {
 // No es tan estricto como un CSP con nonces, pero sigue bloqueando lo más
 // importante: carga de scripts/conexiones a dominios no autorizados,
 // clickjacking (frame-ancestors) y hijacking de <form> (form-action).
+// wss:// equivalente del origen del backend, para el WebSocket del chat
+// interno (ver core/chat_ws.py). En teoría un source `https://host` de
+// connect-src ya debería cubrir `wss://host` (mismo host, upgrade de
+// scheme), pero en la práctica hay navegadores que lo bloquean si el
+// scheme wss/ws no está explícito en la policy — así que lo declaramos
+// a mano para no depender de ese comportamiento implícito.
+function backendWsOrigin(backend: string): string {
+  return backend.replace(/^http/, "ws");
+}
+
 function buildCsp(): string {
   const backend = backendOrigin();
+  const backendWs = backendWsOrigin(backend);
   const directives = [
     `default-src 'self'`,
     // Google Identity Services (botón de "Iniciar sesión con Google") se
@@ -49,7 +60,11 @@ function buildCsp(): string {
     // ese fetch() lo rige connect-src, no img-src, así que sin blob: acá
     // el navegador lo bloquea silenciosamente y GLTFLoader tira
     // "Couldn't load texture" aunque el archivo esté perfecto)
-    `connect-src 'self' ${backend} https://accounts.google.com blob:`,
+    // El chat interno (hooks/useChat.ts::buildWsUrl) abre un WebSocket
+    // wss:// contra el mismo backend — sin declarar ese scheme acá
+    // algunos navegadores bloquean la conexión aunque el host ya esté
+    // autorizado por https:// (ver nota en backendWsOrigin()).
+    `connect-src 'self' ${backend} ${backendWs} https://accounts.google.com blob:`,
     // El botón de Google se renderiza dentro de un iframe de Google
     `frame-src https://accounts.google.com`,
     `object-src 'none'`,

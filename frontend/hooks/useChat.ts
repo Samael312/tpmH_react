@@ -104,8 +104,11 @@ export function useChatThread(conversationId: number | null) {
   const [sendError, setSendError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const seenIds = useRef<Set<number>>(new Set());
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [isFetching, setIsFetching] = useState(false);
 
-  // Historial inicial por REST
+  // Historial inicial por REST (y re-fetch manual vía `refetch`, p.ej. el
+  // RefreshButton de las páginas de chat completas)
   useEffect(() => {
     if (!conversationId) return;
     let cancelled = false;
@@ -113,7 +116,7 @@ export function useChatThread(conversationId: number | null) {
     // El set-state-in-effect lint exige que el setState no sea la primera
     // línea síncrona del efecto — lo empujamos a una microtask (mismo
     // comportamiento, un tick después).
-    Promise.resolve().then(() => { if (!cancelled) setLoading(true); });
+    Promise.resolve().then(() => { if (!cancelled) { setLoading(true); setIsFetching(true); } });
     api.get(`/chat/conversations/${conversationId}/messages`)
       .then((res) => {
         if (cancelled) return;
@@ -122,9 +125,13 @@ export function useChatThread(conversationId: number | null) {
         setMessages(msgs);
       })
       .catch(() => {})
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .finally(() => { if (!cancelled) { setLoading(false); setIsFetching(false); } });
     return () => { cancelled = true; };
-  }, [conversationId]);
+  }, [conversationId, refreshTick]);
+
+  const refetch = useCallback(() => {
+    setRefreshTick((t) => t + 1);
+  }, []);
 
   // Conexión WS para tiempo real
   useEffect(() => {
@@ -201,5 +208,5 @@ export function useChatThread(conversationId: number | null) {
     }
   }, [conversationId, queryClient]);
 
-  return { messages, loading, connected, sendError, send, markRead };
+  return { messages, loading, isFetching, connected, sendError, send, markRead, refetch };
 }

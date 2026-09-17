@@ -99,6 +99,26 @@ function StudentCard({ student }: { student: TeacherStudentFull }) {
                 {getFlagForNationality(student.nationality)} {student.nationality}
               </span>
             )}
+            {(platformConfig?.chat_enabled ?? true) && (
+              <button
+                type="button"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  try {
+                    const convo = await openDirectConversation(student.username);
+                    router.push(`/teacher/chat?conversation=${convo.id}`);
+                  } catch {
+                    // el link a /teacher/chat sigue funcionando aunque falle el prefetch
+                    router.push("/teacher/chat");
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-black text-white
+                           bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500
+                           px-3 py-1.5 rounded-full shadow-sm shadow-pink-200 transition-colors"
+              >
+                <MessagesSquare className="w-3.5 h-3.5" /> Chat
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-3 flex-wrap text-xs text-slate-500 font-medium">
@@ -115,25 +135,6 @@ function StudentCard({ student }: { student: TeacherStudentFull }) {
 
         {/* Estado + progreso resumen */}
         <div className="hidden sm:flex flex-col items-end gap-1.5 flex-shrink-0">
-          {(platformConfig?.chat_enabled ?? true) && (
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={async (e) => {
-                e.stopPropagation();
-                try {
-                  await openDirectConversation(student.username);
-                  router.push("/teacher/chat");
-                } catch {
-                  // el link a /teacher/chat sigue funcionando aunque falle el prefetch
-                  router.push("/teacher/chat");
-                }
-              }}
-              className="flex items-center gap-1 text-[10px] font-black text-pink-500 hover:text-pink-600 cursor-pointer"
-            >
-              <MessagesSquare className="w-3.5 h-3.5" /> Chat
-            </span>
-          )}
           {activeEnr ? (
             <>
               <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full ${STATUS_BADGE[activeEnr.status] ?? "bg-slate-100 text-slate-500"}`}>

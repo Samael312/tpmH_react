@@ -4,21 +4,39 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Send, WifiOff } from "lucide-react";
 import { ChatConversation, useChatThread } from "@/hooks/useChat";
 import { useAuthStore } from "@/store/authStore";
+import { decodeToken } from "@/lib/auth";
 
 export default function ChatThreadView({
-  conversation, onBack,
+  conversation, onBack, onRegisterRefetch,
 }: {
   conversation: ChatConversation;
   onBack?: () => void;
+  // Le pasa al padre la función para refrescar el historial de ESTE hilo
+  // (por ejemplo el RefreshButton de las páginas /dashboard/chat y
+  // /teacher/chat, que refrescan lista + hilo activo en un solo click).
+  onRegisterRefetch?: (refetch: () => void) => void;
 }) {
-  const currentUser = useAuthStore((s) => s.user);
-  const { messages, loading, connected, sendError, send, markRead } = useChatThread(conversation.id);
+  // OJO: `useAuthStore().user.id` NO sirve acá — ningún flujo de login
+  // (email/password ni Google, ver app/(public)/login/page.tsx y
+  // app/(public)/register/google-complete/page.tsx) lo popula nunca, así
+  // que siempre da `undefined` y `isMine` abajo termina siendo `false`
+  // para TODOS los mensajes de TODOS los usuarios (el bug real detrás de
+  // "todos los mensajes se ven del mismo lado y color"). El id del
+  // usuario logueado sí viaja siempre en el JWT (`sub`, ver
+  // auth/jwt.py::create_access_token), así que lo sacamos de ahí.
+  const token = useAuthStore((s) => s.token);
+  const currentUserId = token ? Number(decodeToken(token)?.sub) : undefined;
+  const { messages, loading, connected, sendError, send, markRead, refetch } = useChatThread(conversation.id);
   const [draft, setDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
+
+  useEffect(() => {
+    onRegisterRefetch?.(refetch);
+  }, [onRegisterRefetch, refetch]);
 
   useEffect(() => {
     markRead();
@@ -62,7 +80,7 @@ export default function ChatThreadView({
           <p className="text-center text-xs text-slate-400 py-8">Todavía no hay mensajes. ¡Escribí el primero!</p>
         ) : (
           messages.map((m) => {
-            const isMine = m.sender_id === currentUser?.id;
+            const isMine = !!currentUserId && m.sender_id === currentUserId;
             return (
               <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
                 <div className="max-w-[75%]">
