@@ -453,9 +453,10 @@ interface StepScheduleProps {
   setBlocks: (blocks: ScheduleBlock[]) => void;
   onNext: () => void;
   onBack: () => void;
+  saving?: boolean;
 }
 
-function StepSchedule({ blocks, setBlocks, onNext, onBack }: StepScheduleProps) {
+function StepSchedule({ blocks, setBlocks, onNext, onBack, saving = false }: StepScheduleProps) {
   const [selectedDay, setSelectedDay] = useState(0);
 
   const AVAILABLE_HOURS = Array.from({ length: 16 }, (_, i) => `${(i + 7).toString().padStart(2, "0")}:00`);
@@ -639,11 +640,11 @@ function StepSchedule({ blocks, setBlocks, onNext, onBack }: StepScheduleProps) 
       </div>
 
       <div className="flex gap-4 pt-6 border-t border-slate-100">
-        <button onClick={onBack} className="px-8 py-4 text-base font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors flex items-center justify-center gap-2">
+        <button onClick={onBack} disabled={saving} className="px-8 py-4 text-base font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
           <ChevronLeft className="w-5 h-5" /> Volver
         </button>
-        <button onClick={onNext} className="flex-1 py-4 text-base font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2">
-          {blocks.length === 0 ? "Saltar por ahora" : "Continuar"} <ChevronRight className="w-5 h-5" />
+        <button onClick={onNext} disabled={saving} className="flex-1 py-4 text-base font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-lg shadow-pink-200 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+          {saving ? "Guardando..." : blocks.length === 0 ? "Saltar por ahora" : "Continuar"} <ChevronRight className="w-5 h-5" />
         </button>
       </div>
     </div>
@@ -847,7 +848,7 @@ export default function OnboardingPage() {
                 onBack={back}
               />
             )}
-            {step === 3 && <StepSchedule blocks={blocks} setBlocks={setBlocks} onNext={finish} onBack={back} />}
+            {step === 3 && <StepSchedule blocks={blocks} setBlocks={setBlocks} onNext={finish} onBack={back} saving={saving} />}
 
             {step === 4 && (
               <div className="w-full">

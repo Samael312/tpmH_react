@@ -31,7 +31,7 @@ export function useMySupportTickets() {
     // mientras el estudiante/profesor ya tenía la vista abierta, no se
     // enteraba hasta recargar la página a mano. Se sondea en segundo plano
     // mientras la pestaña esté visible, igual que useUnreadSupportCount.
-    refetchInterval: (q) => {
+    refetchInterval: () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
       return 20000;
     },

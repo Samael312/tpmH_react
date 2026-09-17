@@ -200,8 +200,14 @@ function StepSelectSlot({
   const { slots, loading } = useAvailableSlots(date, effectiveDuration, teacherUsername, isTrial ? "trial" : "regular");
   const myTz = getMyDisplayTimezone();
 
+  // Si no es prueba o todavía no hay profesor elegido, no hay nada que
+  // pedir al backend: se deriva directamente durante el render en vez de
+  // sincronizar ese caso con un efecto (que solo estaría llamando a
+  // setState y retornando, sin sincronizar nada externo).
+  const needsSubjectFetch = isTrial && !!teacherUsername;
+
   useEffect(() => {
-    if (!isTrial || !teacherUsername) { setSubjectOptions([]); setSelectedSubject(""); setSubjectsLoading(false); return; }
+    if (!needsSubjectFetch) return;
     // Se limpia de inmediato al cambiar de profesor (no solo cuando
     // resuelve el fetch): así nunca queda un instante mostrando las
     // materias del profesor anterior mientras carga el nuevo. `ignore`
@@ -209,17 +215,33 @@ function StepSelectSlot({
     // profesor rápido y las respuestas llegan desordenadas) sobrescriba
     // la del profesor que realmente está seleccionado ahora.
     let ignore = false;
-    setSubjectOptions([]);
-    setSelectedSubject("");
-    setSubjectsLoading(true);
-    api.get(`/teachers/${teacherUsername}`).then(res => {
-      if (ignore) return;
-      const opts = [...new Set([...(res.data.subjects || []), ...(res.data.languages || [])])];
-      setSubjectOptions(opts);
-      setSelectedSubject(opts[0] || "");
-    }).catch(() => { if (!ignore) setSubjectOptions([]); }).finally(() => { if (!ignore) setSubjectsLoading(false); });
+    // Todo el trabajo de sincronización (incluido el reseteo inicial) queda
+    // dentro de esta función async: así ningún setState corre de forma
+    // síncrona en el cuerpo del efecto, y todos se disparan como reacción
+    // al fetch (patrón "subscribe to external system").
+    const loadSubjects = async () => {
+      setSubjectOptions([]);
+      setSelectedSubject("");
+      setSubjectsLoading(true);
+      try {
+        const res = await api.get(`/teachers/${teacherUsername}`);
+        if (ignore) return;
+        const opts = [...new Set([...(res.data.subjects || []), ...(res.data.languages || [])])];
+        setSubjectOptions(opts);
+        setSelectedSubject(opts[0] || "");
+      } catch {
+        if (!ignore) setSubjectOptions([]);
+      } finally {
+        if (!ignore) setSubjectsLoading(false);
+      }
+    };
+    loadSubjects();
     return () => { ignore = true; };
-  }, [isTrial, teacherUsername]);
+  }, [needsSubjectFetch, teacherUsername]);
+
+  const effectiveSubjectOptions = needsSubjectFetch ? subjectOptions : [];
+  const effectiveSelectedSubject = needsSubjectFetch ? selectedSubject : "";
+  const effectiveSubjectsLoading = needsSubjectFetch ? subjectsLoading : false;
 
   const formatTime = (utc: string) => formatTimeTz(utc, myTz);
 
@@ -228,18 +250,18 @@ function StepSelectSlot({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
       <div className="space-y-5">
-        {isTrial && subjectOptions.length > 1 && (
+        {isTrial && effectiveSubjectOptions.length > 1 && (
           <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-xl shadow-slate-200/50 p-6">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
               ¿Qué quieres practicar en esta clase?
             </p>
             <div className="flex flex-wrap gap-2">
-              {subjectOptions.map(s => (
+              {effectiveSubjectOptions.map(s => (
                 <button
                   key={s}
                   onClick={() => setSelectedSubject(s)}
                   className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all duration-200 ${
-                    selectedSubject === s
+                    effectiveSelectedSubject === s
                       ? "border-pink-400 bg-pink-50 text-pink-600"
                       : "border-transparent bg-slate-100 text-slate-500 hover:border-slate-200"
                   }`}
@@ -251,7 +273,7 @@ function StepSelectSlot({
           </div>
         )}
 
-        <MiniCalendar value={date} onChange={setDate} disabled={subjectsLoading} />
+        <MiniCalendar value={date} onChange={setDate} disabled={effectiveSubjectsLoading} />
 
         {!isTrial && (
           <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-xl shadow-slate-200/50 p-6">
@@ -328,7 +350,7 @@ function StepSelectSlot({
               return (
                 <button
                   key={i}
-                  onClick={() => !blocked && onSelect(date, slot, effectiveDuration, isTrial ? selectedSubject : undefined)}
+                  onClick={() => !blocked && onSelect(date, slot, effectiveDuration, isTrial ? effectiveSelectedSubject : undefined)}
                   disabled={blocked}
                   className={`
                     relative py-4 px-3 rounded-2xl text-center border-2 transition-all duration-200

@@ -193,7 +193,7 @@ export default function TeacherCohortsPage() {
       .then(res => setRecurringCandidates(res.data))
       .catch(() => setRecurringCandidates([]))
       .finally(() => setLoadingRecurringCandidates(false));
-  }, [closingCohort?.id, isFixedSchedule]);
+  }, [closingCohort, isFixedSchedule]);
 
   // La duración por defecto de ambos forms depende del catálogo configurado
   // por el superadmin, que llega async — se sincroniza cuando esté disponible.
