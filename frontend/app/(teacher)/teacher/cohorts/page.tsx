@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Users2, Plus, Check, Calendar, Lock, Ban, ChevronRight,
-  AlertTriangle, Clock, X, UserCheck, UserX, RefreshCw, RotateCcw, Pencil,
+  AlertTriangle, Clock, X, UserCheck, UserX, RefreshCw, RotateCcw, Pencil, MessagesSquare,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { Card, Badge, Button, Skeleton, FullScreenModal, ConfirmModal } from "@/components/ui";
 import RefreshButton from "@/components/ui/RefreshButton";
@@ -25,6 +26,8 @@ import { getMyDisplayTimezone, formatTimeTz, getDateKeyTz } from "@/lib/tzFormat
 import { useBusinessRules } from "@/hooks/useBusinessRules";
 import { getErrorMessage } from "@/lib/errorMessage";
 import { useToast } from "@/hooks/useToast";
+import { usePlatformConfig } from "@/hooks/useStudentData";
+import { openGroupConversation } from "@/hooks/useChat";
 
 interface Session {
   id: number;
@@ -59,6 +62,8 @@ const STATUS_BADGE: Record<Cohort["status"], "success" | "warning" | "info" | "n
 };
 
 export default function TeacherCohortsPage() {
+  const router = useRouter();
+  const { config: platformConfig } = usePlatformConfig();
   const {
     cohorts,
     loading: loadingCohorts,
@@ -468,12 +473,30 @@ export default function TeacherCohortsPage() {
                 )}
               </div>
 
-              <button
-                onClick={() => toggleExpand(cohort)}
-                className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-slate-100 flex items-center justify-center flex-shrink-0"
-              >
-                <ChevronRight className={`w-4 h-4 text-slate-500 transition-transform ${expandedId === cohort.id ? "rotate-90" : ""}`} />
-              </button>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {(platformConfig?.chat_enabled ?? true) && (
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        await openGroupConversation(cohort.id);
+                      } finally {
+                        router.push("/teacher/chat");
+                      }
+                    }}
+                    title="Chat grupal"
+                    className="w-8 h-8 rounded-xl bg-pink-50 hover:bg-pink-100 flex items-center justify-center"
+                  >
+                    <MessagesSquare className="w-4 h-4 text-pink-500" />
+                  </button>
+                )}
+                <button
+                  onClick={() => toggleExpand(cohort)}
+                  className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-slate-100 flex items-center justify-center flex-shrink-0"
+                >
+                  <ChevronRight className={`w-4 h-4 text-slate-500 transition-transform ${expandedId === cohort.id ? "rotate-90" : ""}`} />
+                </button>
+              </div>
             </div>
 
             {/* Barra de progreso de cupo */}

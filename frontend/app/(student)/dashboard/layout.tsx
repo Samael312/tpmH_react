@@ -6,6 +6,7 @@ import { useAuthStore } from "@/store/authStore";
 import api from "@/lib/api";
 import NavBar from "@/components/layout/NavBar";
 import DashboardTopbar from "@/components/layout/DashboardTopbar";
+import ChatWidget from "@/components/chat/ChatWidget";
 import { useLandingData } from "@/hooks/useLandingData";
 
 const FULLSCREEN_ROUTES = ["/dashboard/onboarding"];
@@ -101,6 +102,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
       <NavBar />
+      <ChatWidget />
 
       {/* ─── Área de Contenido ─── */}
       <main className="flex-1 flex flex-col min-w-0 bg-slate-50 pt-14 pb-20 md:pt-0 md:pb-0">

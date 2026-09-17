@@ -669,6 +669,7 @@ export interface PlatformConfigInfo {
   platform_tagline: string | null;
   is_single_tenant: boolean;
   show_teacher_whatsapp: boolean;
+  chat_enabled: boolean;
   featured_teacher: {
     username: string;
     name: string;

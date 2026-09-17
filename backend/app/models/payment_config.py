@@ -70,6 +70,19 @@ class PlatformConfig(Base):
     # payments.py::notify_payment (rama package_change).
     min_classes_before_package_change = Column(Integer, default=0, server_default="0")
 
+    # ─── N1/N2: Chat interno (student <-> teacher) ───
+    # Interruptor global. En False: oculta el acceso en navbar/widget del
+    # frontend Y bloquea a nivel backend (REST + WS) el envío/lectura de
+    # mensajes, para evitar que alguien lo esquive pegando la URL o
+    # abriendo el socket directo.
+    chat_enabled = Column(Boolean, default=True, server_default="true")
+    # Días de retención del historial antes de purgarse (job en
+    # core/scheduler.py::purge_old_chat_messages). 0 = sin límite.
+    chat_retention_days = Column(Integer, default=90, server_default="90")
+    # Ventana de inactividad (en horas) tras la cual un nuevo mensaje del
+    # estudiante vuelve a disparar el email de aviso al profesor.
+    chat_reactivation_hours = Column(Integer, default=24, server_default="24")
+
 # backend/app/models/payment_config.py
 class PaymentConfig(Base):
     __tablename__ = "payment_config"

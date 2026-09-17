@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
   Search, Users, Mail, Phone, ChevronDown, BookOpen,
   GraduationCap, Package as PackageIcon, Filter, X, Sliders,
-  AlertTriangle, RefreshCw,
+  AlertTriangle, RefreshCw, MessagesSquare,
 } from "lucide-react";
 import { useTeacherStudentsFull, TeacherStudentFull } from "@/hooks/useTeacherData";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
@@ -15,6 +16,8 @@ import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
+import { usePlatformConfig } from "@/hooks/useStudentData";
+import { openDirectConversation } from "@/hooks/useChat";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "Todos los estados" },
@@ -68,6 +71,8 @@ function getProgressPct(e: TeacherStudentFull["enrollments"][number] | null) {
 
 function StudentCard({ student }: { student: TeacherStudentFull }) {
   const [expanded, setExpanded] = useState(false);
+  const router = useRouter();
+  const { config: platformConfig } = usePlatformConfig();
   const activeEnr = getActiveEnrollment(student);
   const progressPct = getProgressPct(activeEnr);
 
@@ -110,6 +115,25 @@ function StudentCard({ student }: { student: TeacherStudentFull }) {
 
         {/* Estado + progreso resumen */}
         <div className="hidden sm:flex flex-col items-end gap-1.5 flex-shrink-0">
+          {(platformConfig?.chat_enabled ?? true) && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await openDirectConversation(student.username);
+                  router.push("/teacher/chat");
+                } catch {
+                  // el link a /teacher/chat sigue funcionando aunque falle el prefetch
+                  router.push("/teacher/chat");
+                }
+              }}
+              className="flex items-center gap-1 text-[10px] font-black text-pink-500 hover:text-pink-600 cursor-pointer"
+            >
+              <MessagesSquare className="w-3.5 h-3.5" /> Chat
+            </span>
+          )}
           {activeEnr ? (
             <>
               <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full ${STATUS_BADGE[activeEnr.status] ?? "bg-slate-100 text-slate-500"}`}>

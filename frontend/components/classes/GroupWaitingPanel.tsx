@@ -3,9 +3,12 @@
 "use client";
 
 import { useState } from "react";
-import { Users2, Calendar, Clock, ArrowRightLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Users2, Calendar, Clock, ArrowRightLeft, MessagesSquare } from "lucide-react";
 import ChangePackageModal from "@/components/payments/ChangePackageModal";
 import type { StudentEnrollment } from "@/hooks/useStudentData";
+import { usePlatformConfig } from "@/hooks/useStudentData";
+import { openGroupConversation } from "@/hooks/useChat";
 
 const STATUS_LABEL: Record<string, string> = {
   filling: "Llenándose",
@@ -28,6 +31,8 @@ interface Props {
 
 export default function GroupWaitingPanel({ enrollment, onChanged, completedClasses = 0, totalClasses = null }: Props) {
   const [showMigration, setShowMigration] = useState(false);
+  const router = useRouter();
+  const { config: platformConfig } = usePlatformConfig();
 
   const status = enrollment.cohort_status ?? "filling";
   const current = enrollment.cohort_current_students ?? 0;
@@ -121,6 +126,23 @@ export default function GroupWaitingPanel({ enrollment, onChanged, completedClas
               />
             </div>
           </div>
+        )}
+
+        {enrollment.cohort_id != null
+          && (status === "filling" || status === "confirmed" || status === "in_progress")
+          && (platformConfig?.chat_enabled ?? true) && (
+          <button
+            onClick={async () => {
+              try {
+                await openGroupConversation(enrollment.cohort_id as number);
+              } finally {
+                router.push("/dashboard/chat");
+              }
+            }}
+            className="w-full py-2.5 text-xs font-bold text-white bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl transition-all flex items-center justify-center gap-2"
+          >
+            <MessagesSquare className="w-3.5 h-3.5" /> Chat del grupo
+          </button>
         )}
 
         {canMigrate && (status === "filling" || status === "confirmed") && (

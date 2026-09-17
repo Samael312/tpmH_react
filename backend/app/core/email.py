@@ -646,6 +646,20 @@ def send_package_expiring_email(
     html = _base_template("Tu paquete está por agotarse", _badge("Por vencer", COLOR_AMBER), "Tu paquete se está agotando ⏳", body)
     return _send(to_email, f"Tu paquete está por agotarse — {PLATFORM_NAME}", html)
 
+def send_new_chat_message_teacher_email(
+    to_email: str, teacher_name: str, student_name: str, message_preview: str, conversation_url: str,
+) -> bool:
+    body = f"""
+      <p>Hola {teacher_name}, tienes un nuevo mensaje de <strong style="color:{COLOR_INK};">{student_name}</strong> en el chat interno.</p>
+      {_detail_table([
+        _detail_row("Mensaje", message_preview),
+      ])}
+      {_cta_button("Responder", conversation_url)}
+    """
+    html = _base_template("Nuevo mensaje", _badge("Chat", COLOR_BLUE), "Nuevo mensaje 💬", body)
+    return _send(to_email, f"Nuevo mensaje de {student_name} — {PLATFORM_NAME}", html)
+
+
 def send_class_confirmed_email(
     to_email: str, student_name: str, teacher_name: str, subject: str,
     class_start_local: str, duration_minutes: int, buffer_minutes: int = 0,

@@ -115,5 +115,8 @@ def serialize_platform_config(db: Session, config: PlatformConfig) -> dict:
         "is_single_tenant": config.is_single_tenant,
         "featured_teacher": featured_teacher,
         "show_teacher_whatsapp": config.show_teacher_whatsapp,
+        "chat_enabled": config.chat_enabled,
+        "chat_retention_days": config.chat_retention_days,
+        "chat_reactivation_hours": config.chat_reactivation_hours,
         "landing_content": get_landing_content(config),
     }

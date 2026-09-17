@@ -72,6 +72,10 @@ class PlatformConfigUpdate(BaseModel):
     is_single_tenant: Optional[bool] = None
     featured_teacher_username: Optional[str] = None
     show_teacher_whatsapp: Optional[bool] = None
+    # N2: toggle del chat interno + su configuración de retención/reactivación.
+    chat_enabled: Optional[bool] = None
+    chat_retention_days: Optional[int] = None
+    chat_reactivation_hours: Optional[int] = None
     # Mini-CMS del landing (N3). El admin siempre manda el objeto completo
     # (todas las claves de LANDING_CONTENT_DEFAULTS) — se guarda tal cual,
     # se completa contra los defaults recién al leer (ver get_landing_content).
@@ -1024,6 +1028,22 @@ def update_platform_config(
         config.is_single_tenant = data.is_single_tenant
     if data.show_teacher_whatsapp is not None:
         config.show_teacher_whatsapp = data.show_teacher_whatsapp
+    if data.chat_enabled is not None:
+        config.chat_enabled = data.chat_enabled
+    if data.chat_retention_days is not None:
+        if data.chat_retention_days < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Los días de retención no pueden ser negativos",
+            )
+        config.chat_retention_days = data.chat_retention_days
+    if data.chat_reactivation_hours is not None:
+        if data.chat_reactivation_hours < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Las horas de reactivación no pueden ser negativas",
+            )
+        config.chat_reactivation_hours = data.chat_reactivation_hours
     if data.landing_content is not None:
         config.landing_content = data.landing_content
 

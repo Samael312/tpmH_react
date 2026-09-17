@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Check, Loader2, AlertCircle, Calendar, UserCheck, MessageCircle, Star, ArrowLeft } from "lucide-react";
+import { Check, Loader2, AlertCircle, Calendar, UserCheck, MessageCircle, MessagesSquare, Star, ArrowLeft } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { useMyTeachers, usePlatformConfig } from "@/hooks/useStudentData";
+import { openDirectConversation } from "@/hooks/useChat";
 import PublicProfileView, { PublicProfileTeacher, PublicProfileReview } from "@/components/teacher/PublicProfileView";
 import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
@@ -226,6 +227,22 @@ export default function TeacherBrowsePage() {
               <div className="bg-white/90 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" /> {chooseError || unlinkError}
               </div>
+            )}
+
+            {isMine && (platformConfig?.chat_enabled ?? true) && (
+              <button
+                onClick={async () => {
+                  try {
+                    await openDirectConversation(username);
+                    router.push("/dashboard/chat");
+                  } catch {
+                    toast.error("No se pudo abrir el chat. Intenta de nuevo.");
+                  }
+                }}
+                className="flex items-center justify-center gap-2 bg-white/20 hover:bg-white/30 backdrop-blur-md px-5 py-3 rounded-2xl text-sm font-bold transition-all duration-200 shadow-lg"
+              >
+                <MessagesSquare className="w-4 h-4" /> Chat
+              </button>
             )}
 
             <button

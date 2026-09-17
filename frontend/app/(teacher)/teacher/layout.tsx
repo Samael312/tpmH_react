@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { useAuthStore } from '@/store/authStore'
 import NavBar from '@/components/layout/NavBar'
 import DashboardTopbar from '@/components/layout/DashboardTopbar'
+import ChatWidget from '@/components/chat/ChatWidget'
 import api from '@/lib/api'
 
 const FULLSCREEN_ROUTES = ['/teacher/onboarding']
@@ -112,6 +113,7 @@ export default function TeacherLayout({
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
       <NavBar />
+      <ChatWidget />
 
       <main className="flex-1 flex flex-col min-w-0 bg-slate-50 pt-14 pb-20 md:pt-0 md:pb-0">
         <DashboardTopbar variant="teacher" />

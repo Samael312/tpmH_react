@@ -412,6 +412,7 @@ function LandingTitleField({ label, value, onChange, gradientId, onGradientChang
 
 const TABS = [
   { key: 'platform', label: 'Plataforma', icon: '🏳️', dot: 'bg-pink-500' },
+  { key: 'chat', label: 'Chats', icon: '💬', dot: 'bg-blue-400' },
   { key: 'payments', label: 'Pagos', icon: '💳', dot: 'bg-emerald-400' },
   { key: 'catalogs', label: 'Catálogos', icon: '📚', dot: 'bg-purple-400' },
   { key: 'rules', label: 'Reglas', icon: '⚙️', dot: 'bg-amber-400' },
@@ -577,6 +578,9 @@ export default function SettingsPage() {
         platform_tagline: platformConfig?.platform_tagline,
         is_single_tenant: platformConfig?.is_single_tenant,
         show_teacher_whatsapp: platformConfig?.show_teacher_whatsapp,
+        chat_enabled: platformConfig?.chat_enabled,
+        chat_retention_days: platformConfig?.chat_retention_days,
+        chat_reactivation_hours: platformConfig?.chat_reactivation_hours,
         featured_teacher_username: platformConfig?.featured_teacher_username || null,
         landing_content: platformConfig?.landing_content,
       })
@@ -1261,6 +1265,109 @@ export default function SettingsPage() {
             <Skeleton className="h-32 w-full rounded-2xl" />
           )}
         </Card>
+      )}
+
+      {/* ─── N2: Chat interno ──────────────────────────────────────── */}
+      {activeTab === 'chat' && (
+        plError ? (
+          <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span className="text-sm font-semibold flex-1">No se pudo cargar la configuración del chat.</span>
+            <Button variant="secondary" onClick={() => refetchPlatformConfig()} className="!rounded-xl !py-2 !px-4 text-xs">Reintentar</Button>
+          </div>
+        ) : platformConfig ? (
+          <div className="space-y-6">
+            <Card className="p-6 md:p-8 space-y-6">
+              <div>
+                <h3 className="text-slate-800 font-black text-lg">Chat interno</h3>
+                <p className="text-slate-500 text-sm font-medium mt-1">
+                  Mensajería directa entre alumno y profesor (y grupal, por cohorte).
+                </p>
+              </div>
+
+              {/* Toggle general */}
+              <div className="flex items-center justify-between bg-blue-50/50 rounded-2xl p-6 border border-blue-100">
+                <div>
+                  <p className="text-slate-800 text-sm font-bold">Habilitar el chat interno</p>
+                  <p className="text-slate-500 text-xs font-medium mt-1">
+                    Al apagarlo, desaparece el ícono de la barra de navegación y el widget flotante
+                    tanto en mobile como en desktop, y el backend rechaza cualquier intento de leer
+                    o enviar mensajes aunque alguien fuerce la URL o el WebSocket directamente.
+                  </p>
+                </div>
+                <button
+                  onClick={() => updatePlatformConfig({
+                    ...platformConfig,
+                    chat_enabled: !platformConfig.chat_enabled
+                  })}
+                  className={`
+                    relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none shrink-0 ml-4
+                    ${platformConfig.chat_enabled ? 'bg-blue-500 shadow-inner' : 'bg-slate-200'}
+                  `}
+                >
+                  <span className={`
+                    absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform duration-300 shadow-sm
+                    ${platformConfig.chat_enabled ? 'translate-x-6' : 'translate-x-0'}
+                  `}/>
+                </button>
+              </div>
+
+              {/* Retención de historial */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                  Retención de historial (días)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={platformConfig.chat_retention_days}
+                  onChange={e => updatePlatformConfig({
+                    ...platformConfig,
+                    chat_retention_days: Math.max(0, Number(e.target.value) || 0)
+                  })}
+                  className="w-full md:w-48 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300 transition-all"
+                />
+                <p className="text-xs text-slate-500 font-medium ml-1 mt-1">
+                  Los mensajes más viejos que esto se borran automáticamente (job diario). Usa 0 para no borrar nunca.
+                </p>
+              </div>
+
+              {/* Reactivación del email al profesor */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                  Reactivación del aviso por email (horas)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={platformConfig.chat_reactivation_hours}
+                  onChange={e => updatePlatformConfig({
+                    ...platformConfig,
+                    chat_reactivation_hours: Math.max(0, Number(e.target.value) || 0)
+                  })}
+                  className="w-full md:w-48 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300 transition-all"
+                />
+                <p className="text-xs text-slate-500 font-medium ml-1 mt-1">
+                  Cuando un alumno escribe después de este tiempo de silencio (o es el primer mensaje),
+                  se le manda un email al profesor avisándole. Usa 0 para avisarle en cada mensaje del alumno.
+                </p>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button
+                  variant="primary"
+                  loading={saving}
+                  onClick={savePlatformConfig}
+                  className="md:w-auto w-full px-8 py-3 !rounded-2xl shadow-md shadow-pink-200"
+                >
+                  {saved ? '✓ Configuración guardada' : 'Guardar chat'}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        ) : (
+          <Skeleton className="h-32 w-full rounded-2xl" />
+        )
       )}
 
       {/* ─── Catálogos del Sistema ─────────────────────────────────── */}

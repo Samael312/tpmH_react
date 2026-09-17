@@ -505,6 +505,9 @@ export interface AdminPlatformConfig {
   platform_tagline: string | null
   is_single_tenant: boolean
   show_teacher_whatsapp: boolean
+  chat_enabled: boolean
+  chat_retention_days: number
+  chat_reactivation_hours: number
   featured_teacher: {
     username: string
     name: string

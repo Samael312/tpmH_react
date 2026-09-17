@@ -8,11 +8,13 @@ import { useAuthStore } from "@/store/authStore";
 import { 
   LayoutDashboard, Users, GraduationCap, Calendar, Settings, LogOut, 
   MonitorPlay, UserCircle, ClipboardEdit, CreditCard, Book, BarChart, ChevronLeft,
-  CheckCheck, MoreHorizontal, Users2, LifeBuoy, Crown, AlertOctagon
+  CheckCheck, MoreHorizontal, Users2, LifeBuoy, Crown, AlertOctagon, MessagesSquare
 } from "lucide-react";
 import { useUnreadNotificationCount } from "@/hooks/useAdminData";
 import { useUnreadSupportCount } from "@/hooks/useSupport";
 import { useLandingData } from "@/hooks/useLandingData";
+import { usePlatformConfig } from "@/hooks/useStudentData";
+import { useUnreadChatCount } from "@/hooks/useChat";
 
 import { useMobileTopBar } from "@/lib/mobileTopBar";
 import RefreshButton from "@/components/ui/RefreshButton";
@@ -28,6 +30,7 @@ const STUDENT_MAIN: TabItem[] = [
   { href: "/dashboard/profile", label: "Perfil", icon: <UserCircle size={20} /> },
 ];
 const STUDENT_MORE: TabItem[] = [
+  { href: "/dashboard/chat", label: "Chat", icon: <MessagesSquare size={20} /> },
   { href: "/dashboard/availability", label: "Disponibilidad", icon: <Users size={20} /> },
   { href: "/dashboard/materials", label: "Materiales", icon: <Book size={20} /> },
   { href: "/dashboard/homework", label: "Tareas", icon: <ClipboardEdit size={20} /> },
@@ -42,6 +45,7 @@ const TEACHER_MAIN: TabItem[] = [
   { href: "/teacher/profile", label: "Perfil", icon: <UserCircle size={20} /> },
 ];
 const TEACHER_MORE: TabItem[] = [
+  { href: "/teacher/chat", label: "Chat", icon: <MessagesSquare size={20} /> },
   { href: "/teacher/materials", label: "Materiales", icon: <Book size={20} /> },
   { href: "/teacher/homework", label: "Tareas", icon: <ClipboardEdit size={20} /> },
   { href: "/teacher/packages", label: "Paquetes", icon: <CreditCard size={20} /> },
@@ -181,6 +185,9 @@ export default function DashboardSidebar() {
   const showStudentMenu = role === "student";
   const { count: unreadCount } = useUnreadNotificationCount(showAdminMenu);
   const { count: unreadSupportCount } = useUnreadSupportCount(showStudentMenu || (showTeacherMenu && role === "teacher"));
+  const { config: platformConfig } = usePlatformConfig();
+  const chatEnabled = platformConfig?.chat_enabled ?? true;
+  const { count: unreadChatCount } = useUnreadChatCount(chatEnabled && (showStudentMenu || showTeacherMenu));
 
   const handleLogout = () => {
     logout();
@@ -202,11 +209,14 @@ export default function DashboardSidebar() {
   // showTeacherMenu=true, se quedaba solo con el menú de profesor y nunca
   // veía las opciones de admin en la barra inferior mobile. Se le agregan
   // los ítems de admin al final de "Más".
-  const mobileMore = showStudentMenu
+  const mobileMoreRaw = showStudentMenu
     ? STUDENT_MORE
     : showTeacherMenu
       ? (role === "teacher_admin" ? [...TEACHER_MORE, ...ADMIN_MAIN, ...ADMIN_MORE] : TEACHER_MORE)
       : ADMIN_MORE;
+  // N2: oculta también la entrada de Chat en el sheet "Más" de mobile
+  // cuando el superadmin/teacher_admin lo deshabilitó.
+  const mobileMore = chatEnabled ? mobileMoreRaw : mobileMoreRaw.filter(i => i.href !== "/dashboard/chat" && i.href !== "/teacher/chat");
 
   return (
     <>
@@ -267,6 +277,9 @@ export default function DashboardSidebar() {
                 <NavItem href="/dashboard/homework" icon={<ClipboardEdit size={20} />} label="Mis Tareas" active={isActive("/dashboard/homework")} collapsed={collapsed} />
                 <NavItem href="/dashboard/teachers" icon={<GraduationCap size={20} />} label="Profesores" active={isActive("/dashboard/teachers")} collapsed={collapsed} />
                 <NavItem href="/dashboard/support" icon={<LifeBuoy size={20} />} label="Soporte" active={isActive("/dashboard/support")} collapsed={collapsed} badge={unreadSupportCount > 0 ? unreadSupportCount : undefined} />
+                {chatEnabled && (
+                  <NavItem href="/dashboard/chat" icon={<MessagesSquare size={20} />} label="Chat" active={isActive("/dashboard/chat")} collapsed={collapsed} badge={unreadChatCount > 0 ? unreadChatCount : undefined} />
+                )}
                 <NavItem href="/dashboard/profile" icon={<UserCircle size={20} />} label="Mi Perfil" active={isActive("/dashboard/profile")} collapsed={collapsed} />
               </nav>
             </div>
@@ -291,6 +304,9 @@ export default function DashboardSidebar() {
                 <NavItem href="/teacher/cohorts" icon={<Users2 size={20} />} label="Grupos" active={isActive("/teacher/cohorts")} collapsed={collapsed} />
                 <NavItem href="/teacher/wallet" icon={<BarChart size={20} />} label="Ganancias" active={isActive("/teacher/wallet")} collapsed={collapsed} />
                 <NavItem href="/teacher/support" icon={<LifeBuoy size={20} />} label="Soporte" active={isActive("/teacher/support")} collapsed={collapsed} badge={unreadSupportCount > 0 ? unreadSupportCount : undefined} />
+                {chatEnabled && (
+                  <NavItem href="/teacher/chat" icon={<MessagesSquare size={20} />} label="Chat" active={isActive("/teacher/chat")} collapsed={collapsed} badge={unreadChatCount > 0 ? unreadChatCount : undefined} />
+                )}
                 <NavItem href="/teacher/profile" icon={<UserCircle size={20} />} label="Mi Perfil" active={isActive("/teacher/profile")} collapsed={collapsed} />
               </nav>
             </div>

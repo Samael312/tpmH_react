@@ -298,12 +298,33 @@ async def notify_low_credit_packages():
     finally:
         db.close()
 
+async def purge_old_chat_messages():
+    """
+    Job diario. Borra mensajes de chat interno más viejos que
+    PlatformConfig.chat_retention_days (0 = sin límite, no borra nada).
+    """
+    from app.core.chat import purge_old_messages
+    from app.core.platform_config import get_or_create_platform_config
+
+    db: Session = SessionLocal()
+    try:
+        config = get_or_create_platform_config(db)
+        count = purge_old_messages(db, config.chat_retention_days)
+        if count:
+            logger.info(f"Chat: {count} mensajes purgados por retención ({config.chat_retention_days}d)")
+    except Exception as e:
+        logger.error(f"Error en job de purga de chat: {e}")
+    finally:
+        db.close()
+
+
 def start_scheduler():
     scheduler.add_job(send_class_reminders, trigger=IntervalTrigger(hours=1), id="class_reminders", replace_existing=True)
     scheduler.add_job(finalize_expired_classes, trigger=IntervalTrigger(minutes=10), id="finalize_expired_classes", replace_existing=True)
     scheduler.add_job(sync_all_teacher_calendars, trigger=IntervalTrigger(minutes=30), id="sync_teacher_calendars", replace_existing=True)
     scheduler.add_job(generate_upcoming_meet_links, trigger=IntervalTrigger(minutes=5), id="generate_meet_links", replace_existing=True)
     scheduler.add_job(notify_low_credit_packages, trigger=IntervalTrigger(days=7), id="notify_low_credit_packages", replace_existing=True)
+    scheduler.add_job(purge_old_chat_messages, trigger=IntervalTrigger(hours=24), id="purge_old_chat_messages", replace_existing=True)
     scheduler.start()
 
 def stop_scheduler():
