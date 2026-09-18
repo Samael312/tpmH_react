@@ -7,10 +7,14 @@ interface BottomSheetProps {
   open: boolean;
   onClose: () => void;
   title?: string;
+  // Variante densa: header y padding más chicos y alto máximo en `dvh`
+  // (respeta la barra de direcciones del móvil) — para menús cuyo contenido
+  // debe entrar completo sin scroll vertical.
+  compact?: boolean;
   children: React.ReactNode;
 }
 
-export default function BottomSheet({ open, onClose, title, children }: BottomSheetProps) {
+export default function BottomSheet({ open, onClose, title, compact = false, children }: BottomSheetProps) {
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
@@ -25,11 +29,11 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
         onClick={onClose}
       />
       <div
-        className="relative w-full sm:max-w-lg bg-white rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl
-                   animate-in slide-in-from-bottom duration-300 max-h-[85vh] overflow-y-auto"
+        className={`relative w-full sm:max-w-lg bg-white rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl
+                   animate-in slide-in-from-bottom duration-300 overflow-y-auto ${compact ? "max-h-[92dvh]" : "max-h-[85vh]"}`}
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <div className="sticky top-0 bg-white/95 backdrop-blur-md flex items-center justify-between px-5 py-4 border-b border-slate-100 rounded-t-[2rem] z-10">
+        <div className={`sticky top-0 bg-white/95 backdrop-blur-md flex items-center justify-between px-5 ${compact ? "py-2.5" : "py-4"} border-b border-slate-100 rounded-t-[2rem] z-10`}>
           <div className="w-9 h-1 bg-slate-200 rounded-full absolute left-1/2 -translate-x-1/2 top-2 sm:hidden" />
           {title ? <h2 className="text-sm font-black text-slate-800 mt-2">{title}</h2> : <span />}
           <button
@@ -39,7 +43,7 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
             <X className="w-4 h-4 text-slate-500" />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className={compact ? "p-3" : "p-5"}>{children}</div>
       </div>
     </div>
   );

@@ -5,11 +5,12 @@
 # necesidad de abrir sockets.
 
 from collections import defaultdict
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, update
+from sqlalchemy.exc import IntegrityError
 
 from app.models.chat import ChatConversation, ChatConversationType, ChatMessage, ChatReadState
 from app.models.user import User, UserRole
@@ -326,21 +327,41 @@ def get_unread_count_for_user(db: Session, current_user: User) -> int:
 
 # ─── Envío de mensajes + reactivación de email ──────────────────────────
 
+def find_message_by_client_id(
+    db: Session, conversation_id: int, sender_id: int, client_id: Optional[str],
+) -> Optional[ChatMessage]:
+    if not client_id:
+        return None
+    return db.query(ChatMessage).filter(
+        ChatMessage.conversation_id == conversation_id,
+        ChatMessage.sender_id == sender_id,
+        ChatMessage.client_id == client_id,
+    ).first()
+
+
 def send_message(
     db: Session, config: PlatformConfig, convo: ChatConversation, sender: User, content: str,
-) -> tuple[ChatMessage, bool]:
+    client_id: Optional[str] = None,
+) -> tuple[ChatMessage, bool, bool]:
     """
     Persiste el mensaje y determina si corresponde disparar el email de
     aviso al profesor (solo cuando el remitente es un estudiante y la
     conversación estaba inactiva por más de chat_reactivation_hours, o es
     el primer mensaje de la conversación).
-    Devuelve (mensaje, should_notify_teacher_by_email).
+
+    Idempotente por `client_id`: si ese mensaje ya existe (reintento por
+    REST tras un WS lento) devuelve el existente sin duplicarlo.
+    Devuelve (mensaje, should_notify_teacher_by_email, is_duplicate).
     """
     content = content.strip()
     if not content:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "El mensaje no puede estar vacío")
     if len(content) > 4000:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Mensaje demasiado largo")
+
+    existing = find_message_by_client_id(db, convo.id, sender.id, client_id)
+    if existing:
+        return existing, False, True
 
     now = utc_now()
     should_notify = False
@@ -353,7 +374,7 @@ def send_message(
         ):
             should_notify = True
 
-    message = ChatMessage(conversation_id=convo.id, sender_id=sender.id, content=content)
+    message = ChatMessage(conversation_id=convo.id, sender_id=sender.id, content=content, client_id=client_id)
     db.add(message)
 
     convo.last_message_at = now
@@ -361,9 +382,17 @@ def send_message(
     if should_notify:
         convo.teacher_last_notified_at = now
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Carrera con otro envío del mismo client_id (WS + REST casi a la vez).
+        db.rollback()
+        existing = find_message_by_client_id(db, convo.id, sender.id, client_id)
+        if existing:
+            return existing, False, True
+        raise
     db.refresh(message)
-    return message, should_notify
+    return message, should_notify, False
 
 
 # ─── Entrega (checkmarks) ────────────────────────────────────────────────
@@ -373,15 +402,17 @@ def send_message(
 # destinatario tiene AL MENOS UN socket global abierto", esté mirando esa
 # conversación o cualquier otra pantalla de la app.
 
-def mark_delivered_now(db: Session, message: ChatMessage) -> bool:
-    """Marca el mensaje como entregado AHORA si todavía no lo estaba.
-    Devuelve True si lo acaba de marcar (o sea, hay que avisarle al emisor
-    con el evento 'delivered' — ver endpoints/chat.py)."""
-    if message.delivered_at is not None:
-        return False
-    message.delivered_at = utc_now()
+def mark_delivered_by_id(db: Session, message_id: int) -> Optional[datetime]:
+    """UPDATE atómico de una sola query: devuelve el instante si ESTA llamada
+    fue la que marcó el mensaje como entregado, None si ya lo estaba."""
+    now = utc_now()
+    result = db.execute(
+        update(ChatMessage)
+        .where(ChatMessage.id == message_id, ChatMessage.delivered_at.is_(None))
+        .values(delivered_at=now)
+    )
     db.commit()
-    return True
+    return now if result.rowcount else None
 
 
 def catch_up_deliveries(db: Session, user: User) -> dict[int, list[int]]:

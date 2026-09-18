@@ -2,14 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Send, WifiOff, Clock, Check, CheckCheck, AlertCircle } from "lucide-react";
-import { ChatConversation, ChatMessage, useChatThread } from "@/hooks/useChat";
+import { ChatConversation, ChatMessage, useChatThread, useUnreadChatCount } from "@/hooks/useChat";
+import { useChatStore } from "@/store/chatStore";
 import { useAuthStore } from "@/store/authStore";
 import { decodeToken } from "@/lib/auth";
 
 // ─── Checkmarks (N3) ──────────────────────────────────────────────────────
 // reloj = en cola/enviando (todavía no confirma el servidor) · 1 check =
 // confirmado por el servidor (persistido) · 2 checks = le llegó a algún
-// destinatario conectado (ver core/chat.py::mark_delivered_now). No hay
+// destinatario conectado (ver core/chat.py::mark_delivered_by_id). No hay
 // estado de "leído" (3er check / azul) — no fue pedido.
 function MessageStatusIcon({ status }: { status: ChatMessage["status"] }) {
   // Se renderiza DEBAJO de la burbuja, sobre el fondo claro de la
@@ -49,7 +50,11 @@ export default function ChatThreadView({
   // auth/jwt.py::create_access_token), así que lo sacamos de ahí.
   const token = useAuthStore((s) => s.token);
   const currentUserId = token ? Number(decodeToken(token)?.sub) : undefined;
-  const { messages, loading, connected, sendError, send, markRead, refetch } = useChatThread(conversation.id);
+  const { messages, loading, connected, sendError, send, retryMessage, markRead, refetch } = useChatThread(conversation.id);
+  const setActiveConversation = useChatStore((s) => s.setActiveConversation);
+  // Con este hilo abierto (y leído) el total de no leídos son los OTROS
+  // chats — se muestra junto a la flecha de volver.
+  const { count: otherUnread } = useUnreadChatCount(!!onBack);
   const [draft, setDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -61,9 +66,24 @@ export default function ChatThreadView({
     onRegisterRefetch?.(refetch);
   }, [onRegisterRefetch, refetch]);
 
+  // Entrar al chat = leerlo: quita la notificación de la lista y del badge.
   useEffect(() => {
     markRead();
   }, [conversation.id, markRead]);
+
+  // Le avisa al store qué hilo se está mirando: un mensaje entrante en
+  // ESTE hilo se marca leído al instante; en cualquier otro queda como nuevo.
+  useEffect(() => {
+    setActiveConversation(conversation.id);
+    return () => setActiveConversation(null);
+  }, [conversation.id, setActiveConversation]);
+
+  // Mensajes que llegaron con la pestaña en segundo plano: se leen al volver.
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") markRead(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [markRead]);
 
   const handleSend = () => {
     if (!draft.trim()) return;
@@ -76,8 +96,13 @@ export default function ChatThreadView({
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-shrink-0">
         {onBack && (
-          <button onClick={onBack} className="text-slate-400 hover:text-pink-500 transition-colors">
+          <button onClick={onBack} className="relative text-slate-400 hover:text-pink-500 transition-colors" aria-label="Volver">
             <ArrowLeft size={18} />
+            {otherUnread > 0 && (
+              <span className="absolute -top-2 -right-3 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center">
+                {otherUnread > 99 ? "99+" : otherUnread}
+              </span>
+            )}
           </button>
         )}
         <div className="min-w-0 flex-1">
@@ -124,8 +149,13 @@ export default function ChatThreadView({
                   </div>
                   {isMine && (
                     <div className="flex justify-end items-center gap-1 mt-0.5 px-1">
-                      {m.status === "failed" && (
-                        <span className="text-[10px] text-rose-500 font-semibold mr-0.5">No enviado</span>
+                      {m.status === "failed" && m.client_id && (
+                        <button
+                          onClick={() => retryMessage(m.client_id!)}
+                          className="text-[10px] text-rose-500 font-semibold mr-0.5 underline underline-offset-2"
+                        >
+                          No enviado · Reintentar
+                        </button>
                       )}
                       <MessageStatusIcon status={m.status} />
                     </div>

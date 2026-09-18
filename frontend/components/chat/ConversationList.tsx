@@ -63,12 +63,14 @@ export default function ConversationList({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-bold text-slate-800 truncate">{c.title}</p>
+              <p className={`text-sm truncate ${c.unread_count > 0 ? "font-black text-slate-900" : "font-bold text-slate-800"}`}>{c.title}</p>
               {c.last_message_at && (
-                <span className="text-[10px] text-slate-400 flex-shrink-0">{timeAgo(c.last_message_at)}</span>
+                <span className={`text-[10px] flex-shrink-0 ${c.unread_count > 0 ? "text-rose-500 font-bold" : "text-slate-400"}`}>
+                  {timeAgo(c.last_message_at)}
+                </span>
               )}
             </div>
-            <p className="text-xs text-slate-400 truncate">
+            <p className={`text-xs truncate ${c.unread_count > 0 ? "text-slate-700 font-semibold" : "text-slate-400"}`}>
               {c.last_message_preview || (c.conversation_type === "group" ? "Chat grupal" : "Sin mensajes todavía")}
             </p>
           </div>

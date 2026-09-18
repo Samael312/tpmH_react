@@ -1,9 +1,14 @@
 # app/api/v1/endpoints/chat.py
+import asyncio
+import json
+import logging
+from dataclasses import dataclass
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.auth.dependencies import get_current_user, get_current_staff
 from app.auth.jwt import decode_access_token
@@ -13,7 +18,7 @@ from app.core.email import send_new_chat_message_teacher_email
 from app.core.god_mode_audit import log_god_mode_action
 from app.core.rate_limit import limiter
 from app.core.config import settings
-from app.db.base import SessionLocal, get_db
+from app.db.base import ChatSessionLocal, get_db
 from app.models.chat import ChatConversation, ChatConversationType, ChatMessage
 from app.models.group_cohort import GroupCohort
 from app.models.teacher import TeacherProfile
@@ -28,6 +33,7 @@ from app.schemas.chat import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ─── Serialización ───────────────────────────────────────────────────────
@@ -91,6 +97,7 @@ def _serialize_message(msg) -> ChatMessageResponse:
         content=msg.content,
         created_at=msg.created_at,
         delivered_at=msg.delivered_at,
+        client_id=msg.client_id,
     )
 
 
@@ -217,6 +224,124 @@ def mark_conversation_read(
     return {"message": "ok"}
 
 
+# ─── Envío de mensajes (camino compartido REST + WS) ────────────────────
+#
+# Todo el trabajo de base de datos (síncrono) corre en el threadpool con su
+# propia sesión de vida corta (ChatSessionLocal, ver db/base.py): antes se
+# hacía directo dentro de handlers `async`, bloqueando el event loop —
+# cada mensaje de cualquier usuario esperaba las queries (y el SMTP) del
+# anterior. El orden de salida es: persistir → eco al emisor (lo que quita
+# el reloj) → resto de participantes → "entregado" → email en segundo plano.
+
+@dataclass
+class _Persisted:
+    payload: dict
+    message_id: int
+    conversation_id: int
+    sender_id: int
+    participant_ids: set[int]
+    duplicate: bool
+    email_args: Optional[dict]
+
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _persist_message(user_id: int, conversation_id: int, content: str, client_id: Optional[str]) -> _Persisted:
+    db = ChatSessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user or not user.is_active:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuario no válido")
+        config = chat_core.assert_chat_enabled(db)
+        convo = db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
+        if not convo:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversación no encontrada")
+        chat_core.assert_participant(db, user, convo)
+
+        message, should_notify, duplicate = chat_core.send_message(
+            db, config, convo, user, content, client_id=client_id,
+        )
+        payload = {
+            "type": "message",
+            "id": message.id,
+            "conversation_id": message.conversation_id,
+            "sender_id": message.sender_id,
+            "sender_username": user.username,
+            "content": message.content,
+            "created_at": message.created_at.isoformat(),
+            "delivered_at": message.delivered_at.isoformat() if message.delivered_at else None,
+            # Solo lo usa el emisor para reconciliar su mensaje "sending";
+            # los demás participantes lo ignoran.
+            "client_id": message.client_id,
+        }
+        if duplicate:
+            return _Persisted(payload, message.id, convo.id, user.id, set(), True, None)
+
+        email_args = None
+        if should_notify and convo.teacher and convo.teacher.user:
+            teacher_user = convo.teacher.user
+            email_args = dict(
+                to_email=teacher_user.email,
+                teacher_name=teacher_user.name,
+                student_name=user.name,
+                message_preview=message.content[:140],
+                conversation_url=f"{settings.FRONTEND_URL}/teacher/chat?conversation={convo.id}",
+            )
+        return _Persisted(
+            payload, message.id, convo.id, user.id,
+            chat_core.conversation_participant_user_ids(db, convo), False, email_args,
+        )
+    finally:
+        db.close()
+
+
+def _mark_delivered(message_id: int):
+    db = ChatSessionLocal()
+    try:
+        return chat_core.mark_delivered_by_id(db, message_id)
+    finally:
+        db.close()
+
+
+def _send_notification_email(args: dict) -> None:
+    try:
+        send_new_chat_message_teacher_email(**args)
+    except Exception:
+        # Nunca romper el envío del mensaje por un fallo de email.
+        logger.exception("No se pudo enviar el email de nuevo mensaje de chat")
+
+
+async def _send_and_fanout(user_id: int, conversation_id: int, content: str, client_id: Optional[str]) -> dict:
+    sent = await run_in_threadpool(_persist_message, user_id, conversation_id, content, client_id)
+    payload = sent.payload
+
+    # Eco al emisor primero: es lo que le quita el reloj de "enviando".
+    await chat_manager.send_to_user(sent.sender_id, payload)
+    if sent.duplicate:
+        return payload
+
+    online_others = await chat_manager.broadcast_to_users(sent.participant_ids - {sent.sender_id}, payload)
+
+    # 2do checkmark: al menos un destinatario (que no sea el emisor) estaba
+    # online cuando salió el mensaje.
+    if online_others:
+        delivered_at = await run_in_threadpool(_mark_delivered, sent.message_id)
+        if delivered_at:
+            await chat_manager.send_to_user(sent.sender_id, {
+                "type": "delivered",
+                "id": sent.message_id,
+                "conversation_id": sent.conversation_id,
+                "delivered_at": delivered_at.isoformat(),
+            })
+
+    if sent.email_args:
+        task = asyncio.create_task(run_in_threadpool(_send_notification_email, sent.email_args))
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
+    return payload
+
+
 @router.post("/conversations/{conversation_id}/messages", response_model=ChatMessageResponse)
 @limiter.limit("30/minute")
 async def post_message(
@@ -224,38 +349,28 @@ async def post_message(
     conversation_id: int,
     data: SendMessageRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
     """
-    Envío por REST (fallback si el WS global no está conectado — ver
-    store/chatStore.ts en el frontend). El WS también puede recibir
-    mensajes directamente — ver `chat_websocket` más abajo — ambos
-    caminos pasan por la misma `chat_core.send_message` y el mismo
-    `_broadcast_and_notify`, así que checkmarks y push en tiempo real
-    funcionan igual sin importar por cuál llegó.
+    Envío por REST: fallback si el WS global no está conectado o no
+    devolvió el eco a tiempo (ver store/chatStore.ts). Comparte todo el
+    camino con el WS (`_send_and_fanout`) y es idempotente por `client_id`,
+    así que reintentar un mensaje que en realidad sí se guardó no lo duplica.
     """
-    config = chat_core.assert_chat_enabled(db)
-    convo = db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
-    if not convo:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversación no encontrada")
-    chat_core.assert_participant(db, current_user, convo)
-
-    message, should_notify = chat_core.send_message(db, config, convo, current_user, data.content)
-    await _broadcast_and_notify(db, convo, message, should_notify)
-    return _serialize_message(message)
+    payload = await _send_and_fanout(current_user.id, conversation_id, data.content, data.client_id)
+    return ChatMessageResponse.model_validate({
+        k: payload[k] for k in (
+            "id", "conversation_id", "sender_id", "sender_username",
+            "content", "created_at", "delivered_at", "client_id",
+        )
+    })
 
 
 # ─── WebSocket ───────────────────────────────────────────────────────────
 #
 # N3: UNA sola conexión GLOBAL por usuario (no una por conversación) — se
 # abre apenas hay sesión (ver store/chatStore.ts, montado en los
-# layouts de student/teacher) y se mantiene viva mientras navegás por
-# CUALQUIER pantalla de la app, no solo /dashboard/chat. Esto es lo que
-# permite:
-#   - Recibir mensajes en tiempo real de cualquier conversación estando en
-#     otra pantalla (antes solo llegaban al reabrir el hilo).
-#   - Saber si el destinatario está "online" de verdad para el segundo
-#     checkmark (ver core/chat.py::mark_delivered_now).
+# layouts de student/teacher/admin) y se mantiene viva mientras navegás
+# por CUALQUIER pantalla de la app, no solo /dashboard/chat.
 #
 # El navegador no permite mandar headers custom (Authorization) al abrir
 # un WebSocket, y frontend/backend son servicios distintos (no hay cookie
@@ -263,19 +378,44 @@ async def post_message(
 # wss:// (va cifrado por TLS igual que cualquier header).
 #
 # Protocolo (frames JSON):
-#   Cliente → servidor: {"type": "send", "conversation_id": int,
-#                         "content": str, "client_id": str}
-#     `client_id` es un uuid generado en el cliente al crear el mensaje
-#     optimista (cola de envío — ver ChatThreadView.tsx) — viaja de ida y
-#     vuelta sin persistirse, solo para que el emisor pueda reconciliar su
-#     mensaje "sending" con el id real que le asigna la base.
+#   Cliente → servidor:
+#     {"type": "send", "conversation_id": int, "content": str, "client_id": str}
+#     {"type": "ping"}   — heartbeat del cliente cada ~25 s; sin "pong" a
+#                          tiempo el cliente descarta el socket y reconecta
+#                          (detecta conexiones zombie tras un proxy/sleep).
 #   Servidor → cliente:
-#     {"type": "message", ...}     — mensaje nuevo (para todos los
-#                                     participantes, incluido el emisor).
+#     {"type": "message", ...}     — mensaje nuevo (todos los participantes,
+#                                     incluido el emisor).
 #     {"type": "delivered", "id", "conversation_id", "delivered_at"}
-#                                   — SOLO al emisor, cuando le llega a
-#                                     algún destinatario (2do checkmark).
-#     {"type": "error", "detail": str}
+#                                   — SOLO al emisor (2do checkmark).
+#     {"type": "pong"}
+#     {"type": "error", "detail": str, "client_id": str | None}
+
+
+def _ws_validate(user_id: int) -> Optional[int]:
+    """None si el usuario puede abrir el socket; si no, el close code."""
+    db = ChatSessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user or not user.is_active:
+            return 4401
+        if chat_core.assert_chat_enabled_ws(db) is None:
+            return 4403
+        if user.role not in (UserRole.student, UserRole.teacher, UserRole.teacher_admin):
+            return 4403
+        return None
+    finally:
+        db.close()
+
+
+def _ws_catch_up(user_id: int) -> dict[int, list[int]]:
+    db = ChatSessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        return chat_core.catch_up_deliveries(db, user) if user else {}
+    finally:
+        db.close()
+
 
 @router.websocket("/ws")
 async def chat_websocket(websocket: WebSocket, token: str = Query(...)):
@@ -283,132 +423,54 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(...)):
     if not payload:
         await websocket.close(code=4401)
         return
+    user_id = int(payload["sub"])
 
-    db = SessionLocal()
+    close_code = await run_in_threadpool(_ws_validate, user_id)
+    if close_code:
+        await websocket.close(code=close_code)
+        return
+
+    await chat_manager.connect(user_id, websocket)
     try:
-        user = db.query(User).filter(User.id == int(payload["sub"])).first()
-        if not user or not user.is_active:
-            await websocket.close(code=4401)
-            return
+        # Catch-up: los mensajes que le mandaron mientras estaba offline
+        # pasan a "entregado" ahora — se lo avisamos a cada emisor online.
+        by_sender = await run_in_threadpool(_ws_catch_up, user_id)
+        for sender_id, message_ids in by_sender.items():
+            for message_id in message_ids:
+                await chat_manager.send_to_user(sender_id, {"type": "delivered", "id": message_id})
 
-        config = chat_core.assert_chat_enabled_ws(db)
-        if config is None:
-            await websocket.close(code=4403)
-            return
-        if user.role not in (UserRole.student, UserRole.teacher, UserRole.teacher_admin):
-            await websocket.close(code=4403)
-            return
+        while True:
+            try:
+                raw = json.loads(await websocket.receive_text())
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(raw, dict):
+                continue
 
-        await chat_manager.connect(user.id, websocket)
-        try:
-            # Catch-up: cualquier mensaje que le hayan mandado mientras
-            # estaba offline pasa a "entregado" recién ahora — y se lo
-            # avisamos a cada emisor que siga conectado (2do checkmark
-            # aparece con retraso, pero aparece).
-            by_sender = chat_core.catch_up_deliveries(db, user)
-            for sender_id, message_ids in by_sender.items():
-                for message_id in message_ids:
-                    await chat_manager.send_to_user(sender_id, {
-                        "type": "delivered",
-                        "id": message_id,
-                        "delivered_at": None,  # ver nota abajo
-                    })
-            # Nota: no repetimos la query por el delivered_at exacto de
-            # cada mensaje acá (ya se guardó en la misma transacción de
-            # catch_up_deliveries) — el frontend solo necesita el id para
-            # marcar el segundo check, no le importa el timestamp exacto.
+            msg_type = raw.get("type", "send")
+            if msg_type == "ping":
+                await websocket.send_json({"type": "pong"})
+                continue
+            if msg_type != "send":
+                continue
 
-            while True:
-                raw = await websocket.receive_json()
-                msg_type = (raw or {}).get("type", "send")
-                if msg_type != "send":
-                    continue
-
-                conversation_id = (raw or {}).get("conversation_id")
-                content = (raw or {}).get("content", "")
-                client_id = (raw or {}).get("client_id")
-                if not conversation_id:
-                    await websocket.send_json({"type": "error", "detail": "Falta conversation_id", "client_id": client_id})
-                    continue
-
-                # Re-chequeamos el toggle en cada mensaje (no solo al
-                # conectar) por si el admin lo apaga mientras el socket
-                # sigue abierto.
-                config = chat_core.assert_chat_enabled_ws(db)
-                if config is None:
-                    await websocket.send_json({"type": "error", "detail": "Chat deshabilitado", "client_id": client_id})
-                    continue
-
-                convo = db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
-                if not convo:
-                    await websocket.send_json({"type": "error", "detail": "Conversación no encontrada", "client_id": client_id})
-                    continue
-                try:
-                    chat_core.assert_participant(db, user, convo)
-                except HTTPException as e:
-                    await websocket.send_json({"type": "error", "detail": e.detail, "client_id": client_id})
-                    continue
-
-                try:
-                    message, should_notify = chat_core.send_message(db, config, convo, user, content)
-                except HTTPException as e:
-                    await websocket.send_json({"type": "error", "detail": e.detail, "client_id": client_id})
-                    continue
-                await _broadcast_and_notify(db, convo, message, should_notify, client_id=client_id)
-        except WebSocketDisconnect:
-            pass
-        finally:
-            chat_manager.disconnect(user.id, websocket)
+            client_id = raw.get("client_id")
+            client_id = str(client_id)[:64] if client_id else None
+            conversation_id = raw.get("conversation_id")
+            if not conversation_id:
+                await websocket.send_json({"type": "error", "detail": "Falta conversation_id", "client_id": client_id})
+                continue
+            try:
+                await _send_and_fanout(user_id, int(conversation_id), str(raw.get("content") or ""), client_id)
+            except HTTPException as e:
+                await websocket.send_json({"type": "error", "detail": e.detail, "client_id": client_id})
+            except Exception:
+                logger.exception("Error enviando mensaje de chat por WS")
+                await websocket.send_json({"type": "error", "detail": "No se pudo enviar el mensaje", "client_id": client_id})
+    except WebSocketDisconnect:
+        pass
     finally:
-        db.close()
-
-
-async def _broadcast_and_notify(
-    db: Session, convo: ChatConversation, message, should_notify: bool, client_id: Optional[str] = None,
-) -> None:
-    participant_ids = chat_core.conversation_participant_user_ids(db, convo)
-    payload = {
-        "type": "message",
-        "id": message.id,
-        "conversation_id": message.conversation_id,
-        "sender_id": message.sender_id,
-        "sender_username": message.sender.username,
-        "content": message.content,
-        "created_at": message.created_at.isoformat(),
-        "delivered_at": message.delivered_at.isoformat() if message.delivered_at else None,
-        # Solo tiene sentido para el emisor (que fue quien lo generó) —
-        # los demás participantes simplemente lo ignoran al no tener un
-        # mensaje "sending" con ese client_id en su propia cola.
-        "client_id": client_id,
-    }
-    online_now = await chat_manager.broadcast_to_users(participant_ids, payload)
-
-    # 2do checkmark: alguien QUE NO SEA el propio emisor recibió el
-    # mensaje en el momento (no offline, no solo el eco a sus otras
-    # pestañas).
-    other_recipients_online = online_now - {message.sender_id}
-    if other_recipients_online and chat_core.mark_delivered_now(db, message):
-        await chat_manager.send_to_user(message.sender_id, {
-            "type": "delivered",
-            "id": message.id,
-            "conversation_id": message.conversation_id,
-            "delivered_at": message.delivered_at.isoformat(),
-        })
-
-    if should_notify and convo.teacher and convo.teacher.user:
-        teacher_user = convo.teacher.user
-        student_name = message.sender.name if convo.conversation_type == ChatConversationType.direct else message.sender.name
-        try:
-            send_new_chat_message_teacher_email(
-                to_email=teacher_user.email,
-                teacher_name=teacher_user.name,
-                student_name=student_name,
-                message_preview=message.content[:140],
-                conversation_url=f"{settings.FRONTEND_URL}/teacher/chat?conversation={convo.id}",
-            )
-        except Exception:
-            # Nunca romper el envío del mensaje por un fallo de email.
-            pass
+        chat_manager.disconnect(user_id, websocket)
 
 
 # ─── N5: Auditoría (superadmin / teacher_admin) ──────────────────────────

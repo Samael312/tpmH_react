@@ -5,10 +5,18 @@ import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/store/authStore'
 import NavBar from '@/components/layout/NavBar'
 import DashboardTopbar from '@/components/layout/DashboardTopbar'
+import { usePlatformConfig } from '@/hooks/useStudentData'
+import { useChatSocketBootstrap } from '@/hooks/useChat'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { user, hasHydrated } = useAuthStore()
+  const { config: platformConfig } = usePlatformConfig()
+
+  // Un teacher_admin también es profesor: sin el socket global en /admin/*
+  // no recibía mensajes ni actualizaba el badge mientras administraba.
+  // (El superadmin solo audita chats, no participa — no necesita socket.)
+  useChatSocketBootstrap(user?.role === 'teacher_admin' && platformConfig?.chat_enabled === true)
 
   useEffect(() => {
     if (!hasHydrated) return

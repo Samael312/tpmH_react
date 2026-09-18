@@ -6,6 +6,7 @@ import { useAuthStore } from "@/store/authStore";
 import { usePlatformConfig } from "@/hooks/useStudentData";
 import { useChatConversations, useUnreadChatCount, ChatConversation } from "@/hooks/useChat";
 import { useChatWidgetPresenceStore } from "@/store/chatWidgetPresenceStore";
+import { useChatStore } from "@/store/chatStore";
 import ConversationList from "./ConversationList";
 import ChatThreadView from "./ChatThreadView";
 
@@ -21,7 +22,9 @@ export default function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<ChatConversation | null>(null);
   const { conversations, loading } = useChatConversations(enabled);
-  const { count } = useUnreadChatCount(enabled && !open);
+  const { count } = useUnreadChatCount(enabled);
+  // Cambia con cada mensaje nuevo sin leer → reinicia el pulso del botón.
+  const pulseKey = useChatStore((s) => s.pulseKey);
 
   // N2: avisa a ChipiWidget que hay un botón flotante en esta esquina —
   // así se corre solo hacia arriba (prop `raised`, ver
@@ -49,6 +52,16 @@ export default function ChatWidget() {
                    hover:scale-105 active:scale-95 transition-transform"
         aria-label="Chat interno"
       >
+        {/* Pulso al llegar un mensaje nuevo: `key` reinicia la animación CSS
+            (finita, no queda visible después). Siempre montado — solo se
+            oculta con `invisible` — para no repetirse al abrir/cerrar. */}
+        {pulseKey > 0 && (
+          <span
+            key={pulseKey}
+            aria-hidden
+            className={`chat-pulse-ring pointer-events-none absolute inset-0 rounded-2xl bg-pink-400 ${open ? "invisible" : ""}`}
+          />
+        )}
         {open ? <X size={22} /> : <MessageCircle size={22} />}
         {!open && count > 0 && (
           <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 rounded-full bg-white text-rose-500 text-[10px] font-black flex items-center justify-center border-2 border-rose-400">

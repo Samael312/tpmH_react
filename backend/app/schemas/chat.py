@@ -1,11 +1,13 @@
 # app/schemas/chat.py
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Literal
 from datetime import datetime
 
 
 class SendMessageRequest(BaseModel):
     content: str
+    # Idempotencia del reintento por REST — ver models/chat.py::ChatMessage.client_id.
+    client_id: Optional[str] = Field(None, max_length=64)
 
     @field_validator("content")
     @classmethod
@@ -34,6 +36,7 @@ class ChatMessageResponse(BaseModel):
     # None = todavía no le llegó a ningún destinatario conectado (1 check
     # en el frontend). Con valor = ya le llegó a alguien (2 checks).
     delivered_at: Optional[datetime] = None
+    client_id: Optional[str] = None
 
     class Config:
         from_attributes = True

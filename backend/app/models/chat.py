@@ -103,15 +103,22 @@ class ChatMessage(Base):
     # Null hasta que le llega a AL MENOS UN destinatario (ver
     # core/chat_ws.py::ChatConnectionManager, ahora una conexión global por
     # usuario en vez de una por conversación). Habilita el segundo
-    # checkmark en el frontend — ver core/chat.py::mark_delivered_now /
-    # catch_up_delivery.
+    # checkmark en el frontend — ver core/chat.py::mark_delivered_by_id /
+    # catch_up_deliveries.
     delivered_at = Column(DateTime(timezone=True), nullable=True)
+
+    # uuid generado por el cliente al crear el mensaje optimista. Permite
+    # reintentar el envío por REST (si el eco por WS no llegó) sin duplicar
+    # el mensaje: (conversation_id, sender_id, client_id) es único. Null
+    # para mensajes anteriores a esta columna o creados sin client_id.
+    client_id = Column(String(64), nullable=True)
 
     conversation = relationship("ChatConversation", back_populates="messages")
     sender = relationship("User")
 
     __table_args__ = (
         Index("ix_chat_messages_conversation_created", "conversation_id", "created_at"),
+        UniqueConstraint("conversation_id", "sender_id", "client_id", name="uq_chat_message_client_id"),
     )
 
 

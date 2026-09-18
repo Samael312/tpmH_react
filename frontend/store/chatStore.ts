@@ -66,6 +66,14 @@ interface ServerMessagePayload {
 
 const MAX_CACHED_PER_CONVERSATION = 300;
 
+// Si el eco del servidor no llega en este tiempo, el mensaje se reenvía por
+// REST con el mismo client_id (idempotente en el backend — no se duplica).
+const ACK_TIMEOUT_MS = 5000;
+// Heartbeat: detecta sockets "zombie" (proxy que los cortó, móvil que
+// durmió) que siguen en readyState OPEN pero ya no entregan nada.
+const PING_INTERVAL_MS = 25000;
+const PONG_TIMEOUT_MS = 8000;
+
 function toClientMessage(m: ServerMessagePayload): ChatMessage {
   return {
     id: m.id,
@@ -103,12 +111,30 @@ interface ChatStoreState {
   // hilo EN ESTA SESIÓN — así el hook sabe si mostrar skeleton (primera
   // vez) o solo refrescar en silencio (ya estaba cacheado).
   historyLoadedByConversation: Record<number, boolean>;
+  // Hilo que el usuario tiene abierto AHORA (ChatThreadView lo registra al
+  // montar): un mensaje entrante en ese hilo se considera leído; en
+  // cualquier otro queda como "nuevo" en la lista y suma al badge.
+  activeConversationId: number | null;
+  // Se incrementa con cada mensaje entrante que queda como no leído —
+  // ChatWidget lo usa como `key` para reiniciar la animación de pulso.
+  pulseKey: number;
 
   connect: (token: string, userId: number) => void;
   disconnect: () => void;
   reset: () => void;
   ensureHistory: (conversationId: number) => Promise<void>;
   sendMessage: (conversationId: number, content: string) => void;
+  retryMessage: (conversationId: number, clientId: string) => void;
+  setActiveConversation: (conversationId: number | null) => void;
+}
+
+// ─── Listeners de mensajes entrantes (los usa hooks/useChat.ts para
+// actualizar el cache de React Query al instante, sin refetch) ───────────
+type IncomingMessageListener = (message: ServerMessagePayload, isMine: boolean) => void;
+const incomingListeners = new Set<IncomingMessageListener>();
+export function onChatMessage(listener: IncomingMessageListener): () => void {
+  incomingListeners.add(listener);
+  return () => { incomingListeners.delete(listener); };
 }
 
 // ─── Estado de la conexión (fuera de zustand: no es serializable ni hay
@@ -119,6 +145,10 @@ let reconnectAttempts = 0;
 let currentToken: string | null = null;
 let currentUserId: number | null = null;
 let intentionalClose = false;
+let hasConnectedOnce = false;
+let pingTimer: ReturnType<typeof setInterval> | null = null;
+let pongTimer: ReturnType<typeof setTimeout> | null = null;
+let lifecycleListenersAttached = false;
 
 function buildWsUrl(token: string): string {
   const httpBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
@@ -133,6 +163,8 @@ export const useChatStore = create<ChatStoreState>()((set, get) => ({
   errorByConversation: {},
   fetchingByConversation: {},
   historyLoadedByConversation: {},
+  activeConversationId: null,
+  pulseKey: 0,
 
   connect: (token, userId) => {
     // Ya conectado con las mismas credenciales — no abrir un segundo socket.
@@ -143,7 +175,8 @@ export const useChatStore = create<ChatStoreState>()((set, get) => ({
     intentionalClose = false;
     currentToken = token;
     currentUserId = userId;
-    openSocket(set, get);
+    attachLifecycleListeners();
+    openSocket();
   },
 
   disconnect: () => {
@@ -152,6 +185,9 @@ export const useChatStore = create<ChatStoreState>()((set, get) => ({
     currentUserId = null;
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     reconnectAttempts = 0;
+    hasConnectedOnce = false;
+    stopHeartbeat();
+    detachLifecycleListeners();
     if (ws) {
       try { ws.close(); } catch { /* noop */ }
       ws = null;
@@ -164,8 +200,11 @@ export const useChatStore = create<ChatStoreState>()((set, get) => ({
     set({
       messagesByConversation: {}, errorByConversation: {}, eventVersion: 0,
       fetchingByConversation: {}, historyLoadedByConversation: {},
+      activeConversationId: null, pulseKey: 0,
     });
   },
+
+  setActiveConversation: (conversationId) => set({ activeConversationId: conversationId }),
 
   ensureHistory: async (conversationId) => {
     set((state) => ({ fetchingByConversation: { ...state.fetchingByConversation, [conversationId]: true } }));
@@ -232,33 +271,70 @@ export const useChatStore = create<ChatStoreState>()((set, get) => ({
     }));
 
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: "send", conversation_id: conversationId, content: trimmed, client_id: clientId,
-      }));
-      return;
+      try {
+        ws.send(JSON.stringify({
+          type: "send", conversation_id: conversationId, content: trimmed, client_id: clientId,
+        }));
+        // Sin eco a tiempo → REST con el mismo client_id (idempotente).
+        setTimeout(() => {
+          const stillSending = useChatStore.getState().messagesByConversation[conversationId]
+            ?.some((m) => m.client_id === clientId && m.status === "sending");
+          if (stillSending) postViaRest(conversationId, trimmed, clientId);
+        }, ACK_TIMEOUT_MS);
+        return;
+      } catch { /* socket roto: cae al REST de abajo */ }
     }
 
-    // Fallback REST — mismo backend, misma persistencia (ver
-    // endpoints/chat.py::post_message) — por si el socket está
+    // Fallback REST — mismo camino en el backend (endpoints/chat.py::
+    // post_message → _send_and_fanout) — para cuando el socket está
     // reconectando en ese instante puntual.
-    api.post(`/chat/conversations/${conversationId}/messages`, { content: trimmed })
-      .then((res) => {
-        const real = toClientMessage(res.data as ServerMessagePayload);
-        reconcileOptimistic(useChatStore.setState, conversationId, clientId, real);
-      })
-      .catch(() => {
-        useChatStore.setState((state) => ({
-          messagesByConversation: {
-            ...state.messagesByConversation,
-            [conversationId]: (state.messagesByConversation[conversationId] ?? []).map((m) =>
-              m.client_id === clientId ? { ...m, status: "failed" as const } : m
-            ),
-          },
-          errorByConversation: { ...state.errorByConversation, [conversationId]: "No se pudo enviar el mensaje" },
-        }));
-      });
+    postViaRest(conversationId, trimmed, clientId);
+  },
+
+  retryMessage: (conversationId, clientId) => {
+    const msg = get().messagesByConversation[conversationId]?.find((m) => m.client_id === clientId);
+    if (!msg || msg.status !== "failed") return;
+    set((state) => ({
+      messagesByConversation: {
+        ...state.messagesByConversation,
+        [conversationId]: (state.messagesByConversation[conversationId] ?? []).map((m) =>
+          m.client_id === clientId ? { ...m, status: "sending" as const } : m
+        ),
+      },
+      errorByConversation: { ...state.errorByConversation, [conversationId]: null },
+    }));
+    postViaRest(conversationId, msg.content, clientId);
   },
 }));
+
+function postViaRest(conversationId: number, content: string, clientId: string) {
+  api.post(`/chat/conversations/${conversationId}/messages`, { content, client_id: clientId })
+    .then((res) => {
+      reconcileOptimistic(useChatStore.setState, conversationId, clientId, toClientMessage(res.data as ServerMessagePayload));
+    })
+    .catch(() => markFailed(clientId, "No se pudo enviar el mensaje"));
+}
+
+function markFailed(clientId: string, detail: string) {
+  useChatStore.setState((state) => {
+    const next = { ...state.messagesByConversation };
+    let failedIn: number | null = null;
+    for (const key of Object.keys(next)) {
+      const convoId = Number(key);
+      if (next[convoId].some((m) => m.client_id === clientId && m.status === "sending")) {
+        next[convoId] = next[convoId].map((m) =>
+          m.client_id === clientId ? { ...m, status: "failed" as const } : m
+        );
+        failedIn = convoId;
+      }
+    }
+    if (failedIn === null) return {};
+    return {
+      messagesByConversation: next,
+      errorByConversation: { ...state.errorByConversation, [failedIn]: detail },
+    };
+  });
+}
 
 function reconcileOptimistic(
   setState: typeof useChatStore.setState,
@@ -281,35 +357,116 @@ function reconcileOptimistic(
       };
     }
     const next = [...list];
-    next[idx] = { ...real, client_id: clientId };
+    const prev = list[idx];
+    // El "delivered" puede llegar antes que la respuesta REST — no lo pisamos.
+    next[idx] = {
+      ...real,
+      client_id: clientId,
+      status: prev.status === "delivered" ? "delivered" : real.status,
+      delivered_at: prev.delivered_at ?? real.delivered_at,
+    };
     return { messagesByConversation: { ...state.messagesByConversation, [conversationId]: next } };
   });
 }
 
-function openSocket(
-  set: (partial: Partial<ChatStoreState> | ((s: ChatStoreState) => Partial<ChatStoreState>)) => void,
-  get: () => ChatStoreState,
-) {
+// ─── Conexión ────────────────────────────────────────────────────────────
+
+function stopHeartbeat() {
+  if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+  if (pongTimer) { clearTimeout(pongTimer); pongTimer = null; }
+}
+
+function scheduleReconnect(delay: number) {
+  if (intentionalClose || !currentToken) return;
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    if (!intentionalClose && currentToken) openSocket();
+  }, delay);
+}
+
+// Descarta un socket que dejó de responder y reconecta YA (sin esperar a
+// que el navegador se dé cuenta, lo cual con un socket zombie puede tardar
+// minutos).
+function dropSocket(socket: WebSocket) {
+  if (ws !== socket) return;
+  stopHeartbeat();
+  socket.onopen = socket.onclose = socket.onerror = socket.onmessage = null;
+  try { socket.close(); } catch { /* noop */ }
+  ws = null;
+  useChatStore.setState({ connected: false });
+  scheduleReconnect(0);
+}
+
+function probe(socket: WebSocket) {
+  if (ws !== socket || socket.readyState !== WebSocket.OPEN) return;
+  try {
+    socket.send(JSON.stringify({ type: "ping" }));
+  } catch {
+    dropSocket(socket);
+    return;
+  }
+  if (pongTimer) clearTimeout(pongTimer);
+  pongTimer = setTimeout(() => dropSocket(socket), PONG_TIMEOUT_MS);
+}
+
+// Al volver a la pestaña o recuperar red, comprobamos la conexión en el
+// acto (móvil: el SO suele haber matado el socket mientras dormía).
+function handleWake() {
+  if (intentionalClose || !currentToken) return;
+  if (document.visibilityState === "hidden") return;
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    probe(ws);
+  } else if (!ws || ws.readyState === WebSocket.CLOSED) {
+    reconnectAttempts = 0;
+    scheduleReconnect(0);
+  }
+}
+
+function attachLifecycleListeners() {
+  if (lifecycleListenersAttached || typeof window === "undefined") return;
+  document.addEventListener("visibilitychange", handleWake);
+  window.addEventListener("online", handleWake);
+  lifecycleListenersAttached = true;
+}
+
+function detachLifecycleListeners() {
+  if (!lifecycleListenersAttached || typeof window === "undefined") return;
+  document.removeEventListener("visibilitychange", handleWake);
+  window.removeEventListener("online", handleWake);
+  lifecycleListenersAttached = false;
+}
+
+// Tras una RE-conexión pudo haberse perdido algo: traemos el delta de los
+// hilos cacheados y forzamos la revalidación de lista + badge.
+function resyncAfterReconnect() {
+  const state = useChatStore.getState();
+  Object.keys(state.messagesByConversation).forEach((id) => { void state.ensureHistory(Number(id)); });
+  useChatStore.setState((s) => ({ eventVersion: s.eventVersion + 1 }));
+}
+
+function openSocket() {
   if (!currentToken) return;
   const socket = new WebSocket(buildWsUrl(currentToken));
   ws = socket;
 
   socket.onopen = () => {
     reconnectAttempts = 0;
-    set({ connected: true });
+    useChatStore.setState({ connected: true });
+    stopHeartbeat();
+    pingTimer = setInterval(() => probe(socket), PING_INTERVAL_MS);
+    if (hasConnectedOnce) resyncAfterReconnect();
+    hasConnectedOnce = true;
   };
 
   socket.onclose = () => {
-    set({ connected: false });
+    useChatStore.setState({ connected: false });
     if (intentionalClose || ws !== socket) return;
-    // Backoff simple: 1s, 2s, 4s, 8s... tope 30s — mismo criterio que el
-    // resto del proyecto usa para polling en segundo plano (ver
-    // hooks/useChat.ts / useUnreadSupportCount).
+    stopHeartbeat();
+    // Backoff simple: 1s, 2s, 4s, 8s... tope 30s.
     const delay = Math.min(30000, 1000 * 2 ** reconnectAttempts);
     reconnectAttempts += 1;
-    reconnectTimer = setTimeout(() => {
-      if (!intentionalClose && currentToken) openSocket(set, get);
-    }, delay);
+    scheduleReconnect(delay);
   };
 
   socket.onerror = () => {
@@ -317,6 +474,9 @@ function openSocket(
   };
 
   socket.onmessage = (event) => {
+    // Cualquier frame prueba que la conexión está viva.
+    if (pongTimer) { clearTimeout(pongTimer); pongTimer = null; }
+
     let payload: Record<string, unknown>;
     try {
       payload = JSON.parse(event.data);
@@ -341,6 +501,7 @@ function openSocket(
           };
         });
       }
+      incomingListeners.forEach((fn) => fn(data, isMine));
       useChatStore.setState((state) => ({ eventVersion: state.eventVersion + 1 }));
     } else if (payload.type === "delivered") {
       const conversationId = payload.conversation_id as number | undefined;
@@ -356,8 +517,11 @@ function openSocket(
         );
         return { messagesByConversation: next, eventVersion: state.eventVersion + 1 };
       });
+    } else if (payload.type === "error") {
+      // El servidor rechazó el envío (chat deshabilitado, no participante,
+      // etc.): sin esto el mensaje quedaba en "sending" para siempre.
+      const clientId = payload.client_id as string | null | undefined;
+      if (clientId) markFailed(clientId, (payload.detail as string) || "No se pudo enviar el mensaje");
     }
-    // "error": no rompe nada por sí solo — el mensaje ya quedó en
-    // "sending" y el fallback REST (o un reintento manual) se encarga.
   };
 }

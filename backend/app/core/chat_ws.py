@@ -14,8 +14,8 @@
 # Con una conexión por usuario (abierta apenas hay sesión, no por
 # conversación — ver frontend/store/chatStore.ts) alcanza con saber
 # si el USUARIO está online para:
-#   1) marcar "entregado" (ver core/chat.py::mark_delivered_now /
-#      catch_up_delivery), y
+#   1) marcar "entregado" (ver core/chat.py::mark_delivered_by_id /
+#      catch_up_deliveries), y
 #   2) empujarle en tiempo real cualquier evento de CUALQUIER conversación
 #      en la que participe, esté mirando esa pantalla o no.
 #
@@ -32,6 +32,7 @@
 # vez de iterar _connections directamente. El resto de la lógica (auth,
 # persistencia, autorización) no cambia.
 
+import asyncio
 import json
 import logging
 from collections import defaultdict
@@ -85,11 +86,11 @@ class ChatConnectionManager:
         """Igual que send_to_user pero para varios usuarios (broadcast de
         un mensaje a todos los participantes de la conversación). Devuelve
         el subconjunto de user_ids que efectivamente estaba online."""
-        delivered_to: set[int] = set()
-        for user_id in user_ids:
-            if await self.send_to_user(user_id, payload):
-                delivered_to.add(user_id)
-        return delivered_to
+        ids = list(user_ids)
+        # En paralelo: un socket lento de un participante no debe retrasar
+        # a los demás (grupos).
+        results = await asyncio.gather(*(self.send_to_user(uid, payload) for uid in ids))
+        return {uid for uid, ok in zip(ids, results) if ok}
 
 
 chat_manager = ChatConnectionManager()

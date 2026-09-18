@@ -97,11 +97,14 @@ function MobileTopBar() {
 
 // ─── Bottom tab bar móvil ─────────────────────────────────────────────────
 function BottomTabBar({
-  mainItems, moreItems, onLogout,
-}: { mainItems: TabItem[]; moreItems: TabItem[]; onLogout: () => void }) {
+  mainItems, moreItems, badges, onLogout,
+}: { mainItems: TabItem[]; moreItems: TabItem[]; badges: Record<string, number>; onLogout: () => void }) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  // El chat/soporte viven dentro de "Más": sin esto un mensaje nuevo no se
+  // notaba en mobile hasta abrir el sheet.
+  const moreBadge = moreItems.reduce((sum, item) => sum + (badges[item.href] ?? 0), 0);
 
   return (
     <>
@@ -129,32 +132,51 @@ function BottomTabBar({
             onClick={() => setMoreOpen(true)}
             className="flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-bold text-slate-400"
           >
-            <MoreHorizontal size={20} />
+            <span className="relative">
+              <MoreHorizontal size={20} />
+              {moreBadge > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center">
+                  {moreBadge > 99 ? "99+" : moreBadge}
+                </span>
+              )}
+            </span>
             Más
           </button>
         )}
       </nav>
 
-      <BottomSheet open={moreOpen} onClose={() => setMoreOpen(false)} title="Más opciones">
-        <div className="grid grid-cols-3 gap-3 pb-1">
-          {moreItems.map(item => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setMoreOpen(false)}
-              className="flex flex-col items-center justify-center gap-2 py-4 rounded-2xl bg-slate-50
-                         hover:bg-pink-50 text-slate-600 hover:text-pink-600 transition-colors text-xs font-bold text-center"
-            >
-              {item.icon}
-              {item.label}
-            </Link>
-          ))}
+      <BottomSheet open={moreOpen} onClose={() => setMoreOpen(false)} title="Más opciones" compact>
+        {/* 4 columnas compactas: con 16 ítems (teacher_admin) son 4 filas y
+            todo entra sin scroll vertical incluso en pantallas de ~600px. */}
+        <div className="grid grid-cols-4 gap-2">
+          {moreItems.map(item => {
+            const badge = badges[item.href] ?? 0;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMoreOpen(false)}
+                className="relative flex flex-col items-center justify-center gap-1 px-1 py-2.5 rounded-2xl bg-slate-50
+                           hover:bg-pink-50 text-slate-600 hover:text-pink-600 transition-colors
+                           text-[10.5px] leading-tight font-bold text-center break-words
+                           [&>svg]:h-[18px] [&>svg]:w-[18px]"
+              >
+                {item.icon}
+                {item.label}
+                {badge > 0 && (
+                  <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
           <button
             onClick={onLogout}
-            className="flex flex-col items-center justify-center gap-2 py-4 rounded-2xl bg-rose-50
-                       text-rose-500 text-xs font-bold col-span-3 mt-1"
+            className="flex items-center justify-center gap-2 py-2.5 rounded-2xl bg-rose-50
+                       text-rose-500 text-xs font-bold col-span-4"
           >
-            <LogOut size={18} />
+            <LogOut size={16} />
             Cerrar sesión
           </button>
         </div>
@@ -271,6 +293,9 @@ export default function DashboardSidebar() {
               )}
               <nav className="space-y-1">
                 <NavItem href="/dashboard" icon={<LayoutDashboard size={20} />} label="Inicio" active={pathname === "/dashboard"} collapsed={collapsed} />
+                {chatEnabled && (
+                  <NavItem href="/dashboard/chat" icon={<MessagesSquare size={20} />} label="Chat" active={isActive("/dashboard/chat")} collapsed={collapsed} badge={unreadChatCount > 0 ? unreadChatCount : undefined} />
+                )}
                 <NavItem href="/dashboard/schedule" icon={<Calendar size={20} />} label="Horario" active={isActive("/dashboard/schedule")} collapsed={collapsed} />
                 <NavItem href="/dashboard/availability" icon={<Users size={20} />} label="Disponibilidad" active={isActive("/dashboard/availability")} collapsed={collapsed} />
                 <NavItem href="/dashboard/classes" icon={<MonitorPlay size={20} />} label="Mis Clases" active={isActive("/dashboard/classes")} collapsed={collapsed} />
@@ -278,9 +303,6 @@ export default function DashboardSidebar() {
                 <NavItem href="/dashboard/homework" icon={<ClipboardEdit size={20} />} label="Mis Tareas" active={isActive("/dashboard/homework")} collapsed={collapsed} />
                 <NavItem href="/dashboard/teachers" icon={<GraduationCap size={20} />} label="Profesores" active={isActive("/dashboard/teachers")} collapsed={collapsed} />
                 <NavItem href="/dashboard/support" icon={<LifeBuoy size={20} />} label="Soporte" active={isActive("/dashboard/support")} collapsed={collapsed} badge={unreadSupportCount > 0 ? unreadSupportCount : undefined} />
-                {chatEnabled && (
-                  <NavItem href="/dashboard/chat" icon={<MessagesSquare size={20} />} label="Chat" active={isActive("/dashboard/chat")} collapsed={collapsed} badge={unreadChatCount > 0 ? unreadChatCount : undefined} />
-                )}
                 <NavItem href="/dashboard/profile" icon={<UserCircle size={20} />} label="Mi Perfil" active={isActive("/dashboard/profile")} collapsed={collapsed} />
               </nav>
             </div>
@@ -296,6 +318,9 @@ export default function DashboardSidebar() {
               )}
               <nav className="space-y-1">
                 <NavItem href="/teacher/dashboard" icon={<LayoutDashboard size={20} />} label="Mis Clases" active={pathname === "/teacher/dashboard"} collapsed={collapsed} />
+                {chatEnabled && (
+                  <NavItem href="/teacher/chat" icon={<MessagesSquare size={20} />} label="Chat" active={isActive("/teacher/chat")} collapsed={collapsed} badge={unreadChatCount > 0 ? unreadChatCount : undefined} />
+                )}
                 <NavItem href="/teacher/availability" icon={<Calendar size={20} />} label="Disponibilidad" active={isActive("/teacher/availability")} collapsed={collapsed} />
                 <NavItem href="/teacher/students" icon={<GraduationCap size={20} />} label="Estudiantes" active={isActive("/teacher/students")} collapsed={collapsed} />
                 <NavItem href="/teacher/materials" icon={<Book size={20} />} label="Materiales" active={isActive("/teacher/materials")} collapsed={collapsed} />
@@ -305,9 +330,6 @@ export default function DashboardSidebar() {
                 <NavItem href="/teacher/cohorts" icon={<Users2 size={20} />} label="Grupos" active={isActive("/teacher/cohorts")} collapsed={collapsed} />
                 <NavItem href="/teacher/wallet" icon={<BarChart size={20} />} label="Ganancias" active={isActive("/teacher/wallet")} collapsed={collapsed} />
                 <NavItem href="/teacher/support" icon={<LifeBuoy size={20} />} label="Soporte" active={isActive("/teacher/support")} collapsed={collapsed} badge={unreadSupportCount > 0 ? unreadSupportCount : undefined} />
-                {chatEnabled && (
-                  <NavItem href="/teacher/chat" icon={<MessagesSquare size={20} />} label="Chat" active={isActive("/teacher/chat")} collapsed={collapsed} badge={unreadChatCount > 0 ? unreadChatCount : undefined} />
-                )}
                 <NavItem href="/teacher/profile" icon={<UserCircle size={20} />} label="Mi Perfil" active={isActive("/teacher/profile")} collapsed={collapsed} />
               </nav>
             </div>
@@ -374,7 +396,17 @@ export default function DashboardSidebar() {
 
       {/* ─── Mobile: top bar + bottom tab bar ─── */}
       <MobileTopBar />
-      <BottomTabBar mainItems={mobileMain} moreItems={mobileMore} onLogout={handleLogout} />
+      <BottomTabBar
+        mainItems={mobileMain}
+        moreItems={mobileMore}
+        badges={{
+          "/dashboard/chat": unreadChatCount,
+          "/teacher/chat": unreadChatCount,
+          "/dashboard/support": unreadSupportCount,
+          "/teacher/support": unreadSupportCount,
+        }}
+        onLogout={handleLogout}
+      />
     </>
   );
 }
