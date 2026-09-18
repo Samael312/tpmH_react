@@ -43,7 +43,11 @@ function buildCsp(): string {
     // Google Identity Services (botón de "Iniciar sesión con Google") se
     // inyecta como <script src="https://accounts.google.com/gsi/client">
     `script-src 'self' 'unsafe-inline' https://accounts.google.com${isDev ? " 'unsafe-eval'" : ""}`,
-    `style-src 'self' 'unsafe-inline'`,
+    // fonts.googleapis.com -> hoja de estilos @import de Poppins/DM Sans en
+    // globals.css (font-family: display/sans de Tailwind). Sin este origen
+    // el navegador bloquea la carga de esa hoja de estilos (violación de
+    // style-src) y el sitio cae silenciosamente a la fuente fallback.
+    `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
     // blob:/data: -> avatares generados y previews locales antes de subir
     `img-src 'self' blob: data: https://res.cloudinary.com https://ui-avatars.com https://lh3.googleusercontent.com`,
     // Videos de presentación de profesores, servidos desde Cloudinary.
@@ -52,7 +56,10 @@ function buildCsp(): string {
     // <video>) — sin esto el navegador bloquea la carga silenciosamente y
     // el reproductor se queda en negro sin ningún error visible en la UI.
     `media-src 'self' https://res.cloudinary.com blob:`,
-    `font-src 'self' data:`,
+    // fonts.gstatic.com -> los archivos .woff2 reales que sirve la hoja de
+    // estilos de fonts.googleapis.com (y los que genera next/font/google
+    // para Inter en build time, cuando el build sí llega a Google).
+    `font-src 'self' data: https://fonts.gstatic.com`,
     // 'self' + el backend (dominio distinto en producción) + Google (el
     // script de GSI hace sus propias requests de auth) + blob: (Three.js
     // usa THREE.ImageBitmapLoader para las texturas embebidas en los .glb,

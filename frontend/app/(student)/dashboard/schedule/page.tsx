@@ -1457,28 +1457,30 @@ export default function SchedulePage() {
               )}
               <div>
               <h1 className="text-3xl font-black text-slate-800 tracking-tight">
-                {stage === "needs_trial" && step === "select" && "Reserva tu clase de prueba"}
-                {stage === "needs_trial" && step === "payment" && "Confirmar clase de prueba"}
-                {stage === "trial_in_progress" && "Clase de prueba pendiente"}
-                {stage === "needs_package" && "Elige tu paquete"}
-                {stage === "package_pending_payment" && "Pago pendiente de confirmación"}
-                {stage === "needs_payment" && "Pago pendiente de notificación"}
-                {(stage === "needs_renewal" || stage === "renew_required") && "Renueva tu paquete"}
-                {stage === "renewal_pending" && "Renovación en revisión"}
-                {stage === "ready" && step === "select" && "Agendar Clase"}
-                {stage === "ready" && step === "payment" && "Confirmar Reserva"}
-                {stage === "loading" && "Cargando..."}
+                {needsTeacherSelection && "Elige tu Profesor"}
+                {!needsTeacherSelection && stage === "needs_trial" && step === "select" && "Reserva tu clase de prueba"}
+                {!needsTeacherSelection && stage === "needs_trial" && step === "payment" && "Confirmar clase de prueba"}
+                {!needsTeacherSelection && stage === "trial_in_progress" && "Clase de prueba pendiente"}
+                {!needsTeacherSelection && stage === "needs_package" && "Elige tu paquete"}
+                {!needsTeacherSelection && stage === "package_pending_payment" && "Pago pendiente de confirmación"}
+                {!needsTeacherSelection && stage === "needs_payment" && "Pago pendiente de notificación"}
+                {!needsTeacherSelection && (stage === "needs_renewal" || stage === "renew_required") && "Renueva tu paquete"}
+                {!needsTeacherSelection && stage === "renewal_pending" && "Renovación en revisión"}
+                {!needsTeacherSelection && stage === "ready" && step === "select" && "Agendar Clase"}
+                {!needsTeacherSelection && stage === "ready" && step === "payment" && "Confirmar Reserva"}
+                {!needsTeacherSelection && stage === "loading" && "Cargando..."}
               </h1>
               <p className="text-slate-500 mt-1">
-                {stage === "needs_trial" && "Tu primera clase es gratuita, sin compromiso"}
-                {stage === "trial_in_progress" && "Prepárate para tu clase de prueba gratuita"}
-                {stage === "needs_package" && "Selecciona el paquete que mejor se adapte a ti"}
-                {stage === "package_pending_payment" && "Tu pago está en revisión. Te avisaremos cuando se confirme."}
-                {stage === "needs_payment" && "Notifica tu pago para desbloquear el calendario de agendamiento"}
-                {(stage === "needs_renewal" || stage === "renew_required") && "Renueva tu paquete para continuar con tu aprendizaje"}
-                {stage === "renewal_pending" && "Tu solicitud de renovación está en revisión"}
-                {stage === "ready" && step === "select" && "Selecciona fecha y horario disponible"}
-                {stage === "ready" && step === "payment" && "Completa el pago para confirmar tu clase"}
+                {needsTeacherSelection && "Selecciona el profesor con el que quieres agendar clases"}
+                {!needsTeacherSelection && stage === "needs_trial" && "Tu primera clase es gratuita, sin compromiso"}
+                {!needsTeacherSelection && stage === "trial_in_progress" && "Prepárate para tu clase de prueba gratuita"}
+                {!needsTeacherSelection && stage === "needs_package" && "Selecciona el paquete que mejor se adapte a ti"}
+                {!needsTeacherSelection && stage === "package_pending_payment" && "Tu pago está en revisión. Te avisaremos cuando se confirme."}
+                {!needsTeacherSelection && stage === "needs_payment" && "Notifica tu pago para desbloquear el calendario de agendamiento"}
+                {!needsTeacherSelection && (stage === "needs_renewal" || stage === "renew_required") && "Renueva tu paquete para continuar con tu aprendizaje"}
+                {!needsTeacherSelection && stage === "renewal_pending" && "Tu solicitud de renovación está en revisión"}
+                {!needsTeacherSelection && stage === "ready" && step === "select" && "Selecciona fecha y horario disponible"}
+                {!needsTeacherSelection && stage === "ready" && step === "payment" && "Completa el pago para confirmar tu clase"}
               </p>
               </div>
             </div>
