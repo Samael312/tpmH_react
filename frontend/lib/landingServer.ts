@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import type { LandingData } from "@/hooks/useLandingData";
 import { LANDING_CONTENT_DEFAULTS } from "@/hooks/useLandingData";
 
@@ -26,11 +27,31 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1
  * correcta. Si el backend no responde, devuelve null y tanto la metadata
  * como el render inicial caen a sus defaults (la página igual funciona: el
  * hook de cliente vuelve a intentar el fetch normal).
+ *
+ * generateMetadata() (layout.tsx, page.tsx, terms/privacy) se ejecuta para
+ * CADA una de las ~50 páginas durante `next build`, al generar los HTML
+ * estáticos — no solo para "/". El build corre en un contenedor efímero de
+ * Railway, sin garantía de que el backend ya esté arriba (o mientras se
+ * está re-deployando en simultáneo): el fetch recibe un 502 de su gateway
+ * en vez de una conexión rechazada, y eso tarda varios segundos por página
+ * en vez de fallar al instante. Multiplicado por ~50 páginas dispara el
+ * timeout interno de Next.js (60s por página, 3 reintentos cada una) y el
+ * build se vuelve carísimo o falla directamente.
+ * Por eso: (1) en fase de build no llamamos al backend en absoluto — esos
+ * fetches no aportan nada que el ISR de `revalidate: 60` no repita en el
+ * primer request real ya en producción — y (2) el fetch en runtime lleva
+ * un timeout corto propio, para que un backend caído o lento en ese
+ * momento tampoco cuelgue el render de una página real.
  */
 export const getLandingDataServer = cache(async (): Promise<LandingData | null> => {
+  if (process.env.NEXT_PHASE === PHASE_PRODUCTION_BUILD) {
+    return null;
+  }
+
   try {
     const res = await fetch(`${API_URL}/public/landing`, {
       next: { revalidate: 60 },
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) {
       console.error(
