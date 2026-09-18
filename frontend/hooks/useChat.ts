@@ -136,10 +136,18 @@ export function useChatSocketBootstrap(enabled: boolean) {
   }, [enabled, queryClient]);
 }
 
+// Referencia ESTABLE para "sin mensajes todavía" — si acá devolviéramos un
+// `[]` literal en el selector de abajo, useSyncExternalStore (por debajo de
+// zustand) recibiría un array nuevo en cada render y nunca vería el
+// snapshot como estable, disparando "The result of getSnapshot should be
+// cached to avoid an infinite loop" y, en cascada, "Maximum update depth
+// exceeded" en quien consuma este hook (ver ChatThreadView).
+const EMPTY_MESSAGES: StoreChatMessage[] = [];
+
 // ─── Hilo de una conversación: cache local + tiempo real por WS global ───
 export function useChatThread(conversationId: number | null) {
   const queryClient = useQueryClient();
-  const messages = useChatStore((s) => (conversationId ? s.messagesByConversation[conversationId] ?? [] : []));
+  const messages = useChatStore((s) => (conversationId ? s.messagesByConversation[conversationId] ?? EMPTY_MESSAGES : EMPTY_MESSAGES));
   const connected = useChatStore((s) => s.connected);
   const storeSendError = useChatStore((s) => (conversationId ? s.errorByConversation[conversationId] ?? null : null));
   // `fetching`/`historyLoaded` viven en el store (no como useState acá)

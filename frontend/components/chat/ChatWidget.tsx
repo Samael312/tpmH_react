@@ -44,7 +44,7 @@ export default function ChatWidget() {
       <button
         onClick={() => setOpen((o) => !o)}
         className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 sm:right-6 md:bottom-6
-                   z-50 w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-400
+                   z-[60] w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-400
                    shadow-lg shadow-pink-300/40 flex items-center justify-center text-white
                    hover:scale-105 active:scale-95 transition-transform"
         aria-label="Chat interno"
@@ -60,7 +60,7 @@ export default function ChatWidget() {
       {open && (
         <div
           className="fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] right-4 sm:right-6 md:bottom-24
-                     z-50 w-[calc(100vw-2rem)] max-w-sm h-[70vh] max-h-[560px]
+                     z-[60] w-[calc(100vw-2rem)] max-w-sm h-[70vh] max-h-[560px]
                      bg-white rounded-[2rem] shadow-2xl shadow-pink-300/20 border border-pink-100
                      flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200"
         >
