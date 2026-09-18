@@ -39,20 +39,52 @@ interface GoogleSignInButtonProps {
 
 let scriptPromise: Promise<void> | null = null;
 
+// Si el <script> de Google nunca dispara onload ni onerror (bloqueado en
+// silencio por una extensión del navegador, un proxy corporativo, o
+// simplemente una respuesta que nunca llega) el botón se quedaba en su
+// skeleton de carga PARA SIEMPRE, sin ningún error visible ni forma de
+// reintentar — exactamente el síntoma de "el botón de Google no carga"
+// que no deja rastro en la consola. Con este timeout, a los 10s se
+// considera fallido: se muestra el mensaje de error (en vez de un
+// skeleton infinito) y se limpia el singleton para que la próxima vez
+// que se monte el componente (nueva navegación / reload) se reintente
+// desde cero en lugar de quedar pegado al mismo intento fallido.
+const GSI_LOAD_TIMEOUT_MS = 10_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (err) => { clearTimeout(timer); reject(err); }
+    );
+  });
+}
+
 function loadGsiScript(): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
   if (window.google?.accounts?.id) return Promise.resolve();
   if (scriptPromise) return scriptPromise;
 
-  scriptPromise = new Promise((resolve, reject) => {
+  const loadPromise = new Promise<void>((resolve, reject) => {
     const script = document.createElement("script");
     script.src = "https://accounts.google.com/gsi/client";
     script.async = true;
-    script.defer = true;
     script.onload = () => resolve();
     script.onerror = () =>
       reject(new Error("No se pudo cargar Google Identity Services"));
     document.head.appendChild(script);
+  });
+
+  scriptPromise = withTimeout(
+    loadPromise,
+    GSI_LOAD_TIMEOUT_MS,
+    "Tiempo de espera agotado cargando Google Identity Services"
+  ).catch((err) => {
+    // Permite reintentar en el próximo mount en vez de quedar pegado a
+    // esta misma promesa fallida para siempre.
+    scriptPromise = null;
+    throw err;
   });
   return scriptPromise;
 }
@@ -84,6 +116,12 @@ function ensureInitialized(clientId: string): Promise<void> {
       },
       auto_select: false,
     });
+  }).catch((err) => {
+    // Mismo motivo que en loadGsiScript: sin esto, un fallo acá deja el
+    // singleton pegado a una promesa rechazada para siempre y ningún
+    // mount futuro del componente puede volver a intentarlo.
+    initializePromise = null;
+    throw err;
   });
 
   return initializePromise;
