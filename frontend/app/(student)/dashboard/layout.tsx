@@ -8,6 +8,8 @@ import NavBar from "@/components/layout/NavBar";
 import DashboardTopbar from "@/components/layout/DashboardTopbar";
 import ChatWidget from "@/components/chat/ChatWidget";
 import { useLandingData } from "@/hooks/useLandingData";
+import { usePlatformConfig } from "@/hooks/useStudentData";
+import { useChatSocketBootstrap } from "@/hooks/useChat";
 
 const FULLSCREEN_ROUTES = ["/dashboard/onboarding"];
 
@@ -16,7 +18,15 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname();
   const { user, token, setUser, hasHydrated } = useAuthStore();
   const { platformName } = useLandingData();
+  const { config: platformConfig } = usePlatformConfig();
   const [checked, setChecked] = useState(false);
+
+  // N3: conexión WS global del chat interno — se mantiene viva en TODO el
+  // dashboard, no solo en /dashboard/chat (ver store/chatStore.ts). Antes
+  // el socket se abría/cerraba junto con la pantalla de chat, así que no
+  // había forma de recibir mensajes en tiempo real estando en otra parte
+  // de la app.
+  useChatSocketBootstrap(!!user && platformConfig?.chat_enabled === true);
 
   const isFullscreen = FULLSCREEN_ROUTES.some((r) => pathname.startsWith(r));
   const isHome = pathname === "/dashboard";

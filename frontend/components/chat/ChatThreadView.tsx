@@ -1,10 +1,33 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Send, WifiOff } from "lucide-react";
-import { ChatConversation, useChatThread } from "@/hooks/useChat";
+import { ArrowLeft, Send, WifiOff, Clock, Check, CheckCheck, AlertCircle } from "lucide-react";
+import { ChatConversation, ChatMessage, useChatThread } from "@/hooks/useChat";
 import { useAuthStore } from "@/store/authStore";
 import { decodeToken } from "@/lib/auth";
+
+// ─── Checkmarks (N3) ──────────────────────────────────────────────────────
+// reloj = en cola/enviando (todavía no confirma el servidor) · 1 check =
+// confirmado por el servidor (persistido) · 2 checks = le llegó a algún
+// destinatario conectado (ver core/chat.py::mark_delivered_now). No hay
+// estado de "leído" (3er check / azul) — no fue pedido.
+function MessageStatusIcon({ status }: { status: ChatMessage["status"] }) {
+  // Se renderiza DEBAJO de la burbuja, sobre el fondo claro de la
+  // pantalla (no encima del degradé rosa) — por eso usa tonos oscuros,
+  // no blancos.
+  switch (status) {
+    case "sending":
+      return <Clock size={12} className="text-slate-300" aria-label="Enviando..." />;
+    case "sent":
+      return <Check size={13} className="text-slate-300" aria-label="Enviado" />;
+    case "delivered":
+      return <CheckCheck size={13} className="text-pink-400" aria-label="Entregado" />;
+    case "failed":
+      return <AlertCircle size={12} className="text-rose-500" aria-label="No se pudo enviar" />;
+    default:
+      return null;
+  }
+}
 
 export default function ChatThreadView({
   conversation, onBack, onRegisterRefetch,
@@ -81,20 +104,32 @@ export default function ChatThreadView({
         ) : (
           messages.map((m) => {
             const isMine = !!currentUserId && m.sender_id === currentUserId;
+            // Key estable incluso mientras el mensaje es optimista (id
+            // negativo temporal) — ver store/chatStore.ts::sendMessage.
+            const key = m.client_id ?? m.id;
             return (
-              <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+              <div key={key} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
                 <div className="max-w-[75%]">
                   {conversation.conversation_type === "group" && !isMine && (
                     <p className="text-[10px] font-bold text-pink-400 mb-0.5 px-1">{m.sender_username}</p>
                   )}
                   <div
-                    className={`px-3.5 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words
+                    className={`px-3.5 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words transition-opacity
                       ${isMine
                         ? "bg-gradient-to-r from-pink-500 to-rose-400 text-white rounded-br-md"
-                        : "bg-slate-100 text-slate-700 rounded-bl-md"}`}
+                        : "bg-slate-100 text-slate-700 rounded-bl-md"}
+                      ${m.status === "sending" ? "opacity-80" : ""}`}
                   >
                     {m.content}
                   </div>
+                  {isMine && (
+                    <div className="flex justify-end items-center gap-1 mt-0.5 px-1">
+                      {m.status === "failed" && (
+                        <span className="text-[10px] text-rose-500 font-semibold mr-0.5">No enviado</span>
+                      )}
+                      <MessageStatusIcon status={m.status} />
+                    </div>
+                  )}
                 </div>
               </div>
             );

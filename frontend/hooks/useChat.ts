@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
+import { useChatStore, ChatMessage as StoreChatMessage } from "@/store/chatStore";
+import { decodeToken } from "@/lib/auth";
 
 export interface ChatConversation {
   id: number;
@@ -18,14 +20,11 @@ export interface ChatConversation {
   unread_count: number;
 }
 
-export interface ChatMessage {
-  id: number;
-  conversation_id: number;
-  sender_id: number;
-  sender_username: string;
-  content: string;
-  created_at: string;
-}
+// Re-exportado desde el store para que los componentes de chat (
+// ChatThreadView, etc.) no tengan que importar de dos lugares distintos.
+// Incluye `status` ("sending" | "sent" | "delivered" | "failed") para los
+// checkmarks — ver store/chatStore.ts.
+export type ChatMessage = StoreChatMessage;
 
 // ─── Lista de conversaciones ──────────────────────────────────────────────
 export function useChatConversations(enabled: boolean = true) {
@@ -36,11 +35,14 @@ export function useChatConversations(enabled: boolean = true) {
       return res.data as ChatConversation[];
     },
     enabled,
-    // Igual criterio que useUnreadSupportCount: solo sondea mientras la
-    // pestaña está visible, para no gastar requests/batería en segundo plano.
+    // El WS global (ver store/chatStore.ts + useChatSocketBootstrap acá
+    // abajo) invalida este query apenas llega un mensaje nuevo o se marca
+    // como leído — este polling queda como red de contención por si se
+    // perdió algún evento (reconexión, pestaña que estuvo dormida, etc.),
+    // ya no es la única vía de actualización.
     refetchInterval: () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
-      return 15000;
+      return 30000;
     },
   });
 
@@ -54,26 +56,28 @@ export function useChatConversations(enabled: boolean = true) {
 }
 
 // ─── Badge de no leídos (para el NavBar / widget cerrado) ────────────────
+//
+// Antes: useState + setInterval propio, totalmente desacoplado de React
+// Query — por eso ChatThreadView::markRead() nunca lo actualizaba al
+// entrar a un chat (invalidaba ["chat","conversations"] pero este hook no
+// escuchaba esa key). Ahora es un query más: se invalida desde markRead()
+// Y desde el WS global (mensaje nuevo / entregado) — ver
+// useChatSocketBootstrap.
 export function useUnreadChatCount(enabled: boolean = true) {
-  const [count, setCount] = useState(0);
+  const query = useQuery({
+    queryKey: ["chat", "unread-count"],
+    queryFn: async () => {
+      const res = await api.get("/chat/conversations/unread-count");
+      return res.data.unread_count as number;
+    },
+    enabled,
+    refetchInterval: () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
+      return 45000; // red de contención — ver comentario arriba
+    },
+  });
 
-  const fetchUnread = useCallback(() => {
-    return api.get("/chat/conversations/unread-count")
-      .then(res => setCount(res.data.unread_count))
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!enabled) return;
-    fetchUnread();
-    const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      fetchUnread();
-    }, 20000);
-    return () => clearInterval(interval);
-  }, [enabled, fetchUnread]);
-
-  return { count: enabled ? count : 0, refetch: fetchUnread };
+  return { count: enabled ? (query.data ?? 0) : 0, refetch: query.refetch };
 }
 
 // ─── Abrir/crear conversación directa o grupal ───────────────────────────
@@ -87,126 +91,98 @@ export async function openGroupConversation(cohortId: number): Promise<ChatConve
   return res.data;
 }
 
-// ─── Construcción de la URL del WS ────────────────────────────────────────
-function buildWsUrl(conversationId: number, token: string): string {
-  const httpBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
-  const wsBase = httpBase.replace(/^http/, "ws");
-  return `${wsBase}/chat/ws/${conversationId}?token=${encodeURIComponent(token)}`;
-}
-
-// ─── Hilo de una conversación: historial + tiempo real por WS ───────────
-export function useChatThread(conversationId: number | null) {
+// ─── Bootstrap de la conexión WS global ──────────────────────────────────
+//
+// Se llama UNA vez desde los layouts de student/teacher (junto a
+// <ChatWidget/> y <NavBar/>) — abre (y mantiene) la conexión de
+// store/chatStore.ts sin importar en qué pantalla del dashboard estés, y
+// puentea sus eventos hacia React Query para que la lista de
+// conversaciones y el badge de no leídos se actualicen en el momento.
+export function useChatSocketBootstrap(enabled: boolean) {
   const token = useAuthStore((s) => s.token);
+  const userId = useAuthStore((s) => (s.token ? Number(decodeToken(s.token)?.sub) : undefined));
   const queryClient = useQueryClient();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [connected, setConnected] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const seenIds = useRef<Set<number>>(new Set());
-  const [refreshTick, setRefreshTick] = useState(0);
-  const [isFetching, setIsFetching] = useState(false);
+  const connect = useChatStore((s) => s.connect);
+  const disconnect = useChatStore((s) => s.disconnect);
 
-  // Historial inicial por REST (y re-fetch manual vía `refetch`, p.ej. el
-  // RefreshButton de las páginas de chat completas)
   useEffect(() => {
-    if (!conversationId) return;
-    let cancelled = false;
-    seenIds.current = new Set();
-    // El set-state-in-effect lint exige que el setState no sea la primera
-    // línea síncrona del efecto — lo empujamos a una microtask (mismo
-    // comportamiento, un tick después).
-    Promise.resolve().then(() => { if (!cancelled) { setLoading(true); setIsFetching(true); } });
-    api.get(`/chat/conversations/${conversationId}/messages`)
-      .then((res) => {
-        if (cancelled) return;
-        const msgs = res.data as ChatMessage[];
-        msgs.forEach((m) => seenIds.current.add(m.id));
-        setMessages(msgs);
-      })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) { setLoading(false); setIsFetching(false); } });
-    return () => { cancelled = true; };
-  }, [conversationId, refreshTick]);
-
-  const refetch = useCallback(() => {
-    setRefreshTick((t) => t + 1);
-  }, []);
-
-  // Conexión WS para tiempo real
-  useEffect(() => {
-    if (!conversationId || !token) return;
-    const ws = new WebSocket(buildWsUrl(conversationId, token));
-    wsRef.current = ws;
-
-    ws.onopen = () => setConnected(true);
-    ws.onclose = () => setConnected(false);
-    ws.onerror = () => setConnected(false);
-    ws.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.type === "message") {
-          if (seenIds.current.has(payload.id)) return;
-          seenIds.current.add(payload.id);
-          setMessages((prev) => [...prev, {
-            id: payload.id,
-            conversation_id: payload.conversation_id,
-            sender_id: payload.sender_id,
-            sender_username: payload.sender_username,
-            content: payload.content,
-            created_at: payload.created_at,
-          }]);
-          queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
-        } else if (payload.type === "error") {
-          setSendError(payload.detail || "No se pudo enviar el mensaje");
-        }
-      } catch {
-        // ignora frames que no sean JSON válido
-      }
-    };
-
-    return () => {
-      ws.close();
-      wsRef.current = null;
-      setConnected(false);
-    };
-  }, [conversationId, token, queryClient]);
-
-  const send = useCallback(async (content: string) => {
-    const trimmed = content.trim();
-    if (!trimmed || !conversationId) return;
-    setSendError(null);
-
-    // Preferimos el WS (tiempo real inmediato para el resto de la
-    // conversación); si no está conectado, fallback a REST — el backend
-    // acepta ambos caminos y persisten igual (ver endpoints/chat.py).
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ content: trimmed }));
+    if (!enabled || !token || !userId) {
+      disconnect();
       return;
     }
-    try {
-      const res = await api.post(`/chat/conversations/${conversationId}/messages`, { content: trimmed });
-      const msg = res.data as ChatMessage;
-      if (!seenIds.current.has(msg.id)) {
-        seenIds.current.add(msg.id);
-        setMessages((prev) => [...prev, msg]);
-      }
-      queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
-    } catch (err) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setSendError(detail || "No se pudo enviar el mensaje");
-    }
-  }, [conversationId, queryClient]);
+    connect(token, userId);
+    return () => disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, token, userId]);
+
+  // Puente store → React Query: cada evento de mensaje/entrega dispara
+  // una invalidación (debounced) de la lista de conversaciones y el
+  // badge de no leídos.
+  useEffect(() => {
+    if (!enabled) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsub = useChatStore.subscribe((state, prev) => {
+      if (state.eventVersion === prev.eventVersion) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
+        queryClient.invalidateQueries({ queryKey: ["chat", "unread-count"] });
+      }, 250);
+    });
+    return () => {
+      unsub();
+      if (timer) clearTimeout(timer);
+    };
+  }, [enabled, queryClient]);
+}
+
+// ─── Hilo de una conversación: cache local + tiempo real por WS global ───
+export function useChatThread(conversationId: number | null) {
+  const queryClient = useQueryClient();
+  const messages = useChatStore((s) => (conversationId ? s.messagesByConversation[conversationId] ?? [] : []));
+  const connected = useChatStore((s) => s.connected);
+  const storeSendError = useChatStore((s) => (conversationId ? s.errorByConversation[conversationId] ?? null : null));
+  // `fetching`/`historyLoaded` viven en el store (no como useState acá)
+  // para no tener que llamar setState de forma sincrónica dentro del
+  // efecto de abajo — ver store/chatStore.ts::ensureHistory.
+  const fetching = useChatStore((s) => (conversationId ? !!s.fetchingByConversation[conversationId] : false));
+  const historyLoaded = useChatStore((s) => (conversationId ? !!s.historyLoadedByConversation[conversationId] : false));
+  const ensureHistory = useChatStore((s) => s.ensureHistory);
+  const sendToStore = useChatStore((s) => s.sendMessage);
+
+  // Skeleton solo en la primerísima carga de este hilo (todavía sin nada
+  // cacheado); en reaperturas dentro de la misma sesión, el historial ya
+  // cacheado se muestra al instante y el delta se trae en silencio.
+  const loading = fetching && !historyLoaded;
+
+  useEffect(() => {
+    if (!conversationId) return;
+    ensureHistory(conversationId);
+  }, [conversationId, ensureHistory]);
+
+  const refetch = useCallback(() => {
+    if (!conversationId) return Promise.resolve();
+    return ensureHistory(conversationId);
+  }, [conversationId, ensureHistory]);
+
+  const send = useCallback((content: string) => {
+    if (!conversationId || !content.trim()) return;
+    sendToStore(conversationId, content);
+  }, [conversationId, sendToStore]);
 
   const markRead = useCallback(async () => {
     if (!conversationId) return;
     try {
       await api.post(`/chat/conversations/${conversationId}/read`);
+      // Antes solo invalidaba "conversations" — el badge (query separado)
+      // se quedaba con el valor viejo hasta el próximo poll. Ver
+      // useUnreadChatCount más arriba.
       queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["chat", "unread-count"] });
     } catch {
-      // no crítico — el badge se corrige en el próximo poll
+      // no crítico — se corrige en el próximo evento/poll
     }
   }, [conversationId, queryClient]);
 
-  return { messages, loading, isFetching, connected, sendError, send, markRead, refetch };
+  return { messages, loading, isFetching: fetching, connected, sendError: storeSendError, send, markRead, refetch };
 }

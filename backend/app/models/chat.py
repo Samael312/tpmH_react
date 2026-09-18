@@ -100,6 +100,13 @@ class ChatMessage(Base):
     content = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+    # Null hasta que le llega a AL MENOS UN destinatario (ver
+    # core/chat_ws.py::ChatConnectionManager, ahora una conexión global por
+    # usuario en vez de una por conversación). Habilita el segundo
+    # checkmark en el frontend — ver core/chat.py::mark_delivered_now /
+    # catch_up_delivery.
+    delivered_at = Column(DateTime(timezone=True), nullable=True)
+
     conversation = relationship("ChatConversation", back_populates="messages")
     sender = relationship("User")
 

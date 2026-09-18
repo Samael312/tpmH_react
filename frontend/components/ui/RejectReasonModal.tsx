@@ -15,6 +15,14 @@ interface RejectReasonModalProps {
   /** Se invoca con el motivo ya validado (no vacío, trimmed) */
   onConfirm: (reason: string) => void | Promise<void>;
   loading?: boolean;
+  // Copys opcionales para reutilizar el mismo modal fuera del caso
+  // "rechazo" (ej. motivo obligatorio para auditoría de chats en
+  // /admin/chat — ver core/god_mode_audit.py). Si no se pasan, se
+  // comporta exactamente igual que antes.
+  fieldLabel?: string;
+  placeholder?: string;
+  confirmLabel?: string;
+  confirmVariant?: "danger" | "primary";
 }
 
 // ─── Modal para capturar el motivo de un rechazo (pago / retiro / etc.) ───────
@@ -29,6 +37,10 @@ export default function RejectReasonModal({
   onClose,
   onConfirm,
   loading = false,
+  fieldLabel = "Motivo del rechazo",
+  placeholder = "Explica brevemente por qué se rechaza...",
+  confirmLabel = "Confirmar rechazo",
+  confirmVariant = "danger",
 }: RejectReasonModalProps) {
   const [reason, setReason] = useState("");
   const [touched, setTouched] = useState(false);
@@ -67,13 +79,13 @@ export default function RejectReasonModal({
             Cancelar
           </button>
           <Button
-            variant="danger"
+            variant={confirmVariant}
             loading={loading}
             disabled={isEmpty}
             onClick={handleConfirm}
             className="flex-1 justify-center"
           >
-            Confirmar rechazo
+            {confirmLabel}
           </Button>
         </div>
       }
@@ -86,14 +98,14 @@ export default function RejectReasonModal({
         )}
         <div>
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-            Motivo del rechazo
+            {fieldLabel}
           </label>
           <textarea
             autoFocus
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             onBlur={() => setTouched(true)}
-            placeholder="Explica brevemente por qué se rechaza..."
+            placeholder={placeholder}
             rows={4}
             className={`w-full rounded-2xl border p-3.5 text-sm text-slate-800
                         placeholder:text-slate-400 shadow-inner resize-none

@@ -6,11 +6,11 @@ import { Card, Badge, Skeleton } from "@/components/ui";
 import { useGodModeAuditLog, GodModeAuditLogEntry } from "@/hooks/useGodMode";
 import RefreshButton from "@/components/ui/RefreshButton";
 
-const ENTITY_TYPES = ["enrollment", "cohort", "class", "payment", "student", "review"];
+const ENTITY_TYPES = ["enrollment", "cohort", "class", "payment", "student", "review", "chat_conversation"];
 
 // Solo para mostrar: el valor interno ("cohort") sigue siendo el que espera
 // el filtro del backend, esto únicamente traduce el texto visible al admin.
-const ENTITY_LABELS: Record<string, string> = { cohort: "Grupo" };
+const ENTITY_LABELS: Record<string, string> = { cohort: "Grupo", chat_conversation: "Chat" };
 function entityLabel(entityType: string) {
   return ENTITY_LABELS[entityType] ?? entityType;
 }

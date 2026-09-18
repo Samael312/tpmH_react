@@ -7,6 +7,7 @@ import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { usePathname } from "next/navigation";
 import SupportTicketModal from "@/components/support/SupportTicketModal";
+import { useChatWidgetPresenceStore } from "@/store/chatWidgetPresenceStore";
 
 interface Message {
   id: string;
@@ -181,15 +182,22 @@ interface ChipiWidgetProps {
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function ChipiWidget({ screenName, raised = false }: ChipiWidgetProps) {
+export default function ChipiWidget({ screenName, raised }: ChipiWidgetProps) {
   const autoScreen  = useScreenName();
   const screen      = screenName ?? autoScreen;
   const { user }    = useAuthStore();
   const canReportToSupport = user?.role === "student" || user?.role === "teacher";
-  const bubbleBottom = raised
+  // N2: si no se pasa `raised` explícito, se detecta solo mirando si el
+  // botón flotante del chat interno está montado en esta pantalla (ver
+  // store/chatWidgetPresenceStore.ts + components/chat/ChatWidget.tsx) —
+  // ya no hace falta que cada página lo pase a mano, y se ajusta también
+  // si el admin prende/apaga el chat en caliente.
+  const chatWidgetPresent = useChatWidgetPresenceStore((s) => s.mounted);
+  const isRaised = raised ?? chatWidgetPresent;
+  const bubbleBottom = isRaised
     ? "bottom-[calc(10.5rem+env(safe-area-inset-bottom))] md:bottom-40"
     : "bottom-[calc(6.5rem+env(safe-area-inset-bottom))] md:bottom-24";
-  const buttonBottom = raised
+  const buttonBottom = isRaised
     ? "bottom-[calc(8.75rem+env(safe-area-inset-bottom))] md:bottom-24"
     : "bottom-[calc(4.75rem+env(safe-area-inset-bottom))] md:bottom-6";
 

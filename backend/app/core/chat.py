@@ -4,6 +4,7 @@
 # sí (eso vive en core/chat_ws.py) para poder testear esta parte sin
 # necesidad de abrir sockets.
 
+from collections import defaultdict
 from datetime import timedelta
 from typing import Optional
 from fastapi import HTTPException, status
@@ -265,9 +266,25 @@ def _student_cohort_ids(db: Session, student_id: int) -> set[int]:
 
 
 def get_messages(
-    db: Session, convo: ChatConversation, before_id: Optional[int] = None, limit: int = 50,
+    db: Session,
+    convo: ChatConversation,
+    before_id: Optional[int] = None,
+    after_id: Optional[int] = None,
+    limit: int = 50,
 ) -> list[ChatMessage]:
+    """
+    - Sin `before_id` ni `after_id`: los últimos `limit` (historial inicial).
+    - `before_id`: página hacia atrás (scroll-up / "cargar más antiguos").
+    - `after_id`: SOLO los mensajes nuevos desde el último que el cliente
+      ya tiene cacheado (ver frontend/store/chatStore.ts) — evita
+      volver a traer los 50 de siempre cada vez que se reabre un hilo ya
+      visto en esta sesión. No lleva límite propio: en la práctica son
+      pocos (lo que se mandó mientras no estabas mirando ese hilo).
+    """
     q = db.query(ChatMessage).filter(ChatMessage.conversation_id == convo.id)
+    if after_id:
+        q = q.filter(ChatMessage.id > after_id)
+        return q.order_by(ChatMessage.id.asc()).all()
     if before_id:
         q = q.filter(ChatMessage.id < before_id)
     return q.order_by(ChatMessage.id.desc()).limit(limit).all()[::-1]
@@ -347,6 +364,52 @@ def send_message(
     db.commit()
     db.refresh(message)
     return message, should_notify
+
+
+# ─── Entrega (checkmarks) ────────────────────────────────────────────────
+#
+# N3: la conexión WS ahora es global por usuario (ver core/chat_ws.py), no
+# por conversación — así que "entregado" pasa a significar "el usuario
+# destinatario tiene AL MENOS UN socket global abierto", esté mirando esa
+# conversación o cualquier otra pantalla de la app.
+
+def mark_delivered_now(db: Session, message: ChatMessage) -> bool:
+    """Marca el mensaje como entregado AHORA si todavía no lo estaba.
+    Devuelve True si lo acaba de marcar (o sea, hay que avisarle al emisor
+    con el evento 'delivered' — ver endpoints/chat.py)."""
+    if message.delivered_at is not None:
+        return False
+    message.delivered_at = utc_now()
+    db.commit()
+    return True
+
+
+def catch_up_deliveries(db: Session, user: User) -> dict[int, list[int]]:
+    """Al conectarse (o reconectarse) el socket global de `user`, cualquier
+    mensaje QUE LE HAYAN MANDADO A ÉL en cualquiera de sus conversaciones y
+    que siguiera sin `delivered_at` (porque no estaba online cuando se
+    envió) pasa a estar entregado en este instante.
+
+    Devuelve {sender_user_id: [message_id, ...]} para que el caller le
+    avise el segundo checkmark a cada emisor que siga conectado."""
+    convos = list_conversations_for_user(db, user)
+    convo_ids = [c.id for c in convos]
+    if not convo_ids:
+        return {}
+    pending = db.query(ChatMessage).filter(
+        ChatMessage.conversation_id.in_(convo_ids),
+        ChatMessage.sender_id != user.id,
+        ChatMessage.delivered_at.is_(None),
+    ).all()
+    if not pending:
+        return {}
+    now = utc_now()
+    by_sender: dict[int, list[int]] = defaultdict(list)
+    for message in pending:
+        message.delivered_at = now
+        by_sender[message.sender_id].append(message.id)
+    db.commit()
+    return dict(by_sender)
 
 
 # ─── Retención ───────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ import { useAuthStore } from "@/store/authStore";
 import { 
   LayoutDashboard, Users, GraduationCap, Calendar, Settings, LogOut, 
   MonitorPlay, UserCircle, ClipboardEdit, CreditCard, Book, BarChart, ChevronLeft,
-  CheckCheck, MoreHorizontal, Users2, LifeBuoy, Crown, AlertOctagon, MessagesSquare
+  CheckCheck, MoreHorizontal, Users2, LifeBuoy, Crown, AlertOctagon, MessagesSquare, ShieldCheck
 } from "lucide-react";
 import { useUnreadNotificationCount } from "@/hooks/useAdminData";
 import { useUnreadSupportCount } from "@/hooks/useSupport";
@@ -62,6 +62,7 @@ const ADMIN_MAIN: TabItem[] = [
 ];
 const ADMIN_MORE: TabItem[] = [
   { href: "/admin/god-mode", label: "Modo Dios", icon: <Crown size={20} /> },
+  { href: "/admin/chat", label: "Auditoría de chats", icon: <ShieldCheck size={20} /> },
   { href: "/admin/support", label: "Soporte", icon: <LifeBuoy size={20} /> },
   { href: "/admin/logs", label: "Logs", icon: <AlertOctagon size={20} /> },
   { href: "/admin/settings", label: "Configuración", icon: <Settings size={20} /> },
@@ -333,6 +334,7 @@ export default function DashboardSidebar() {
                 <NavItem href="/admin/students" icon={<GraduationCap size={20} />} label="Estudiantes" active={isActive("/admin/students")} collapsed={collapsed} />
                 <NavItem href="/admin/users" icon={<Users size={20} />} label="Edición de Usuarios" active={isActive("/admin/users")} collapsed={collapsed} />
                 <NavItem href="/admin/god-mode" icon={<Crown size={20} />} label="Modo Dios" active={isActive("/admin/god-mode")} collapsed={collapsed} />
+                <NavItem href="/admin/chat" icon={<ShieldCheck size={20} />} label="Auditoría de chats" active={isActive("/admin/chat")} collapsed={collapsed} />
                 <NavItem href="/admin/payments" icon={<CreditCard size={20} />} label="Pagos y Facturas" active={isActive("/admin/payments")} collapsed={collapsed} />
                 <NavItem href="/admin/support" icon={<LifeBuoy size={20} />} label="Soporte" active={isActive("/admin/support")} collapsed={collapsed} />
                 <NavItem href="/admin/logs" icon={<AlertOctagon size={20} />} label="Logs" active={isActive("/admin/logs")} collapsed={collapsed} />

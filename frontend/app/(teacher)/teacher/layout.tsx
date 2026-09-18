@@ -7,6 +7,8 @@ import NavBar from '@/components/layout/NavBar'
 import DashboardTopbar from '@/components/layout/DashboardTopbar'
 import ChatWidget from '@/components/chat/ChatWidget'
 import api from '@/lib/api'
+import { usePlatformConfig } from '@/hooks/useStudentData'
+import { useChatSocketBootstrap } from '@/hooks/useChat'
 
 const FULLSCREEN_ROUTES = ['/teacher/onboarding']
 
@@ -18,8 +20,13 @@ export default function TeacherLayout({
   const router   = useRouter()
   const pathname = usePathname()
   const { user, token, setUser, hasHydrated } = useAuthStore()
+  const { config: platformConfig } = usePlatformConfig()
 
   const isFullscreen = FULLSCREEN_ROUTES.some(r => pathname.startsWith(r))
+
+  // N3: misma conexión WS global que en el layout de student — ver
+  // store/chatStore.ts.
+  useChatSocketBootstrap(!!user && platformConfig?.chat_enabled === true)
 
   // Bloquea el render hasta confirmar que el onboarding está completo
   const [ready, setReady] = useState(isFullscreen)

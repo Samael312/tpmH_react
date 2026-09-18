@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import Cookies from "js-cookie";
+import { useChatStore } from "@/store/chatStore";
 
 export interface User {
   id?: number;
@@ -48,6 +49,12 @@ export const useAuthStore = create<AuthStore>()(
       logout: () => {
         Cookies.remove("access_token");
         set({ user: null, token: null, isLoading: false });
+        // N3: cierra el WS global del chat y borra el cache de mensajes en
+        // memoria — deliberadamente no persiste a disco (ver
+        // store/chatStore.ts), pero sí hay que vaciarlo en logout para no
+        // dejarlo flotando en memoria si el próximo usuario en esta
+        // compu/pestaña inicia sesión con otra cuenta.
+        useChatStore.getState().reset();
       },
 
       setLoading: (loading) => set({ isLoading: loading }),

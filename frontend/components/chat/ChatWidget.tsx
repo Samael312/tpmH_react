@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MessageCircle, X } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { usePlatformConfig } from "@/hooks/useStudentData";
 import { useChatConversations, useUnreadChatCount, ChatConversation } from "@/hooks/useChat";
+import { useChatWidgetPresenceStore } from "@/store/chatWidgetPresenceStore";
 import ConversationList from "./ConversationList";
 import ChatThreadView from "./ChatThreadView";
 
@@ -22,15 +23,27 @@ export default function ChatWidget() {
   const { conversations, loading } = useChatConversations(enabled);
   const { count } = useUnreadChatCount(enabled && !open);
 
+  // N2: avisa a ChipiWidget que hay un botón flotante en esta esquina —
+  // así se corre solo hacia arriba (prop `raised`, ver
+  // components/chipi/ChipiWidget.tsx) sin tener que tocar cada una de las
+  // páginas que lo montan.
+  const setPresence = useChatWidgetPresenceStore((s) => s.setMounted);
+  useEffect(() => {
+    setPresence(enabled);
+    return () => setPresence(false);
+  }, [enabled, setPresence]);
+
   if (!enabled) return null;
 
   return (
     <>
-      {/* Botón flotante — posicionado ARRIBA del de ChipiWidget
-          (que usa bottom-[calc(4.75rem+safe)] / md:bottom-6). */}
+      {/* Botón flotante — ocupa la posición "de base" (antes era de
+          ChipiWidget sin raised); ChipiWidget se corre arriba solo al
+          detectar que este botón está presente, así que ya no hace falta
+          hardcodear acá offsets gigantes para esquivarlo. */}
       <button
         onClick={() => setOpen((o) => !o)}
-        className="fixed bottom-[calc(9.5rem+env(safe-area-inset-bottom))] right-4 sm:right-6 md:bottom-24
+        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 sm:right-6 md:bottom-6
                    z-50 w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-400
                    shadow-lg shadow-pink-300/40 flex items-center justify-center text-white
                    hover:scale-105 active:scale-95 transition-transform"
@@ -46,7 +59,7 @@ export default function ChatWidget() {
 
       {open && (
         <div
-          className="fixed bottom-[calc(15.5rem+env(safe-area-inset-bottom))] right-4 sm:right-6 md:bottom-[10.5rem]
+          className="fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] right-4 sm:right-6 md:bottom-24
                      z-50 w-[calc(100vw-2rem)] max-w-sm h-[70vh] max-h-[560px]
                      bg-white rounded-[2rem] shadow-2xl shadow-pink-300/20 border border-pink-100
                      flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200"
