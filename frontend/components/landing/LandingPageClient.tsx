@@ -112,8 +112,12 @@ function TeacherAvatar({ teacher, className, sizes = "200px", priority = false, 
     // nunca en el resto de avatares de la página.
     return <Image src={photo} alt={name} fill sizes={sizes} className={className} priority={priority} />;
   }
+  // Sin foto: el fallback debe ocupar el mismo espacio que ocuparía la
+  // <Image fill> (el contenedor padre siempre es `relative`), si no el div
+  // colapsa a su contenido (el círculo/letra) y deja ver el fondo del
+  // contenedor alrededor en vez de cubrirlo por completo.
   return (
-    <div className={`${className} bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center`}>
+    <div className={`absolute inset-0 w-full h-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center ${className ?? ""}`}>
       <span className={`${textSize} font-black text-white/90`}>{name[0]?.toUpperCase() ?? "T"}</span>
     </div>
   );
@@ -195,14 +199,20 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
 
           {/* Texto */}
           <div className="text-center lg:text-left animate-in fade-in slide-in-from-left-8 duration-700">
-            <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-sm border border-rose-100 rounded-full px-4 py-2 shadow-sm mb-6">
-              <div className="flex">
-                {[1,2,3,4,5].map(i => <Star key={i} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />)}
+            {loading ? (
+              <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-sm border border-rose-100 rounded-full px-4 py-2 shadow-sm mb-6">
+                <Skeleton className="h-4 w-24 rounded-full bg-slate-200/70" />
               </div>
-              <span className="text-xs font-black text-slate-700">
-                {avgRating.toFixed(1)} · {reviews.length}+ reseñas
-              </span>
-            </div>
+            ) : (
+              <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-sm border border-rose-100 rounded-full px-4 py-2 shadow-sm mb-6">
+                <div className="flex">
+                  {[1,2,3,4,5].map(i => <Star key={i} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />)}
+                </div>
+                <span className="text-xs font-black text-slate-700">
+                  {avgRating.toFixed(1)} · {reviews.length}+ reseñas
+                </span>
+              </div>
+            )}
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.1] mb-6 drop-shadow-sm text-balance">
               {gTitle(isSingleTenant ? "hero_title_single" : "hero_title_multi")}
@@ -227,22 +237,35 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
             </div>
 
             <div className="flex items-center gap-6 mt-8 justify-center lg:justify-start">
-              {[
-                { icon: <Users className="w-4 h-4" />, label: isSingleTenant ? "Estudiantes satisfechos" : "Profesores activos", value: isSingleTenant ? "100+" : `${teachers.length}` },
-                { icon: <Globe className="w-4 h-4" />, label: "Idiomas", value: `${combinedLanguages.length || 1}+` },
-                { icon: <Clock className="w-4 h-4" />, label: "Horas de clase", value: "1000+" },
-              ].map(stat => (
-                <div key={stat.label} className="text-center">
-                  <p className="text-2xl font-black text-slate-900">{stat.value}</p>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{stat.label}</p>
-                </div>
-              ))}
+              {loading ? (
+                [1, 2, 3].map(i => (
+                  <div key={i} className="text-center">
+                    <Skeleton className="h-7 w-12 mx-auto mb-1.5 bg-slate-200/70" />
+                    <Skeleton className="h-2.5 w-16 mx-auto bg-slate-200/70" />
+                  </div>
+                ))
+              ) : (
+                [
+                  { icon: <Users className="w-4 h-4" />, label: isSingleTenant ? "Estudiantes satisfechos" : "Profesores activos", value: isSingleTenant ? "100+" : `${teachers.length}` },
+                  { icon: <Globe className="w-4 h-4" />, label: "Idiomas", value: `${combinedLanguages.length || 1}+` },
+                  { icon: <Clock className="w-4 h-4" />, label: "Horas de clase", value: "1000+" },
+                ].map(stat => (
+                  <div key={stat.label} className="text-center">
+                    <p className="text-2xl font-black text-slate-900">{stat.value}</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{stat.label}</p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
           {/* Visual: foto única o collage de hasta 5 */}
           <div className="flex justify-center lg:justify-end animate-in fade-in slide-in-from-right-8 duration-700 delay-150">
-            {isSingleTenant ? (
+            {loading ? (
+              <div className="relative w-72 h-80 sm:w-80 sm:h-96">
+                <Skeleton className="w-full h-full rounded-[3rem] rotate-3" />
+              </div>
+            ) : isSingleTenant ? (
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-br from-rose-300 to-pink-300 rounded-[3rem] blur-2xl opacity-40 scale-105" />
                 <div className="relative w-72 h-80 sm:w-80 sm:h-96 rounded-[3rem] overflow-hidden border-4 border-white shadow-2xl ring-1 ring-rose-200 bg-slate-200 rotate-3 hover:rotate-1 transition-transform duration-700">
@@ -566,7 +589,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
       </section>
 
       {/* ─── Clases grupales ─── */}
-      {groupPackages.length > 0 && (
+      {(loading || groupPackages.length > 0) && (
         <section id="group-plans" className="py-24 relative overflow-hidden bg-slate-50 border-y border-slate-100">
           <div className="absolute top-0 left-0 w-[450px] h-[450px] bg-purple-200/40 mix-blend-multiply rounded-full blur-[110px] pointer-events-none" />
           <div className="relative max-w-6xl mx-auto px-4 sm:px-6 z-10">
@@ -582,22 +605,32 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
               </p>
             </Reveal>
 
-            {/* Cómo funciona */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-16">
-              {lc.group_steps.map((s, idx) => (
-                <Reveal key={idx} delay={idx * 120} className="bg-white rounded-[1.75rem] border border-slate-100 shadow-sm p-6 flex flex-col items-center text-center">
-                  <div className="w-10 h-10 rounded-full bg-rose-600 text-white font-black flex items-center justify-center mb-4">
-                    {idx + 1}
-                  </div>
-                  <h3 className="font-extrabold text-slate-900 mb-2">{s.title}</h3>
-                  <p className="text-sm text-slate-500 leading-relaxed">{s.desc}</p>
-                </Reveal>
-              ))}
-            </div>
+            {loading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                {[1, 2, 3, 4].map(i => (
+                  <Skeleton key={i} className="h-72 w-full rounded-[2rem]" />
+                ))}
+              </div>
+            ) : (
+              <>
+                {/* Cómo funciona */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-16">
+                  {lc.group_steps.map((s, idx) => (
+                    <Reveal key={idx} delay={idx * 120} className="bg-white rounded-[1.75rem] border border-slate-100 shadow-sm p-6 flex flex-col items-center text-center">
+                      <div className="w-10 h-10 rounded-full bg-rose-600 text-white font-black flex items-center justify-center mb-4">
+                        {idx + 1}
+                      </div>
+                      <h3 className="font-extrabold text-slate-900 mb-2">{s.title}</h3>
+                      <p className="text-sm text-slate-500 leading-relaxed">{s.desc}</p>
+                    </Reveal>
+                  ))}
+                </div>
 
-            <Reveal>
-              <PackagesCarousel packages={groupPackages} showTeacher={!isSingleTenant} />
-            </Reveal>
+                <Reveal>
+                  <PackagesCarousel packages={groupPackages} showTeacher={!isSingleTenant} />
+                </Reveal>
+              </>
+            )}
           </div>
         </section>
       )}
@@ -618,7 +651,13 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
             </div>
           </Reveal>
 
-          {reviews.length === 0 ? (
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map(i => (
+                <Skeleton key={i} className="h-56 w-full rounded-2xl" />
+              ))}
+            </div>
+          ) : reviews.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-slate-400 font-bold">Sé el primero en dejar una reseña tras tu clase</p>
             </div>
