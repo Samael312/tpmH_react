@@ -124,7 +124,10 @@ def get_current_approved_teacher(current_user: User = Depends(get_current_user))
     Solo permite acceso a profesores con status='approved'.
     Se usa donde el profesor asigna material o tareas.
     """
-    if current_user.role != UserRole.teacher:
+    if current_user.role not in [
+            UserRole.teacher,
+            UserRole.teacher_admin
+        ]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acceso solo para profesores"
