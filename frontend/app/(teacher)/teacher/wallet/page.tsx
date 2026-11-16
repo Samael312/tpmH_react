@@ -7,6 +7,7 @@ import { usePageTopBar } from '@/lib/mobileTopBar'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 import { Wallet as WalletIcon, TrendingUp, CheckCircle2, X, Loader2, ArrowDownLeft, ArrowUpRight, AlertTriangle, RefreshCw, Coins, Landmark } from 'lucide-react'
+import { useBusinessRules } from "@/hooks/useBusinessRules";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 
@@ -41,6 +42,8 @@ function RequestWithdrawalModal({
   onClose: () => void
   onDone: () => void
 }) {
+  const { rules } = useBusinessRules()
+  const minWithdrawal = rules.min_withdrawal_amount
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState('paypal')
   const [paymentInfo, setPaymentInfo] = useState('')
@@ -49,7 +52,7 @@ function RequestWithdrawalModal({
   const toast = useToast()
 
   const amountNum = parseFloat(amount)
-  const valid = amountNum >= 10 && amountNum <= available && paymentInfo.trim().length > 0
+  const valid = amountNum >= minWithdrawal && amountNum <= available && paymentInfo.trim().length > 0
 
   const submit = async () => {
     if (!valid) return
@@ -119,7 +122,7 @@ function RequestWithdrawalModal({
             />
           </div>
           {amountNum > available && <p className="text-[11px] text-rose-500 font-bold">Excede tu saldo disponible</p>}
-          {amountNum > 0 && amountNum < 10 && <p className="text-[11px] text-rose-500 font-bold">El monto mínimo de retiro es $10.00</p>}
+          {amountNum > 0 && amountNum < minWithdrawal && <p className="text-[11px] text-rose-500 font-bold">El monto mínimo de retiro es ${minWithdrawal.toFixed(2)}</p>}
         </div>
 
         {/* Método Selector */}

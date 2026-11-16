@@ -23,6 +23,8 @@ export interface BusinessRules {
   // paquete (aplica a upgrades y downgrades por igual). 0 = sin
   // restricción.
   min_classes_before_package_change: number;
+  // F5: mínimo de retiro que aplica el servidor (antes $10 fijo en la UI).
+  min_withdrawal_amount: number;
 }
 
 // Pool fijo del que se eligen las duraciones de clase (regulares/paquetes)
@@ -43,6 +45,7 @@ const FALLBACK: BusinessRules = {
   buffer_group_minutes: 10,
   meet_link_autogen_minutes: 30,
   min_classes_before_package_change: 0,
+  min_withdrawal_amount: 10,
 };
 
 let cache: BusinessRules | null = null;

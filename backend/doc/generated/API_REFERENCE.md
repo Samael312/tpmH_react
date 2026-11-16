@@ -261,11 +261,11 @@ Total de rutas: **217**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| GET | `/system-catalogs/` | — |  | `get_all_catalogs` (app/api/v1/endpoints/system_catalogs.py:30) | Devuelve todos los catálogos como { key: value }. Público — lo consume cualquier pantalla (onboarding, perfil, etc.) sin requerir sesión de admin. |
-| GET | `/system-catalogs/admin` | get_current_staff, get_current_user |  | `list_catalogs_admin` (app/api/v1/endpoints/system_catalogs.py:41) | Vista completa (con label y updated_at) para la pantalla de configuración. |
-| GET | `/system-catalogs/business-rules` | — |  | `get_business_rules` (app/api/v1/endpoints/system_catalogs.py:50) | Público — el frontend lo necesita para validar duraciones/plazos sin sesión de admin. |
-| PATCH | `/system-catalogs/business-rules` | get_current_staff, get_current_user |  | `update_business_rules` (app/api/v1/endpoints/system_catalogs.py:96) |  |
-| PATCH | `/system-catalogs/{key}` | get_current_staff, get_current_user |  | `update_catalog` (app/api/v1/endpoints/system_catalogs.py:122) |  |
+| GET | `/system-catalogs/` | — |  | `get_all_catalogs` (app/api/v1/endpoints/system_catalogs.py:31) | Devuelve todos los catálogos como { key: value }. Público — lo consume cualquier pantalla (onboarding, perfil, etc.) sin requerir sesión de admin. |
+| GET | `/system-catalogs/admin` | get_current_staff, get_current_user |  | `list_catalogs_admin` (app/api/v1/endpoints/system_catalogs.py:42) | Vista completa (con label y updated_at) para la pantalla de configuración. |
+| GET | `/system-catalogs/business-rules` | — |  | `get_business_rules` (app/api/v1/endpoints/system_catalogs.py:51) | Público — el frontend lo necesita para validar duraciones/plazos sin sesión de admin. |
+| PATCH | `/system-catalogs/business-rules` | get_current_staff, get_current_user |  | `update_business_rules` (app/api/v1/endpoints/system_catalogs.py:98) |  |
+| PATCH | `/system-catalogs/{key}` | get_current_staff, get_current_user |  | `update_catalog` (app/api/v1/endpoints/system_catalogs.py:124) |  |
 
 ## Modo Dios
 

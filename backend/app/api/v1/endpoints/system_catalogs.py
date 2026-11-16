@@ -14,6 +14,7 @@ from app.schemas.system_catalog import (
     UpdateBusinessRulesRequest,
 )
 from app.schemas.classes import CLASS_DURATION_OPTIONS, DEFAULT_BUFFER_MINUTES
+from app.schemas.payments import MIN_WITHDRAWAL_AMOUNT
 
 router = APIRouter()
 
@@ -90,6 +91,7 @@ def get_business_rules(db: Session = Depends(get_db)):
             else 30
         ),
         min_classes_before_package_change=config.min_classes_before_package_change or 0,
+        min_withdrawal_amount=MIN_WITHDRAWAL_AMOUNT,
     )
 
 

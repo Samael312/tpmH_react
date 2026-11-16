@@ -5,12 +5,12 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | URL | Archivo | Guard (rol) | Líneas | Nota |
 |---|---|---|---|---|
 | `/forgot-password` | `app/(auth)/forgot-password/page.tsx` | pública | 208 |  |
-| `/reset-password` | `app/(auth)/reset-password/page.tsx` | pública | 213 |  |
+| `/reset-password` | `app/(auth)/reset-password/page.tsx` | pública | 215 |  |
 | `/verify-email` | `app/(auth)/verify-email/page.tsx` | pública | 107 |  |
-| `/login` | `app/(public)/login/page.tsx` | pública | 331 |  |
+| `/login` | `app/(public)/login/page.tsx` | pública | 332 |  |
 | `/privacy` | `app/(public)/privacy/page.tsx` | pública | 17 |  |
 | `/register/google-complete` | `app/(public)/register/google-complete/page.tsx` | pública | 252 |  |
-| `/register` | `app/(public)/register/page.tsx` | pública | 650 |  |
+| `/register` | `app/(public)/register/page.tsx` | pública | 652 |  |
 | `/terms` | `app/(public)/terms/page.tsx` | pública | 17 |  |
 | `/dashboard/availability` | `app/(student)/dashboard/availability/page.tsx` | student | 448 |  |
 | `/dashboard/chat` | `app/(student)/dashboard/chat/page.tsx` | student | 142 |  |
@@ -18,7 +18,7 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/dashboard/homework` | `app/(student)/dashboard/homework/page.tsx` | student | 608 |  |
 | `/dashboard/materials` | `app/(student)/dashboard/materials/page.tsx` | student | 490 | app/student/materials/page.tsx |
 | `/dashboard/onboarding` | `app/(student)/dashboard/onboarding/page.tsx` | student | 888 |  |
-| `/dashboard` | `app/(student)/dashboard/page.tsx` | student | 770 |  |
+| `/dashboard` | `app/(student)/dashboard/page.tsx` | student | 772 |  |
 | `/dashboard/profile` | `app/(student)/dashboard/profile/page.tsx` | student | 971 |  |
 | `/dashboard/schedule` | `app/(student)/dashboard/schedule/page.tsx` | student | 1796 |  |
 | `/dashboard/support` | `app/(student)/dashboard/support/page.tsx` | student | 21 |  |
@@ -50,7 +50,7 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/teacher/profile/preview` | `app/(teacher)/teacher/profile/preview/page.tsx` | teacher, teacher_admin | 86 |  |
 | `/teacher/students` | `app/(teacher)/teacher/students/page.tsx` | teacher, teacher_admin | 499 |  |
 | `/teacher/support` | `app/(teacher)/teacher/support/page.tsx` | teacher, teacher_admin | 21 |  |
-| `/teacher/wallet` | `app/(teacher)/teacher/wallet/page.tsx` | teacher, teacher_admin | 396 |  |
+| `/teacher/wallet` | `app/(teacher)/teacher/wallet/page.tsx` | teacher, teacher_admin | 399 |  |
 | `/` | `app/page.tsx` | pública | 52 |  |
 | `/unauthorized` | `app/unauthorized/page.tsx` | pública | 84 |  |
 

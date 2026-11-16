@@ -1269,7 +1269,7 @@ export default function TeacherProfilePage() {
                     <div>
                       <p className="text-sm font-black text-rose-700">Eliminar mi cuenta</p>
                       <p className="text-xs text-rose-500 mt-0.5">
-                        Se desactivará tu cuenta y perfil público de forma permanente.
+                        Se desactivará tu cuenta, tu perfil público dejará de verse y tus datos personales se anonimizarán. Los pagos y clases ya realizados se conservan por registro contable. Para borrarla no debes tener saldo, retiros pendientes, clases futuras ni alumnos activos.
                       </p>
                     </div>
                     <button

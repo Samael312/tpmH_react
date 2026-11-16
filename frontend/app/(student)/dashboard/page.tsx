@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useAuthStore } from "@/store/authStore";
+import { useBusinessRules } from "@/hooks/useBusinessRules";
 import { 
   useStudentClasses, 
   useEnrollments, 
@@ -128,6 +129,7 @@ function QuickAction({
 }
 
 export default function StudentDashboard() {
+  const { rules } = useBusinessRules(); // UX-03: la duración de la prueba la fija el superadmin
   const { user } = useAuthStore();
   const toast = useToast();
   const { classes: classesData, loading: classesLoading, isFetching: classesFetching, isError: classesError, refetch: refetchClasses } = useStudentClasses();
@@ -278,7 +280,7 @@ export default function StudentDashboard() {
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-1">¡Bienvenido!</p>
                   <h2 className="text-xl font-black">Tu primera clase es gratis</h2>
-                  <p className="text-white/80 text-sm mt-1">Reserva tu clase de prueba de 30 minutos sin compromiso</p>
+                  <p className="text-white/80 text-sm mt-1">Reserva tu clase de prueba de {rules.trial_duration_minutes} minutos sin compromiso</p>
                 </div>
               </div>
               <Link href="/dashboard/schedule" className="flex-shrink-0 inline-flex items-center gap-2 px-5 py-3 bg-white text-purple-600 text-sm font-bold rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200">
@@ -727,7 +729,7 @@ export default function StudentDashboard() {
               label={stage === "needs_trial" && !hasTrial ? "Agendar prueba" : "Agendar clase"}
               description={
                 stage === "needs_trial" && !hasTrial
-                  ? "Reserva tu clase gratuita de 30 min"
+                  ? `Reserva tu clase gratuita de ${rules.trial_duration_minutes} min`
                   : stage === "trial_in_progress" || hasTrial
                     ? "Completa tu prueba primero"
                     : stage === "needs_package"

@@ -61,14 +61,14 @@ Salida: repetir sondas (200 KB y `role: system` en Chipi → rechazados).
 
 ## Fase 4 — Frontend / UX
 
-- [ ] **UX-01** (M) bucle con cookie válida y `localStorage` vacío (`teacher/layout.tsx`, `proxy.ts`)
-- [ ] **UX-02** (S) `aria-label` en ojo de contraseña y widget Chipi
-- [ ] **UX-03** (S) duración de prueba desde `trial_duration_minutes`
-- [ ] **UX-04** (S) error visible si falla la carga de retiros
-- [ ] **F4** (M) un 401 no pierde formularios
-- [ ] **F5** (M) reglas del servidor (mínimo retiro, duraciones) leídas de la configuración
-- [ ] **F6** (S) texto de borrar cuenta alineado con el comportamiento real
-- [ ] **F9** (S) quitar `"mar12"` hardcodeado
+- [x] **UX-01** (M) bucle con cookie válida y `localStorage` vacío (`teacher/layout.tsx`, `proxy.ts`) (hecho en 3b)
+- [x] **UX-02** (S) `aria-label` en ojo de contraseña y widget Chipi
+- [x] **UX-03** (S) duración de prueba desde `trial_duration_minutes`
+- [x] **UX-04** (S) error visible si falla la carga de retiros (el 404 se cerró en Fase 1; la UI ya muestra el error)
+- [x] **F4** (M) un 401 no pierde formularios (hecho en 3b)
+- [x] **F5** (M) reglas del servidor (mínimo retiro, duraciones) leídas de la configuración (mínimo de retiro desde `/system-catalogs/business-rules`)
+- [x] **F6** (S) texto de borrar cuenta alineado con el comportamiento real
+- [x] **F9** (S) quitar `"mar12"` hardcodeado
 - [ ] **F10** (L) tests de frontend (Vitest + Playwright mínimo) y script `test`
 
 ## Fase 5 — Coste y rendimiento

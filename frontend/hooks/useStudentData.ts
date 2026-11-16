@@ -593,7 +593,14 @@ export function useFeaturedTeacher() {
   const query = useQuery({
     queryKey: ["student", "featured-teacher"],
     queryFn: async () => {
-      const username = process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME ?? "mar12";
+      // F9: sin usuario "mar12" por defecto — sale de la variable pública o, si no, del profesor destacado
+      // configurado en la plataforma (el mismo que usa el backend).
+      let username = process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME || "";
+      if (!username) {
+        const cfg = await api.get("/admin/platform-config");
+        username = cfg.data?.featured_teacher?.username || "";
+      }
+      if (!username) throw new Error("No hay profesor destacado configurado");
       const [tRes, rRes] = await Promise.all([
         api.get(`/teachers/${username}`),
         api.get(`/reviews/${username}`),

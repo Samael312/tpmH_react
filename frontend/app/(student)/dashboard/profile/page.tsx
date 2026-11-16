@@ -890,7 +890,7 @@ export default function StudentProfilePage() {
                   <div>
                     <p className="text-sm font-black text-rose-700">Eliminar mi cuenta</p>
                     <p className="text-xs text-rose-500 mt-0.5">
-                      Se borrarán todos tus datos, clases y progreso de forma permanente.
+                      Tu cuenta se desactivará y tus datos personales se anonimizarán. Los pagos y clases ya realizados se conservan por registro contable. Para borrarla no debes tener saldo, clases futuras, pagos pendientes ni clases disponibles en tu paquete.
                     </p>
                   </div>
                   <button

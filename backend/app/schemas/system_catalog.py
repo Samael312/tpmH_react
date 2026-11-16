@@ -39,6 +39,8 @@ class BusinessRulesResponse(BaseModel):
     # paquete (aplica tanto a upgrades como a downgrades). 0 = sin
     # restricción.
     min_classes_before_package_change: int
+    # F5: mínimo de retiro (constante del servidor, schemas/payments.py); la UI lo lee de aquí.
+    min_withdrawal_amount: float = 10.0
 
 
 class UpdateBusinessRulesRequest(BaseModel):

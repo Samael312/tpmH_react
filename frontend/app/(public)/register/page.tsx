@@ -525,6 +525,7 @@ export default function RegisterPage() {
                       <button
                         type="button"
                         onClick={() => setShowPw(!showPw)}
+                        aria-label={showPw ? "Ocultar contraseña" : "Mostrar contraseña"}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
                       >
                         {showPw ? (
@@ -559,6 +560,7 @@ export default function RegisterPage() {
                       <button
                         type="button"
                         onClick={() => setShowConfirmPw(!showConfirmPw)}
+                        aria-label={showConfirmPw ? "Ocultar confirmación de contraseña" : "Mostrar confirmación de contraseña"}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
                       >
                         {showConfirmPw ? (
