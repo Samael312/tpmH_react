@@ -54,7 +54,7 @@ Salida: `python -m tests.audit.concurrency_live` termina con 0 FALLO. **Pendient
 - [x] **SEC-02** (M) Chipi: rate-limit, tope de tamaño, solo `role` user/assistant; TTS con cuota
 - [x] **SEC-03** (M) `teacher_admin` sin aprobar sus propios pagos ni fijar su comisión
 - [x] **SEC-04** (M) verificación de email; Google solo con `email_verified`
-- [x] **SEC-05** (L) JWT en cookie HttpOnly + refresco (hecho, 3b) · _pendiente:_ retirar Bearer/`?token=`, access de 30 min, CSP sin `unsafe-*`
+- [x] **SEC-05** (L) JWT en cookie HttpOnly + refresco (hecho, 3b) · CSP con nonce (script-src sin `unsafe-inline`; `style-src` lo conserva) · _pendiente al desplegar:_ retirar Bearer/`?token=` y access de 30 min
 - [x] **SEC-06** (M) tope en `/logs/frontend`, `state` OAuth, `application/pptx`, borrado de cuenta, topes del WS · _pendiente en 3b:_ token WS fuera de la query
 
 Salida: repetir sondas (200 KB y `role: system` en Chipi → rechazados).
@@ -69,7 +69,7 @@ Salida: repetir sondas (200 KB y `role: system` en Chipi → rechazados).
 - [x] **F5** (M) reglas del servidor (mínimo retiro, duraciones) leídas de la configuración (mínimo de retiro desde `/system-catalogs/business-rules`)
 - [x] **F6** (S) texto de borrar cuenta alineado con el comportamiento real
 - [x] **F9** (S) quitar `"mar12"` hardcodeado
-- [ ] **F10** (L) tests de frontend (Vitest + Playwright mínimo) y script `test`
+- [x] **F10** (L) tests de frontend (Vitest + Playwright mínimo) y script `test` (Vitest, 22 tests; falta Playwright)
 
 ## Fase 5 — Coste y rendimiento
 

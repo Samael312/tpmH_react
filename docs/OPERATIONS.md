@@ -97,7 +97,7 @@ Tras compartir un `.env` (chat, captura, repositorio) considera comprometidas **
 ## 9. Dominio, HTTPS y CORS
 
 - Backend y frontend en dominios propios con HTTPS; `FRONTEND_URL`/`BACKEND_URL` coherentes (los usan CORS y los emails). CORS solo admite `FRONTEND_URL` y `http://localhost:3000`.
-- `next.config.ts` fija el CSP: el dominio del backend debe estar en `connect-src`; la cookie de sesión es `secure`, así que el frontend debe servirse por HTTPS.
+- `lib/csp.ts` (aplicado por `proxy.ts`) fija el CSP con nonce: el dominio del backend debe estar en `connect-src` (sale de `NEXT_PUBLIC_API_URL`, que se lee al construir); la cookie de sesión es `secure`, así que el frontend debe servirse por HTTPS.
 - Google Cloud: orígenes y URIs de redirección de ambos dominios; `GOOGLE_REDIRECT_URI` en `https://`.
 - Resend: verificar el dominio de `EMAIL_FROM` (SPF/DKIM).
 

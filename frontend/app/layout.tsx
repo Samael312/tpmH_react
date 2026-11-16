@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { connection } from "next/server";
 import Providers from "./providers";
 import { getLandingDataServer, buildDefaultSiteTitle } from "@/lib/landingServer";
 
@@ -24,7 +25,9 @@ export const viewport: Viewport = {
   viewportFit: "cover", // necesario para que env(safe-area-inset-*) funcione en iOS
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // CSP con nonce (lib/csp.ts, proxy.ts): el nonce solo se aplica si la página se renderiza por petición.
+  await connection();
   return (
     <html lang="es" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>

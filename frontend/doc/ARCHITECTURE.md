@@ -13,7 +13,7 @@ hooks/          datos por rol con React Query: useStudentData, useTeacherData, u
 store/          authStore (user + login/logout), chatStore (WS global en memoria), chatWidgetPresenceStore, toastStore
 lib/            api.ts (axios), auth.ts (decode JWT), scheduleUtc.ts / tzFormat.ts / timezones.ts (horas), errorReporting.ts, godModeActions.ts...
 proxy.ts        guard de rutas por rol (antes "middleware")
-next.config.ts  CSP + cabeceras de seguridad (HSTS, X-Frame DENY...), rewrites, perfil destacado
+next.config.ts  cabeceras de seguridad estáticas (HSTS, X-Frame DENY...), rewrites · lib/csp.ts + proxy.ts: CSP con nonce por petición
 ```
 
 ## Sesión y autenticación
@@ -33,7 +33,7 @@ Backend en UTC. `lib/scheduleUtc.ts` (`getNextWeekdayDate`, `utcTimeToLocal`…)
 Las pantallas pesadas (`student/schedule`, ~1800 líneas) duplican reglas del backend (estado de reserva, duraciones): al cambiar reglas, revisa ambos lados (`hooks/useBusinessRules.ts` trae las configurables).
 
 ## Seguridad
-CSP con `'unsafe-inline'` y `'unsafe-eval'` en script-src; sin `dangerouslySetInnerHTML`; sin `console.log`; React escapa el HTML.
+CSP con nonce y `'strict-dynamic'` en script-src (`'unsafe-eval'` solo en desarrollo; `style-src` mantiene `'unsafe-inline'`); sin `dangerouslySetInnerHTML`; sin `console.log`; React escapa el HTML.
 Pendiente: cookie HttpOnly (ver KNOWN_ISSUES).
 
 ## Build y calidad (verificado 2026-11-16)
