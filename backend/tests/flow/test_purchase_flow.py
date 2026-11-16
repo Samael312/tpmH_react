@@ -204,7 +204,7 @@ def test_full_trial_to_active_package_flow(
     balance_before = wallet_before.available_balance if wallet_before else 0.0
 
     r_notify = client.post("/api/v1/payments/notify-payment", json={
-        "type": "package", "package_id": package_id, "transaction_reference": "flow-tests-ref",
+        "type": "package", "package_id": package_id, "payment_method": "paypal", "transaction_reference": "flow-tests-ref",
     }, headers=auth_headers(student_token))
     assert r_notify.status_code == 200, r_notify.text
     payment_id = r_notify.json()["payment_id"]

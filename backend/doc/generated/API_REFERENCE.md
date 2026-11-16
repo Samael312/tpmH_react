@@ -10,13 +10,13 @@ Total de rutas: **213**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| POST | `/auth/forgot-password` | — | 5/hour | `forgot_password` (app/api/v1/endpoints/auth.py:248) | Inicia el flujo de recuperación de contraseña. Siempre devuelve 200 aunque el email no exista para no revelar qué emails están registrados. |
-| POST | `/auth/forgot-username` | — | 5/hour | `forgot_username` (app/api/v1/endpoints/auth.py:333) | Envía el nombre de usuario asociado a un email. Igual que forgot-password: siempre devuelve el mismo mensaje, exista o no el email, para no revelar qué correos están registrados. |
-| POST | `/auth/google` | — | 20/minute | `google_login` (app/api/v1/endpoints/auth.py:136) | Paso 1 del flujo Google (GSI). Verifica el id_token contra Google. - Si el email ya tiene cuenta -> login normal, devuelve token. - Si no existe -> NO crea la cuenta. Devuelve needs_registration=True   junto con los datos de Google para que el frontend pida   username + rol antes de crear la cuenta. |
-| POST | `/auth/google/register` | — | 10/hour | `google_register` (app/api/v1/endpoints/auth.py:193) |  |
-| POST | `/auth/login` | — | 10/minute | `login` (app/api/v1/endpoints/auth.py:87) |  |
-| POST | `/auth/register` | — | 5/hour | `register` (app/api/v1/endpoints/auth.py:36) |  |
-| POST | `/auth/reset-password` | — | 10/hour | `reset_password` (app/api/v1/endpoints/auth.py:292) | Establece la nueva contraseña usando el token del email. |
+| POST | `/auth/forgot-password` | — | 5/hour | `forgot_password` (app/api/v1/endpoints/auth.py:251) | Inicia el flujo de recuperación de contraseña. Siempre devuelve 200 aunque el email no exista para no revelar qué emails están registrados. |
+| POST | `/auth/forgot-username` | — | 5/hour | `forgot_username` (app/api/v1/endpoints/auth.py:336) | Envía el nombre de usuario asociado a un email. Igual que forgot-password: siempre devuelve el mismo mensaje, exista o no el email, para no revelar qué correos están registrados. |
+| POST | `/auth/google` | — | 20/minute | `google_login` (app/api/v1/endpoints/auth.py:139) | Paso 1 del flujo Google (GSI). Verifica el id_token contra Google. - Si el email ya tiene cuenta -> login normal, devuelve token. - Si no existe -> NO crea la cuenta. Devuelve needs_registration=True   junto con los datos de Google para que el frontend pida   username + rol antes de crear la cuenta. |
+| POST | `/auth/google/register` | — | 10/hour | `google_register` (app/api/v1/endpoints/auth.py:196) |  |
+| POST | `/auth/login` | — | 10/minute | `login` (app/api/v1/endpoints/auth.py:88) |  |
+| POST | `/auth/register` | — | 5/hour | `register` (app/api/v1/endpoints/auth.py:37) |  |
+| POST | `/auth/reset-password` | — | 10/hour | `reset_password` (app/api/v1/endpoints/auth.py:295) | Establece la nueva contraseña usando el token del email. |
 
 ## Usuarios
 
@@ -74,18 +74,18 @@ Total de rutas: **213**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| DELETE | `/classes/admin/{class_id}` | get_current_staff, get_current_user |  | `cancel_class_admin` (app/api/v1/endpoints/classes.py:880) | El staff/admin cancela una clase. El crédito SIEMPRE se reembolsa, igual que en la cancelación del profesor. |
-| PATCH | `/classes/admin/{class_id}/reschedule` | get_current_staff, get_current_user |  | `reschedule_class_admin` (app/api/v1/endpoints/classes.py:833) |  |
-| GET | `/classes/my-classes` | get_current_student, get_current_user |  | `get_my_classes_student` (app/api/v1/endpoints/classes.py:280) |  |
-| GET | `/classes/teacher/classes` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_classes_teacher` (app/api/v1/endpoints/classes.py:565) |  |
-| DELETE | `/classes/teacher/{class_id}` | get_current_teacher_or_teacher_admin, get_current_user |  | `cancel_class_teacher` (app/api/v1/endpoints/classes.py:724) | El profesor cancela una clase. El crédito SIEMPRE se le reembolsa al estudiante, sin importar la antelación — la penalización de 12h es exclusivamente para cancelaciones hechas por el propio estudiante. |
-| PATCH | `/classes/teacher/{class_id}/reschedule` | get_current_teacher_or_teacher_admin, get_current_user |  | `reschedule_class_teacher` (app/api/v1/endpoints/classes.py:780) |  |
-| POST | `/classes/trial` | get_current_staff, get_current_user |  | `book_trial_class` (app/api/v1/endpoints/classes.py:482) |  |
-| DELETE | `/classes/{class_id}` | get_current_student, get_current_user |  | `cancel_class_student` (app/api/v1/endpoints/classes.py:386) |  |
-| DELETE | `/classes/{class_id}/leave` | get_current_student, get_current_user |  | `leave_group_class` (app/api/v1/endpoints/classes.py:330) | El estudiante cancela SU participación en una sesión grupal puntual (Class con class_type='group'). No cancela la clase para los demás inscritos — solo libera su propio cupo (vía ClassParticipant), igual que hace release_cohort_seat al migrar de grupal a individual. |
-| PATCH | `/classes/{class_id}/meet-link` | get_current_teacher_or_teacher_admin, get_current_user |  | `update_meet_link` (app/api/v1/endpoints/classes.py:693) | El profesor carga/edita manualmente el link de la videollamada. Campo 100% opcional: no bloquea ninguna otra acción sobre la clase. Solo se permite mientras la clase está 'confirmed' (mismo estado en el que ClassResponse se lo muestra al estudiante). |
-| PATCH | `/classes/{class_id}/reschedule` | get_current_student, get_current_user |  | `reschedule_class_student` (app/api/v1/endpoints/classes.py:418) |  |
-| PATCH | `/classes/{class_id}/status` | get_current_teacher_or_teacher_admin, get_current_user |  | `update_class_status` (app/api/v1/endpoints/classes.py:625) |  |
+| DELETE | `/classes/admin/{class_id}` | get_current_staff, get_current_user |  | `cancel_class_admin` (app/api/v1/endpoints/classes.py:900) | El staff/admin cancela una clase. El crédito SIEMPRE se reembolsa, igual que en la cancelación del profesor. |
+| PATCH | `/classes/admin/{class_id}/reschedule` | get_current_staff, get_current_user |  | `reschedule_class_admin` (app/api/v1/endpoints/classes.py:852) |  |
+| GET | `/classes/my-classes` | get_current_student, get_current_user |  | `get_my_classes_student` (app/api/v1/endpoints/classes.py:282) |  |
+| GET | `/classes/teacher/classes` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_classes_teacher` (app/api/v1/endpoints/classes.py:570) |  |
+| DELETE | `/classes/teacher/{class_id}` | get_current_teacher_or_teacher_admin, get_current_user |  | `cancel_class_teacher` (app/api/v1/endpoints/classes.py:741) | El profesor cancela una clase. El crédito SIEMPRE se le reembolsa al estudiante, sin importar la antelación — la penalización de 12h es exclusivamente para cancelaciones hechas por el propio estudiante. |
+| PATCH | `/classes/teacher/{class_id}/reschedule` | get_current_teacher_or_teacher_admin, get_current_user |  | `reschedule_class_teacher` (app/api/v1/endpoints/classes.py:798) |  |
+| POST | `/classes/trial` | get_current_staff, get_current_user |  | `book_trial_class` (app/api/v1/endpoints/classes.py:487) |  |
+| DELETE | `/classes/{class_id}` | get_current_student, get_current_user |  | `cancel_class_student` (app/api/v1/endpoints/classes.py:388) |  |
+| DELETE | `/classes/{class_id}/leave` | get_current_student, get_current_user |  | `leave_group_class` (app/api/v1/endpoints/classes.py:332) | El estudiante cancela SU participación en una sesión grupal puntual (Class con class_type='group'). No cancela la clase para los demás inscritos — solo libera su propio cupo (vía ClassParticipant), igual que hace release_cohort_seat al migrar de grupal a individual. |
+| PATCH | `/classes/{class_id}/meet-link` | get_current_teacher_or_teacher_admin, get_current_user |  | `update_meet_link` (app/api/v1/endpoints/classes.py:710) | El profesor carga/edita manualmente el link de la videollamada. Campo 100% opcional: no bloquea ninguna otra acción sobre la clase. Solo se permite mientras la clase está 'confirmed' (mismo estado en el que ClassResponse se lo muestra al estudiante). |
+| PATCH | `/classes/{class_id}/reschedule` | get_current_student, get_current_user |  | `reschedule_class_student` (app/api/v1/endpoints/classes.py:421) |  |
+| PATCH | `/classes/{class_id}/status` | get_current_teacher_or_teacher_admin, get_current_user |  | `update_class_status` (app/api/v1/endpoints/classes.py:630) |  |
 
 ## Materiales
 
@@ -201,24 +201,24 @@ Total de rutas: **213**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| GET | `/payments/admin/withdrawals/pending` | get_current_staff, get_current_user |  | `get_pending_withdrawals` (app/api/v1/endpoints/payments.py:2267) |  |
-| POST | `/payments/admin/withdrawals/{withdrawal_id}/process` | get_current_staff, get_current_user |  | `process_withdrawal_v2` (app/api/v1/endpoints/payments.py:1442) |  |
-| POST | `/payments/book` | get_current_student, get_current_user |  | `book_class` (app/api/v1/endpoints/payments.py:478) |  |
-| GET | `/payments/booking-status` | get_current_student, get_current_user |  | `get_booking_status` (app/api/v1/endpoints/payments.py:1488) |  |
-| GET | `/payments/config` | — |  | `get_payment_config` (app/api/v1/endpoints/payments.py:416) |  |
-| PATCH | `/payments/config` | get_current_staff, get_current_user |  | `update_payment_config` (app/api/v1/endpoints/payments.py:448) |  |
-| GET | `/payments/history` | get_current_staff_or_teacher, get_current_user |  | `get_payments_history` (app/api/v1/endpoints/payments.py:865) | Historial de pagos ya resueltos (aprobados o rechazados). Teacher solo ve los suyos; staff ve todos. |
-| POST | `/payments/manual-grant` | get_current_staff_or_teacher, get_current_user |  | `manual_grant_payment` (app/api/v1/endpoints/payments.py:1266) |  |
-| GET | `/payments/my-income` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_income` (app/api/v1/endpoints/payments.py:1338) |  |
-| GET | `/payments/my-payments` | get_current_student, get_current_user |  | `get_my_payments_student` (app/api/v1/endpoints/payments.py:1328) |  |
-| GET | `/payments/my-wallet` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_wallet` (app/api/v1/endpoints/payments.py:1357) |  |
-| GET | `/payments/my-withdrawals` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_withdrawals` (app/api/v1/endpoints/payments.py:1383) |  |
-| POST | `/payments/notify-payment` | get_current_student, get_current_user |  | `notify_payment` (app/api/v1/endpoints/payments.py:1586) |  |
-| GET | `/payments/pending-review` | get_current_staff_or_teacher, get_current_user |  | `get_payments_pending_review` (app/api/v1/endpoints/payments.py:811) |  |
-| POST | `/payments/request-refund-cohort-cancelled` | get_current_student, get_current_user |  | `request_refund_cohort_cancelled` (app/api/v1/endpoints/payments.py:2187) | Reembolso por una cohorte grupal que el profesor canceló (F3 del roadmap de verificación). A diferencia del reembolso por profesor suspendido, acá siempre es el 100% de lo pagado: el grupo nunca llegó a arrancar (o se abortó), no hay "clases ya tomadas" que descontar. Mientras este reembolso esté pe |
-| POST | `/payments/request-refund-teacher-suspended` | get_current_student, get_current_user |  | `request_refund_teacher_suspended` (app/api/v1/endpoints/payments.py:2063) | Reembolso disparado por la suspensión/rechazo del profesor del estudiante (no por un downgrade de paquete). Reutiliza el mismo mecanismo que el "reembolso completo" de cambio de paquete (Payment payment_type="refund" sin ningún paquete nuevo solicitado): al aprobarse, /payments/validate/{id} cancela |
-| POST | `/payments/request-withdrawal` | get_current_teacher_or_teacher_admin, get_current_user |  | `request_withdrawal_v2` (app/api/v1/endpoints/payments.py:1393) |  |
-| PATCH | `/payments/{payment_id}/validate` | get_current_staff, get_current_user |  | `validate_payment` (app/api/v1/endpoints/payments.py:926) | NEG-01: solo `superadmin` y `teacher_admin` aprueban/rechazan pagos (los profesores normales ven el pago como «pendiente de revisión»). Un `teacher_admin` no valida los pagos de sus propias clases: los resuelve el `superadmin`. |
+| GET | `/payments/admin/withdrawals/pending` | get_current_staff, get_current_user |  | `get_pending_withdrawals` (app/api/v1/endpoints/payments.py:2291) |  |
+| POST | `/payments/admin/withdrawals/{withdrawal_id}/process` | get_current_staff, get_current_user |  | `process_withdrawal_v2` (app/api/v1/endpoints/payments.py:1465) |  |
+| POST | `/payments/book` | get_current_student, get_current_user |  | `book_class` (app/api/v1/endpoints/payments.py:484) |  |
+| GET | `/payments/booking-status` | get_current_student, get_current_user |  | `get_booking_status` (app/api/v1/endpoints/payments.py:1511) |  |
+| GET | `/payments/config` | — |  | `get_payment_config` (app/api/v1/endpoints/payments.py:422) |  |
+| PATCH | `/payments/config` | get_current_staff, get_current_user |  | `update_payment_config` (app/api/v1/endpoints/payments.py:454) |  |
+| GET | `/payments/history` | get_current_staff_or_teacher, get_current_user |  | `get_payments_history` (app/api/v1/endpoints/payments.py:884) | Historial de pagos ya resueltos (aprobados o rechazados). Teacher solo ve los suyos; staff ve todos. |
+| POST | `/payments/manual-grant` | get_current_staff_or_teacher, get_current_user |  | `manual_grant_payment` (app/api/v1/endpoints/payments.py:1289) |  |
+| GET | `/payments/my-income` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_income` (app/api/v1/endpoints/payments.py:1361) |  |
+| GET | `/payments/my-payments` | get_current_student, get_current_user |  | `get_my_payments_student` (app/api/v1/endpoints/payments.py:1351) |  |
+| GET | `/payments/my-wallet` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_wallet` (app/api/v1/endpoints/payments.py:1380) |  |
+| GET | `/payments/my-withdrawals` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_withdrawals` (app/api/v1/endpoints/payments.py:1406) |  |
+| POST | `/payments/notify-payment` | get_current_student, get_current_user |  | `notify_payment` (app/api/v1/endpoints/payments.py:1609) |  |
+| GET | `/payments/pending-review` | get_current_staff_or_teacher, get_current_user |  | `get_payments_pending_review` (app/api/v1/endpoints/payments.py:830) |  |
+| POST | `/payments/request-refund-cohort-cancelled` | get_current_student, get_current_user |  | `request_refund_cohort_cancelled` (app/api/v1/endpoints/payments.py:2211) | Reembolso por una cohorte grupal que el profesor canceló (F3 del roadmap de verificación). A diferencia del reembolso por profesor suspendido, acá siempre es el 100% de lo pagado: el grupo nunca llegó a arrancar (o se abortó), no hay "clases ya tomadas" que descontar. Mientras este reembolso esté pe |
+| POST | `/payments/request-refund-teacher-suspended` | get_current_student, get_current_user |  | `request_refund_teacher_suspended` (app/api/v1/endpoints/payments.py:2087) | Reembolso disparado por la suspensión/rechazo del profesor del estudiante (no por un downgrade de paquete). Reutiliza el mismo mecanismo que el "reembolso completo" de cambio de paquete (Payment payment_type="refund" sin ningún paquete nuevo solicitado): al aprobarse, /payments/validate/{id} cancela |
+| POST | `/payments/request-withdrawal` | get_current_teacher_or_teacher_admin, get_current_user |  | `request_withdrawal_v2` (app/api/v1/endpoints/payments.py:1416) |  |
+| PATCH | `/payments/{payment_id}/validate` | get_current_staff, get_current_user |  | `validate_payment` (app/api/v1/endpoints/payments.py:945) | NEG-01: solo `superadmin` y `teacher_admin` aprueban/rechazan pagos (los profesores normales ven el pago como «pendiente de revisión»). Un `teacher_admin` no valida los pagos de sus propias clases: los resuelve el `superadmin`. |
 
 ## Clases grupales
 
@@ -260,8 +260,8 @@ Total de rutas: **213**
 | GET | `/system-catalogs/` | — |  | `get_all_catalogs` (app/api/v1/endpoints/system_catalogs.py:30) | Devuelve todos los catálogos como { key: value }. Público — lo consume cualquier pantalla (onboarding, perfil, etc.) sin requerir sesión de admin. |
 | GET | `/system-catalogs/admin` | get_current_staff, get_current_user |  | `list_catalogs_admin` (app/api/v1/endpoints/system_catalogs.py:41) | Vista completa (con label y updated_at) para la pantalla de configuración. |
 | GET | `/system-catalogs/business-rules` | — |  | `get_business_rules` (app/api/v1/endpoints/system_catalogs.py:50) | Público — el frontend lo necesita para validar duraciones/plazos sin sesión de admin. |
-| PATCH | `/system-catalogs/business-rules` | get_current_staff, get_current_user |  | `update_business_rules` (app/api/v1/endpoints/system_catalogs.py:93) |  |
-| PATCH | `/system-catalogs/{key}` | get_current_staff, get_current_user |  | `update_catalog` (app/api/v1/endpoints/system_catalogs.py:119) |  |
+| PATCH | `/system-catalogs/business-rules` | get_current_staff, get_current_user |  | `update_business_rules` (app/api/v1/endpoints/system_catalogs.py:96) |  |
+| PATCH | `/system-catalogs/{key}` | get_current_staff, get_current_user |  | `update_catalog` (app/api/v1/endpoints/system_catalogs.py:122) |  |
 
 ## Modo Dios
 

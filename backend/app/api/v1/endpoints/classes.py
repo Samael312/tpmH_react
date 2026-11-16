@@ -26,6 +26,8 @@ from app.core.calendar_sync import (
 )
 from app.core.class_logic import (
     can_book_slot,
+    lock_booking_rows,
+    lock_class_row,
     can_cancel_class,
     can_reschedule_class,
     resolve_status_after_reschedule,
@@ -390,6 +392,7 @@ def cancel_class_student(
     db: Session = Depends(get_db)
 ):
     class_ = _get_class_or_404(db, class_id, student_id=current_user.student_profile.id)
+    class_ = lock_class_row(db, class_id)  # una cancelacion concurrente no puede devolver el credito dos veces
 
     can_cancel, error_msg = can_cancel_class(class_, current_user.id, db)
     if not can_cancel:
@@ -432,6 +435,7 @@ def reschedule_class_student(
             detail=error_msg
         )
 
+    lock_booking_rows(db, class_.teacher_id, student_id)
     can_book, error_msg = can_book_slot(
         start_time_utc=data.start_time_utc,
         teacher_id=class_.teacher_id,
@@ -440,7 +444,8 @@ def reschedule_class_student(
         # la clase existente, que no cambian al reagendar).
         end_time_utc=data.start_time_utc + timedelta(minutes=class_.duration + (class_.buffer_minutes or 0)),
         db=db,
-        exclude_class_id=class_id
+        exclude_class_id=class_id,
+        enforce_availability=True,  # AUD-06
     )
 
     if not can_book:
@@ -644,6 +649,13 @@ def update_class_status(
                 "Ya pasaron 72h desde el fin de la clase; el estado quedó bloqueado."
             )
 
+    # AUD-04: no se puede completar ni marcar como no asistida una clase que aun no empezo.
+    if data.status in ("completed", "no_show") and class_.start_time_utc > utc_now():
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "No puedes marcar como completada o no asistida una clase que aún no ha empezado."
+        )
+
     min_cancel_hours = get_business_rules(db)["min_cancel_hours"]
 
     old_status = class_.status
@@ -658,7 +670,12 @@ def update_class_status(
 
     sync_student_lifetime_class_counter(class_, old_status, data.status, db=db)
     class_.status = data.status
-    new_counts = class_counts_towards_package(data.status, class_.start_time_utc, min_cancel_hours=min_cancel_hours)
+    # AUD-05: este endpoint lo usa el profesor/teacher_admin; la penalizacion por cancelar
+    # tarde es solo del alumno, nunca de quien cancela desde aqui.
+    new_counts = class_counts_towards_package(
+        data.status, class_.start_time_utc,
+        apply_late_cancel_penalty=False, min_cancel_hours=min_cancel_hours,
+    )
 
     if data.notes:
         class_.notes = data.notes
@@ -734,6 +751,7 @@ def cancel_class_teacher(
     """
     class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
     _reject_if_external(class_)
+    class_ = lock_class_row(db, class_id)
 
     if class_.status == "cancelled":
         raise HTTPException(
@@ -793,6 +811,7 @@ def reschedule_class_teacher(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error_msg
         )
+    lock_booking_rows(db, class_.teacher_id, class_.student_id)
 
     can_book, error_msg = can_book_slot(
         start_time_utc=data.start_time_utc,
@@ -839,6 +858,7 @@ def reschedule_class_admin(
 ):
     class_ = _get_class_or_404(db, class_id)
     _reject_if_external(class_)
+    lock_booking_rows(db, class_.teacher_id, class_.student_id)
 
     can_book, error_msg = can_book_slot(
         start_time_utc=data.start_time_utc,

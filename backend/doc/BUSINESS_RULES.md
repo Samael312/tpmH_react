@@ -109,3 +109,12 @@ Semanal: filas `TeacherAvailability` (`day_of_week`, `start_time_utc`, `end_time
 - Un `teacher_admin` recibe 403 al validar pagos cuyo profesor es él mismo (`is_own_payment` en `/payments/pending-review` e `/history`); los resuelve el `superadmin`.
 - `PATCH /admin/teachers/{id}/commission`: un `teacher_admin` no puede cambiar su propia comisión (403); sí la de otros.
 - `POST /payments/manual-grant` (dar créditos sin pago) sigue permitido a profesores para sus alumnos: no mueve dinero.
+
+## Reservas y concurrencia (Fase 2)
+
+- El alumno solo reserva/reagenda dentro de la disponibilidad declarada del profesor (staff y profesor pueden saltarla).
+- `pending_trial` y sesiones grupales ocupan la agenda del profesor.
+- La duración reservada debe ser la del paquete.
+- Reservas, reagendados y cancelaciones toman `FOR UPDATE` sobre alumno/profesor/clase (sin restricción de exclusión en BD).
+- Una clase futura no puede marcarse `completed`/`no_show`. Si cancela el profesor por `PATCH status`, no se penaliza al alumno.
+- Fechas sin zona horaria -> 422. Retiro mínimo $10. Usuario/email sin distinguir mayúsculas. Valor 0 válido en reglas de negocio. `commission_rate` NULL = 15 %.

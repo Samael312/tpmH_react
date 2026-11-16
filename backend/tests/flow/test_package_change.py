@@ -43,6 +43,31 @@ from app.models.group_cohort import GroupCohort, CohortStatus
 from app.core.group_cohort_logic import get_cohort_active_count
 from tests.flow.conftest import auth_headers
 
+
+@pytest.fixture(autouse=True)
+def _no_min_classes_for_package_change():
+    """Regla D7 (minimo de clases antes de cambiar de paquete): estos tests parten de 0 clases completadas."""
+    from app.db.base import SessionLocal
+    from app.models.payment_config import PlatformConfig
+    s = SessionLocal()
+    try:
+        cfg = s.query(PlatformConfig).first()
+        original = cfg.min_classes_before_package_change if cfg else None
+        if cfg:
+            cfg.min_classes_before_package_change = 0
+            s.commit()
+    finally:
+        s.close()
+    yield
+    s = SessionLocal()
+    try:
+        cfg = s.query(PlatformConfig).first()
+        if cfg:
+            cfg.min_classes_before_package_change = original
+            s.commit()
+    finally:
+        s.close()
+
 pytestmark = pytest.mark.integration
 
 logger = logging.getLogger("flow_tests")
@@ -656,7 +681,7 @@ def test_individual_enrollment_coexists_with_new_group_enrollment(
 
     r_enroll = client.post(
         f"/api/v1/cohorts/{group_setup['cohort']['id']}/enroll",
-        json={"cohort_id": group_setup["cohort"]["id"], "transaction_reference": "flow-tests-group"},
+        json={"cohort_id": group_setup["cohort"]["id"], "payment_method": "paypal", "transaction_reference": "flow-tests-group"},
         headers=auth_headers(student_token),
     )
     assert r_enroll.status_code == 201, r_enroll.text
@@ -699,7 +724,7 @@ def test_cohort_enrollment_rejects_when_full_and_when_already_enrolled(
 
     r1 = client.post(
         f"/api/v1/cohorts/{cohort_id}/enroll",
-        json={"cohort_id": cohort_id, "transaction_reference": "flow-tests-dup"},
+        json={"cohort_id": cohort_id, "payment_method": "paypal", "transaction_reference": "flow-tests-dup"},
         headers=auth_headers(student_token),
     )
     assert r1.status_code == 201, r1.text
@@ -710,7 +735,7 @@ def test_cohort_enrollment_rejects_when_full_and_when_already_enrolled(
 
     r_dup = client.post(
         f"/api/v1/cohorts/{cohort_id}/enroll",
-        json={"cohort_id": cohort_id, "transaction_reference": "flow-tests-dup-2"},
+        json={"cohort_id": cohort_id, "payment_method": "paypal", "transaction_reference": "flow-tests-dup-2"},
         headers=auth_headers(student_token),
     )
     assert r_dup.status_code == 400
@@ -728,7 +753,7 @@ def test_cohort_enrollment_rejects_when_full_and_when_already_enrolled(
 
     r_full = client.post(
         f"/api/v1/cohorts/{cohort_id}/enroll",
-        json={"cohort_id": cohort_id, "transaction_reference": "flow-tests-full"},
+        json={"cohort_id": cohort_id, "payment_method": "paypal", "transaction_reference": "flow-tests-full"},
         headers=auth_headers(student_token),
     )
     assert r_full.status_code == 400
@@ -749,7 +774,7 @@ def test_leave_cohort_frees_enrollment_and_seat(
     cohort_id = group_setup["cohort"]["id"]
     r_enroll = client.post(
         f"/api/v1/cohorts/{cohort_id}/enroll",
-        json={"cohort_id": cohort_id, "transaction_reference": "flow-tests-leave"},
+        json={"cohort_id": cohort_id, "payment_method": "paypal", "transaction_reference": "flow-tests-leave"},
         headers=auth_headers(student_token),
     )
     enrollment_id = r_enroll.json()["enrollment_id"]
@@ -871,7 +896,7 @@ def test_group_to_group_migration_is_manual_leave_then_enroll(
     old_cohort_id = group_setup["cohort"]["id"]
     r_join_old = client.post(
         f"/api/v1/cohorts/{old_cohort_id}/enroll",
-        json={"cohort_id": old_cohort_id, "transaction_reference": "flow-tests-g2g-old"},
+        json={"cohort_id": old_cohort_id, "payment_method": "paypal", "transaction_reference": "flow-tests-g2g-old"},
         headers=auth_headers(student_token),
     )
     old_enrollment_id = r_join_old.json()["enrollment_id"]
@@ -893,7 +918,7 @@ def test_group_to_group_migration_is_manual_leave_then_enroll(
 
     r_join_new = client.post(
         f"/api/v1/cohorts/{new_cohort_id}/enroll",
-        json={"cohort_id": new_cohort_id, "transaction_reference": "flow-tests-g2g-new"},
+        json={"cohort_id": new_cohort_id, "payment_method": "paypal", "transaction_reference": "flow-tests-g2g-new"},
         headers=auth_headers(student_token),
     )
     assert r_join_new.status_code == 201, r_join_new.text

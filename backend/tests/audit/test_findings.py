@@ -13,7 +13,7 @@ import pytest
 
 from tests.audit.conftest import hdr, future, _mk_user
 from tests.audit.helpers import (
-    API, iso, book, set_status, approve, ready_student, complete_trial, buy_package,
+    API, iso, book, set_status, approve, ready_student, complete_trial, buy_package, restrict_availability,
 )
 from app.models.package import Enrollment, Package
 from app.models.class_ import Class
@@ -26,15 +26,14 @@ from app.models.payment_config import PlatformConfig
 
 # ─── Agendado ───────────────────────────────────────────────────────────────
 
-@pytest.mark.xfail(strict=True, reason="AUD-01: book_class no valida la disponibilidad declarada del profesor")
 def test_booking_outside_teacher_availability_rejected(client, world, db):
     eid, _ = ready_student(client, world)
+    restrict_availability(db, world)
     t = future(72).replace(hour=3)  # disponibilidad: 08:00-20:00 UTC
     r = book(client, world, t, enrollment_id=eid)
     assert r.status_code in (400, 409, 422), f"se aceptó una clase a las 03:00 UTC ({r.status_code})"
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-02: can_book_slot ignora 'pending_trial' y permite doble reserva del profesor")
 def test_two_students_cannot_book_same_trial_slot(client, world, db):
     s2 = _mk_user(db, "student", "alumno2")
     db.add(StudentProfile(user_id=s2.id, user_username="alumno2", timezone="UTC"))
@@ -53,7 +52,7 @@ def test_renewal_after_full_cycle_gives_new_credits(client, world, db):
         assert r.status_code == 201, r.text
         ids.append(r.json()["class_id"])
     for cid in ids:
-        assert set_status(client, world, cid, "completed").status_code == 200
+        assert set_status(client, world, cid, "completed", age=True).status_code == 200
     db.expire_all()
     assert db.get(Enrollment, eid).status.value == "completed"
     r = client.post(f"{API}/payments/notify-payment", json={
@@ -67,14 +66,12 @@ def test_renewal_after_full_cycle_gives_new_credits(client, world, db):
     assert book(client, world, future(300), enrollment_id=eid).status_code == 201
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-04: el profesor puede marcar 'completed' una clase que aún no ocurrió")
 def test_cannot_complete_future_class(client, world, db):
     eid, _ = ready_student(client, world)
     cid = book(client, world, future(200), enrollment_id=eid).json()["class_id"]
     assert set_status(client, world, cid, "completed").status_code == 400
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-05: PATCH status=cancelled aplica penalización de estudiante aunque cancele el profesor")
 def test_teacher_status_cancel_does_not_penalize_student(client, world, db):
     eid, _ = ready_student(client, world)
     cid = book(client, world, future(3), enrollment_id=eid).json()["class_id"]
@@ -83,10 +80,10 @@ def test_teacher_status_cancel_does_not_penalize_student(client, world, db):
     assert db.get(Enrollment, eid).classes_used == 0
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-06: reagendar (alumno) no valida disponibilidad del profesor")
 def test_student_reschedule_outside_availability_rejected(client, world, db):
     eid, _ = ready_student(client, world)
-    cid = book(client, world, future(72), enrollment_id=eid).json()["class_id"]
+    restrict_availability(db, world)
+    cid = book(client, world, future(72).replace(hour=10), enrollment_id=eid).json()["class_id"]
     new = future(96).replace(hour=3)
     r = client.patch(f"{API}/classes/{cid}/reschedule", json={
         "start_time_utc": iso(new), "end_time_utc": iso(new + timedelta(minutes=50))},
@@ -94,14 +91,12 @@ def test_student_reschedule_outside_availability_rejected(client, world, db):
     assert r.status_code in (400, 409)
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-07: la duración reservada no se valida contra la del paquete")
 def test_booking_duration_must_match_package(client, world, db):
     eid, _ = ready_student(client, world)  # paquete de 50 min
     r = book(client, world, future(72), enrollment_id=eid, duration=110)
     assert r.status_code == 400
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-08: datetime sin zona horaria provoca 500 (naive vs aware)")
 def test_naive_datetime_does_not_crash(client, world, db):
     eid, _ = ready_student(client, world)
     naive = (future(72)).replace(tzinfo=None).isoformat()
@@ -111,7 +106,6 @@ def test_naive_datetime_does_not_crash(client, world, db):
     assert r.status_code in (400, 422), f"status {r.status_code}"
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-09: update_enrollment_counter fuerza status='active' y pisa estados pendientes")
 def test_counter_update_keeps_pending_renewal_status(client, world, db):
     eid, _ = ready_student(client, world)
     cid = book(client, world, future(72), enrollment_id=eid).json()["class_id"]
@@ -119,12 +113,11 @@ def test_counter_update_keeps_pending_renewal_status(client, world, db):
         "type": "renewal", "enrollment_id": eid, "package_id": world["pkg"].id,
         "payment_method": "bank_transfer"}, headers=hdr(world["s_user"]))
     assert r.status_code == 200
-    set_status(client, world, cid, "completed")
+    set_status(client, world, cid, "completed", age=True)
     db.expire_all()
     assert db.get(Enrollment, eid).status.value == "pending_renewal"
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-10: get_business_rules ignora el valor 0 (usa 'or' en lugar de 'is None')")
 def test_business_rules_accept_zero(db):
     from app.core.class_logic import get_business_rules
     db.add(PlatformConfig(min_cancel_hours=0))
@@ -175,7 +168,6 @@ def test_commission_zero_and_full():
     assert _apply_commission(50, T1()) == (0.0, 50.0)
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-11: commission_rate NULL rompe el cálculo (TypeError)")
 def test_commission_null_rate_falls_back_to_default():
     from app.api.v1.endpoints.payments import _apply_commission
     class TN: commission_rate = None
@@ -255,7 +247,6 @@ def test_admin_can_list_pending_withdrawals(client, world, db):
     assert r.status_code == 200
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-13: el mínimo de retiro ($10 en el schema viejo) no se aplica en WithdrawalRequestV2")
 def test_withdrawal_minimum_amount(client, world, db):
     ready_student(client, world)
     r = client.post(f"{API}/payments/request-withdrawal", json={"amount": 0.5, "payment_info": "x"},
@@ -347,7 +338,6 @@ def test_register_login_roundtrip(client):
     assert client.post(f"{API}/auth/login", json={"login": "nuevo", "password": "mala"}).status_code == 401
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-16: login por username distingue mayúsculas pero el registro lo pasa a minúsculas")
 def test_login_username_case_insensitive(client):
     client.post(f"{API}/auth/register", json={
         "email": "c@x.com", "username": "MiUser", "password": "Password123",
@@ -356,7 +346,6 @@ def test_login_username_case_insensitive(client):
     assert r.status_code == 200
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-17: el email no se normaliza: 'A@x.com' y 'a@x.com' se registran como cuentas distintas")
 def test_email_case_duplicates_rejected(client):
     base = {"username": "user1", "password": "Password123", "name": "N", "surname": "U", "role": "student"}
     assert client.post(f"{API}/auth/register", json={**base, "email": "Dup@x.com"}).status_code == 200
@@ -429,6 +418,7 @@ def test_featured_teacher_slots_work_for_students(client, world, db):
 
 def test_slots_endpoint_returns_free_slots_and_marks_busy(client, world, db):
     eid, _ = ready_student(client, world)
+    restrict_availability(db, world)
     start = future(72).replace(hour=10)
     assert book(client, world, start, enrollment_id=eid).status_code == 201
     date = start.strftime("%Y-%m-%d")

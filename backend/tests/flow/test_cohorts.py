@@ -336,7 +336,7 @@ def test_cohort_close_and_cancel(
 
 
 def test_pending_group_enrollment_payment_rejection(
-    client, teacher_token, student_token, fixed_users, clean_cohort_slate,
+    client, teacher_token, student_token, superadmin_token, fixed_users, clean_cohort_slate,
 ):
     """
     Técnico: PATCH /payments/{id}/validate {action: "reject"} sin
@@ -380,14 +380,13 @@ def test_pending_group_enrollment_payment_rejection(
     # Rechazar sin motivo -> 400.
     r_reject_no_reason = client.patch(f"/api/v1/payments/{payment_id}/validate", json={
         "action": "reject",
-    }, headers=auth_headers(teacher_token))
+    }, headers=auth_headers(superadmin_token))
     assert r_reject_no_reason.status_code == 400, r_reject_no_reason.text
 
-    # Rechazar con motivo -> 200. El profesor de ese alumno puede rechazar
-    # directamente (no hace falta ser superadmin/teacher_admin).
+    # Rechazar con motivo -> 200. Desde Fase 1 solo el staff valida pagos (el profesor ya no).
     r_reject = client.patch(f"/api/v1/payments/{payment_id}/validate", json={
         "action": "reject", "rejection_reason": "Comprobante de transferencia ilegible",
-    }, headers=auth_headers(teacher_token))
+    }, headers=auth_headers(superadmin_token))
     assert r_reject.status_code == 200, r_reject.text
     assert r_reject.json()["message"] == "Pago rechazado"
 
@@ -399,7 +398,7 @@ def test_pending_group_enrollment_payment_rejection(
     # No se puede rechazar dos veces el mismo pago (ya no está pending_review).
     r_reject_again = client.patch(f"/api/v1/payments/{payment_id}/validate", json={
         "action": "reject", "rejection_reason": "Intento repetido",
-    }, headers=auth_headers(teacher_token))
+    }, headers=auth_headers(superadmin_token))
     assert r_reject_again.status_code == 404, r_reject_again.text
 
     # El enrollment sigue activo (no se cancela automáticamente para

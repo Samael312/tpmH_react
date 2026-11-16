@@ -25,6 +25,31 @@ from app.models.availability import TeacherAvailability
 from app.auth.passwords import hash_password
 from tests.flow.conftest import auth_headers
 
+
+@pytest.fixture(autouse=True)
+def _no_min_classes_for_package_change():
+    """Regla D7 (minimo de clases antes de cambiar de paquete): estos tests parten de 0 clases completadas."""
+    from app.db.base import SessionLocal
+    from app.models.payment_config import PlatformConfig
+    s = SessionLocal()
+    try:
+        cfg = s.query(PlatformConfig).first()
+        original = cfg.min_classes_before_package_change if cfg else None
+        if cfg:
+            cfg.min_classes_before_package_change = 0
+            s.commit()
+    finally:
+        s.close()
+    yield
+    s = SessionLocal()
+    try:
+        cfg = s.query(PlatformConfig).first()
+        if cfg:
+            cfg.min_classes_before_package_change = original
+            s.commit()
+    finally:
+        s.close()
+
 pytestmark = [pytest.mark.integration, pytest.mark.destructive]
 
 
@@ -58,6 +83,17 @@ def _approve_payment(client, superadmin_token, payment_id):
 
 
 def _mark_status(client, teacher_token, class_id, new_status):
+    # AUD-04: solo se cierra una clase que ya empezó -> se mueve al pasado antes.
+    if new_status in ("completed", "no_show"):
+        from app.db.base import SessionLocal
+        s = SessionLocal()
+        try:
+            c = s.get(Class, class_id)
+            c.start_time_utc = datetime.now(tz.utc) - timedelta(hours=3)
+            c.end_time_utc = c.start_time_utc + timedelta(minutes=c.duration or 50)
+            s.commit()
+        finally:
+            s.close()
     r = client.patch(f"/api/v1/classes/{class_id}/status", json={
         "status": new_status,
     }, headers=auth_headers(teacher_token))

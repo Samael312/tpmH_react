@@ -98,6 +98,13 @@ def setup_world(db):
     return admin, tu, tp, pkg
 
 
+def age_class(db, cid):
+    """AUD-04: solo se completa una clase que ya empezo -> mover al pasado por SQL."""
+    db.execute(text("update classes set start_time_utc = now() - interval '3 hours', "
+                    "end_time_utc = now() - interval '2 hours' where id=:i"), {"i": cid})
+    db.commit()
+
+
 def new_student(db, n):
     su = mk_user(db, "student", f"{TAG}al{n}")
     sp = StudentProfile(user_id=su.id, user_username=su.username, timezone="UTC")
@@ -114,6 +121,8 @@ def enroll(c, db, admin, tu, pkg, su, hours=3):
     assert r.status_code == 201, r.text
     cid = r.json()["class_id"]
     for s in ("confirmed", "completed"):
+        if s == "completed":
+            age_class(db, cid)
         assert c.patch(f"{BASE}/classes/{cid}/status", json={"status": s}, headers=tok(tu)).status_code == 200
     cfg = c.get(BASE + "/payments/config").json()
     method = next((m for m, k in (("bank_transfer", "bank_transfer_enabled"), ("paypal", "paypal_enabled"),
@@ -169,6 +178,8 @@ def main():
                  "end_time_utc": (st + timedelta(minutes=25)).isoformat(), "duration_minutes": 25})
         cid = r.json()["class_id"]
         for s in ("confirmed", "completed"):
+            if s == "completed":
+                age_class(db, cid)
             c.patch(f"{BASE}/classes/{cid}/status", json={"status": s}, headers=tok(tu))
         cfg = c.get(BASE + "/payments/config").json()
         method = next(m for m, k in (("bank_transfer", "bank_transfer_enabled"), ("paypal", "paypal_enabled"),

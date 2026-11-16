@@ -1,6 +1,6 @@
 from pydantic import BaseModel, field_validator
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from app.schemas.god_mode import GodModeActionBase
 
 
@@ -64,6 +64,16 @@ class RescheduleClassRequest(BaseModel):
     start_time_utc: datetime
     end_time_utc: datetime
     day_of_week: Optional[str] = None
+
+    @field_validator("start_time_utc", "end_time_utc")
+    @classmethod
+    def require_timezone(cls, v):
+        # AUD-08: un datetime sin zona (naive) revienta al compararlo con utc_now() (500).
+        if v.tzinfo is None or v.tzinfo.utcoffset(v) is None:
+            raise ValueError("La fecha debe incluir zona horaria (ej. 2026-01-01T10:00:00Z)")
+        # Normaliza a UTC: con offset (+02:00) se guardaba la hora local sin convertir
+        # y day_of_week se calculaba sobre la hora local.
+        return v.astimezone(timezone.utc)
 
 
 class UpdateClassStatusRequest(BaseModel):

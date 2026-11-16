@@ -19,7 +19,7 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 
 - **GoogleAuthResponse** — needs_registration: bool = False; access_token: Optional[str] = None; token_type: str = 'bearer'; role: Optional[str] = None; name: Optional[str] = None; username: Optional[str] = None; email: Optional[EmailStr] = None; surname: Optional[str] = None; avatar: Optional[str] = None
 - **GoogleRegisterRequest** — id_token: str; username: str; role: str  _(validadores: validate_role, validate_username)_
-- **RegisterRequest** — email: EmailStr; username: str = Field(min_length=3, max_length=50); password: str = Field(min_length=8, max_length=128); name: str = Field(min_length=1, max_length=100); surname: str = Field(min_length=1, max_length=100); role: str = 'student'  _(validadores: validate_username, validate_password, validate_not_blank, validate_role)_
+- **RegisterRequest** — email: EmailStr; username: str = Field(min_length=3, max_length=50); password: str = Field(min_length=8, max_length=128); name: str = Field(min_length=1, max_length=100); surname: str = Field(min_length=1, max_length=100); role: str = 'student'  _(validadores: normalize_email, validate_username, validate_password, validate_not_blank, validate_role)_
 - **LoginRequest** — login: str = Field(min_length=1, max_length=255); password: str = Field(min_length=1, max_length=128)
 - **TokenResponse** — access_token: str; token_type: str = 'bearer'; role: str; name: str; surname: str; username: str; email: str; avatar_url: str | None = None
 - **GoogleAuthRequest** — id_token: str
@@ -57,7 +57,7 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 
 - **BookClassRequest** — enrollment_id: int; start_time_utc: datetime; end_time_utc: datetime; day_of_week: Optional[str] = None; duration_minutes: int  _(validadores: validate_duration)_
 - **BookTrialRequest** — teacher_username: str; student_id: int; start_time_utc: datetime; end_time_utc: datetime; day_of_week: Optional[str] = None; subject: str; duration_minutes: int = 30  _(validadores: validate_duration)_
-- **RescheduleClassRequest** — start_time_utc: datetime; end_time_utc: datetime; day_of_week: Optional[str] = None
+- **RescheduleClassRequest** — start_time_utc: datetime; end_time_utc: datetime; day_of_week: Optional[str] = None  _(validadores: require_timezone)_
 - **UpdateClassStatusRequest** — status: str; notes: Optional[str] = None  _(validadores: validate_status)_
 - **UpdateMeetLinkRequest** — meet_link: Optional[str] = None  _(validadores: validate_meet_link)_
 - **ClassResponse** — id: int; enrollment_id: Optional[int]; teacher_id: int; teacher_username: Optional[str] = None; student_id: Optional[int] = None; class_type: str; subject: Optional[str]; start_time_utc: datetime; end_time_utc: datetime; day_of_week: Optional[str]; duration_minutes: int; status: str; meet_link: Optional[str] = None; notes: Optional[str]; teacher_timezone: Optional[str]; student_timezone: Optional[str]; created_at: datetime; teacher_nationality: Optional[str] = None; student_nationality: Optional[str] = None; teacher_phone: Optional[str] = None; teacher_name: Optional[str] = None; teacher_avata
@@ -147,7 +147,7 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 
 - **PaymentConfigResponse** — paypal_enabled: bool; binance_enabled: bool; bank_transfer_enabled: bool; mobile_payment_enabled: bool; paypal_email: Optional[str]; binance_address: Optional[str]; binance_network: Optional[str]; bank_transfer_details: Optional[str]; mobile_payment_details: Optional[str]; whatsapp_number: Optional[str]; default_commission_rate: float; has_any_method: bool
 - **UpdatePaymentConfigRequest** — paypal_enabled: Optional[bool] = None; binance_enabled: Optional[bool] = None; bank_transfer_enabled: Optional[bool] = None; mobile_payment_enabled: Optional[bool] = None; paypal_email: Optional[str] = None; binance_address: Optional[str] = None; binance_network: Optional[str] = None; bank_transfer_details: Optional[str] = None; mobile_payment_details: Optional[str] = None; whatsapp_number: Optional[str] = None; default_commission_rate: Optional[float] = None
-- **BookAndPayRequest** — enrollment_id: Optional[int] = None; teacher_username: Optional[str] = None; start_time_utc: datetime; end_time_utc: datetime; duration_minutes: int; subject: Optional[str] = None
+- **BookAndPayRequest** — enrollment_id: Optional[int] = None; teacher_username: Optional[str] = None; start_time_utc: datetime; end_time_utc: datetime; duration_minutes: int; subject: Optional[str] = None  _(validadores: require_timezone)_
 - **PaymentResponse** — id: int; class_id: Optional[int]; student_id: int; teacher_id: int; amount_total: float; amount_teacher: float; amount_platform: float; payment_method: str; receipt_url: Optional[str]; transaction_id: Optional[str]; status: str; created_at: datetime; validated_at: Optional[datetime]
 - **ValidatePaymentRequest** — action: str; rejection_reason: Optional[str] = None  _(validadores: validate_action)_
 - **WalletResponse** — available_balance: float; total_earned: float; total_withdrawn: float

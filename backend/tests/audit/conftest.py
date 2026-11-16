@@ -82,6 +82,8 @@ from app.models.availability import TeacherAvailability  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def fresh_db():
+    from app.core.rate_limit import limiter
+    limiter.reset()  # el limite de registro (5/hora) se acumulaba entre tests
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield
@@ -131,7 +133,7 @@ def world(db):
     db.flush()
     for dow in range(7):
         db.add(TeacherAvailability(teacher_id=tp.id, day_of_week=dow, is_available=True,
-                                   start_time_utc="08:00", end_time_utc="20:00"))
+                                   start_time_utc="00:00", end_time_utc="00:00"))
     pkg = Package(teacher_id=tp.id, name="P4", subject="English", classes_count=4,
                   price=100.0, price_per_class=25.0, duration_minutes=50, is_active=True)
     db.add(pkg)

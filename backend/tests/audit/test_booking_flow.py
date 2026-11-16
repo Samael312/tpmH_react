@@ -19,7 +19,7 @@ def test_stage_progression_trial_to_ready(client, world, db):
     assert client.get(url, headers=s).json()["stage"] == "trial_in_progress"
     cid = r.json()["class_id"]
     set_status(client, world, cid, "confirmed")
-    set_status(client, world, cid, "completed")
+    set_status(client, world, cid, "completed", age=True)
     assert client.get(url, headers=s).json()["stage"] == "needs_package"
     buy_package(client, world)
     assert client.get(url, headers=s).json()["stage"] == "ready"

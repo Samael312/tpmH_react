@@ -172,14 +172,18 @@ def get_business_rules(db: Session) -> dict:
             "buffer_group_minutes": DEFAULT_BUFFER_MINUTES["group"],
             "meet_link_autogen_minutes": DEFAULT_MEET_LINK_AUTOGEN_MINUTES,
         }
+    def _num(value, default):
+        # AUD-10: 0 es un valor valido (ej. permitir cancelar sin antelacion); `or` lo descartaba.
+        return default if value is None else value
+
     return {
-        "min_booking_hours": config.min_booking_hours or MIN_BOOKING_HOURS,
-        "min_cancel_hours": config.min_cancel_hours or MIN_CANCEL_HOURS,
-        "min_reschedule_hours_student": config.min_reschedule_hours_student or MIN_RESCHEDULE_HOURS_STUDENT,
+        "min_booking_hours": _num(config.min_booking_hours, MIN_BOOKING_HOURS),
+        "min_cancel_hours": _num(config.min_cancel_hours, MIN_CANCEL_HOURS),
+        "min_reschedule_hours_student": _num(config.min_reschedule_hours_student, MIN_RESCHEDULE_HOURS_STUDENT),
         "allowed_class_durations": config.allowed_class_durations or [50, 80, 110],
         "allowed_package_durations": config.allowed_package_durations or [50, 80, 110],
-        "low_credit_threshold": config.low_credit_threshold or 1,
-        "low_credit_renotify_days": config.low_credit_renotify_days or 6,
+        "low_credit_threshold": _num(config.low_credit_threshold, 1),
+        "low_credit_renotify_days": _num(config.low_credit_renotify_days, 6),
         "trial_duration_minutes": config.trial_duration_minutes or DEFAULT_TRIAL_DURATION_MINUTES,
         "buffer_trial_minutes": (
             config.buffer_trial_minutes if config.buffer_trial_minutes is not None
@@ -239,6 +243,27 @@ def get_buffer_minutes_for_type(class_type, db: Session) -> int:
 
 # ─── Validaciones ───────────────────────────────────────────────────────────
 
+def lock_booking_rows(db: Session, teacher_id: int, student_id: int | None = None) -> None:
+    """
+    Serializa las reservas concurrentes tomando un lock de fila (SELECT ... FOR UPDATE)
+    sobre el alumno y luego el profesor (siempre en ese orden, para evitar deadlocks).
+    Sin esto, dos requests simultaneos leen la agenda/creditos antes de que el otro
+    haga commit y ambos pasan los chequeos (doble reserva, sobre-reserva de creditos).
+    El lock se libera con el commit/rollback. En SQLite no hace nada.
+    """
+    from app.models.student import StudentProfile
+    from app.models.teacher import TeacherProfile
+
+    if student_id is not None:
+        db.query(StudentProfile.id).filter(StudentProfile.id == student_id).with_for_update().first()
+    db.query(TeacherProfile.id).filter(TeacherProfile.id == teacher_id).with_for_update().first()
+
+
+def lock_class_row(db: Session, class_id: int) -> "Class":
+    """Recarga la clase con lock de fila para que dos cancelaciones simultaneas no devuelvan el credito dos veces."""
+    return db.query(Class).filter(Class.id == class_id).with_for_update().populate_existing().first()
+
+
 def can_book_slot(
     start_time_utc: datetime,
     teacher_id: int,
@@ -265,12 +290,22 @@ def can_book_slot(
     # prometerlo en su propio docstring. Con enforce_min_notice=False se
     # salta SOLO el chequeo de antelación; el de choques sigue aplicando.
     enforce_min_notice: bool = True,
+    # AUD-01/06: reservas y reagendados hechos por el ALUMNO deben caer dentro de la
+    # disponibilidad declarada del profesor (el staff y el propio profesor pueden saltarsela).
+    enforce_availability: bool = False,
 ) -> tuple[bool, str]:
     now = utc_now()
     rules = get_business_rules(db)
 
     if enforce_min_notice and start_time_utc < now + timedelta(hours=rules["min_booking_hours"]):
         return False, f"Debes agendar con al menos {rules['min_booking_hours']} hora(s) de antelación"
+
+    if enforce_availability:
+        in_availability, availability_msg = is_within_teacher_availability(
+            teacher_id, start_time_utc, end_time_utc, db
+        )
+        if not in_availability:
+            return False, "Ese horario no está dentro de la disponibilidad del profesor"
 
     # Prefiltro amplio en SQL (3h cubre de sobra cualquier duración+margen
     # posible hoy: máximo 110min + 10min = 120min). El chequeo exacto de
@@ -300,8 +335,11 @@ def can_book_slot(
         Class.teacher_id == teacher_id,
         Class.start_time_utc < end_approx,
         Class.start_time_utc > lookback,
-        Class.status.notin_(["cancelled", "expired", "pending_trial"]),
-        Class.class_type != ClassType.group,
+        # AUD-02: una prueba pendiente de confirmar (pending_trial) y las sesiones
+        # grupales SI ocupan la agenda del profesor (antes se ignoraban y dos
+        # alumnos podian reservar la misma hora). El cupo de un grupo se valida
+        # aparte (can_join_group_class), no por esta via.
+        Class.status.notin_(["cancelled", "expired"]),
     )
     if exclude_class_id:
         query = query.filter(Class.id != exclude_class_id)
@@ -319,11 +357,17 @@ def can_book_slot(
     ):
         return False, "El profesor ya tiene una clase en ese horario (o no ha pasado su margen de preparación)"
 
+    # AUD-18: una sesion grupal no tiene student_id (NULL). Con `== None` SQL comparaba
+    # `IS NULL` y daba un falso choque con cualquier otra sesion grupal; sin alumno
+    # no hay choque de alumno que validar.
+    if student_id is None:
+        return True, ""
+
     query_student = db.query(Class).filter(
         Class.student_id == student_id,
         Class.start_time_utc < end_approx,
         Class.start_time_utc > lookback,
-        Class.status.notin_(["cancelled", "expired", "pending_trial"])
+        Class.status.notin_(["cancelled", "expired"])
     )
     if exclude_class_id:
         query_student = query_student.filter(Class.id != exclude_class_id)
@@ -493,11 +537,15 @@ def update_enrollment_counter(
     if enrollment:
         enrollment.classes_used = max(0, enrollment.classes_used + delta)
 
-        # Si se usaron todas las clases del paquete marcamos como completado # None = ilimitadas, nunca se marca como completado por conteo
-        if enrollment.classes_total is not None and enrollment.classes_used >= enrollment.classes_total:
-            enrollment.status = "completed"
-        else:
-            enrollment.status = "active"
+        # AUD-09: solo se alterna active <-> completed. Antes se forzaba 'active' y se
+        # pisaban estados pendientes (pending_renewal, pending_package_change) y cancelled.
+        current = getattr(enrollment.status, "value", enrollment.status)
+        if current in ("active", "completed"):
+            # None = ilimitadas, nunca se marca como completado por conteo
+            if enrollment.classes_total is not None and enrollment.classes_used >= enrollment.classes_total:
+                enrollment.status = "completed"
+            else:
+                enrollment.status = "active"
 
         db.commit()
 

@@ -40,6 +40,7 @@ from app.core.email import (
 from app.core.teacher_students import link_student_to_teacher
 from app.core.timezone import utc_now
 from app.core.calendar_sync import sync_class_created
+from app.core.class_logic import lock_booking_rows
 from app.db.base import get_db
 from app.models.class_ import Class, ClassType
 from app.models.package import Enrollment, EnrollmentStatus, Package
@@ -101,7 +102,8 @@ def _get_featured_teacher(db: Session):
 
 
 def _apply_commission(amount_total: float, teacher: TeacherProfile) -> tuple[float, float]:
-    commission = teacher.commission_rate if teacher else 0.15
+    # AUD-11: commission_rate NULL cae al 15 % por defecto (antes TypeError).
+    commission = teacher.commission_rate if teacher and teacher.commission_rate is not None else 0.15
     amount_platform = round(amount_total * commission, 2)
     amount_teacher = round(amount_total - amount_platform, 2)
     return amount_teacher, amount_platform
@@ -201,6 +203,7 @@ def _find_recent_duplicate_payment(
     amount: float,
     enrollment_id: Optional[int] = None,
     window_seconds: int = DUPLICATE_PAYMENT_NOTIFICATION_WINDOW_SECONDS,
+    installment_index: Optional[int] = None,
 ) -> Optional[Payment]:
     """
     Busca un Payment prácticamente idéntico (mismo estudiante, enrollment,
@@ -229,6 +232,9 @@ def _find_recent_duplicate_payment(
         query = query.filter(Payment.enrollment_id == enrollment_id)
     else:
         query = query.filter(Payment.enrollment_id.is_(None))
+    # AUD-22: dos cuotas de igual monto (1 y 2) no son el mismo pago: se distinguen por numero.
+    if installment_index is not None:
+        query = query.filter(Payment.installment_index == installment_index)
     return query.order_by(Payment.created_at.desc()).first()
 
 
@@ -502,6 +508,9 @@ def book_class(
             detail="No se pudo determinar con qué profesor deseas agendar"
         )
 
+    # AUD-02b/23: serializa reservas concurrentes del mismo alumno/profesor (lock de fila).
+    lock_booking_rows(db, teacher.id, student_id)
+
     stage = get_student_booking_stage(student_id, teacher.id, db)
 
     if stage == "trial_in_progress":
@@ -539,7 +548,8 @@ def book_class(
             # D5 fix: fin ocupado real del candidato (duración de prueba +
             # su propio margen), no solo su start.
             end_time_utc=trial_end + timedelta(minutes=trial_buffer),
-            db=db
+            db=db,
+            enforce_availability=True,
         )
         if not can_book:
             raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
@@ -613,7 +623,7 @@ def book_class(
         Enrollment.id == data.enrollment_id,
         Enrollment.student_id == student_id,
         Enrollment.status.in_(["active", "pending_package_change"]),
-    ).first()
+    ).populate_existing().first()  # tras el lock: leer creditos frescos, no la copia cacheada
 
     if not enrollment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado o no activo")
@@ -635,6 +645,13 @@ def book_class(
     if not can_duration:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, duration_msg)
     
+    # AUD-07: la duracion reservada debe ser la del paquete (antes bastaba con que estuviera en el catalogo global).
+    if data.duration_minutes != enrollment.package.duration_minutes:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"La duración de la clase debe ser de {enrollment.package.duration_minutes} minutos (la de tu paquete)."
+        )
+
     _sync_student_teacher_username(current_user, enrollment.teacher, db)
 
     day_of_week = DAYS_ES[data.start_time_utc.weekday()]
@@ -663,7 +680,8 @@ def book_class(
             teacher_id=enrollment.teacher_id,
             student_id=student_id,
             end_time_utc=data.start_time_utc + timedelta(minutes=data.duration_minutes + regular_buffer),
-            db=db
+            db=db,
+            enforce_availability=True,
         )
         if not can_book:
             raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
@@ -749,7 +767,8 @@ def book_class(
             teacher_id=enrollment.teacher_id,
             student_id=student_id,
             end_time_utc=data.start_time_utc + timedelta(minutes=data.duration_minutes + regular_buffer),
-            db=db
+            db=db,
+            enforce_availability=True,
         )
         if not can_book:
             raise HTTPException(status.HTTP_409_CONFLICT, error_msg)
@@ -935,7 +954,11 @@ def validate_payment(
     normales ven el pago como «pendiente de revisión»). Un `teacher_admin` no valida los
     pagos de sus propias clases: los resuelve el `superadmin`.
     """
-    payment = db.query(Payment).filter(Payment.id == payment_id, Payment.status == "pending_review").first()
+    # Lock de fila: dos aprobaciones simultaneas del mismo pago se serializan y la segunda ve
+    # que ya no esta pendiente (404), asi la billetera se acredita una sola vez.
+    payment = db.query(Payment).filter(
+        Payment.id == payment_id, Payment.status == "pending_review"
+    ).with_for_update().first()
     if not payment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pago no encontrado o ya procesado")
 
@@ -1448,7 +1471,7 @@ def process_withdrawal_v2(
 ):
     withdrawal = db.query(Withdrawal).filter(
         Withdrawal.id == withdrawal_id, Withdrawal.status == "pending"
-    ).first()
+    ).with_for_update().first()  # idempotencia: dos procesos simultaneos no devuelven/descuentan dos veces
     if not withdrawal:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Retiro no encontrado o ya procesado")
 
@@ -2031,6 +2054,7 @@ def notify_payment(
 
     duplicate = _find_recent_duplicate_payment(
         db, student_id, payment_type, amount, enrollment_id=enrollment.id,
+        installment_index=data.installment_index if use_installments else None,
     )
     if duplicate:
         return {"payment_id": duplicate.id, "message": "Pago notificado, en espera de aprobación"}

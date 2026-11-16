@@ -83,8 +83,8 @@ def test_no_show_and_completed_count_toward_package(client, world, db):
     eid, _ = ready_student(client, world)
     a = book(client, world, future(72), enrollment_id=eid).json()["class_id"]
     b = book(client, world, future(96), enrollment_id=eid).json()["class_id"]
-    set_status(client, world, a, "no_show")
-    set_status(client, world, b, "completed")
+    set_status(client, world, a, "no_show", age=True)
+    set_status(client, world, b, "completed", age=True)
     db.expire_all()
     assert db.get(Enrollment, eid).classes_used == 2
     # revertir un completed baja el contador

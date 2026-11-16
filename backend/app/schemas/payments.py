@@ -1,6 +1,6 @@
 from pydantic import BaseModel, field_validator, model_validator, Field
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from app.schemas.god_mode import GodModeActionBase
 
 
@@ -39,6 +39,9 @@ class UpdatePaymentConfigRequest(BaseModel):
 
 # ─── Reserva y pago ─────────────────────────────────────────────────────────
 
+MIN_WITHDRAWAL_AMOUNT = 10.0
+
+
 class BookAndPayRequest(BaseModel):
     """
     Paso 1: El estudiante reserva un slot.
@@ -49,7 +52,17 @@ class BookAndPayRequest(BaseModel):
     start_time_utc: datetime
     end_time_utc: datetime
     duration_minutes: int
-    subject: Optional[str] = None 
+    subject: Optional[str] = None
+
+    @field_validator("start_time_utc", "end_time_utc")
+    @classmethod
+    def require_timezone(cls, v):
+        # AUD-08: un datetime sin zona (naive) revienta al compararlo con utc_now() (500).
+        if v.tzinfo is None or v.tzinfo.utcoffset(v) is None:
+            raise ValueError("La fecha debe incluir zona horaria (ej. 2026-01-01T10:00:00Z)")
+        # Normaliza a UTC: con offset (+02:00) se guardaba la hora local sin convertir
+        # y day_of_week se calculaba sobre la hora local.
+        return v.astimezone(timezone.utc) 
 
 
 # BUG-04/12: SubmitPaymentReceiptRequest y su endpoint /submit-receipt fueron
@@ -227,6 +240,9 @@ class WithdrawalRequestV2(BaseModel):
     def validate_amount(cls, v):
         if v <= 0:
             raise ValueError("El monto debe ser mayor a 0")
+        # AUD-13: el minimo ($10) solo se aplicaba en la UI.
+        if v < MIN_WITHDRAWAL_AMOUNT:
+            raise ValueError(f"El retiro mínimo es de ${MIN_WITHDRAWAL_AMOUNT:.2f}")
         return v
 
 

@@ -38,15 +38,15 @@ Salida: xfails de la fase en verde.
 
 ## Fase 2 — Reservas y concurrencia
 
-- [ ] **AUD-01** (M) validar disponibilidad del profesor en servidor (reservas y reagendados)
-- [ ] **AUD-02 / 02b** (L) doble reserva: `pending_trial`/`group` bloquean + lock de fila o restricción de exclusión (migración Alembic) · verif.: `concurrency_live.py` R1
-- [ ] **AUD-23** (M) sobre-reserva de créditos: `FOR UPDATE` sobre `enrollment` · verif.: R2
-- [ ] **Idempotencia** (M) `validate_payment` y `process_withdrawal_v2` con transición atómica · verif.: R3, R4
-- [ ] **Cancelación** (S) idempotente explícita, crédito devuelto una vez · verif.: R5
-- [ ] **AUD-22** (S) guarda anti doble clic identifica la cuota por número
-- [ ] **AUD-04** · [ ] **AUD-05** · [ ] **AUD-06** · [ ] **AUD-07** · [ ] **AUD-08** · [ ] **AUD-09** · [ ] **AUD-10** · [ ] **AUD-11** · [ ] **AUD-13** · [ ] **AUD-15** · [ ] **AUD-16** · [ ] **AUD-17** · [ ] **AUD-18** (agrupar por módulo: pagos, cuotas, cohortes, notificaciones)
+- [x] **AUD-01** (M) validar disponibilidad del profesor en servidor (reservas y reagendados)
+- [x] **AUD-02 / 02b** (L) doble reserva: `pending_trial`/`group` bloquean + lock de fila o restricción de exclusión (migración Alembic) · verif.: `concurrency_live.py` R1
+- [x] **AUD-23** (M) sobre-reserva de créditos: `FOR UPDATE` sobre `enrollment` · verif.: R2
+- [x] **Idempotencia** (M) `validate_payment` y `process_withdrawal_v2` con transición atómica · verif.: R3, R4
+- [x] **Cancelación** (S) idempotente explícita, crédito devuelto una vez · verif.: R5
+- [x] **AUD-22** (S) guarda anti doble clic identifica la cuota por número
+- [x] **AUD-04** · [x] **AUD-05** · [x] **AUD-06** · [x] **AUD-07** · [x] **AUD-08** · [x] **AUD-09** · [x] **AUD-10** · [x] **AUD-11** · [x] **AUD-13** · [x] **AUD-15** · [x] **AUD-16** · [x] **AUD-17** · [x] **AUD-18** (agrupar por módulo: pagos, cuotas, cohortes, notificaciones)
 
-Salida: `python -m tests.audit.concurrency_live` termina con 0 FALLO.
+Salida: `python -m tests.audit.concurrency_live` termina con 0 FALLO. **Pendiente de correr por el usuario contra Neon dev** (la restricción de exclusión no se creó: se usó `FOR UPDATE` sobre alumno y profesor). AUD-18 sin reproducir en API, pero se blindó `can_book_slot` con `student_id None`.
 
 ## Fase 3 — Seguridad
 

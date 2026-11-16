@@ -43,6 +43,12 @@ class RegisterRequest(BaseModel):
     surname: str = Field(min_length=1, max_length=100)
     role: str = "student"
 
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v):
+        # AUD-17: 'A@x.com' y 'a@x.com' son la misma cuenta.
+        return v.strip().lower()
+
     @field_validator("username")
     @classmethod
     def validate_username(cls, v):

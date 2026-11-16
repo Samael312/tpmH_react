@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 import logging
 import secrets
@@ -38,14 +39,14 @@ router = APIRouter()
 def register(request: Request, data: RegisterRequest, db: Session = Depends(get_db)):
 
     # 1. Verificar que el email no existe
-    if db.query(User).filter(User.email == data.email).first():
+    if db.query(User).filter(func.lower(User.email) == data.email.lower()).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Este email ya está registrado"
         )
 
     # 2. Verificar que el username no existe
-    if db.query(User).filter(User.username == data.username).first():
+    if db.query(User).filter(func.lower(User.username) == data.username.lower()).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Este nombre de usuario ya está en uso"
@@ -92,7 +93,9 @@ def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
     user = (
         db.query(User)
         .filter(
-            (User.username == data.login) | (User.email == data.login)
+            # AUD-16: el registro guarda el usuario en minusculas; el login no debe distinguir mayusculas.
+            (func.lower(User.username) == data.login.strip().lower())
+            | (func.lower(User.email) == data.login.strip().lower())
         )
         .first()
     )
