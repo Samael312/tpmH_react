@@ -49,6 +49,13 @@ def d7_env(db, fixed_users, volatile):
             s.commit()
 
             if tracked["enrollment_ids"]:
+                # un cambio de paquete aceptado crea un Payment (FK a enrollments): borrarlo antes, o el delete
+                # del enrollment falla en silencio (rollback) y deja un enrollment activo que rompe los tests siguientes.
+                from sqlalchemy import text as _t
+                _run(lambda: s.execute(
+                    _t("delete from payments where enrollment_id = any(:ids)"), {"ids": tracked["enrollment_ids"]}
+                ))
+            if tracked["enrollment_ids"]:
                 _run(lambda: s.query(Enrollment).filter(
                     Enrollment.id.in_(tracked["enrollment_ids"])
                 ).delete(synchronize_session=False))

@@ -118,6 +118,7 @@ def test_frontend_error_report_works_without_authentication(client, db, error_lo
     (p. ej. en /login) — el reporte no debe fallar solo porque todavía no
     hay nadie logueado.
     """
+    client.cookies.clear()  # SEC-05: un login previo en este cliente deja cookies de sesion; aqui debe ir anonimo
     r = client.post("/api/v1/logs/frontend", json={
         "message": "Flow-test: error anónimo (sin sesión)",
         "screen": "/login",
@@ -125,7 +126,9 @@ def test_frontend_error_report_works_without_authentication(client, db, error_lo
     })
     assert r.status_code == 204
 
-    log_row = db.query(ErrorLog).filter(ErrorLog.screen == "/login", ErrorLog.message.like("Flow-test%")).first()
+    log_row = db.query(ErrorLog).filter(
+        ErrorLog.screen == "/login", ErrorLog.message.like("Flow-test%")
+    ).order_by(ErrorLog.id.desc()).first()  # la mas reciente: puede haber residuos de corridas anteriores
     assert log_row is not None
     assert log_row.user_id is None
     error_log_cleanup.append(log_row.id)

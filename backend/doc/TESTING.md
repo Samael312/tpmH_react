@@ -28,13 +28,12 @@ PostgreSQL local + `.env` (`DATABASE_URL`, `SECRET_KEY`, `ENVIRONMENT=developmen
 ## Qué NO está probado todavía
 Concurrencia real (doble reserva/aprobación/retiro: necesita PostgreSQL), cohortes y AUD-18, DST con fechas fijas, integraciones externas (Google, Cloudinary, Resend, OpenAI), WebSocket de chat, E2E de UI con navegador (la extensión de Chrome no estaba conectada), accesibilidad/rendimiento, carga y rate-limit tras proxy, `pip-audit`/`npm audit`, tests de frontend.
 
-## Estado de `tests/flow` (ejecutado contra la BD Neon real, noviembre 2026)
-Dos rondas completas (109 tests): 1.ª ronda 53 OK / 50 fallos / 6 errores; tras corregir tests obsoletos (falta `price_per_class`, `payment_method` ahora obligatorio, limpieza de cohortes con FK de chat) 68 OK en la 2.ª ronda. Una 3.ª ronda parcial dejó 26 OK / 25 fallos.
-Los fallos que quedan **no son regresiones de producto confirmadas**, sino tests desactualizados frente a reglas nuevas:
-- La regla D7 ya exige un mínimo de clases completadas (por defecto 3) antes de cambiar de paquete: ~14 tests de `test_package_change`, `test_d7`, `test_difficult_bugs` y `test_lifetime` esperan poder cambiar con 0 clases (hay que fijar `PlatformConfig` en el test o completar clases).
-- Varios endpoints de pago exigen `payment_method` (tests de cohorte y `test_d7_zero_minimum...`).
-- `test_cohort_close_and_cancel`: «No hay alumnos con pago confirmado» (el flujo del test no aprueba el pago antes de cerrar).
-- `test_d14_close_cohort...`: la sesión generada queda fuera de la disponibilidad declarada (03:00 UTC); depende de la hora de ejecución.
-- Fallos que sí coinciden con bugs reales: `test_withdrawals_pending_real_path` (AUD-12, 404).
-- `test_direct_chat_requires_real_link...`: el chat directo se crea sin vínculo real; revisar si es regla o bug.
-Los fallos de la 3.ª ronda dejan residuos en la BD compartida: limpiar con la fixture o a mano antes de repetir.
+## Estado de `tests/flow` (ejecutado contra la rama dev de Neon, noviembre 2026)
+Tras las Fases 1-3 los 109 tests quedaron al día con las reglas nuevas (el último run completo tuvo 4 fallos por residuos de `d7`, ya corregidos; esos módulos pasan 13/13). Cambios hechos solo en los tests:
+- `payment_method` y `payment_info` en los cambios de paquete; precios con `price_per_class` exacto; fixture autouse que fija el mínimo D7 en 0 (omite los módulos `d7`).
+- Enrollments insertados por ORM llevan un `Payment` aprobado (AUD-14: un reembolso exige un pago aprobado real).
+- Cohortes: el pago se aprueba antes de cerrar; fixture `open_teacher_availability` (24 h, restaura lo que había) porque cerrar una cohorte valida la disponibilidad (AUD-01).
+- SEC-05: el `TestClient` conserva las cookies de sesión: fixture autouse que las limpia antes de cada test (si no, «sin token» queda autenticado).
+- Chat: la regla vigente deja a un alumno abrir chat con un profesor aprobado sin vínculo; el profesor solo con alumnos vinculados (el test se reescribió).
+- Limpiezas: borrar `class_participants`/`classes` de cohortes y los `Payment` de un enrollment **antes** de borrarlo (la FK falla en silencio con `rollback` y deja un enrollment activo que rompe tests posteriores).
+Los tests dejan residuos en la BD compartida si fallan a medias: comprobar `enrollments`, `packages` y `error_logs` (`message like 'Flow-test%'`) de los usuarios `flowtest_*` antes de repetir.

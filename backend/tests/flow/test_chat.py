@@ -221,20 +221,33 @@ def test_direct_chat_happy_path(client, teacher_token, student_token, linked_stu
     assert r_unread_student_after.json()["unread_count"] == 0
 
 
-def test_direct_chat_requires_real_link_not_student_teacher_link(
-    client, student_token, unlinked_student_teacher,
+def test_direct_chat_link_rules_student_to_approved_teacher_vs_teacher_to_student(
+    client, student_token, teacher_token, unlinked_student_teacher, db,
 ):
     """
-    Técnico: REGRESIÓN a propósito. Sin TeacherProfile.students poblado
-    (aunque StudentTeacherLink pudiera decir cualquier otra cosa, esa
-    tabla ya NO es la fuente de verdad — ver core/chat.py), el alumno NO
-    puede abrir conversación con ese profesor: 403.
-    UX: nadie debería poder chatear con un profesor que no es el suyo.
+    Tecnico: regla vigente de core/chat.py::get_direct_conversation_or_404 (relajada a proposito, ver su
+    comentario): un ALUMNO puede abrir chat con un profesor APROBADO aunque aun no lo haya elegido (dudas antes
+    de decidir); un PROFESOR solo puede abrir chat con alumnos vinculados (TeacherProfile.students) -> 403.
+    UX: el alumno puede preguntar antes de comprar, pero un profesor no puede escribirle a cualquier alumno.
+    (Antes este test esperaba 403 para el alumno; esa regla se cambio y el test estaba obsoleto.)
     """
     from tests.flow import constants as C
+    from app.models.chat import ChatConversation
 
-    r_open = client.get(f"/api/v1/chat/conversations/direct/{C.TEACHER['username']}", headers=auth_headers(student_token))
-    assert r_open.status_code == 403, r_open.text
+    r_student = client.get(
+        f"/api/v1/chat/conversations/direct/{C.TEACHER['username']}", headers=auth_headers(student_token),
+    )
+    assert r_student.status_code == 200, r_student.text
+    convo_id = r_student.json()["id"]
+
+    r_teacher = client.get(
+        f"/api/v1/chat/conversations/direct/{C.STUDENT['username']}", headers=auth_headers(teacher_token),
+    )
+    assert r_teacher.status_code == 403, r_teacher.text
+
+    # limpieza: la conversacion se crea al abrirla
+    db.query(ChatConversation).filter(ChatConversation.id == convo_id).delete(synchronize_session=False)
+    db.commit()
 
 
 # ─── Chat grupal ─────────────────────────────────────────────────────────

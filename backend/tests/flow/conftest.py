@@ -173,6 +173,16 @@ def client():
     return TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def _no_session_cookies_between_tests(client):
+    """
+    SEC-05: el login ahora fija cookies de sesion y el TestClient (de sesion) las conserva: un test "sin token"
+    pasaria a estar autenticado por la cookie de un test anterior. Se limpian antes de cada test.
+    """
+    client.cookies.clear()
+    yield
+
+
 @pytest.fixture
 def db(_block_production):
     """Sesión de BD de corta duración para setup/verificación/limpieza directa."""
