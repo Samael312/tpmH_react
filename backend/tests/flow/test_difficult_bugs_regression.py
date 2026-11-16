@@ -105,9 +105,11 @@ def diff_env(db, fixed_users, volatile):
 def _create_package(client, teacher_token, tracked, **overrides):
     payload = {
         "name": "Flow-test D-bugs package", "subject": "English",
-        "price": 100.0, "classes_count": 4, "duration_minutes": 50,
+        "price": 100.0, "price_per_class": 25.0, "classes_count": 4, "duration_minutes": 50,
     }
     payload.update(overrides)
+    if "price_per_class" not in overrides:  # el backend exige price_per_class * classes_count == price
+        payload["price_per_class"] = round(payload["price"] / payload["classes_count"], 2)
     r = client.post("/api/v1/packages/", json=payload, headers=auth_headers(teacher_token))
     assert r.status_code == 201, r.text
     tracked["package_ids"].append(r.json()["id"])

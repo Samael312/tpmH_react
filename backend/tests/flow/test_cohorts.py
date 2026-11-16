@@ -50,6 +50,13 @@ def clean_cohort_slate(db, fixed_users, volatile):
             s.query(Enrollment).filter(
                 Enrollment.teacher_id == state["teacher_id"], Enrollment.student_id == state["student_id"]
             ).delete(synchronize_session=False)
+            from sqlalchemy import text as _t
+            ids = [r[0] for r in s.query(GroupCohort.id).filter(GroupCohort.teacher_id == state["teacher_id"]).all()]
+            if ids:  # las conversaciones grupales referencian a la cohorte (FK): borrarlas antes
+                for q in ("delete from chat_messages where conversation_id in (select id from chat_conversations where cohort_id = any(:i))",
+                          "delete from chat_read_states where conversation_id in (select id from chat_conversations where cohort_id = any(:i))",
+                          "delete from chat_conversations where cohort_id = any(:i)"):
+                    s.execute(_t(q), {"i": ids})
             s.query(GroupCohort).filter(GroupCohort.teacher_id == state["teacher_id"]).delete(synchronize_session=False)
             if state["package_ids"]:
                 s.query(Package).filter(Package.id.in_(state["package_ids"])).delete(synchronize_session=False)
@@ -66,7 +73,7 @@ def clean_cohort_slate(db, fixed_users, volatile):
 
 def _create_group_package(client, teacher_token, clean_cohort_slate, **overrides):
     payload = {
-        "name": "Flow-test grupal", "subject": "English", "price": 80.0,
+        "name": "Flow-test grupal", "subject": "English", "price": 80.0, "price_per_class": 10.0,
         "classes_count": 8, "duration_minutes": 50,
         "is_group": True, "min_students": 1, "max_students": 6,
     }
@@ -111,7 +118,7 @@ def test_cohort_members_endpoint_shows_students_while_filling(
     assert r_members_empty.json() == []
 
     r_enroll = client.post(f"/api/v1/cohorts/{cohort_id}/enroll", json={
-        "cohort_id": cohort_id, "transaction_reference": "flow-tests-cohort-ref",
+        "cohort_id": cohort_id, "payment_method": "paypal", "transaction_reference": "flow-tests-cohort-ref",
     }, headers=auth_headers(student_token))
     assert r_enroll.status_code == 201, r_enroll.text
 
@@ -163,7 +170,7 @@ def test_group_to_individual_unlimited_migration_releases_cohort_seat(
     cohort_id = r_cohort.json()["id"]
 
     r_enroll = client.post(f"/api/v1/cohorts/{cohort_id}/enroll", json={
-        "cohort_id": cohort_id, "transaction_reference": "flow-tests-cohort-ref-2",
+        "cohort_id": cohort_id, "payment_method": "paypal", "transaction_reference": "flow-tests-cohort-ref-2",
     }, headers=auth_headers(student_token))
     assert r_enroll.status_code == 201, r_enroll.text
     enrollment_id = r_enroll.json()["enrollment_id"]
@@ -266,7 +273,7 @@ def test_cohort_close_and_cancel(
     assert r_close_empty.status_code == 400, r_close_empty.text
 
     r_enroll_a = client.post(f"/api/v1/cohorts/{cohort_a_id}/enroll", json={
-        "cohort_id": cohort_a_id, "transaction_reference": "flow-tests-close-ref",
+        "cohort_id": cohort_a_id, "payment_method": "paypal", "transaction_reference": "flow-tests-close-ref",
     }, headers=auth_headers(student_token))
     assert r_enroll_a.status_code == 201, r_enroll_a.text
 
@@ -300,7 +307,7 @@ def test_cohort_close_and_cancel(
     cohort_b_id = r_cohort_b.json()["id"]
 
     r_enroll_b = client.post(f"/api/v1/cohorts/{cohort_b_id}/enroll", json={
-        "cohort_id": cohort_b_id, "transaction_reference": "flow-tests-cancel-ref",
+        "cohort_id": cohort_b_id, "payment_method": "paypal", "transaction_reference": "flow-tests-cancel-ref",
     }, headers=auth_headers(student_token))
     assert r_enroll_b.status_code == 201, r_enroll_b.text
     enrollment_b_id = r_enroll_b.json()["enrollment_id"]
@@ -356,7 +363,7 @@ def test_pending_group_enrollment_payment_rejection(
     cohort_id = r_cohort.json()["id"]
 
     r_enroll = client.post(f"/api/v1/cohorts/{cohort_id}/enroll", json={
-        "cohort_id": cohort_id, "transaction_reference": "flow-tests-reject-ref",
+        "cohort_id": cohort_id, "payment_method": "paypal", "transaction_reference": "flow-tests-reject-ref",
     }, headers=auth_headers(student_token))
     assert r_enroll.status_code == 201, r_enroll.text
     enrollment_id = r_enroll.json()["enrollment_id"]

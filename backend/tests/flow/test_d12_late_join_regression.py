@@ -158,7 +158,7 @@ def test_d12_late_join_gets_prorated_price_and_reduced_credits(
     )
 
     r_enroll = client.post(f"/api/v1/cohorts/{cohort.id}/enroll", json={
-        "cohort_id": cohort.id, "transaction_reference": "flow-tests-d12-late-join",
+        "cohort_id": cohort.id, "payment_method": "paypal", "transaction_reference": "flow-tests-d12-late-join",
     }, headers=auth_headers(student_token))
     assert r_enroll.status_code == 201, r_enroll.text
     body = r_enroll.json()
@@ -215,6 +215,6 @@ def test_d12_cohort_fully_completed_rejects_new_enrollments(db, cohort_env, clie
     )
 
     r_enroll = client.post(f"/api/v1/cohorts/{cohort.id}/enroll", json={
-        "cohort_id": cohort.id,
+        "cohort_id": cohort.id, "payment_method": "paypal",
     }, headers=auth_headers(student_token))
     assert r_enroll.status_code == 400, r_enroll.text

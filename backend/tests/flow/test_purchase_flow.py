@@ -177,7 +177,7 @@ def test_full_trial_to_active_package_flow(
 
     # 4) Ahora el estudiante necesita un paquete. El profesor crea uno.
     r_pkg = client.post("/api/v1/packages/", json={
-        "name": "Flow-test package", "subject": "English", "price": 100.0,
+        "name": "Flow-test package", "subject": "English", "price": 100.0, "price_per_class": 25.0,
         "classes_count": 4, "duration_minutes": 50,
     }, headers=auth_headers(teacher_token))
     assert r_pkg.status_code == 201, r_pkg.text

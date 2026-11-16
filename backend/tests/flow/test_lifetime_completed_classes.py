@@ -173,7 +173,7 @@ def test_lifetime_counter_survives_renewal_and_package_change(
 
     # 1) Paquete inicial A (4 clases) — compra normal, aprobada por staff.
     r_pkg_a = client.post("/api/v1/packages/", json={
-        "name": "Flow-test lifetime A", "subject": "English", "price": 100.0,
+        "name": "Flow-test lifetime A", "subject": "English", "price": 100.0, "price_per_class": 25.0,
         "classes_count": 4, "duration_minutes": 50,
     }, headers=auth_headers(teacher_token))
     assert r_pkg_a.status_code == 201, r_pkg_a.text
@@ -181,7 +181,7 @@ def test_lifetime_counter_survives_renewal_and_package_change(
     clean_lifetime_slate["package_ids"].append(package_a_id)
 
     r_notify_a = client.post("/api/v1/payments/notify-payment", json={
-        "type": "package", "package_id": package_a_id, "transaction_reference": "flow-tests-lifetime-a",
+        "type": "package", "package_id": package_a_id, "payment_method": "paypal", "transaction_reference": "flow-tests-lifetime-a",
     }, headers=auth_headers(student_token))
     assert r_notify_a.status_code == 200, r_notify_a.text
     _approve_payment(client, superadmin_token, r_notify_a.json()["payment_id"])
@@ -232,7 +232,7 @@ def test_lifetime_counter_survives_renewal_and_package_change(
     # contador de por vida NO debe moverse.
     r_renew = client.post("/api/v1/payments/notify-payment", json={
         "type": "renewal", "enrollment_id": enrollment_id, "package_id": package_a_id,
-        "transaction_reference": "flow-tests-lifetime-renewal",
+        "payment_method": "paypal", "transaction_reference": "flow-tests-lifetime-renewal",
     }, headers=auth_headers(student_token))
     assert r_renew.status_code == 200, r_renew.text
     _approve_payment(client, superadmin_token, r_renew.json()["payment_id"])
@@ -264,7 +264,7 @@ def test_lifetime_counter_survives_renewal_and_package_change(
     # 5) CAMBIO DE PAQUETE (upgrade a uno con más créditos) — tampoco
     # debe afectar el contador de por vida.
     r_pkg_b = client.post("/api/v1/packages/", json={
-        "name": "Flow-test lifetime B (upgrade)", "subject": "English", "price": 250.0,
+        "name": "Flow-test lifetime B (upgrade)", "subject": "English", "price": 250.0, "price_per_class": 25.0,
         "classes_count": 10, "duration_minutes": 50,
     }, headers=auth_headers(teacher_token))
     assert r_pkg_b.status_code == 201, r_pkg_b.text
@@ -273,7 +273,7 @@ def test_lifetime_counter_survives_renewal_and_package_change(
 
     r_change = client.post("/api/v1/payments/notify-payment", json={
         "type": "package_change", "enrollment_id": enrollment_id, "package_id": package_b_id,
-        "transaction_reference": "flow-tests-lifetime-change",
+        "payment_method": "paypal", "transaction_reference": "flow-tests-lifetime-change",
     }, headers=auth_headers(student_token))
     assert r_change.status_code == 200, r_change.text
     assert "payment_id" in r_change.json(), (
@@ -438,7 +438,7 @@ def test_lifetime_counter_counts_group_classes_and_excludes_cancelled_participan
 
     # 1) Paquete grupal + cohorte.
     r_pkg = client.post("/api/v1/packages/", json={
-        "name": "Flow-test lifetime grupal", "subject": "English", "price": 80.0,
+        "name": "Flow-test lifetime grupal", "subject": "English", "price": 80.0, "price_per_class": 10.0,
         "classes_count": 8, "duration_minutes": 50,
         "is_group": True, "min_students": 1, "max_students": 6,
     }, headers=auth_headers(teacher_token))
@@ -455,7 +455,7 @@ def test_lifetime_counter_counts_group_classes_and_excludes_cancelled_participan
 
     # 2) El alumno fijo se inscribe y su pago se aprueba.
     r_enroll = client.post(f"/api/v1/cohorts/{cohort_id}/enroll", json={
-        "cohort_id": cohort_id, "transaction_reference": "flow-tests-lifetime-group",
+        "cohort_id": cohort_id, "payment_method": "paypal", "transaction_reference": "flow-tests-lifetime-group",
     }, headers=auth_headers(student_token))
     assert r_enroll.status_code == 201, r_enroll.text
     enrollment_id = r_enroll.json()["enrollment_id"]

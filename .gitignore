@@ -239,4 +239,4 @@ storage-user-*.json
 # Carpeta de notas personales del proyecto
 notes/
 TODO.md
-PERSONAL.md
+PERSONAL.mdtests/audit/outbox.jsonl
