@@ -70,7 +70,7 @@ Alertas recomendadas: gasto OpenAI, compute-hours de Neon, 5xx en Railway, `need
 | Síntoma | Diagnóstico | Acción |
 |---|---|---|
 | Todo da 500 tras desplegar | migración no aplicada o columna inexistente | `alembic current` vs repo; aplicar `upgrade head` |
-| 429 para todos los usuarios | rate-limit ve la IP del proxy (SEC-01) | añadir `--proxy-headers --forwarded-allow-ips='*'` al comando de uvicorn |
+| 429 para todos los usuarios | rate-limit ve la IP del proxy (SEC-01) | ya incluido en `railway.toml` y `Dockerfile` (SEC-01); si persiste, revisa que el despliegue use ese comando |
 | El backend no arranca | falta `OPENAI_API_KEY` o `DATABASE_URL`/`SECRET_KEY` | revisar variables del servicio |
 | Emails no llegan | `RESEND_API_KEY` ausente/errónea o dominio de `EMAIL_FROM` sin verificar; los fallos se capturan y solo quedan en logs | revisar logs («Error enviando email…») |
 | Sin recordatorios ni Meet | proceso reiniciado antes del primer disparo (intervalos de 1 h/24 h/7 d) o servicio dormido | comprobar logs de jobs; no escalar a >1 worker |
@@ -113,7 +113,8 @@ Tras compartir un `.env` (chat, captura, repositorio) considera comprometidas **
 ## 11. Checklist previo a producción real (estado actual)
 
 - [ ] Corregir AUD-12 (retiros pendientes) y AUD-03 (renovación): bloquean ingresos y cobros.
-- [ ] `--proxy-headers` en uvicorn (SEC-01) y `ENVIRONMENT=production`.
+- [x] `--proxy-headers` en uvicorn (SEC-01, ya en `railway.toml`/`Dockerfile`) · [ ] `ENVIRONMENT=production`.
+- [ ] Ejecutar `alembic upgrade head` (nueva migración `a7b8c9d0e1f2`: verificación de email).
 - [ ] Pool de conexiones/endpoint pooled de Neon; subir intervalos del scheduler.
 - [ ] Límites y login para Chipi/TTS (coste); tope en `/logs/frontend`.
 - [ ] Separar funciones de `teacher_admin` (comisión propia, retiros propios).
@@ -121,3 +122,9 @@ Tras compartir un `.env` (chat, captura, repositorio) considera comprometidas **
 - [ ] Migraciones automatizadas en el despliegue.
 - [ ] Rotar las claves usadas durante la auditoría.
 - [ ] Prueba E2E en navegador y prueba de carga básica.
+
+## Sesión por cookies (SEC-05)
+- Variables nuevas del backend: `COOKIE_DOMAIN=.tuprofemaria.com` (producción), `COOKIE_SAMESITE=lax`, `REFRESH_TOKEN_EXPIRE_DAYS=30`. `COOKIE_SECURE` es automático en `ENVIRONMENT=production`.
+- Ejecutar `alembic upgrade head` (migración `b8c9d0e1f2a3`: tabla `refresh_tokens`).
+- Orden de despliegue: backend primero (acepta cookie y Bearer), luego frontend. Cuando todos usen el frontend nuevo, bajar `ACCESS_TOKEN_EXPIRE_MINUTES` a 30.
+- Frontend y API deben ser del mismo sitio (`tuprofemaria.com` y `api.tuprofemaria.com`); con dominios `*.up.railway.app` distintos las cookies no se comparten con el proxy de Next.

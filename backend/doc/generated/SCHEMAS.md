@@ -17,11 +17,11 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 
 ## schemas/auth.py
 
-- **GoogleAuthResponse** — needs_registration: bool = False; access_token: Optional[str] = None; token_type: str = 'bearer'; role: Optional[str] = None; name: Optional[str] = None; username: Optional[str] = None; email: Optional[EmailStr] = None; surname: Optional[str] = None; avatar: Optional[str] = None
+- **GoogleAuthResponse** — needs_registration: bool = False; access_token: Optional[str] = None; token_type: str = 'bearer'; user_id: Optional[int] = None; role: Optional[str] = None; name: Optional[str] = None; username: Optional[str] = None; email: Optional[EmailStr] = None; surname: Optional[str] = None; avatar: Optional[str] = None
 - **GoogleRegisterRequest** — id_token: str; username: str; role: str  _(validadores: validate_role, validate_username)_
 - **RegisterRequest** — email: EmailStr; username: str = Field(min_length=3, max_length=50); password: str = Field(min_length=8, max_length=128); name: str = Field(min_length=1, max_length=100); surname: str = Field(min_length=1, max_length=100); role: str = 'student'  _(validadores: normalize_email, validate_username, validate_password, validate_not_blank, validate_role)_
 - **LoginRequest** — login: str = Field(min_length=1, max_length=255); password: str = Field(min_length=1, max_length=128)
-- **TokenResponse** — access_token: str; token_type: str = 'bearer'; role: str; name: str; surname: str; username: str; email: str; avatar_url: str | None = None
+- **TokenResponse** — access_token: str; token_type: str = 'bearer'; user_id: Optional[int] = None; role: str; name: str; surname: str; username: str; email: str; avatar_url: str | None = None
 - **GoogleAuthRequest** — id_token: str
 - **ForgotPasswordRequest** — email: EmailStr
 - **ForgotUsernameRequest** — email: EmailStr
@@ -49,8 +49,8 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 
 ## schemas/chipi.py
 
-- **ChatMessage** — role: str; content: str
-- **ChipiRequest** — message: str; screen: str; history: List[ChatMessage] = []; stream: bool = True
+- **ChatMessage** — role: Literal['user', 'assistant']; content: str = Field(max_length=MAX_CHIPI_MESSAGE_CHARS
+- **ChipiRequest** — message: str = Field(min_length=1, max_length=MAX_CHIPI; screen: str = Field(max_length=100); history: List[ChatMessage] = Field(default_factory=list, max_length=M; stream: bool = True
 - **ChipiResponse** — response: str; screen: str
 
 ## schemas/classes.py
@@ -106,7 +106,7 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 
 ## schemas/logs.py
 
-- **FrontendErrorReportRequest** — message: str = Field(..., min_length=1, max_length=2000; stack: Optional[str] = None; screen: str = Field(..., description='Ruta del fronten; level: str = Field('error', pattern='^(error|warning); status_code: Optional[int] = None; extra: Optional[dict[str, Any]] = None
+- **FrontendErrorReportRequest** — message: str = Field(..., min_length=1, max_length=2000; stack: Optional[str] = Field(None, max_length=MAX_LOG_STACK_CHA; screen: str = Field(..., max_length=300, description='; level: str = Field('error', pattern='^(error|warning); status_code: Optional[int] = Field(None, ge=0, le=599); extra: Optional[dict[str, Any]] = None  _(validadores: limit_extra_size)_
 - **ErrorLogResponse** — id: int; source: str; level: str; message: str; detail: Optional[str] = None; screen: Optional[str] = None; method: Optional[str] = None; status_code: Optional[int] = None; user_id: Optional[int] = None; user_name: Optional[str] = None; user_role: Optional[str] = None; extra_data: Optional[dict[str, Any]] = None; created_at: datetime
 - **PaginatedErrorLogResponse** — items: list[ErrorLogResponse]; total: int; page: int; page_size: int
 - **ErrorLogUserOption** — id: int; name: str
@@ -215,4 +215,5 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 - **UserUpdate** — name: Optional[str] = None; surname: Optional[str] = None; phone_number: Optional[str] = None; email: Optional[EmailStr] = None; nationality: Optional[str] = None; onboarding_completed: Optional[bool] = None
 - **StudentProfileUpdate** — timezone: Optional[str] = None; goal: Optional[str] = None; phone_number: Optional[str] = None; preferred_payment_methods: Optional[List[str]] = None; nationality: Optional[str] = None
 - **UpdateProfileRequest** — username: Optional[str] = None; email: Optional[EmailStr] = None; name: Optional[str] = None; surname: Optional[str] = None; avatar: Optional[str] = None; phone_number: Optional[str] = None; timezone: Optional[str] = None; nationality: Optional[str] = None; onboarding_completed: Optional[bool] = None
+- **DeleteAccountRequest** — password: Optional[str] = None; confirm_username: str
 - **ChangePasswordRequest** — current_password: str; new_password: str  _(validadores: validate_password)_

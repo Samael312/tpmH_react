@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 import logging
@@ -9,7 +9,10 @@ from app.models.user import User, UserRole
 from app.models.teacher import TeacherProfile
 from app.models.student import StudentProfile
 from app.auth.passwords import hash_password, verify_password
-from app.auth.jwt import create_access_token
+from app.auth.session import (
+    REFRESH_COOKIE, clear_auth_cookies, revoke_all_sessions, revoke_refresh_family,
+    rotate_refresh_token, set_auth_cookies,
+)
 from app.auth.google import verify_google_token
 from app.schemas.auth import (
     RegisterRequest, 
@@ -27,16 +30,84 @@ from app.models.password_reset import PasswordResetToken
 from app.core.email import send_password_reset_email, send_username_recovery_email  
 from app.core.timezone import utc_now
 from pydantic import BaseModel, EmailStr
-from app.core.email import send_welcome_email
+from app.core.email import send_welcome_email, send_verification_email
+from app.models.email_verification import EmailVerificationToken
+from app.auth.dependencies import get_current_user
+import hashlib
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
+EMAIL_VERIFICATION_TTL_HOURS = 24
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _issue_verification_email(user: User, db: Session) -> None:
+    """Invalida los tokens previos, crea uno nuevo y envia el correo (SEC-04). Nunca rompe el flujo que lo llama."""
+    try:
+        db.query(EmailVerificationToken).filter(
+            EmailVerificationToken.user_id == user.id, EmailVerificationToken.is_used == False  # noqa: E712
+        ).update({"is_used": True})
+        raw = secrets.token_urlsafe(32)
+        db.add(EmailVerificationToken(
+            user_id=user.id,
+            token_hash=_hash_token(raw),
+            expires_at=utc_now() + timedelta(hours=EMAIL_VERIFICATION_TTL_HOURS),
+        ))
+        db.commit()
+        send_verification_email(to_email=user.email, user_name=user.name, verify_token=raw)
+    except Exception:
+        db.rollback()
+        logger.exception("No se pudo enviar el email de verificacion")
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+@router.post("/verify-email")
+@limiter.limit("20/hour")
+def verify_email(request: Request, data: VerifyEmailRequest, db: Session = Depends(get_db)):
+    """SEC-04: consume el token del correo y marca la cuenta como verificada. Un solo uso, 24 h."""
+    record = (
+        db.query(EmailVerificationToken)
+        .filter(
+            EmailVerificationToken.token_hash == _hash_token(data.token.strip()),
+            EmailVerificationToken.is_used == False,  # noqa: E712
+            EmailVerificationToken.expires_at > utc_now(),  # comparacion en SQL: evita naive vs aware
+        )
+        .with_for_update()
+        .first()
+    )
+    if not record:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "El enlace de verificación no es válido o expiró")
+    user = db.query(User).filter(User.id == record.user_id).first()
+    if not user or not user.is_active:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "El enlace de verificación no es válido o expiró")
+    record.is_used = True
+    user.is_verified = True
+    db.commit()
+    return {"message": "Email verificado correctamente"}
+
+
+@router.post("/resend-verification")
+@limiter.limit("3/hour")
+def resend_verification(request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """SEC-04: reenvia el correo de verificacion al usuario autenticado (no permite enumerar cuentas)."""
+    if current_user.is_verified:
+        return {"message": "Tu email ya está verificado"}
+    _issue_verification_email(current_user, db)
+    return {"message": "Te enviamos un nuevo enlace de verificación"}
+
+
 @router.post("/register", response_model=TokenResponse)
 @limiter.limit("5/hour")
-def register(request: Request, data: RegisterRequest, db: Session = Depends(get_db)):
+def register(request: Request, response: Response, data: RegisterRequest, db: Session = Depends(get_db)):
 
     # 1. Verificar que el email no existe
     if db.query(User).filter(func.lower(User.email) == data.email.lower()).first():
@@ -74,9 +145,11 @@ def register(request: Request, data: RegisterRequest, db: Session = Depends(get_
     db.refresh(user)
 
     send_welcome_email(to_email=user.email, user_name=user.name, role=user.role)
-    token = create_access_token(user.id, user.role)
+    _issue_verification_email(user, db)
+    token = set_auth_cookies(response, user, db)  # SEC-05: sesion en cookies HttpOnly (el JSON se mantiene en la transicion)
     return TokenResponse(
         access_token=token,
+        user_id=user.id,
         role=user.role,
         name=user.name,
         surname=user.surname,
@@ -87,7 +160,7 @@ def register(request: Request, data: RegisterRequest, db: Session = Depends(get_
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("10/minute")
-def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
+def login(request: Request, response: Response, data: LoginRequest, db: Session = Depends(get_db)):
 
     # Buscar por username O por email — el usuario usa lo que prefiera
     user = (
@@ -115,7 +188,7 @@ def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
             detail="Cuenta desactivada, contacta con soporte."
         )
 
-    token = create_access_token(user.id, user.role)
+    token = set_auth_cookies(response, user, db)
 
     # La foto "real" (la que el usuario subió como estudiante/profesor) tiene
     # prioridad sobre el avatar de Google, que puede estar desactualizado o
@@ -128,6 +201,7 @@ def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
 
     return TokenResponse(
         access_token=token,
+        user_id=user.id,
         role=user.role,
         name=user.name,
         surname=user.surname,
@@ -138,7 +212,7 @@ def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/google", response_model=GoogleAuthResponse)
 @limiter.limit("20/minute")
-async def google_login(request: Request, data: GoogleAuthRequest, db: Session = Depends(get_db)):
+async def google_login(request: Request, response: Response, data: GoogleAuthRequest, db: Session = Depends(get_db)):
     """
     Paso 1 del flujo Google (GSI). Verifica el id_token contra Google.
     - Si el email ya tiene cuenta -> login normal, devuelve token.
@@ -154,7 +228,7 @@ async def google_login(request: Request, data: GoogleAuthRequest, db: Session = 
             detail=str(e)
         )
 
-    user = db.query(User).filter(User.email == google_data["email"]).first()
+    user = db.query(User).filter(func.lower(User.email) == google_data["email"]).first()
 
     if not user:
         return GoogleAuthResponse(
@@ -165,18 +239,29 @@ async def google_login(request: Request, data: GoogleAuthRequest, db: Session = 
             avatar=google_data.get("avatar"),
         )
 
-    # Si el usuario existía con password normal, vinculamos el google_id
-    if not user.google_id:
-        user.google_id = google_data["google_id"]
-        db.commit()
-
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cuenta desactivada, contacta con soporte."
         )
 
-    token = create_access_token(user.id, user.role)
+    # SEC-04: la cuenta ya vinculada a OTRO Google no se puede reclamar; y una cuenta local solo se vincula
+    # si su email ya esta verificado (si no, quien la creo con la contrasena podria conservar el acceso).
+    if user.google_id and user.google_id != google_data["google_id"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Esta cuenta está vinculada a otra cuenta de Google."
+        )
+    if not user.google_id:
+        if not user.is_verified:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Verifica tu email con el enlace que te enviamos antes de iniciar sesión con Google."
+            )
+        user.google_id = google_data["google_id"]
+        db.commit()
+
+    token = set_auth_cookies(response, user, db)
     avatar_url = (
         (user.teacher_profile.profile_photo_url if user.teacher_profile else None)
         or (user.student_profile.profile_photo_url if user.student_profile else None)
@@ -184,6 +269,7 @@ async def google_login(request: Request, data: GoogleAuthRequest, db: Session = 
     )
     return GoogleAuthResponse(
         access_token=token,
+        user_id=user.id,
         role=user.role,
         name=user.name,
         username=user.username,
@@ -195,16 +281,16 @@ async def google_login(request: Request, data: GoogleAuthRequest, db: Session = 
 
 @router.post("/google/register", response_model=GoogleAuthResponse)
 @limiter.limit("10/hour")
-async def google_register(request: Request, data: GoogleRegisterRequest, db: Session = Depends(get_db)):
+async def google_register(request: Request, response: Response, data: GoogleRegisterRequest, db: Session = Depends(get_db)):
     try:
         google_data = await verify_google_token(data.id_token)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    if db.query(User).filter(User.email == google_data["email"]).first():
+    if db.query(User).filter(func.lower(User.email) == google_data["email"]).first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Este email ya está registrado")
 
-    if db.query(User).filter(User.username == data.username).first():
+    if db.query(User).filter(func.lower(User.username) == data.username.strip().lower()).first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Este nombre de usuario ya está en uso")
 
     # F6 (verification_roadmap): antes se descargaba y re-hospedaba
@@ -223,7 +309,7 @@ async def google_register(request: Request, data: GoogleRegisterRequest, db: Ses
         surname=google_data["surname"],
         avatar=avatar_url,
         google_id=google_data["google_id"],
-        is_verified=google_data.get("is_verified") == "true",
+        is_verified=bool(google_data.get("is_verified")),  # bug: antes se comparaba un bool con "true" (siempre False)
         role=data.role,
     )
     db.add(user)
@@ -237,9 +323,10 @@ async def google_register(request: Request, data: GoogleRegisterRequest, db: Ses
     db.commit()
     db.refresh(user)
     send_welcome_email(to_email=user.email, user_name=user.name, role=user.role)
-    token = create_access_token(user.id, user.role)
+    token = set_auth_cookies(response, user, db)
     return GoogleAuthResponse(
         access_token=token,
+        user_id=user.id,
         role=user.role,
         name=user.name,
         username=user.username,
@@ -247,6 +334,33 @@ async def google_register(request: Request, data: GoogleRegisterRequest, db: Ses
         surname=user.surname,
         avatar=user.avatar,
     )
+
+@router.post("/refresh")
+@limiter.limit("60/minute")
+def refresh_session(request: Request, response: Response, db: Session = Depends(get_db)):
+    """
+    SEC-05: renueva la sesion con el refresh token de la cookie HttpOnly (rotacion: el anterior queda
+    revocado). Si el token es desconocido/vencido/reutilizado responde 401 y limpia las cookies.
+    """
+    result = rotate_refresh_token(db, request.cookies.get(REFRESH_COOKIE))
+    if result is None:
+        db.rollback()
+        clear_auth_cookies(response)
+        response.status_code = status.HTTP_401_UNAUTHORIZED
+        return {"detail": "Sesión expirada"}
+    user, family_id = result
+    set_auth_cookies(response, user, db, family_id=family_id)
+    return {"message": "Sesión renovada"}
+
+
+@router.post("/logout")
+@limiter.limit("60/minute")
+def logout(request: Request, response: Response, db: Session = Depends(get_db)):
+    """SEC-05: revoca la familia del refresh token y borra las cookies. No exige estar autenticado."""
+    revoke_refresh_family(db, request.cookies.get(REFRESH_COOKIE))
+    clear_auth_cookies(response)
+    return {"message": "Sesión cerrada"}
+
 
 @router.post("/forgot-password")
 @limiter.limit("5/hour")
@@ -328,6 +442,9 @@ def reset_password(
 
     # Marcar token como usado
     reset_token.is_used = True
+
+    # SEC-05: cambiar la contrasena cierra todas las sesiones abiertas (incluida la de quien la robo)
+    revoke_all_sessions(db, user.id)
 
     db.commit()
 

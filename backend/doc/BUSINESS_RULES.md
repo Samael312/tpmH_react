@@ -118,3 +118,17 @@ Semanal: filas `TeacherAvailability` (`day_of_week`, `start_time_utc`, `end_time
 - Reservas, reagendados y cancelaciones toman `FOR UPDATE` sobre alumno/profesor/clase (sin restricción de exclusión en BD).
 - Una clase futura no puede marcarse `completed`/`no_show`. Si cancela el profesor por `PATCH status`, no se penaliza al alumno.
 - Fechas sin zona horaria -> 422. Retiro mínimo $10. Usuario/email sin distinguir mayúsculas. Valor 0 válido en reglas de negocio. `commission_rate` NULL = 15 %.
+
+## Seguridad (Fase 3a)
+- **Email verificado:** retiros (`request-withdrawal`), pagos (`notify-payment`) e inscripción a cohortes exigen `is_verified`. Se puede entrar sin verificar; Google solo se vincula a cuentas verificadas.
+- **Borrar cuenta:** exige contraseña (o solo el usuario si la cuenta es solo-Google) y bloquea mientras haya saldo en la billetera, retiros pendientes, clases futuras, paquetes con clases disponibles, pagos en revisión o alumnos con paquete activo (profesor).
+- **Chipi/TTS:** mensajes ≤ 2000 caracteres, historial ≤ 20, solo roles user/assistant; 20/min y 300/día por usuario (IP si anónimo). TTS 60/min por usuario, batch 6/min.
+- **Logs del frontend:** stack ≤ 8000, extra ≤ 4000, 30/min por IP.
+- **Chat WS:** frames ≤ 20 000 caracteres y 20 envíos por 10 s por conexión.
+
+## Sesión (Fase 3b, SEC-05)
+- La sesión vive en cookies HttpOnly fijadas por el backend: `tpm_access` (JWT), `tpm_refresh` (opaco, solo viaja a `/api/v1/auth`) y `tpm_session` (marca para el proxy del frontend). Producción: `COOKIE_DOMAIN=.tuprofemaria.com`, SameSite=Lax, Secure.
+- `POST /auth/refresh` rota el refresh token (en BD solo el hash). Reusar uno ya rotado fuera de 10 s se trata como robo y revoca toda la cadena; dentro de 10 s se tolera (dos pestañas).
+- Cambiar o restablecer la contraseña, o borrar la cuenta, revoca todas las sesiones (al cambiarla, la actual recibe cookies nuevas).
+- Peticiones que mutan y traen cookies con un `Origin` ajeno -> 403. Las que usan `Authorization: Bearer` no están sujetas.
+- Transición: el backend sigue aceptando `Authorization: Bearer` y `?token=` en el WS, y devuelve `access_token` en el JSON; el frontend nuevo ya no los usa.

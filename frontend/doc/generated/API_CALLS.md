@@ -49,6 +49,7 @@ Llamadas `api.<verbo>(...)` por archivo (regex; las URLs construidas dinámicame
 - `components/chipi/ChipiWidget.tsx`: POST /chipi/chat
 - `components/classes/ClassCard.tsx`: DELETE /classes/teacher/{x}, DELETE /classes/{x}, DELETE /classes/{x}/leave, PATCH /classes/{x}/status, POST /cohorts/{x}/leave, POST /support/class-corrections
 - `components/classes/MeetLinkModal.tsx`: PATCH /classes/{x}/meet-link
+- `components/layout/VerifyEmailBanner.tsx`: POST /auth/resend-verification
 - `components/payments/BuyCreditsModal.tsx`: POST /payments/notify-payment
 - `components/payments/PackageCheckout.tsx`: POST /payments/notify-payment
 - `hooks/useAdminData.ts`: GET /admin/notifications, GET /admin/notifications/unread-count, GET /admin/platform-config, GET /admin/stats, GET /admin/support-tickets${qs , GET /admin/teachers/{x}/appeals, GET /admin/teachers{x}, GET /admin/users, GET /payments/admin/withdrawals/pending, GET /payments/config, GET /payments/history, GET /payments/pending-review, GET /system-catalogs/business-rules

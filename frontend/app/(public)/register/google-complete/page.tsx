@@ -73,9 +73,7 @@ export default function GoogleCompleteSignupPage() {
       login(access_token, { username: uname, name, role: userRole, email, surname });
 
       try {
-        const meRes = await api.get("/users/me", {
-          headers: { Authorization: `Bearer ${access_token}` },
-        });
+        const meRes = await api.get("/users/me");
         const userData = meRes.data;
         login(access_token, {
           username: uname,

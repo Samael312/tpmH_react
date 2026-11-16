@@ -47,7 +47,7 @@ def tok(u):
 def mk_user(db, role, name):
     u = User(email=f"{name}@audit-conc.com", username=name, name=name, surname="Conc",
              password_hash=hash_password("Password123"), role=UserRole(role), is_active=True,
-             onboarding_completed=True)
+             onboarding_completed=True, is_verified=True)
     db.add(u)
     db.flush()
     created_user_ids.append(u.id)

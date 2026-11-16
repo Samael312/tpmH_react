@@ -45,6 +45,7 @@ const SCREEN_ROUTES: Array<[string, string]> = ([
   ["/register", "register"],
   ["/forgot-password", "forgot-password"],
   ["/reset-password", "reset-password"],
+  ["/verify-email", "verify-email"],
 
   // Estudiante
   // Nota: "/dashboard/teachers" (lista) vs "/dashboard/teachers/[username]"

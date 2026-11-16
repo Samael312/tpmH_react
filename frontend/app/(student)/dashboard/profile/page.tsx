@@ -200,6 +200,7 @@ export default function StudentProfilePage() {
 
   // Eliminar Cuenta
   const [deleteInput, setDeleteInput]     = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting]           = useState(false);
 
@@ -386,14 +387,14 @@ export default function StudentProfilePage() {
     if (deleteInput !== currentUsername) return;
     setDeleting(true);
     try {
-      await api.delete("/users/me");
+      await api.delete("/users/me", { data: { confirm_username: deleteInput, password: deletePassword || undefined } });
       logout();
       window.location.href = "/";
     } catch (e) {
       toast.error(getErrorMessage(e, "No se pudo eliminar la cuenta"));
       setDeleting(false);
     }
-  }, [deleteInput, username, user?.username, logout, toast]);
+  }, [deleteInput, deletePassword, username, user?.username, logout, toast]);
 
   // ─── PATCH: Subir Foto de Perfil ─────────────────────────────────────────────
   const handleAvatarChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -925,6 +926,14 @@ export default function StudentProfilePage() {
                       placeholder={username || user?.username}
                       className="w-full bg-white border-2 border-rose-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-300 px-3.5 py-2.5 focus:outline-none focus:border-rose-400 transition-all duration-200"
                     />
+                    <input
+                        type="password"
+                        value={deletePassword}
+                        onChange={e => setDeletePassword(e.target.value)}
+                        placeholder="Tu contraseña (si tu cuenta tiene)"
+                        autoComplete="current-password"
+                        className="mt-2 w-full bg-white border-2 border-rose-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-300 px-3.5 py-2.5 focus:outline-none focus:border-rose-400 transition-all duration-200"
+                      />
                   </div>
 
                   <div className="flex gap-2">

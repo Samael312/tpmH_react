@@ -176,8 +176,11 @@ def test_error_response_never_leaks_traceback(client, world, db):
 
 
 def test_error_logs_endpoint_accepts_anonymous_reports(client):
+    r = client.post(f"{API}/logs/frontend", json={"message": "boom", "screen": "/x", "stack": "s" * 8_000})
+    assert r.status_code == 204
+    # SEC-06: por encima del tope (8000) se rechaza en vez de llenar la tabla de logs
     r = client.post(f"{API}/logs/frontend", json={"message": "boom", "screen": "/x", "stack": "s" * 200_000})
-    assert r.status_code == 204  # documenta SEC-06: sin tope de tamaño
+    assert r.status_code == 422
 
 
 # ─── Paquetes: ilimitado, cuotas, cambios ───────────────────────────────────

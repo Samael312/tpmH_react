@@ -12,7 +12,17 @@ class Settings(BaseSettings):
     # JWT
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
+    # SEC-05: con la cookie HttpOnly + refresh el access token puede (y debe) ser corto: 30 min en produccion.
+    # El valor por defecto sigue siendo el antiguo para no cerrar sesiones hasta que el frontend con refresh
+    # este desplegado; luego basta con poner ACCESS_TOKEN_EXPIRE_MINUTES=30 en el entorno.
     ACCESS_TOKEN_EXPIRE_MINUTES: int = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 10080)
+    REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 30))
+
+    # Cookies de sesion (SEC-05). Produccion mismo sitio: COOKIE_DOMAIN=.tuprofemaria.com, SameSite=lax.
+    # Si frontend y API estuvieran en sitios distintos habria que usar COOKIE_SAMESITE=none (exige Secure).
+    COOKIE_DOMAIN: Optional[str] = os.getenv("COOKIE_DOMAIN") or None
+    COOKIE_SAMESITE: str = os.getenv("COOKIE_SAMESITE", "lax")
+    COOKIE_SECURE: Optional[bool] = None  # None => True solo si ENVIRONMENT=production
 
     # Google OAuth
     GOOGLE_CLIENT_ID: Optional[str] = None

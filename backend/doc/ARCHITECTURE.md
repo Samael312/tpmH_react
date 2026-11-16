@@ -76,7 +76,7 @@ Todos son `IntervalTrigger` (primer disparo **después** del intervalo). Con var
 ## Despliegue (Railway)
 
 `railway.toml`: servicio backend (`backend/Dockerfile`, `uvicorn app.main:app --host 0.0.0.0 --port 8000`, healthcheck `/health`)
-y frontend (`node server.js`). Uvicorn **sin** `--proxy-headers` (ver KNOWN_ISSUES SEC-01).
+y frontend (`node server.js`). Uvicorn con `--proxy-headers --forwarded-allow-ips=*` y un solo worker (SEC-01).
 
 ## Manejo de errores y logs
 

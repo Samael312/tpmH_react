@@ -154,7 +154,7 @@ El flujo principal funciona de punta a punta (verificado con tests). La auditor�
 | AUD-02 | Doble reserva posible (pruebas pendientes y sesiones grupales no bloquean; sin bloqueo de fila) |
 | AUD-12 | `GET /payments/admin/withdrawals/pending` devuelve 404 (falta el decorador) |
 | AUD-14 | Los reembolsos no descuentan la billetera del profesor |
-| SEC-01/02/03/05 | Rate-limit ve la IP del proxy; Chipi anónimo sin límites; `teacher_admin` sin separación de funciones; JWT en cookie no HttpOnly sin revocación |
+| SEC-05 | JWT en cookie no HttpOnly sin revocación (SEC-01/02/03/04 y casi todo SEC-06 corregidos en las Fases 1 y 3a) |
 
 Lista completa con tests que los reproducen: [`backend/doc/KNOWN_ISSUES.md`](backend/doc/KNOWN_ISSUES.md) y [`ANALISIS.md`](ANALISIS.md).
 

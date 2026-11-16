@@ -50,12 +50,12 @@ Salida: `python -m tests.audit.concurrency_live` termina con 0 FALLO. **Pendient
 
 ## Fase 3 — Seguridad
 
-- [ ] **SEC-01** (M) `--proxy-headers` + IP real; rate-limit compartido si hay >1 worker
-- [ ] **SEC-02** (M) Chipi: rate-limit, tope de tamaño, solo `role` user/assistant; TTS con cuota
+- [x] **SEC-01** (M) `--proxy-headers` + IP real; rate-limit compartido si hay >1 worker
+- [x] **SEC-02** (M) Chipi: rate-limit, tope de tamaño, solo `role` user/assistant; TTS con cuota
 - [x] **SEC-03** (M) `teacher_admin` sin aprobar sus propios pagos ni fijar su comisión
-- [ ] **SEC-04** (M) verificación de email; Google solo con `email_verified`
-- [ ] **SEC-05** (L) JWT en cookie HttpOnly, vida corta + refresco, CSP sin `unsafe-*`
-- [ ] **SEC-06** (M) tope en `/logs/frontend`, `state` OAuth, token WS fuera de la query, `application/pptx`, borrado de cuenta
+- [x] **SEC-04** (M) verificación de email; Google solo con `email_verified`
+- [x] **SEC-05** (L) JWT en cookie HttpOnly + refresco (hecho, 3b) · _pendiente:_ retirar Bearer/`?token=`, access de 30 min, CSP sin `unsafe-*`
+- [x] **SEC-06** (M) tope en `/logs/frontend`, `state` OAuth, `application/pptx`, borrado de cuenta, topes del WS · _pendiente en 3b:_ token WS fuera de la query
 
 Salida: repetir sondas (200 KB y `role: system` en Chipi → rechazados).
 
@@ -82,7 +82,7 @@ Salida: repetir sondas (200 KB y `role: system` en Chipi → rechazados).
 
 ## Fase 6 — Pruebas y documentación
 
-- [ ] Actualizar `tests/flow` obsoletos (regla D7, `payment_method`, cohorte sin pago confirmado, disponibilidad por hora) · ver `backend/doc/TESTING.md`
+- [x] Actualizar `tests/flow` obsoletos (regla D7, `payment_method`, cohorte sin pago confirmado, disponibilidad por hora) · ver `backend/doc/TESTING.md`
 - [ ] Concurrencia en CI sobre PostgreSQL para PRs de reservas/pagos
 - [ ] Paso de migraciones Alembic en el despliegue (no se ejecutan solas)
 - [ ] Regenerar docs y cerrar IDs en `KNOWN_ISSUES.md`

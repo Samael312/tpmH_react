@@ -19,6 +19,7 @@ function CalendarCallbackInner() {
 
   const runCallback = useCallback(() => {
     const code = searchParams.get("code");
+    const oauthState = searchParams.get("state");
     const oauthError = searchParams.get("error");
 
     if (oauthError) {
@@ -41,7 +42,7 @@ function CalendarCallbackInner() {
     setErrorMsg("");
 
     api
-      .post("/calendar/callback", { code })
+      .post("/calendar/callback", { code, state: oauthState })
       .then(() => {
         setStatus("success");
         setTimeout(() => router.replace("/teacher/profile"), 1800);

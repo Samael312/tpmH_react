@@ -54,6 +54,7 @@ def _get_or_create_user(db: Session, spec: dict) -> User:
     # Estado base que SIEMPRE debe cumplirse para que los tests no se topen
     # con un 403 "cuenta desactivada" o quedan atascados en onboarding.
     user.is_active = True
+    user.is_verified = True  # SEC-04: retiros y pagos exigen email verificado
     user.is_banned = False
     user.ban_reason = None
     user.banned_at = None

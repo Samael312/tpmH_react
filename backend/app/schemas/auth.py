@@ -6,6 +6,7 @@ class GoogleAuthResponse(BaseModel):
     needs_registration: bool = False
     access_token: Optional[str] = None
     token_type: str = "bearer"
+    user_id: Optional[int] = None
     role: Optional[str] = None
     name: Optional[str] = None
     username: Optional[str] = None
@@ -88,6 +89,7 @@ class TokenResponse(BaseModel):
     """Lo que devuelve el servidor al hacer login"""
     access_token: str
     token_type: str = "bearer"
+    user_id: Optional[int] = None
     role: str
     name: str
     surname: str

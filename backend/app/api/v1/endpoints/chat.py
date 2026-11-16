@@ -2,6 +2,8 @@
 import asyncio
 import json
 import logging
+import time
+from collections import deque
 from dataclasses import dataclass
 from typing import Optional
 
@@ -12,6 +14,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.auth.dependencies import get_current_user, get_current_staff
 from app.auth.jwt import decode_access_token
+from app.auth.session import ACCESS_COOKIE, allowed_origins
 from app.core import chat as chat_core
 from app.core.chat_ws import chat_manager
 from app.core.email import send_new_chat_message_teacher_email
@@ -417,9 +420,25 @@ def _ws_catch_up(user_id: int) -> dict[int, list[int]]:
         db.close()
 
 
+# SEC-06: topes por conexion (antes un cliente podia inundar el chat sin limite).
+WS_MAX_FRAME_CHARS = 20_000
+WS_SEND_WINDOW_SECONDS = 10
+WS_MAX_SENDS_PER_WINDOW = 20
+
+
 @router.websocket("/ws")
-async def chat_websocket(websocket: WebSocket, token: str = Query(...)):
-    payload = decode_access_token(token)
+async def chat_websocket(websocket: WebSocket, token: Optional[str] = Query(None)):
+    # SEC-05: el token ya no hace falta en la URL (acaba en logs y en el historial): el navegador envia la cookie
+    # HttpOnly en el handshake. Con cookie se exige que el Origin sea el del frontend (un sitio ajeno podria
+    # abrir el socket con las cookies del usuario: "cross-site WebSocket hijacking"). `?token=` se conserva
+    # solo durante la transicion.
+    if not token:
+        token = websocket.cookies.get(ACCESS_COOKIE)
+        origin = (websocket.headers.get("origin") or "").rstrip("/")
+        if origin and origin not in allowed_origins():
+            await websocket.close(code=4403)
+            return
+    payload = decode_access_token(token) if token else None
     if not payload:
         await websocket.close(code=4401)
         return
@@ -439,9 +458,14 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(...)):
             for message_id in message_ids:
                 await chat_manager.send_to_user(sender_id, {"type": "delivered", "id": message_id})
 
+        send_times: deque = deque()  # SEC-06: ventana deslizante de envios de ESTA conexion
         while True:
+            text = await websocket.receive_text()
+            if len(text) > WS_MAX_FRAME_CHARS:
+                await websocket.send_json({"type": "error", "detail": "Mensaje demasiado grande"})
+                continue
             try:
-                raw = json.loads(await websocket.receive_text())
+                raw = json.loads(text)
             except json.JSONDecodeError:
                 continue
             if not isinstance(raw, dict):
@@ -453,6 +477,14 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(...)):
                 continue
             if msg_type != "send":
                 continue
+
+            now_ts = time.monotonic()
+            while send_times and now_ts - send_times[0] > WS_SEND_WINDOW_SECONDS:
+                send_times.popleft()
+            if len(send_times) >= WS_MAX_SENDS_PER_WINDOW:
+                await websocket.send_json({"type": "error", "detail": "Estás enviando mensajes demasiado rápido"})
+                continue
+            send_times.append(now_ts)
 
             client_id = raw.get("client_id")
             client_id = str(client_id)[:64] if client_id else None

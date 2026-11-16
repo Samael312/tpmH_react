@@ -1,7 +1,10 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_teacher, get_db
+from app.auth.jwt import create_oauth_state, decode_oauth_state
 from app.core.google_calendar import (
     exchange_code_for_tokens,
     get_auth_url,
@@ -12,6 +15,7 @@ from app.models.google_calendar import GoogleCalendarToken
 from app.models.user import User
 
 # NOTA: Sin prefix="/calendar" para evitar duplicidad con router.py
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["calendar"])
 
 
@@ -41,7 +45,8 @@ def calendar_status(
 
 @router.get("/auth-url")
 def get_google_auth_url(current: User = Depends(get_current_teacher)):
-    return {"auth_url": get_auth_url(state=str(current.teacher_profile.id))}
+    # SEC-06: state firmado (antes era el id del profesor en claro y el callback no lo validaba).
+    return {"auth_url": get_auth_url(state=create_oauth_state(current.teacher_profile.id))}
 
 
 @router.post("/callback")
@@ -59,12 +64,22 @@ def calendar_callback(
             detail="Código OAuth requerido",
         )
 
-    try:
-        credentials = exchange_code_for_tokens(code, code_verifier=code_verifier)
-    except Exception as e:
+    # SEC-06: el `state` debe existir, estar firmado, no haber vencido y pertenecer a ESTE profesor.
+    state_teacher_id = decode_oauth_state(str(payload.get("state") or ""))
+    if state_teacher_id is None or state_teacher_id != current.teacher_profile.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Error al canjear el código con Google: {str(e)}",
+            detail="La autorización con Google no es válida o expiró. Vuelve a iniciar la conexión.",
+        )
+
+    try:
+        credentials = exchange_code_for_tokens(code, code_verifier=code_verifier)
+    except Exception:
+        # SEC-06: no devolver el texto de la excepcion de Google al cliente.
+        logger.exception("Calendar: error al canjear el codigo OAuth")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se pudo conectar con Google Calendar. Inténtalo de nuevo.",
         )
 
     token = (

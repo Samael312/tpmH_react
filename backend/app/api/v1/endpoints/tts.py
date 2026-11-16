@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.db.base import get_db
 from app.auth.dependencies import get_current_user
+from app.core.rate_limit import limiter, user_or_ip_key
 from app.models.user import User
 from app.models.material import Material
 from app.core.tts_service import generate_word_audio, generate_batch_audio
@@ -19,7 +20,9 @@ router = APIRouter()
 
 
 @router.post("/word", response_model=TTSWordResponse)
+@limiter.limit("60/minute;1000/day", key_func=user_or_ip_key)  # SEC-02: cada audio nuevo cuesta TTS
 async def get_word_audio(
+    request: Request,
     data: TTSWordRequest,
     current_user: User = Depends(get_current_user),
 ):
@@ -50,7 +53,9 @@ async def get_word_audio(
 
 
 @router.post("/batch", response_model=TTSBatchResponse)
+@limiter.limit("6/minute;60/day", key_func=user_or_ip_key)
 async def get_batch_audio(
+    request: Request,
     data: TTSBatchRequest,
     current_user: User = Depends(get_current_user),
 ):

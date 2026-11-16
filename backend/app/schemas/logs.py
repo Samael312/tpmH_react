@@ -1,6 +1,12 @@
 from typing import Any, Optional
 from datetime import datetime
-from pydantic import BaseModel, Field
+import json
+
+from pydantic import BaseModel, Field, field_validator
+
+# SEC-06: /logs/frontend es anonimo; sin topes cualquiera podia llenar la tabla con cargas de cientos de KB.
+MAX_LOG_STACK_CHARS = 8000
+MAX_LOG_EXTRA_JSON_CHARS = 4000
 
 
 class FrontendErrorReportRequest(BaseModel):
@@ -9,11 +15,18 @@ class FrontendErrorReportRequest(BaseModel):
     controlado o fallo de una llamada a la API).
     """
     message: str = Field(..., min_length=1, max_length=2000)
-    stack: Optional[str] = None
-    screen: str = Field(..., description="Ruta del frontend donde ocurrió, ej. /dashboard/schedule")
+    stack: Optional[str] = Field(None, max_length=MAX_LOG_STACK_CHARS)
+    screen: str = Field(..., max_length=300, description="Ruta del frontend donde ocurrió, ej. /dashboard/schedule")
     level: str = Field("error", pattern="^(error|warning)$")
-    status_code: Optional[int] = None
+    status_code: Optional[int] = Field(None, ge=0, le=599)
     extra: Optional[dict[str, Any]] = None
+
+    @field_validator("extra")
+    @classmethod
+    def limit_extra_size(cls, v):
+        if v is not None and len(json.dumps(v, default=str)) > MAX_LOG_EXTRA_JSON_CHARS:
+            raise ValueError(f"extra supera {MAX_LOG_EXTRA_JSON_CHARS} caracteres")
+        return v
 
 
 class ErrorLogResponse(BaseModel):

@@ -42,26 +42,18 @@ export function reportFrontendError(report: FrontendErrorReport) {
     const key = `${report.screen}|${report.message}`;
     if (!shouldReport(key)) return;
 
-    let token: string | undefined;
-    if (typeof document !== "undefined") {
-      token = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("access_token="))
-        ?.split("=")[1];
-    }
-
     reportingClient
       .post(
         "/logs/frontend",
         {
           message: report.message.slice(0, 2000),
-          stack: report.stack,
-          screen: report.screen,
+          stack: report.stack?.slice(0, 8000), // el backend rechaza stacks > 8000 caracteres (SEC-06)
+          screen: report.screen.slice(0, 300),
           level: report.level ?? "error",
           status_code: report.status_code,
           extra: report.extra,
         },
-        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+        { withCredentials: true } // la sesión viaja en la cookie HttpOnly (SEC-05)
       )
       .catch(() => {
         // Si ni siquiera se puede reportar el error, no hay nada más que

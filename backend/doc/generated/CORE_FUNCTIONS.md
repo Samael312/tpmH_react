@@ -85,37 +85,38 @@ Las que empiezan por `_` son privadas del módulo.
 - `_base_template(preheader: str, badge_html: str, heading: str, body_html: str)` — L65
 - `_send(to_email: str, subject: str, html: str)` — L118
 - `send_password_reset_email(to_email: str, user_name: str, reset_token: str)` — L136
-- `send_username_recovery_email(to_email: str, user_name: str, username: str)` — L148
-- `send_welcome_email(to_email: str, user_name: str, role: str)` — L162
-- `_duration_and_buffer_rows(duration_minutes: int, buffer_minutes: int=0)` — L185
-- `send_class_booking_confirmation(to_email: str, student_name: str, teacher_name: str, subject: str, class_start_local: str, duration_minutes: int, is_trial: bool=False, buff)` — L196
-- `send_class_rescheduled_student_email(to_email: str, student_name: str, teacher_name: str, old_start_local: str, new_start_local: str, changed_by: str)` — L217
-- `send_class_reminder_email(to_email: str, student_name: str, teacher_name: str, subject: str, class_start_local: str, hours_before: int=24)` — L234
-- `send_cohort_ended_email(to_email: str, student_name: str, package_name: str, reason: str, credit_returned: bool | None=None)` — L253: Para cuando una cohorte grupal termina y el alumno queda libre de elegir un nuevo paquete — a diferencia de una clase cancelada (que tiene una fecha/hora puntual), acá lo que se cancela es la cohorte completa, así que esta plantilla NO reutiliza el campo "Fecha y hora" de send_class_cancelled_email 
-- `send_class_cancelled_email(to_email: str, student_name: str, class_start_local: str, cancelled_by: str, reason: str | None=None, credit_returned: bool | None=None)` — L283
-- `send_class_no_show_email(to_email: str, student_name: str, class_start_local: str)` — L304
-- `send_homework_graded_email(to_email: str, student_name: str, homework_title: str, score: float, feedback: str | None)` — L315
-- `send_material_assigned_email(to_email: str, student_name: str, teacher_name: str, material_title: str, category: str)` — L331
-- `send_payment_receipt_email(to_email: str, student_name: str, concept: str, amount: float, payment_method: str, transaction_reference: str | None=None)` — L346
-- `send_payment_failed_email(to_email: str, student_name: str, concept: str, amount: float, rejection_reason: str)` — L365
-- `send_teacher_status_update_email(to_email: str, teacher_name: str, new_status: str, reason: str | None=None)` — L385
-- `send_support_ticket_response_email(to_email: str, user_name: str, subject: str, admin_response: str, portal_path: str)` — L406
-- `send_new_booking_teacher_email(to_email: str, teacher_name: str, student_first_name: str, student_last_name: str, student_nationality: str | None, student_phone: str | Non)` — L419
-- `send_class_rescheduled_teacher_email(to_email: str, teacher_name: str, student_name: str, old_start_local: str, new_start_local: str, changed_by: str)` — L442
-- `send_class_reminder_teacher_email(to_email: str, teacher_name: str, student_name: str, subject: str, class_start_local: str, hours_before: int=24)` — L459
-- `send_class_cancelled_teacher_email(to_email: str, teacher_name: str, student_name: str, class_start_local: str, cancelled_by: str, reason: str | None=None)` — L477
-- `send_homework_submitted_email(to_email: str, teacher_name: str, student_name: str, homework_title: str, submitted_at_local: str)` — L495
-- `send_new_review_received_email(to_email: str, teacher_name: str, student_name: str, rating: float, comment: str | None)` — L510
-- `send_withdrawal_requested_teacher_email(to_email: str, teacher_name: str, amount: float, destination_method: str)` — L524
-- `send_withdrawal_processed_email(to_email: str, teacher_name: str, status: str, amount: float, reference: str | None=None, rejection_reason: str | None=None)` — L540
-- `send_admin_new_support_ticket_email(to_email: str, user_name: str, user_role_label: str, category_label: str, subject: str, message: str)` — L564
-- `send_admin_new_teacher_pending_email(to_email: str, teacher_name: str, teacher_email: str, subjects_or_languages: list[str])` — L580
-- `send_admin_payment_pending_email(to_email: str, student_name: str, amount: float, concept: str, payment_method: str, transaction_reference: str | None=None)` — L596
-- `send_admin_withdrawal_requested_email(to_email: str, teacher_name: str, amount: float, destination_details: str)` — L617
-- `send_package_expiring_email(to_email: str, student_name: str, package_name: str, classes_remaining: int)` — L632
-- `send_new_chat_message_teacher_email(to_email: str, teacher_name: str, student_name: str, message_preview: str, conversation_url: str)` — L649
-- `send_class_confirmed_email(to_email: str, student_name: str, teacher_name: str, subject: str, class_start_local: str, duration_minutes: int, buffer_minutes: int=0)` — L663
-- `send_class_confirmed_teacher_email(to_email: str, teacher_name: str, student_name: str, subject: str, class_start_local: str, duration_minutes: int)` — L680
+- `send_verification_email(to_email: str, user_name: str, verify_token: str)` — L148
+- `send_username_recovery_email(to_email: str, user_name: str, username: str)` — L160
+- `send_welcome_email(to_email: str, user_name: str, role: str)` — L174
+- `_duration_and_buffer_rows(duration_minutes: int, buffer_minutes: int=0)` — L197
+- `send_class_booking_confirmation(to_email: str, student_name: str, teacher_name: str, subject: str, class_start_local: str, duration_minutes: int, is_trial: bool=False, buff)` — L208
+- `send_class_rescheduled_student_email(to_email: str, student_name: str, teacher_name: str, old_start_local: str, new_start_local: str, changed_by: str)` — L229
+- `send_class_reminder_email(to_email: str, student_name: str, teacher_name: str, subject: str, class_start_local: str, hours_before: int=24)` — L246
+- `send_cohort_ended_email(to_email: str, student_name: str, package_name: str, reason: str, credit_returned: bool | None=None)` — L265: Para cuando una cohorte grupal termina y el alumno queda libre de elegir un nuevo paquete — a diferencia de una clase cancelada (que tiene una fecha/hora puntual), acá lo que se cancela es la cohorte completa, así que esta plantilla NO reutiliza el campo "Fecha y hora" de send_class_cancelled_email 
+- `send_class_cancelled_email(to_email: str, student_name: str, class_start_local: str, cancelled_by: str, reason: str | None=None, credit_returned: bool | None=None)` — L295
+- `send_class_no_show_email(to_email: str, student_name: str, class_start_local: str)` — L316
+- `send_homework_graded_email(to_email: str, student_name: str, homework_title: str, score: float, feedback: str | None)` — L327
+- `send_material_assigned_email(to_email: str, student_name: str, teacher_name: str, material_title: str, category: str)` — L343
+- `send_payment_receipt_email(to_email: str, student_name: str, concept: str, amount: float, payment_method: str, transaction_reference: str | None=None)` — L358
+- `send_payment_failed_email(to_email: str, student_name: str, concept: str, amount: float, rejection_reason: str)` — L377
+- `send_teacher_status_update_email(to_email: str, teacher_name: str, new_status: str, reason: str | None=None)` — L397
+- `send_support_ticket_response_email(to_email: str, user_name: str, subject: str, admin_response: str, portal_path: str)` — L418
+- `send_new_booking_teacher_email(to_email: str, teacher_name: str, student_first_name: str, student_last_name: str, student_nationality: str | None, student_phone: str | Non)` — L431
+- `send_class_rescheduled_teacher_email(to_email: str, teacher_name: str, student_name: str, old_start_local: str, new_start_local: str, changed_by: str)` — L454
+- `send_class_reminder_teacher_email(to_email: str, teacher_name: str, student_name: str, subject: str, class_start_local: str, hours_before: int=24)` — L471
+- `send_class_cancelled_teacher_email(to_email: str, teacher_name: str, student_name: str, class_start_local: str, cancelled_by: str, reason: str | None=None)` — L489
+- `send_homework_submitted_email(to_email: str, teacher_name: str, student_name: str, homework_title: str, submitted_at_local: str)` — L507
+- `send_new_review_received_email(to_email: str, teacher_name: str, student_name: str, rating: float, comment: str | None)` — L522
+- `send_withdrawal_requested_teacher_email(to_email: str, teacher_name: str, amount: float, destination_method: str)` — L536
+- `send_withdrawal_processed_email(to_email: str, teacher_name: str, status: str, amount: float, reference: str | None=None, rejection_reason: str | None=None)` — L552
+- `send_admin_new_support_ticket_email(to_email: str, user_name: str, user_role_label: str, category_label: str, subject: str, message: str)` — L576
+- `send_admin_new_teacher_pending_email(to_email: str, teacher_name: str, teacher_email: str, subjects_or_languages: list[str])` — L592
+- `send_admin_payment_pending_email(to_email: str, student_name: str, amount: float, concept: str, payment_method: str, transaction_reference: str | None=None)` — L608
+- `send_admin_withdrawal_requested_email(to_email: str, teacher_name: str, amount: float, destination_details: str)` — L629
+- `send_package_expiring_email(to_email: str, student_name: str, package_name: str, classes_remaining: int)` — L644
+- `send_new_chat_message_teacher_email(to_email: str, teacher_name: str, student_name: str, message_preview: str, conversation_url: str)` — L661
+- `send_class_confirmed_email(to_email: str, student_name: str, teacher_name: str, subject: str, class_start_local: str, duration_minutes: int, buffer_minutes: int=0)` — L675
+- `send_class_confirmed_teacher_email(to_email: str, teacher_name: str, student_name: str, subject: str, class_start_local: str, duration_minutes: int)` — L692
 
 ## app/core/error_log.py
 
@@ -177,6 +178,10 @@ Las que empiezan por `_` son privadas del módulo.
 - `get_or_create_platform_config(db: Session)` — L81: Devuelve la fila (única) de configuración de plataforma, creándola con valores default si todavía no existe.
 - `serialize_platform_config(db: Session, config: PlatformConfig)` — L93: Convierte PlatformConfig al dict público que ya consumía el frontend desde /admin/platform-config. Extraído para poder reutilizarlo también en el endpoint agregado de landing.
 
+## app/core/rate_limit.py
+
+- `user_or_ip_key(request)` — L27: Clave de rate-limit: el usuario autenticado (claim `sub` del JWT) o, si es anonimo / el token no es valido, la IP. Asi un usuario no comparte cupo con otros detras de la misma IP (NAT, proxy) y un anonimo no puede agotar el cupo de los demas. Un token invalido o vencido cae a la IP (no se puede fals
+
 ## app/core/schedule_recalc.py
 
 - `_recalc_weekly_rows(rows, old_tz: str, new_tz: str)` — L40: Recalcula filas con day_of_week + start_time_utc/end_time_utc ("HH:MM"), preservando la hora local y recalculando el UTC para la nueva zona horaria. Devuelve un resumen de los cambios para notificar al usuario.
@@ -197,11 +202,11 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/storage.py
 
-- `_slugify(text: str)` — L66
-- `_matches_declared_type(file_bytes: bytes, content_type: str)` — L87
-- `_resource_type_for(content_type: str)` — L133: Determina el resource_type correcto de Cloudinary según el content_type. Crítico para video: si se sube con resource_type="auto" (o "raw"), Cloudinary puede aplicarle el límite de tamaño de imagen/raw del plan (mucho más bajo) en vez del límite específico para video.
-- `upload_file(file_bytes: bytes, filename: str, content_type: str, folder: str='materials', display_name: str | None=None)` — L149
-- `delete_file(public_id: str, resource_type: str='image')` — L204
+- `_slugify(text: str)` — L67
+- `_matches_declared_type(file_bytes: bytes, content_type: str)` — L88
+- `_resource_type_for(content_type: str)` — L134: Determina el resource_type correcto de Cloudinary según el content_type. Crítico para video: si se sube con resource_type="auto" (o "raw"), Cloudinary puede aplicarle el límite de tamaño de imagen/raw del plan (mucho más bajo) en vez del límite específico para video.
+- `upload_file(file_bytes: bytes, filename: str, content_type: str, folder: str='materials', display_name: str | None=None)` — L150
+- `delete_file(public_id: str, resource_type: str='image')` — L205
 
 ## app/core/teacher_students.py
 
@@ -257,14 +262,15 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/auth/dependencies.py
 
-- `get_current_user(credentials: HTTPAuthorizationCredentials=Depends(security), db: Session=Depends(get_db))` — L15: Dependencia base — verifica que el usuario está logueado. Se usa en cualquier endpoint que requiera autenticación.
-- `get_current_user_optional(credentials: Optional[HTTPAuthorizationCredentials]=Depends(optional_security), db: Session=Depends(get_db))` — L48: Igual que get_current_user pero devuelve None en vez de lanzar 401 cuando no hay token o es inválido. Se usa en endpoints que aceptan reportes tanto de usuarios logueados como anónimos (ej. reporte de errores de frontend, que puede ocurrir antes de loguearse).
-- `get_current_teacher(current_user: User=Depends(get_current_user))` — L69: Permite acceso a profesores y a teacher_admin (actúan como profesores)
-- `get_current_student(current_user: User=Depends(get_current_user))` — L78: Solo permite acceso a estudiantes
-- `get_current_staff(current_user: User=Depends(get_current_user))` — L87: Permite acceso a superadmin Y teacher_admin. Para endpoints que ambos pueden usar.
-- `get_current_teacher_or_teacher_admin(current_user: User=Depends(get_current_user))` — L105: Permite acceso a teacher Y teacher_admin. Para endpoints de gestión de clases propias.
-- `get_current_approved_teacher(current_user: User=Depends(get_current_user))` — L122: Solo permite acceso a profesores con status='approved'. Se usa donde el profesor asigna material o tareas.
-- `get_current_staff_or_teacher(current_user: User=Depends(get_current_user))` — L143: Permite acceso a superadmin, teacher_admin y teacher. Se usa para aprobar renovaciones de paquete: el staff o el propio profesor del estudiante pueden confirmar el pago y activarla.
+- `get_current_user(request: Request, credentials: Optional[HTTPAuthorizationCredentials]=Depends(optional_security), db: Session=Depends(get_db))` — L16: Dependencia base — verifica que el usuario está logueado. Se usa en cualquier endpoint que requiera autenticación. SEC-05: el token puede venir en la cabecera Authorization (clientes API, periodo de transicion) o en la cookie HttpOnly `tpm_access`.
+- `get_current_user_optional(request: Request, credentials: Optional[HTTPAuthorizationCredentials]=Depends(optional_security), db: Session=Depends(get_db))` — L57: Igual que get_current_user pero devuelve None en vez de lanzar 401 cuando no hay token o es inválido. Se usa en endpoints que aceptan reportes tanto de usuarios logueados como anónimos (ej. reporte de errores de frontend, que puede ocurrir antes de loguearse).
+- `get_current_teacher(current_user: User=Depends(get_current_user))` — L80: Permite acceso a profesores y a teacher_admin (actúan como profesores)
+- `get_current_student(current_user: User=Depends(get_current_user))` — L89: Solo permite acceso a estudiantes
+- `get_current_staff(current_user: User=Depends(get_current_user))` — L98: Permite acceso a superadmin Y teacher_admin. Para endpoints que ambos pueden usar.
+- `get_current_teacher_or_teacher_admin(current_user: User=Depends(get_current_user))` — L116: Permite acceso a teacher Y teacher_admin. Para endpoints de gestión de clases propias.
+- `get_current_approved_teacher(current_user: User=Depends(get_current_user))` — L133: Solo permite acceso a profesores con status='approved'. Se usa donde el profesor asigna material o tareas.
+- `get_current_staff_or_teacher(current_user: User=Depends(get_current_user))` — L154: Permite acceso a superadmin, teacher_admin y teacher. Se usa para aprobar renovaciones de paquete: el staff o el propio profesor del estudiante pueden confirmar el pago y activarla.
+- `require_verified_email(user)` — L172: SEC-04 (politica suave): retiros y pagos exigen email verificado. Las cuentas previas quedaron verificadas en la migracion.
 
 ## app/auth/google.py
 
@@ -273,12 +279,30 @@ Las que empiezan por `_` son privadas del módulo.
 ## app/auth/jwt.py
 
 - `create_access_token(user_id: int, role: str)` — L6: Genera un token JWT con el id y rol del usuario. Expira según ACCESS_TOKEN_EXPIRE_MINUTES del .env
-- `decode_access_token(token: str)` — L23: Verifica y decodifica un token. Retorna None si el token es inválido o expiró.
+- `create_oauth_state(teacher_id: int, purpose: str='gcal')` — L26: `state` firmado y de vida corta para el flujo OAuth (SEC-06): ata la autorizacion al profesor que la inicio y evita que un atacante inyecte su propio `code` en la sesion de otro. Usa `tid` y `typ` (no `sub`/`role`) para que NUNCA se pueda usar como token de acceso.
+- `decode_oauth_state(state: str, purpose: str='gcal')` — L42: Devuelve el teacher_id del `state`, o None si es invalido, vencido o de otro tipo.
+- `decode_access_token(token: str)` — L53: Verifica y decodifica un token. Retorna None si el token es inválido o expiró.
 
 ## app/auth/passwords.py
 
 - `hash_password(password: str)` — L3: Convierte la contraseña en un hash seguro
 - `verify_password(plain_password: str, hashed_password: str)` — L9: Compara la contraseña introducida con el hash guardado
+
+## app/auth/session.py
+
+- `hash_token(raw: str)` — L33
+- `_aware(dt: Optional[datetime])` — L37
+- `_secure()` — L43
+- `_set_cookie(response: Response, name: str, value: str, max_age: int, path: str='/')` — L49
+- `_delete_cookie(response: Response, name: str, path: str='/')` — L56
+- `allowed_origins()` — L63: Origenes del frontend que pueden hacer peticiones con cookies (mismo criterio que CORS).
+- `set_auth_cookies(response: Response, user: User, db: Session, family_id: Optional[str]=None)` — L68: Crea access + refresh, guarda el hash del refresh y fija las cookies. Devuelve el access token.
+- `clear_auth_cookies(response: Response)` — L86
+- `_revoke_family(db: Session, family_id: str)` — L92
+- `revoke_all_sessions(db: Session, user_id: int)` — L98: Cierra TODAS las sesiones del usuario (cambio/restablecimiento de contrasena, borrado de cuenta).
+- `rotate_refresh_token(db: Session, raw: Optional[str])` — L105: Valida el refresh y lo rota. Devuelve (usuario, family_id) o None si no es valido. - Desconocido o vencido -> None. - Ya revocado: dentro de la ventana de gracia se acepta (carrera entre pestanas); fuera de ella se asume   reutilizacion/robo y se revoca TODA la familia.
+- `revoke_refresh_family(db: Session, raw: Optional[str])` — L139: Logout: revoca la familia del refresh presentado (si es valido o conocido).
+- `token_from_request(request: Request)` — L149: Token de acceso de la peticion: cabecera Authorization (clientes API / transicion) o cookie.
 
 ## app/db/base.py
 

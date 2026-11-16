@@ -41,7 +41,10 @@ Cuenta de prueba sin tocar la BD real: `python -m tests.audit.run_server` (SQLit
 | `DATABASE_URL` | definida (Neon, `sslmode=require&channel_binding=require`) | **sí** | `db/base.py` (engines), Alembic | Usar el endpoint *pooled* de Neon si se activa pool (ver RESOURCE_COSTS #3) |
 | `SECRET_KEY` | definida (64 car.) | **sí** | firma JWT HS256 | Rotarla invalida todas las sesiones. No reutilizar entre entornos |
 | `ALGORITHM` | `HS256` | no | JWT | |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `10080` (7 días) | no | caducidad JWT | Sin revocación (SEC-05): considerar bajarlo |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `10080` (7 días) | no | caducidad del access token | Con refresh (SEC-05) bájalo a `30` cuando el frontend nuevo esté desplegado |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | no | caducidad del refresh token (cookie `tpm_refresh`) | |
+| `COOKIE_DOMAIN` | vacío | prod | dominio de las cookies de sesión | `.tuprofemaria.com` en producción |
+| `COOKIE_SAMESITE` | `lax` | no | SameSite de las cookies | `none` solo si front y API son de sitios distintos |
 | `ENVIRONMENT` | `development` | no | `production` oculta `/docs` y bloquea `flow_tests` | ver ⚠4 |
 | `FRONTEND_URL` | `http://localhost:3000` (antes `https://tuprofemaria.com`) | no | CORS (`main.py`), enlaces en emails | CORS permite además `http://localhost:3000` |
 | `BACKEND_URL` | `http://localhost:8000` (antes `https://api.tuprofemaria.com`) | no | enlaces absolutos | |

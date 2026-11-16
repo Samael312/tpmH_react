@@ -4,13 +4,19 @@ import { decodeToken, isTokenExpired } from "@/lib/auth";
 
 const authRoutes = ["/login", "/register"];
 
+// SEC-05: el backend fija las cookies `tpm_access` (JWT corto) y `tpm_session` (marca de sesión con refresh
+// vigente). Si el access venció pero hay `tpm_session`, se deja cargar la página: el cliente renueva con
+// POST /auth/refresh en su primera llamada 401. Sin ninguna de las dos -> login. El rol solo se puede
+// comprobar aquí mientras el access sigue vigente; la autorización real la hace siempre el backend.
 export function proxy(request: NextRequest) {
-  const token = request.cookies.get("access_token")?.value;
+  const token = request.cookies.get("tpm_access")?.value;
+  const hasSession = !!request.cookies.get("tpm_session")?.value;
   const { pathname } = request.nextUrl;
 
   const payload   = token ? decodeToken(token) : null;
   const isExpired = !token || isTokenExpired(token);
   const role      = payload?.role || "";
+  const canRenew  = isExpired && hasSession; // access vencido pero la sesión se puede renovar
 
   // ── 1. Rutas de auth (login / register) ─────────────────────────────────
   if (authRoutes.includes(pathname)) {
@@ -26,7 +32,7 @@ export function proxy(request: NextRequest) {
 
   // ── 2. Protección Estudiantes ────────────────────────────────────────────
   if (pathname.startsWith("/dashboard")) {
-    // Sin sesión → login. Sesión válida pero con rol incorrecto → unauthorized.
+    if (canRenew) return NextResponse.next();
     if (isExpired) return NextResponse.redirect(new URL("/login", request.url));
     if (role !== "student")
       return NextResponse.redirect(new URL("/unauthorized", request.url));
@@ -35,23 +41,17 @@ export function proxy(request: NextRequest) {
 
   // ── 3. Protección Profesores ─────────────────────────────────────────────
   if (pathname.startsWith("/teacher")) {
-    // Sin sesión → login. Sesión válida pero con rol incorrecto → unauthorized.
+    if (canRenew) return NextResponse.next();
     if (isExpired) return NextResponse.redirect(new URL("/login", request.url));
     if (!["teacher", "teacher_admin"].includes(role))
       return NextResponse.redirect(new URL("/unauthorized", request.url));
-
-    // El onboarding es siempre accesible para profesores autenticados
-    if (pathname.startsWith("/teacher/onboarding"))
-      return NextResponse.next();
-
-    // Para el resto de rutas /teacher/* el onboarding se verifica
-    // en el layout con una llamada a la API (el middleware no tiene
-    // acceso a la BD, así que la redirección fina la maneja el layout)
+    // El onboarding y el resto de rutas /teacher/* los resuelve el layout con una llamada a la API.
     return NextResponse.next();
   }
 
   // ── 4. Protección Admin ──────────────────────────────────────────────────
   if (pathname.startsWith("/admin")) {
+    if (canRenew) return NextResponse.next();
     if (isExpired) return NextResponse.redirect(new URL("/login", request.url));
     if (!["superadmin", "teacher_admin"].includes(role))
       return NextResponse.redirect(new URL("/unauthorized", request.url));

@@ -306,3 +306,70 @@ def volatile(client, _block_production):
     tracker = Volatile(client, SessionLocal)
     yield tracker
     tracker._run_all()
+
+
+@pytest.fixture(autouse=True)
+def _no_min_classes_for_package_change(request):
+    """Regla D7 (minimo de clases antes de cambiar de paquete): los flows parten de 0 clases completadas.
+    Los tests de test_d7_* fijan su propio valor, asi que se omiten aqui."""
+    if "d7_min_classes" in request.module.__name__:
+        yield
+        return
+    from app.db.base import SessionLocal
+    from app.models.payment_config import PlatformConfig
+    s = SessionLocal()
+    try:
+        cfg = s.query(PlatformConfig).first()
+        original = cfg.min_classes_before_package_change if cfg else None
+        if cfg:
+            cfg.min_classes_before_package_change = 0
+            s.commit()
+    finally:
+        s.close()
+    yield
+    s = SessionLocal()
+    try:
+        cfg = s.query(PlatformConfig).first()
+        if cfg:
+            cfg.min_classes_before_package_change = original
+            s.commit()
+    finally:
+        s.close()
+
+
+@pytest.fixture
+def open_teacher_availability(fixed_users):
+    """
+    El profesor fijo tiene una disponibilidad real que depende de la hora/dia: las sesiones que genera
+    cerrar una cohorte caian fuera (AUD-01: ahora se valida). Se abre 24 h todos los dias durante el
+    test y se RESTAURA lo que habia (sin dejar residuos en la BD compartida).
+    """
+    from app.db.base import SessionLocal
+    from app.models.availability import TeacherAvailability
+    from app.models.teacher import TeacherProfile
+
+    s = SessionLocal()
+    try:
+        tp = s.query(TeacherProfile).filter(TeacherProfile.user_id == fixed_users["teacher"].id).first()
+        saved = [
+            dict(day_of_week=r.day_of_week, local_day_of_week=r.local_day_of_week, start_time_utc=r.start_time_utc,
+                 end_time_utc=r.end_time_utc, is_available=r.is_available)
+            for r in s.query(TeacherAvailability).filter(TeacherAvailability.teacher_id == tp.id).all()
+        ]
+        s.query(TeacherAvailability).filter(TeacherAvailability.teacher_id == tp.id).delete()
+        for dow in range(7):
+            s.add(TeacherAvailability(teacher_id=tp.id, day_of_week=dow, local_day_of_week=dow, is_available=True,
+                                      start_time_utc="00:00", end_time_utc="00:00"))
+        s.commit()
+        teacher_id = tp.id
+    finally:
+        s.close()
+    yield
+    s = SessionLocal()
+    try:
+        s.query(TeacherAvailability).filter(TeacherAvailability.teacher_id == teacher_id).delete()
+        for row in saved:
+            s.add(TeacherAvailability(teacher_id=teacher_id, **row))
+        s.commit()
+    finally:
+        s.close()

@@ -70,6 +70,11 @@ def d14_env(db, fixed_users, volatile):
                 s.commit()
 
             if tracked["cohort_ids"]:
+                from sqlalchemy import text as _tp
+                _run(lambda: s.execute(_tp(
+                    "delete from class_participants where class_id in (select id from classes where cohort_id = any(:i))"),
+                    {"i": tracked["cohort_ids"]}))
+            if tracked["cohort_ids"]:
                 _run(lambda: s.query(Class).filter(
                     Class.cohort_id.in_(tracked["cohort_ids"])
                 ).delete(synchronize_session=False))
@@ -93,7 +98,7 @@ def d14_env(db, fixed_users, volatile):
 
 
 def test_d14_close_cohort_with_fixed_schedule_generates_all_sessions(
-    client, teacher_token, db, d14_env,
+    client, teacher_token, db, d14_env, open_teacher_availability,
 ):
     """
     Técnico + UX (decisión de negocio confirmada): paquete grupal de 3

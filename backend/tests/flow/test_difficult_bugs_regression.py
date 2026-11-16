@@ -47,31 +47,6 @@ from app.core.class_logic import get_student_booking_stage
 import app.api.v1.endpoints.payments as payments_module
 from tests.flow.conftest import auth_headers
 
-
-@pytest.fixture(autouse=True)
-def _no_min_classes_for_package_change():
-    """Regla D7 (minimo de clases antes de cambiar de paquete): estos tests parten de 0 clases completadas."""
-    from app.db.base import SessionLocal
-    from app.models.payment_config import PlatformConfig
-    s = SessionLocal()
-    try:
-        cfg = s.query(PlatformConfig).first()
-        original = cfg.min_classes_before_package_change if cfg else None
-        if cfg:
-            cfg.min_classes_before_package_change = 0
-            s.commit()
-    finally:
-        s.close()
-    yield
-    s = SessionLocal()
-    try:
-        cfg = s.query(PlatformConfig).first()
-        if cfg:
-            cfg.min_classes_before_package_change = original
-            s.commit()
-    finally:
-        s.close()
-
 pytestmark = pytest.mark.integration
 
 
@@ -288,6 +263,7 @@ def test_d2_reject_package_change_notifies_student_by_email(
 
     r_change = client.post("/api/v1/payments/notify-payment", json={
         "type": "package_change", "enrollment_id": enrollment_id, "package_id": new_pkg["id"],
+        "payment_method": "paypal",
     }, headers=auth_headers(student_token))
     assert r_change.status_code == 200, r_change.text
     payment_id = r_change.json()["payment_id"]
@@ -324,6 +300,7 @@ def test_d3_upgrade_with_prior_credit_grants_full_new_package_total_not_partial(
 
     r_change = client.post("/api/v1/payments/notify-payment", json={
         "type": "package_change", "enrollment_id": enrollment_id, "package_id": six_pkg["id"],
+        "payment_method": "paypal",
     }, headers=auth_headers(student_token))
     assert r_change.status_code == 200, r_change.text
     payment_id = r_change.json()["payment_id"]

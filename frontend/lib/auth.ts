@@ -1,5 +1,3 @@
-import Cookies from "js-cookie";
-
 interface TokenPayload {
   sub: string;    // user id
   role: string;
@@ -7,32 +5,20 @@ interface TokenPayload {
   iat: number;
 }
 
-// Decodifica el payload del JWT sin verificar firma
-// La verificación real la hace el backend
+// Decodifica el payload del JWT sin verificar firma. SOLO lo usa proxy.ts (servidor) para enrutar por rol:
+// la verificación real la hace el backend. Desde SEC-05 el token vive en una cookie HttpOnly y el
+// código del navegador ya no puede (ni debe) leerlo.
 export function decodeToken(token: string): TokenPayload | null {
   try {
-    const payload = token.split(".")[1];
-    const decoded = JSON.parse(atob(payload));
-    return decoded;
+    const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(payload));
   } catch {
     return null;
   }
 }
 
-// Verifica si el token ha expirado en el cliente
 export function isTokenExpired(token: string): boolean {
   const payload = decodeToken(token);
   if (!payload) return true;
   return Date.now() >= payload.exp * 1000;
-}
-
-// Obtiene el token actual y verifica que no ha expirado
-export function getValidToken(): string | null {
-  const token = Cookies.get("access_token");
-  if (!token) return null;
-  if (isTokenExpired(token)) {
-    Cookies.remove("access_token");
-    return null;
-  }
-  return token;
 }

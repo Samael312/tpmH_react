@@ -9,6 +9,7 @@ import ChatWidget from '@/components/chat/ChatWidget'
 import api from '@/lib/api'
 import { usePlatformConfig } from '@/hooks/useStudentData'
 import { useChatSocketBootstrap } from '@/hooks/useChat'
+import VerifyEmailBanner from '@/components/layout/VerifyEmailBanner'
 
 const FULLSCREEN_ROUTES = ['/teacher/onboarding']
 
@@ -19,7 +20,7 @@ export default function TeacherLayout({
 }) {
   const router   = useRouter()
   const pathname = usePathname()
-  const { user, token, setUser, hasHydrated } = useAuthStore()
+  const { user, setUser, hasHydrated } = useAuthStore()
   const { config: platformConfig } = usePlatformConfig()
 
   const isFullscreen = FULLSCREEN_ROUTES.some(r => pathname.startsWith(r))
@@ -41,8 +42,9 @@ export default function TeacherLayout({
 
     const currentUser = userRef.current
 
-    if (!currentUser || !token) {
-      router.push('/login')
+    if (!currentUser) {
+      // SEC-05 / UX-01: sesión por cookie HttpOnly pero sin `user` en localStorage -> se recupera de /users/me.
+      api.get('/users/me').then((r) => setUser({ ...r.data })).catch(() => router.push('/login'))
       return
     }
 
@@ -68,6 +70,7 @@ export default function TeacherLayout({
 
     setUser({
       ...latestUser,
+      id: data.id ?? latestUser.id, // el login no trae el id; el chat lo necesita (antes salía del JWT)
       onboarding_completed: done,
       timezone: teacherData?.timezone ?? latestUser.timezone,
     });
@@ -85,11 +88,11 @@ export default function TeacherLayout({
       setReady(true);
     }
   });
-}, [pathname, hasHydrated, token, router, setUser]);
+}, [pathname, hasHydrated, !!user, router, setUser]);
 
   // Si el store ya no tiene user/token (p.ej. logout en curso), no renderizar
   // el dashboard con datos nulos: mostrar spinner mientras se redirige.
-  if (hasHydrated && (!user || !token) && !isFullscreen) {
+  if (hasHydrated && !user && !isFullscreen) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
@@ -130,6 +133,7 @@ export default function TeacherLayout({
 
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
           <div className="max-w-7xl mx-auto">
+            <VerifyEmailBanner />
             {children}
           </div>
         </div>

@@ -3,43 +3,47 @@
 Generado por `backend/doc/generate_docs.py`. Prefijo global: `/api/v1`.
 Auth = dependencia FastAPI de rol detectada. `—` = sin autenticación (pública).
 
-Total de rutas: **213**
+Total de rutas: **217**
 
 
 ## Autenticación
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| POST | `/auth/forgot-password` | — | 5/hour | `forgot_password` (app/api/v1/endpoints/auth.py:251) | Inicia el flujo de recuperación de contraseña. Siempre devuelve 200 aunque el email no exista para no revelar qué emails están registrados. |
-| POST | `/auth/forgot-username` | — | 5/hour | `forgot_username` (app/api/v1/endpoints/auth.py:336) | Envía el nombre de usuario asociado a un email. Igual que forgot-password: siempre devuelve el mismo mensaje, exista o no el email, para no revelar qué correos están registrados. |
-| POST | `/auth/google` | — | 20/minute | `google_login` (app/api/v1/endpoints/auth.py:139) | Paso 1 del flujo Google (GSI). Verifica el id_token contra Google. - Si el email ya tiene cuenta -> login normal, devuelve token. - Si no existe -> NO crea la cuenta. Devuelve needs_registration=True   junto con los datos de Google para que el frontend pida   username + rol antes de crear la cuenta. |
-| POST | `/auth/google/register` | — | 10/hour | `google_register` (app/api/v1/endpoints/auth.py:196) |  |
-| POST | `/auth/login` | — | 10/minute | `login` (app/api/v1/endpoints/auth.py:88) |  |
-| POST | `/auth/register` | — | 5/hour | `register` (app/api/v1/endpoints/auth.py:37) |  |
-| POST | `/auth/reset-password` | — | 10/hour | `reset_password` (app/api/v1/endpoints/auth.py:295) | Establece la nueva contraseña usando el token del email. |
+| POST | `/auth/forgot-password` | — | 5/hour | `forgot_password` (app/api/v1/endpoints/auth.py:365) | Inicia el flujo de recuperación de contraseña. Siempre devuelve 200 aunque el email no exista para no revelar qué emails están registrados. |
+| POST | `/auth/forgot-username` | — | 5/hour | `forgot_username` (app/api/v1/endpoints/auth.py:453) | Envía el nombre de usuario asociado a un email. Igual que forgot-password: siempre devuelve el mismo mensaje, exista o no el email, para no revelar qué correos están registrados. |
+| POST | `/auth/google` | — | 20/minute | `google_login` (app/api/v1/endpoints/auth.py:213) | Paso 1 del flujo Google (GSI). Verifica el id_token contra Google. - Si el email ya tiene cuenta -> login normal, devuelve token. - Si no existe -> NO crea la cuenta. Devuelve needs_registration=True   junto con los datos de Google para que el frontend pida   username + rol antes de crear la cuenta. |
+| POST | `/auth/google/register` | — | 10/hour | `google_register` (app/api/v1/endpoints/auth.py:282) |  |
+| POST | `/auth/login` | — | 10/minute | `login` (app/api/v1/endpoints/auth.py:161) |  |
+| POST | `/auth/logout` | — | 60/minute | `logout` (app/api/v1/endpoints/auth.py:356) | SEC-05: revoca la familia del refresh token y borra las cookies. No exige estar autenticado. |
+| POST | `/auth/refresh` | — | 60/minute | `refresh_session` (app/api/v1/endpoints/auth.py:338) | SEC-05: renueva la sesion con el refresh token de la cookie HttpOnly (rotacion: el anterior queda revocado). Si el token es desconocido/vencido/reutilizado responde 401 y limpia las cookies. |
+| POST | `/auth/register` | — | 5/hour | `register` (app/api/v1/endpoints/auth.py:108) |  |
+| POST | `/auth/resend-verification` | get_current_user | 3/hour | `resend_verification` (app/api/v1/endpoints/auth.py:98) | SEC-04: reenvia el correo de verificacion al usuario autenticado (no permite enumerar cuentas). |
+| POST | `/auth/reset-password` | — | 10/hour | `reset_password` (app/api/v1/endpoints/auth.py:409) | Establece la nueva contraseña usando el token del email. |
+| POST | `/auth/verify-email` | — | 20/hour | `verify_email` (app/api/v1/endpoints/auth.py:73) | SEC-04: consume el token del correo y marca la cuenta como verificada. Un solo uso, 24 h. |
 
 ## Usuarios
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| DELETE | `/users/me` | get_current_user |  | `delete_account` (app/api/v1/endpoints/users.py:209) | Elimina la cuenta del usuario. |
-| GET | `/users/me` | get_current_user |  | `get_me` (app/api/v1/endpoints/users.py:113) | Devuelve los datos del usuario autenticado |
-| PATCH | `/users/me` | get_current_user |  | `update_profile` (app/api/v1/endpoints/users.py:119) | Actualiza datos básicos del perfil. Solo actualiza los campos que se envían (PATCH parcial). |
-| GET | `/users/me/avatar` | get_current_user |  | `get_avatar` (app/api/v1/endpoints/users.py:270) | Obtiene la URL del avatar/foto del usuario autenticado. |
-| PATCH | `/users/me/avatar` | get_current_user |  | `upload_avatar_patch` (app/api/v1/endpoints/users.py:303) | Actualiza la foto de perfil (PATCH /me/avatar). |
-| POST | `/users/me/avatar` | get_current_user |  | `upload_avatar_post` (app/api/v1/endpoints/users.py:293) | Sube o reemplaza la foto de perfil (POST /me/avatar). |
-| POST | `/users/me/change-password` | get_current_user | 10/hour | `change_password` (app/api/v1/endpoints/users.py:182) | Cambia la contraseña verificando la actual |
-| GET | `/users/me/photo` | get_current_user |  | `get_photo` (app/api/v1/endpoints/users.py:287) | Alias para obtener la foto de perfil (GET /me/photo). |
-| PATCH | `/users/me/photo` | get_current_user |  | `upload_photo_patch` (app/api/v1/endpoints/users.py:323) | Alias de compatibilidad para actualizar foto (PATCH /me/photo). |
-| POST | `/users/me/photo` | get_current_user |  | `upload_photo_post` (app/api/v1/endpoints/users.py:313) | Alias de compatibilidad para subir foto (POST /me/photo). |
-| GET | `/users/me/preferences` | get_current_student, get_current_user |  | `get_schedule_preferences` (app/api/v1/endpoints/users.py:458) | Devuelve las preferencias de horario del estudiante en UTC para que el frontend las adapte |
-| POST | `/users/me/preferences` | get_current_student, get_current_user |  | `set_schedule_preferences` (app/api/v1/endpoints/users.py:404) | El estudiante configura sus horas preferidas. Reemplaza todas las preferencias anteriores. |
-| PUT | `/users/me/preferences` | get_current_student, get_current_user |  | `update_schedule_preferences` (app/api/v1/endpoints/users.py:476) | Actualiza (reemplaza) las preferencias de horario del estudiante vía PUT. |
-| GET | `/users/me/student-profile` | get_current_user |  | `get_student_profile` (app/api/v1/endpoints/users.py:335) | Devuelve los datos del perfil de estudiante del usuario autenticado |
-| PATCH | `/users/me/student-profile` | get_current_user |  | `update_student_profile` (app/api/v1/endpoints/users.py:356) | Actualiza datos del perfil de estudiante (timezone, goal, etc.). Si cambia la zona horaria, se recalculan las preferencias de horario (StudentSchedulePreference) para preservar la hora LOCAL configurada por el estudiante — solo se recalcula el UTC equivalente. Ver core/schedule_recalc.py. |
-| GET | `/users/me/teachers` | get_current_student, get_current_user |  | `get_my_teachers` (app/api/v1/endpoints/users.py:528) | Profesores vinculados al estudiante, cada uno con su relación independiente (stage de reserva propio, enrollment activo si existe). En single-tenant siempre devuelve solo al featured teacher, para que el frontend use la misma forma de respuesta en ambos modos. |
-| DELETE | `/users/me/teachers/{teacher_username}` | get_current_student, get_current_user |  | `unlink_teacher` (app/api/v1/endpoints/users.py:642) | Termina la relación con un profesor (solo multi-tenant). Bloqueado si hay un enrollment activo o cualquier solicitud pendiente (renovación o cambio de paquete) con ese profesor. |
-| POST | `/users/me/teachers/{teacher_username}` | get_current_student, get_current_user |  | `link_teacher` (app/api/v1/endpoints/users.py:601) | Vincula al estudiante con un profesor adicional (solo multi-tenant). Idempotente — si el vínculo ya existe, no falla. |
+| DELETE | `/users/me` | get_current_user |  | `delete_account` (app/api/v1/endpoints/users.py:261) | Elimina la cuenta del usuario. |
+| GET | `/users/me` | get_current_user |  | `get_me` (app/api/v1/endpoints/users.py:115) | Devuelve los datos del usuario autenticado |
+| PATCH | `/users/me` | get_current_user |  | `update_profile` (app/api/v1/endpoints/users.py:121) | Actualiza datos básicos del perfil. Solo actualiza los campos que se envían (PATCH parcial). |
+| GET | `/users/me/avatar` | get_current_user |  | `get_avatar` (app/api/v1/endpoints/users.py:335) | Obtiene la URL del avatar/foto del usuario autenticado. |
+| PATCH | `/users/me/avatar` | get_current_user |  | `upload_avatar_patch` (app/api/v1/endpoints/users.py:368) | Actualiza la foto de perfil (PATCH /me/avatar). |
+| POST | `/users/me/avatar` | get_current_user |  | `upload_avatar_post` (app/api/v1/endpoints/users.py:358) | Sube o reemplaza la foto de perfil (POST /me/avatar). |
+| POST | `/users/me/change-password` | get_current_user | 10/hour | `change_password` (app/api/v1/endpoints/users.py:184) | Cambia la contraseña verificando la actual |
+| GET | `/users/me/photo` | get_current_user |  | `get_photo` (app/api/v1/endpoints/users.py:352) | Alias para obtener la foto de perfil (GET /me/photo). |
+| PATCH | `/users/me/photo` | get_current_user |  | `upload_photo_patch` (app/api/v1/endpoints/users.py:388) | Alias de compatibilidad para actualizar foto (PATCH /me/photo). |
+| POST | `/users/me/photo` | get_current_user |  | `upload_photo_post` (app/api/v1/endpoints/users.py:378) | Alias de compatibilidad para subir foto (POST /me/photo). |
+| GET | `/users/me/preferences` | get_current_student, get_current_user |  | `get_schedule_preferences` (app/api/v1/endpoints/users.py:523) | Devuelve las preferencias de horario del estudiante en UTC para que el frontend las adapte |
+| POST | `/users/me/preferences` | get_current_student, get_current_user |  | `set_schedule_preferences` (app/api/v1/endpoints/users.py:469) | El estudiante configura sus horas preferidas. Reemplaza todas las preferencias anteriores. |
+| PUT | `/users/me/preferences` | get_current_student, get_current_user |  | `update_schedule_preferences` (app/api/v1/endpoints/users.py:541) | Actualiza (reemplaza) las preferencias de horario del estudiante vía PUT. |
+| GET | `/users/me/student-profile` | get_current_user |  | `get_student_profile` (app/api/v1/endpoints/users.py:400) | Devuelve los datos del perfil de estudiante del usuario autenticado |
+| PATCH | `/users/me/student-profile` | get_current_user |  | `update_student_profile` (app/api/v1/endpoints/users.py:421) | Actualiza datos del perfil de estudiante (timezone, goal, etc.). Si cambia la zona horaria, se recalculan las preferencias de horario (StudentSchedulePreference) para preservar la hora LOCAL configurada por el estudiante — solo se recalcula el UTC equivalente. Ver core/schedule_recalc.py. |
+| GET | `/users/me/teachers` | get_current_student, get_current_user |  | `get_my_teachers` (app/api/v1/endpoints/users.py:593) | Profesores vinculados al estudiante, cada uno con su relación independiente (stage de reserva propio, enrollment activo si existe). En single-tenant siempre devuelve solo al featured teacher, para que el frontend use la misma forma de respuesta en ambos modos. |
+| DELETE | `/users/me/teachers/{teacher_username}` | get_current_student, get_current_user |  | `unlink_teacher` (app/api/v1/endpoints/users.py:707) | Termina la relación con un profesor (solo multi-tenant). Bloqueado si hay un enrollment activo o cualquier solicitud pendiente (renovación o cambio de paquete) con ese profesor. |
+| POST | `/users/me/teachers/{teacher_username}` | get_current_student, get_current_user |  | `link_teacher` (app/api/v1/endpoints/users.py:666) | Vincula al estudiante con un profesor adicional (solo multi-tenant). Idempotente — si el vínculo ya existe, no falla. |
 
 ## Profesores
 
@@ -154,15 +158,15 @@ Total de rutas: **213**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| POST | `/chipi/chat` | get_current_user_optional |  | `chat_with_chipi` (app/api/v1/endpoints/chipi.py:26) | Endpoint principal del chatbot Chipi. Soporta streaming y respuesta completa. |
+| POST | `/chipi/chat` | get_current_user_optional | 20/minute;300/day | `chat_with_chipi` (app/api/v1/endpoints/chipi.py:30) | Endpoint principal del chatbot Chipi. Soporta streaming y respuesta completa. |
 
 ## Text-to-Speech
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| POST | `/tts/batch` | get_current_user |  | `get_batch_audio` (app/api/v1/endpoints/tts.py:52) | Genera audio para múltiples palabras de una vez. Ideal para precargar un set de vocabulario completo. |
-| POST | `/tts/vocabulary/{material_id}` | get_current_user |  | `get_vocabulary_audio` (app/api/v1/endpoints/tts.py:104) | Genera audio para todas las palabras de un material de tipo vocabulario. |
-| POST | `/tts/word` | get_current_user |  | `get_word_audio` (app/api/v1/endpoints/tts.py:21) | Genera o recupera el audio de alta calidad para una palabra. Cualquier usuario autenticado puede usarlo. |
+| POST | `/tts/batch` | get_current_user | 6/minute;60/day | `get_batch_audio` (app/api/v1/endpoints/tts.py:55) | Genera audio para múltiples palabras de una vez. Ideal para precargar un set de vocabulario completo. |
+| POST | `/tts/vocabulary/{material_id}` | get_current_user |  | `get_vocabulary_audio` (app/api/v1/endpoints/tts.py:109) | Genera audio para todas las palabras de un material de tipo vocabulario. |
+| POST | `/tts/word` | get_current_user | 60/minute;1000/day | `get_word_audio` (app/api/v1/endpoints/tts.py:22) | Genera o recupera el audio de alta calidad para una palabra. Cualquier usuario autenticado puede usarlo. |
 
 ## Paquetes
 
@@ -184,12 +188,12 @@ Total de rutas: **213**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| GET | `/calendar/auth-url` | get_current_teacher, get_current_user |  | `get_google_auth_url` (app/api/v1/endpoints/calendar.py:42) |  |
-| POST | `/calendar/callback` | get_current_teacher, get_current_user |  | `calendar_callback` (app/api/v1/endpoints/calendar.py:47) |  |
-| POST | `/calendar/disconnect` | get_current_teacher, get_current_user |  | `disconnect_calendar` (app/api/v1/endpoints/calendar.py:142) |  |
-| GET | `/calendar/status` | get_current_teacher, get_current_user |  | `calendar_status` (app/api/v1/endpoints/calendar.py:18) |  |
-| POST | `/calendar/sync` | get_current_teacher, get_current_user |  | `manual_sync` (app/api/v1/endpoints/calendar.py:117) | Fuerza una sincronización manual inmediata para este profesor. |
-| POST | `/calendar/toggle` | get_current_teacher, get_current_user |  | `toggle_sync` (app/api/v1/endpoints/calendar.py:95) |  |
+| GET | `/calendar/auth-url` | get_current_teacher, get_current_user |  | `get_google_auth_url` (app/api/v1/endpoints/calendar.py:46) |  |
+| POST | `/calendar/callback` | get_current_teacher, get_current_user |  | `calendar_callback` (app/api/v1/endpoints/calendar.py:52) |  |
+| POST | `/calendar/disconnect` | get_current_teacher, get_current_user |  | `disconnect_calendar` (app/api/v1/endpoints/calendar.py:157) |  |
+| GET | `/calendar/status` | get_current_teacher, get_current_user |  | `calendar_status` (app/api/v1/endpoints/calendar.py:22) |  |
+| POST | `/calendar/sync` | get_current_teacher, get_current_user |  | `manual_sync` (app/api/v1/endpoints/calendar.py:132) | Fuerza una sincronización manual inmediata para este profesor. |
+| POST | `/calendar/toggle` | get_current_teacher, get_current_user |  | `toggle_sync` (app/api/v1/endpoints/calendar.py:110) |  |
 
 ## AI Tools
 
@@ -201,24 +205,24 @@ Total de rutas: **213**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| GET | `/payments/admin/withdrawals/pending` | get_current_staff, get_current_user |  | `get_pending_withdrawals` (app/api/v1/endpoints/payments.py:2291) |  |
-| POST | `/payments/admin/withdrawals/{withdrawal_id}/process` | get_current_staff, get_current_user |  | `process_withdrawal_v2` (app/api/v1/endpoints/payments.py:1465) |  |
-| POST | `/payments/book` | get_current_student, get_current_user |  | `book_class` (app/api/v1/endpoints/payments.py:484) |  |
-| GET | `/payments/booking-status` | get_current_student, get_current_user |  | `get_booking_status` (app/api/v1/endpoints/payments.py:1511) |  |
-| GET | `/payments/config` | — |  | `get_payment_config` (app/api/v1/endpoints/payments.py:422) |  |
-| PATCH | `/payments/config` | get_current_staff, get_current_user |  | `update_payment_config` (app/api/v1/endpoints/payments.py:454) |  |
-| GET | `/payments/history` | get_current_staff_or_teacher, get_current_user |  | `get_payments_history` (app/api/v1/endpoints/payments.py:884) | Historial de pagos ya resueltos (aprobados o rechazados). Teacher solo ve los suyos; staff ve todos. |
-| POST | `/payments/manual-grant` | get_current_staff_or_teacher, get_current_user |  | `manual_grant_payment` (app/api/v1/endpoints/payments.py:1289) |  |
-| GET | `/payments/my-income` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_income` (app/api/v1/endpoints/payments.py:1361) |  |
-| GET | `/payments/my-payments` | get_current_student, get_current_user |  | `get_my_payments_student` (app/api/v1/endpoints/payments.py:1351) |  |
-| GET | `/payments/my-wallet` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_wallet` (app/api/v1/endpoints/payments.py:1380) |  |
-| GET | `/payments/my-withdrawals` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_withdrawals` (app/api/v1/endpoints/payments.py:1406) |  |
-| POST | `/payments/notify-payment` | get_current_student, get_current_user |  | `notify_payment` (app/api/v1/endpoints/payments.py:1609) |  |
-| GET | `/payments/pending-review` | get_current_staff_or_teacher, get_current_user |  | `get_payments_pending_review` (app/api/v1/endpoints/payments.py:830) |  |
-| POST | `/payments/request-refund-cohort-cancelled` | get_current_student, get_current_user |  | `request_refund_cohort_cancelled` (app/api/v1/endpoints/payments.py:2211) | Reembolso por una cohorte grupal que el profesor canceló (F3 del roadmap de verificación). A diferencia del reembolso por profesor suspendido, acá siempre es el 100% de lo pagado: el grupo nunca llegó a arrancar (o se abortó), no hay "clases ya tomadas" que descontar. Mientras este reembolso esté pe |
-| POST | `/payments/request-refund-teacher-suspended` | get_current_student, get_current_user |  | `request_refund_teacher_suspended` (app/api/v1/endpoints/payments.py:2087) | Reembolso disparado por la suspensión/rechazo del profesor del estudiante (no por un downgrade de paquete). Reutiliza el mismo mecanismo que el "reembolso completo" de cambio de paquete (Payment payment_type="refund" sin ningún paquete nuevo solicitado): al aprobarse, /payments/validate/{id} cancela |
-| POST | `/payments/request-withdrawal` | get_current_teacher_or_teacher_admin, get_current_user |  | `request_withdrawal_v2` (app/api/v1/endpoints/payments.py:1416) |  |
-| PATCH | `/payments/{payment_id}/validate` | get_current_staff, get_current_user |  | `validate_payment` (app/api/v1/endpoints/payments.py:945) | NEG-01: solo `superadmin` y `teacher_admin` aprueban/rechazan pagos (los profesores normales ven el pago como «pendiente de revisión»). Un `teacher_admin` no valida los pagos de sus propias clases: los resuelve el `superadmin`. |
+| GET | `/payments/admin/withdrawals/pending` | get_current_staff, get_current_user |  | `get_pending_withdrawals` (app/api/v1/endpoints/payments.py:2295) |  |
+| POST | `/payments/admin/withdrawals/{withdrawal_id}/process` | get_current_staff, get_current_user |  | `process_withdrawal_v2` (app/api/v1/endpoints/payments.py:1468) |  |
+| POST | `/payments/book` | get_current_student, get_current_user |  | `book_class` (app/api/v1/endpoints/payments.py:486) |  |
+| GET | `/payments/booking-status` | get_current_student, get_current_user |  | `get_booking_status` (app/api/v1/endpoints/payments.py:1514) |  |
+| GET | `/payments/config` | — |  | `get_payment_config` (app/api/v1/endpoints/payments.py:424) |  |
+| PATCH | `/payments/config` | get_current_staff, get_current_user |  | `update_payment_config` (app/api/v1/endpoints/payments.py:456) |  |
+| GET | `/payments/history` | get_current_staff_or_teacher, get_current_user |  | `get_payments_history` (app/api/v1/endpoints/payments.py:886) | Historial de pagos ya resueltos (aprobados o rechazados). Teacher solo ve los suyos; staff ve todos. |
+| POST | `/payments/manual-grant` | get_current_staff_or_teacher, get_current_user |  | `manual_grant_payment` (app/api/v1/endpoints/payments.py:1291) |  |
+| GET | `/payments/my-income` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_income` (app/api/v1/endpoints/payments.py:1363) |  |
+| GET | `/payments/my-payments` | get_current_student, get_current_user |  | `get_my_payments_student` (app/api/v1/endpoints/payments.py:1353) |  |
+| GET | `/payments/my-wallet` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_wallet` (app/api/v1/endpoints/payments.py:1382) |  |
+| GET | `/payments/my-withdrawals` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_withdrawals` (app/api/v1/endpoints/payments.py:1408) |  |
+| POST | `/payments/notify-payment` | get_current_student, get_current_user |  | `notify_payment` (app/api/v1/endpoints/payments.py:1612) |  |
+| GET | `/payments/pending-review` | get_current_staff_or_teacher, get_current_user |  | `get_payments_pending_review` (app/api/v1/endpoints/payments.py:832) |  |
+| POST | `/payments/request-refund-cohort-cancelled` | get_current_student, get_current_user |  | `request_refund_cohort_cancelled` (app/api/v1/endpoints/payments.py:2215) | Reembolso por una cohorte grupal que el profesor canceló (F3 del roadmap de verificación). A diferencia del reembolso por profesor suspendido, acá siempre es el 100% de lo pagado: el grupo nunca llegó a arrancar (o se abortó), no hay "clases ya tomadas" que descontar. Mientras este reembolso esté pe |
+| POST | `/payments/request-refund-teacher-suspended` | get_current_student, get_current_user |  | `request_refund_teacher_suspended` (app/api/v1/endpoints/payments.py:2091) | Reembolso disparado por la suspensión/rechazo del profesor del estudiante (no por un downgrade de paquete). Reutiliza el mismo mecanismo que el "reembolso completo" de cambio de paquete (Payment payment_type="refund" sin ningún paquete nuevo solicitado): al aprobarse, /payments/validate/{id} cancela |
+| POST | `/payments/request-withdrawal` | get_current_teacher_or_teacher_admin, get_current_user |  | `request_withdrawal_v2` (app/api/v1/endpoints/payments.py:1418) |  |
+| PATCH | `/payments/{payment_id}/validate` | get_current_staff, get_current_user |  | `validate_payment` (app/api/v1/endpoints/payments.py:947) | NEG-01: solo `superadmin` y `teacher_admin` aprueban/rechazan pagos (los profesores normales ven el pago como «pendiente de revisión»). Un `teacher_admin` no valida los pagos de sus propias clases: los resuelve el `superadmin`. |
 
 ## Clases grupales
 
@@ -226,7 +230,7 @@ Total de rutas: **213**
 |---|---|---|---|---|---|
 | POST | `/cohorts/` | get_current_teacher_or_teacher_admin, get_current_user |  | `create_cohort` (app/api/v1/endpoints/cohorts.py:212) |  |
 | GET | `/cohorts/available` | — |  | `get_available_cohorts` (app/api/v1/endpoints/cohorts.py:1042) | Cohortes con cupo para un paquete grupal específico. D12: antes solo se listaban las 'filling' -- ahora también se listan 'confirmed'/ 'in_progress' con cupo libre, para permitir inscripción tardía (con precio prorrateado, ver _to_cohort_response / _late_join_pricing). |
-| GET | `/cohorts/migration-quote` | get_current_student, get_current_user |  | `get_migration_quote` (app/api/v1/endpoints/cohorts.py:1205) |  |
+| GET | `/cohorts/migration-quote` | get_current_student, get_current_user |  | `get_migration_quote` (app/api/v1/endpoints/cohorts.py:1206) |  |
 | GET | `/cohorts/sessions/{class_id}/participants` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_session_participants` (app/api/v1/endpoints/cohorts.py:967) | Lista los integrantes de UNA sesión grupal puntual con su asistencia individual — antes no existía forma de ver esto desglosado por alumno, el único estado disponible era el de la Class compartida (todo o nada). |
 | PATCH | `/cohorts/sessions/{class_id}/participants/{student_id}/attendance` | get_current_teacher_or_teacher_admin, get_current_user |  | `mark_participant_attendance` (app/api/v1/endpoints/cohorts.py:1000) | El profesor marca la asistencia de UN alumno en una sesión grupal — a diferencia del estado general de la Class (que aplica a todos por igual), esto permite reflejar que, por ejemplo, 4 de 6 asistieron. Solo admite "confirmed" (asistió) o "no_show" (no asistió); para sacar a un alumno de la sesión e |
 | GET | `/cohorts/teacher` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_cohorts` (app/api/v1/endpoints/cohorts.py:298) |  |
@@ -236,7 +240,7 @@ Total de rutas: **213**
 | POST | `/cohorts/{cohort_id}/close` | get_current_teacher_or_teacher_admin, get_current_user |  | `close_cohort_endpoint` (app/api/v1/endpoints/cohorts.py:397) | El profesor cierra la cohorte con los integrantes actuales, sin importar si llegó al mínimo definido al crearla. Solo se bloquea si la cohorte quedó vacía (en ese caso corresponde cancelarla, no cerrarla) o si ya no está en estado "filling". |
 | POST | `/cohorts/{cohort_id}/complete` | get_current_teacher_or_teacher_admin, get_current_user |  | `complete_cohort_endpoint` (app/api/v1/endpoints/cohorts.py:593) | El profesor marca una cohorte como finalizada — el paquete/las sesiones ya cumplieron su ciclo (antes no existía ningún estado de "terminó normalmente", solo "cancelada" antes de arrancar). Si al finalizar el grupo quedó por debajo del mínimo declarado, se cancela el enrollment de cada alumno restan |
 | POST | `/cohorts/{cohort_id}/enroll` | get_current_student, get_current_user |  | `enroll_in_cohort` (app/api/v1/endpoints/cohorts.py:1066) | El estudiante se inscribe en una cohorte abierta. Crea el Enrollment (unpaid, igual que la compra inicial de un paquete individual) y un Payment pendiente de revisión — mismo circuito manual que cualquier otro pago de la plataforma. |
-| POST | `/cohorts/{cohort_id}/leave` | get_current_student, get_current_user |  | `leave_cohort` (app/api/v1/endpoints/cohorts.py:1160) | El estudiante abandona una cohorte grupal POR COMPLETO (no solo una sesión puntual, ver DELETE /classes/{id}/leave para eso): cancela su Enrollment y libera su cupo en todas las sesiones futuras vía release_cohort_seat. Al quedar sin enrollment activo con este profesor, get_student_booking_stage lo  |
+| POST | `/cohorts/{cohort_id}/leave` | get_current_student, get_current_user |  | `leave_cohort` (app/api/v1/endpoints/cohorts.py:1161) | El estudiante abandona una cohorte grupal POR COMPLETO (no solo una sesión puntual, ver DELETE /classes/{id}/leave para eso): cancela su Enrollment y libera su cupo en todas las sesiones futuras vía release_cohort_seat. Al quedar sin enrollment activo con este profesor, get_student_booking_stage lo  |
 | GET | `/cohorts/{cohort_id}/members` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_cohort_members` (app/api/v1/endpoints/cohorts.py:309) | Integrantes actuales de la cohorte (Enrollments activos, no cancelados), sin importar su status ('filling', 'confirmed', etc). A diferencia de /sessions/{class_id}/participants, esto funciona incluso ANTES de que exista ninguna sesión agendada — es lo que permite mostrar en vivo, mientras el grupo s |
 | GET | `/cohorts/{cohort_id}/recurring-candidates` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_recurring_candidates` (app/api/v1/endpoints/cohorts.py:352) | D14: para paquetes grupales con group_schedule_mode="fixed", devuelve las próximas `count` fechas UTC que coinciden con el patrón semanal configurado en el paquete, marcando cuáles ya están libres en la agenda del profesor. El modal de cierre de cohorte usa esto para que el profesor elija a partir d |
 | POST | `/cohorts/{cohort_id}/reopen` | get_current_teacher_or_teacher_admin, get_current_user |  | `reopen_cohort_endpoint` (app/api/v1/endpoints/cohorts.py:514) | Corrección QA: revierte un cierre manual (close_cohort_endpoint) si todavía no arrancó ninguna sesión — por ejemplo si el profesor cerró por error o decide seguir aceptando inscripciones. Vuelve la cohorte a "filling" y limpia la fecha de inicio/cierre para que un cierre posterior tenga que fijarlas |
@@ -313,28 +317,28 @@ Total de rutas: **213**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| GET | `/logs` | get_current_staff, get_current_user |  | `list_error_logs` (app/api/v1/endpoints/logs.py:48) | Listado paginado para la pantalla de Logs en /admin (superadmin y teacher_admin). |
-| POST | `/logs/frontend` | get_current_user_optional |  | `report_frontend_error` (app/api/v1/endpoints/logs.py:22) | El frontend reporta acá los crashes de React no controlados y los fallos de llamadas a la API (4xx/5xx). No requiere estar logueado (puede ocurrir en /login o antes de cargar la sesión), pero si hay un usuario identificado por el token, queda asociado al log. |
-| GET | `/logs/stats` | get_current_staff, get_current_user |  | `get_error_log_stats` (app/api/v1/endpoints/logs.py:118) | Contadores rápidos para las StatCards de la pantalla de Logs. |
-| GET | `/logs/users` | get_current_staff, get_current_user |  | `list_error_log_users` (app/api/v1/endpoints/logs.py:96) | Usuarios que tienen al menos un error registrado, con su nombre y apellido vigentes (se busca en `users`, no en el snapshot guardado en el log, para que si el usuario cambió su nombre el filtro siempre muestre el actual). Alimenta el <select> del filtro por usuario en la pantalla de Logs. |
+| GET | `/logs` | get_current_staff, get_current_user |  | `list_error_logs` (app/api/v1/endpoints/logs.py:51) | Listado paginado para la pantalla de Logs en /admin (superadmin y teacher_admin). |
+| POST | `/logs/frontend` | get_current_user_optional | 30/minute | `report_frontend_error` (app/api/v1/endpoints/logs.py:23) | El frontend reporta acá los crashes de React no controlados y los fallos de llamadas a la API (4xx/5xx). No requiere estar logueado (puede ocurrir en /login o antes de cargar la sesión), pero si hay un usuario identificado por el token, queda asociado al log. |
+| GET | `/logs/stats` | get_current_staff, get_current_user |  | `get_error_log_stats` (app/api/v1/endpoints/logs.py:121) | Contadores rápidos para las StatCards de la pantalla de Logs. |
+| GET | `/logs/users` | get_current_staff, get_current_user |  | `list_error_log_users` (app/api/v1/endpoints/logs.py:99) | Usuarios que tienen al menos un error registrado, con su nombre y apellido vigentes (se busca en `users`, no en el snapshot guardado en el log, para que si el usuario cambió su nombre el filtro siempre muestre el actual). Alimenta el <select> del filtro por usuario en la pantalla de Logs. |
 
 ## Chat interno
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| GET | `/chat/admin/conversations` | get_current_staff, get_current_user |  | `admin_list_conversations` (app/api/v1/endpoints/chat.py:499) |  |
-| GET | `/chat/admin/conversations/{conversation_id}` | get_current_staff, get_current_user |  | `admin_get_conversation` (app/api/v1/endpoints/chat.py:526) |  |
-| GET | `/chat/admin/conversations/{conversation_id}/messages` | get_current_staff, get_current_user |  | `admin_get_conversation_messages` (app/api/v1/endpoints/chat.py:538) |  |
-| GET | `/chat/conversations` | get_current_user |  | `list_conversations` (app/api/v1/endpoints/chat.py:150) |  |
-| GET | `/chat/conversations/direct/{other_username}` | get_current_user |  | `open_direct_conversation` (app/api/v1/endpoints/chat.py:169) |  |
-| GET | `/chat/conversations/group/{cohort_id}` | get_current_user |  | `open_group_conversation` (app/api/v1/endpoints/chat.py:180) |  |
-| GET | `/chat/conversations/unread-count` | get_current_user |  | `unread_count` (app/api/v1/endpoints/chat.py:160) |  |
-| GET | `/chat/conversations/{conversation_id}/messages` | get_current_user |  | `get_messages` (app/api/v1/endpoints/chat.py:191) |  |
-| POST | `/chat/conversations/{conversation_id}/messages` | get_current_user | 30/minute | `post_message` (app/api/v1/endpoints/chat.py:345) | Envío por REST: fallback si el WS global no está conectado o no devolvió el eco a tiempo (ver store/chatStore.ts). Comparte todo el camino con el WS (`_send_and_fanout`) y es idempotente por `client_id`, así que reintentar un mensaje que en realidad sí se guardó no lo duplica. |
-| POST | `/chat/conversations/{conversation_id}/read` | get_current_user |  | `mark_conversation_read` (app/api/v1/endpoints/chat.py:212) |  |
+| GET | `/chat/admin/conversations` | get_current_staff, get_current_user |  | `admin_list_conversations` (app/api/v1/endpoints/chat.py:531) |  |
+| GET | `/chat/admin/conversations/{conversation_id}` | get_current_staff, get_current_user |  | `admin_get_conversation` (app/api/v1/endpoints/chat.py:558) |  |
+| GET | `/chat/admin/conversations/{conversation_id}/messages` | get_current_staff, get_current_user |  | `admin_get_conversation_messages` (app/api/v1/endpoints/chat.py:570) |  |
+| GET | `/chat/conversations` | get_current_user |  | `list_conversations` (app/api/v1/endpoints/chat.py:153) |  |
+| GET | `/chat/conversations/direct/{other_username}` | get_current_user |  | `open_direct_conversation` (app/api/v1/endpoints/chat.py:172) |  |
+| GET | `/chat/conversations/group/{cohort_id}` | get_current_user |  | `open_group_conversation` (app/api/v1/endpoints/chat.py:183) |  |
+| GET | `/chat/conversations/unread-count` | get_current_user |  | `unread_count` (app/api/v1/endpoints/chat.py:163) |  |
+| GET | `/chat/conversations/{conversation_id}/messages` | get_current_user |  | `get_messages` (app/api/v1/endpoints/chat.py:194) |  |
+| POST | `/chat/conversations/{conversation_id}/messages` | get_current_user | 30/minute | `post_message` (app/api/v1/endpoints/chat.py:348) | Envío por REST: fallback si el WS global no está conectado o no devolvió el eco a tiempo (ver store/chatStore.ts). Comparte todo el camino con el WS (`_send_and_fanout`) y es idempotente por `client_id`, así que reintentar un mensaje que en realidad sí se guardó no lo duplica. |
+| POST | `/chat/conversations/{conversation_id}/read` | get_current_user |  | `mark_conversation_read` (app/api/v1/endpoints/chat.py:215) |  |
 
 ## -
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| WS | `/chat/ws` | — |  | `chat_websocket` (app/api/v1/endpoints/chat.py:420) |  |
+| WS | `/chat/ws` | — |  | `chat_websocket` (app/api/v1/endpoints/chat.py:429) |  |

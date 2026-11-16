@@ -12,6 +12,8 @@ from app.models.homework import Homework, HomeworkAssignment
 from app.models.review import Review
 from app.models.student_preferences import StudentSchedulePreference
 from app.models.password_reset import PasswordResetToken
+from app.models.email_verification import EmailVerificationToken
+from app.models.refresh_token import RefreshToken
 from app.models.payment_config import PaymentConfig
 from app.models.google_calendar import GoogleCalendarToken
 from app.models.student_teacher_link import StudentTeacherLink

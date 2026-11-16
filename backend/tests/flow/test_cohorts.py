@@ -46,6 +46,15 @@ def clean_cohort_slate(db, fixed_users, volatile):
         from app.db.base import SessionLocal
         s = SessionLocal()
         try:
+            from sqlalchemy import text as _tp
+            # cerrar una cohorte crea sesiones (classes) con participantes: sin borrarlos antes, las FK impiden
+            # limpiar enrollments/cohortes y los residuos rompen los tests siguientes.
+            s.execute(_tp("delete from class_participants where student_id = :sid or enrollment_id in "
+                          "(select id from enrollments where teacher_id = :tid and student_id = :sid) or class_id in "
+                          "(select id from classes where cohort_id in (select id from group_cohorts where teacher_id = :tid))"),
+                      {"sid": state["student_id"], "tid": state["teacher_id"]})
+            s.execute(_tp("delete from classes where cohort_id in (select id from group_cohorts where teacher_id = :tid)"),
+                      {"tid": state["teacher_id"]})
             s.query(Payment).filter(Payment.student_id == state["student_id"]).delete(synchronize_session=False)
             s.query(Enrollment).filter(
                 Enrollment.teacher_id == state["teacher_id"], Enrollment.student_id == state["student_id"]
@@ -238,7 +247,8 @@ def test_group_to_individual_unlimited_migration_releases_cohort_seat(
 
 
 def test_cohort_close_and_cancel(
-    client, teacher_token, student_token, clean_cohort_slate,
+    client, teacher_token, student_token, superadmin_token, fixed_users, clean_cohort_slate,
+    open_teacher_availability,
 ):
     """
     Técnico: dos ciclos de vida distintos de una cohorte "filling":
@@ -276,6 +286,13 @@ def test_cohort_close_and_cancel(
         "cohort_id": cohort_a_id, "payment_method": "paypal", "transaction_reference": "flow-tests-close-ref",
     }, headers=auth_headers(student_token))
     assert r_enroll_a.status_code == 201, r_enroll_a.text
+
+    # Cerrar exige al menos un alumno con pago confirmado: el staff aprueba la inscripción.
+    pend = client.get("/api/v1/payments/pending-review", headers=auth_headers(superadmin_token)).json()
+    pid_a = [p for p in pend if p["payment_type"] == "group_enrollment"
+             and p["student_username"] == fixed_users["student"].username][0]["payment_id"]
+    assert client.patch(f"/api/v1/payments/{pid_a}/validate", json={"action": "approve"},
+                        headers=auth_headers(superadmin_token)).status_code == 200
 
     r_close = client.post(f"/api/v1/cohorts/{cohort_a_id}/close", json={
         "start_date": "2026-01-15T15:00:00Z",

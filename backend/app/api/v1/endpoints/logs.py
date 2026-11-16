@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 
 from app.db.base import get_db
+from app.core.rate_limit import limiter
 from app.auth.dependencies import get_current_staff, get_current_user_optional
 from app.models.user import User
 from app.models.error_log import ErrorLog
@@ -20,7 +21,9 @@ router = APIRouter()
 
 
 @router.post("/frontend", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("30/minute")  # SEC-06: endpoint anonimo
 def report_frontend_error(
+    request: Request,
     payload: FrontendErrorReportRequest,
     current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db),

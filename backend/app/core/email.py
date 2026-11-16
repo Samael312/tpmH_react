@@ -145,6 +145,18 @@ def send_password_reset_email(to_email: str, user_name: str, reset_token: str) -
     return _send(to_email, f"Restablecer contraseña — {PLATFORM_NAME}", html)
 
 
+def send_verification_email(to_email: str, user_name: str, verify_token: str) -> bool:
+    verify_url = f"{settings.FRONTEND_URL}/verify-email?token={verify_token}"
+    body = f"""
+      <p>Hola {user_name},</p>
+      <p>Confirma que este correo es tuyo para poder pedir retiros, enviar pagos y vincular Google a tu cuenta.
+      El enlace expira en 24 horas. Si no creaste una cuenta, ignora este mensaje.</p>
+      {_cta_button("Verificar mi email", verify_url)}
+    """
+    html = _base_template("Verifica tu email", _badge("Seguridad", COLOR_BLUE), "Verifica tu email", body)
+    return _send(to_email, f"Verifica tu email — {PLATFORM_NAME}", html)
+
+
 def send_username_recovery_email(to_email: str, user_name: str, username: str) -> bool:
     body = f"""
       <p>Hola {user_name},</p>

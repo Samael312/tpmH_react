@@ -107,7 +107,7 @@ def _mk_user(db, role, username):
     u = User(
         email=f"{username}@audit-tpm.com", username=username, name=username.title(),
         surname="Audit", password_hash=hash_password("Password123"),
-        role=UserRole(role), is_active=True, onboarding_completed=True,
+        role=UserRole(role), is_active=True, onboarding_completed=True, is_verified=True,
     )
     db.add(u)
     db.flush()

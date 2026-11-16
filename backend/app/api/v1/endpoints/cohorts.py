@@ -6,7 +6,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_student, get_current_teacher_or_teacher_admin, get_current_user
+from app.auth.dependencies import get_current_student, get_current_teacher_or_teacher_admin, get_current_user, require_verified_email
 from app.core.group_cohort_logic import (
     cancel_cohort,
     cancel_future_cohort_sessions,
@@ -1076,6 +1076,7 @@ def enroll_in_cohort(
     Payment pendiente de revisión — mismo circuito manual que cualquier
     otro pago de la plataforma.
     """
+    require_verified_email(current_user)  # SEC-04
     student_id = current_user.student_profile.id
     from app.core.class_logic import validate_payment_method, PAYMENT_METHOD_LABELS
     method = validate_payment_method(data.payment_method, db)

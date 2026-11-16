@@ -57,10 +57,10 @@ def get_user_from_request(db: Session, request: Request) -> Optional[User]:
     exception handlers, donde las Depends normales no corren).
     """
     try:
-        auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
-        if not auth_header or not auth_header.lower().startswith("bearer "):
+        from app.auth.session import token_from_request  # import local: evita ciclos
+        token = token_from_request(request)
+        if not token:
             return None
-        token = auth_header.split(" ", 1)[1].strip()
         payload = decode_access_token(token)
         if not payload:
             return None

@@ -62,24 +62,18 @@ export default function LoginPage() {
       login(access_token, { username, name, role, email, surname, avatar_url: avatar });
 
       try {
-        const meRes = await api.get("/users/me", {
-          headers: { Authorization: `Bearer ${access_token}` },
-        });
+        const meRes = await api.get("/users/me");
         const userData = meRes.data;
 
         let timezone: string | undefined;
         let goal: string | undefined;
         try {
           if (role === "student") {
-            const spRes = await api.get("/users/me/student-profile", {
-              headers: { Authorization: `Bearer ${access_token}` },
-            });
+            const spRes = await api.get("/users/me/student-profile");
             timezone = spRes.data?.timezone;
             goal = spRes.data?.goal;
           } else if (["teacher", "teacher_admin"].includes(role)) {
-            const tpRes = await api.get("/teachers/me/profile", {
-              headers: { Authorization: `Bearer ${access_token}` },
-            });
+            const tpRes = await api.get("/teachers/me/profile");
             timezone = tpRes.data?.timezone;
           }
         } catch {}
@@ -128,24 +122,18 @@ export default function LoginPage() {
 
       // Fetch user profile to get onboarding_completed status
       try {
-        const meRes = await api.get("/users/me", {
-          headers: { Authorization: `Bearer ${access_token}` }
-        });
+        const meRes = await api.get("/users/me");
         const userData = meRes.data;
 
         let timezone: string | undefined;
         let goal: string | undefined;
         try {
           if (role === "student") {
-            const spRes = await api.get("/users/me/student-profile", {
-              headers: { Authorization: `Bearer ${access_token}` }
-            });
+            const spRes = await api.get("/users/me/student-profile");
             timezone = spRes.data?.timezone;
             goal = spRes.data?.goal;
           } else if (["teacher", "teacher_admin"].includes(role)) {
-            const tpRes = await api.get("/teachers/me/profile", {
-              headers: { Authorization: `Bearer ${access_token}` }
-            });
+            const tpRes = await api.get("/teachers/me/profile");
             timezone = tpRes.data?.timezone;
           }
         } catch {

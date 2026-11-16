@@ -43,31 +43,6 @@ from app.models.group_cohort import GroupCohort, CohortStatus
 from app.core.group_cohort_logic import get_cohort_active_count
 from tests.flow.conftest import auth_headers
 
-
-@pytest.fixture(autouse=True)
-def _no_min_classes_for_package_change():
-    """Regla D7 (minimo de clases antes de cambiar de paquete): estos tests parten de 0 clases completadas."""
-    from app.db.base import SessionLocal
-    from app.models.payment_config import PlatformConfig
-    s = SessionLocal()
-    try:
-        cfg = s.query(PlatformConfig).first()
-        original = cfg.min_classes_before_package_change if cfg else None
-        if cfg:
-            cfg.min_classes_before_package_change = 0
-            s.commit()
-    finally:
-        s.close()
-    yield
-    s = SessionLocal()
-    try:
-        cfg = s.query(PlatformConfig).first()
-        if cfg:
-            cfg.min_classes_before_package_change = original
-            s.commit()
-    finally:
-        s.close()
-
 pytestmark = pytest.mark.integration
 
 logger = logging.getLogger("flow_tests")
@@ -145,7 +120,9 @@ def _create_package(client, teacher_token, tracked, **overrides):
         "price": 100.0, "price_per_class": 25.0, "classes_count": 4, "duration_minutes": 50,
     }
     payload.update(overrides)
-    if "price_per_class" not in overrides:  # el backend exige price_per_class * classes_count == price
+    if payload["classes_count"] is None:  # ilimitado: sin precio por clase
+        payload.pop("price_per_class", None)
+    elif "price_per_class" not in overrides:  # el backend exige price_per_class * classes_count == price
         payload["price_per_class"] = round(payload["price"] / payload["classes_count"], 2)
     r = client.post("/api/v1/packages/", json=payload, headers=auth_headers(teacher_token))
     assert r.status_code == 201, r.text
@@ -169,6 +146,23 @@ def _make_enrollment(db, tracked, *, package_id, classes_total, unlocked_credits
     db.refresh(enrollment)
     tracked["enrollment_ids"].append(enrollment.id)
 
+    # Fase 1 (AUD-14): un reembolso solo procede si hay un pago APROBADO real del enrollment; el insertado
+    # directo por ORM no lo tenia. Se registra uno aprobado (monto del paquete, comision 15 %).
+    if payment_status == "paid" and cohort_id is None:
+        pkg = db.get(Package, package_id)
+        if pkg is not None:
+            approved = Payment(
+                enrollment_id=enrollment.id, student_id=tracked["student_id"], teacher_id=tracked["teacher_id"],
+                amount_total=pkg.price, amount_teacher=round(pkg.price * 0.85, 2),
+                amount_platform=round(pkg.price * 0.15, 2),
+                payment_method="paypal", payment_type="package", status="approved",
+                validated_at=datetime.now(tz.utc),
+            )
+            db.add(approved)
+            db.commit()
+            db.refresh(approved)
+            tracked["payment_ids"].append(approved.id)
+
     for i in range(occupied_classes):
         start = datetime.now(tz.utc) - timedelta(days=occupied_classes - i)
         c = Class(
@@ -186,7 +180,9 @@ def _make_enrollment(db, tracked, *, package_id, classes_total, unlocked_credits
 
 
 def _request_package_change(client, student_token, enrollment_id, package_id, **extra):
-    body = {"type": "package_change", "enrollment_id": enrollment_id, "package_id": package_id}
+    body = {"type": "package_change", "enrollment_id": enrollment_id, "package_id": package_id,
+            # Reglas nuevas: el cobro exige método de pago y el reembolso exige un dato de contacto.
+            "payment_method": "paypal", "payment_info": {"paypal_or_zelle": "flow-tests@example.com"}}
     body.update(extra)
     return client.post("/api/v1/payments/notify-payment", json=body, headers=auth_headers(student_token))
 
@@ -366,7 +362,7 @@ def test_package_change_upgrade_instant_when_deficit_zero(client, student_token,
     ofrece, no debería tener que pagar nada extra ni esperar aprobación.
     """
     old_pkg = _create_package(client, teacher_token, pkg_env, classes_count=4, price=100.0)
-    same_size_pkg = _create_package(client, teacher_token, pkg_env, name="Flow-test lateral", classes_count=4, price=90.0)
+    same_size_pkg = _create_package(client, teacher_token, pkg_env, name="Flow-test lateral", classes_count=4, price=100.0)  # mismo valor: Fase 1 cobra/devuelve la diferencia si cambia el precio
     enrollment_id = _make_enrollment(db, pkg_env, package_id=old_pkg["id"], classes_total=4, unlocked_credits=4)
 
     r = _request_package_change(client, student_token, enrollment_id, same_size_pkg["id"])
@@ -379,7 +375,10 @@ def test_package_change_upgrade_instant_when_deficit_zero(client, student_token,
     assert enrollment_db.classes_total == 4
     assert enrollment_db.status == EnrollmentStatus.active
 
-    no_payment = db.query(Payment).filter(Payment.enrollment_id == enrollment_id).first()
+    # excluye el pago aprobado original (lo crea _make_enrollment); el cambio instantaneo no genera otro
+    no_payment = db.query(Payment).filter(
+        Payment.enrollment_id == enrollment_id, Payment.payment_type != "package"
+    ).first()
     assert no_payment is None, "Un cambio instantáneo no debería generar ningún Payment"
 
 
@@ -596,7 +595,7 @@ def test_package_change_downgrade_case_b_uses_remaining_value_not_full_price(
     devuelve como si nunca hubiera usado nada.
     """
     old_pkg = _create_package(client, teacher_token, pkg_env, classes_count=10, price=200.0)  # $20/clase
-    new_pkg = _create_package(client, teacher_token, pkg_env, name="Flow-test caso B", classes_count=3, price=100.0)
+    new_pkg = _create_package(client, teacher_token, pkg_env, name="Flow-test caso B", classes_count=3, price=90.0)
     # 2 clases ya completadas -> quedan 8 de las 10 -> valor restante = 8*20 = 160
     enrollment_id = _make_enrollment(
         db, pkg_env, package_id=old_pkg["id"], classes_total=10, unlocked_credits=10, occupied_classes=2,
@@ -609,7 +608,7 @@ def test_package_change_downgrade_case_b_uses_remaining_value_not_full_price(
 
     payment_db = db.query(Payment).filter(Payment.id == payment_id).first()
     assert payment_db.payment_type == "refund"
-    assert payment_db.amount_total == 60.0  # |100 - 160|, no |100 - 200|
+    assert payment_db.amount_total == 70.0  # |90 - 160|, no |90 - 200|
 
 
 # ─── Cambio a paquete ilimitado ─────────────────────────────────────────────
@@ -641,7 +640,10 @@ def test_package_change_switch_to_unlimited_transfers_credits_instantly(
     # unlocked_credits(6) - occupied(2) = 4 créditos disponibles transferidos
     assert enrollment_db.prepaid_unlimited_credits == 4
 
-    no_payment = db.query(Payment).filter(Payment.enrollment_id == enrollment_id).first()
+    # excluye el pago aprobado original (lo crea _make_enrollment); el cambio instantaneo no genera otro
+    no_payment = db.query(Payment).filter(
+        Payment.enrollment_id == enrollment_id, Payment.payment_type != "package"
+    ).first()
     assert no_payment is None
 
 

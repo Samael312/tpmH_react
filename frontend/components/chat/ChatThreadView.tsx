@@ -5,7 +5,6 @@ import { ArrowLeft, Send, WifiOff, Clock, Check, CheckCheck, AlertCircle } from 
 import { ChatConversation, ChatMessage, useChatThread, useUnreadChatCount } from "@/hooks/useChat";
 import { useChatStore } from "@/store/chatStore";
 import { useAuthStore } from "@/store/authStore";
-import { decodeToken } from "@/lib/auth";
 
 // ─── Checkmarks (N3) ──────────────────────────────────────────────────────
 // reloj = en cola/enviando (todavía no confirma el servidor) · 1 check =
@@ -48,8 +47,7 @@ export default function ChatThreadView({
   // "todos los mensajes se ven del mismo lado y color"). El id del
   // usuario logueado sí viaja siempre en el JWT (`sub`, ver
   // auth/jwt.py::create_access_token), así que lo sacamos de ahí.
-  const token = useAuthStore((s) => s.token);
-  const currentUserId = token ? Number(decodeToken(token)?.sub) : undefined;
+  const currentUserId = useAuthStore((s) => s.user?.id);
   const { messages, loading, connected, sendError, send, retryMessage, markRead, refetch } = useChatThread(conversation.id);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   // Con este hilo abierto (y leído) el total de no leídos son los OTROS

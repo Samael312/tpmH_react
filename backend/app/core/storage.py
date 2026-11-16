@@ -20,7 +20,8 @@ ALLOWED_DOCUMENT_TYPES = {
     "application/pdf",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/pptx"
+    # SEC-06: antes "application/pptx", que no es un MIME real: los .pptx llegan con este y se rechazaban.
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
 
 ALLOWED_AUDIO_TYPES = {
@@ -117,7 +118,7 @@ def _matches_declared_type(file_bytes: bytes, content_type: str) -> bool:
 
     if content_type in (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/pptx",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ):
         # .docx/.pptx son en el fondo un .zip (formato OOXML)
         return head[:4] == b"PK\x03\x04"

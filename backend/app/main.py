@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from app.core.config import settings
+from app.auth.session import ACCESS_COOKIE, REFRESH_COOKIE, allowed_origins
 from app.core.rate_limit import limiter
 from app.api.v1.router import api_router
 from app.core.scheduler import start_scheduler, stop_scheduler
@@ -45,6 +46,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# SEC-05 (CSRF): con sesion por cookie, una peticion que MUTA datos y trae un Origin ajeno se rechaza. SameSite=Lax ya
+# bloquea el envio de cookies en POST entre sitios; esto cubre ademas subdominios/navegadores antiguos. Las
+# peticiones con cabecera Authorization (clientes API) no usan cookies, asi que no estan sujetas a CSRF.
+@app.middleware("http")
+async def reject_foreign_origin_with_cookies(request: Request, call_next):
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and "authorization" not in request.headers:
+        uses_cookies = ACCESS_COOKIE in request.cookies or REFRESH_COOKIE in request.cookies
+        origin = (request.headers.get("origin") or "").rstrip("/")
+        if uses_cookies and origin and origin not in allowed_origins():
+            return JSONResponse(status_code=403, content={"detail": "Origen no permitido"})
+    return await call_next(request)
+
 
 # Rate limiting — ver app/core/rate_limit.py. `app.state.limiter` es lo
 # que lee el decorador @limiter.limit(...) en cada endpoint, y el

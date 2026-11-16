@@ -25,31 +25,6 @@ from app.models.availability import TeacherAvailability
 from app.auth.passwords import hash_password
 from tests.flow.conftest import auth_headers
 
-
-@pytest.fixture(autouse=True)
-def _no_min_classes_for_package_change():
-    """Regla D7 (minimo de clases antes de cambiar de paquete): estos tests parten de 0 clases completadas."""
-    from app.db.base import SessionLocal
-    from app.models.payment_config import PlatformConfig
-    s = SessionLocal()
-    try:
-        cfg = s.query(PlatformConfig).first()
-        original = cfg.min_classes_before_package_change if cfg else None
-        if cfg:
-            cfg.min_classes_before_package_change = 0
-            s.commit()
-    finally:
-        s.close()
-    yield
-    s = SessionLocal()
-    try:
-        cfg = s.query(PlatformConfig).first()
-        if cfg:
-            cfg.min_classes_before_package_change = original
-            s.commit()
-    finally:
-        s.close()
-
 pytestmark = [pytest.mark.integration, pytest.mark.destructive]
 
 

@@ -1,9 +1,10 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.db.base import get_db
 from app.auth.jwt import decode_access_token
+from app.auth.session import ACCESS_COOKIE
 from app.models.user import User, UserRole
 from app.models.teacher import TeacherStatus
 
@@ -13,14 +14,22 @@ security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
     db: Session = Depends(get_db)
 ) -> User:
     """
     Dependencia base — verifica que el usuario está logueado.
     Se usa en cualquier endpoint que requiera autenticación.
+    SEC-05: el token puede venir en la cabecera Authorization (clientes API, periodo de transicion)
+    o en la cookie HttpOnly `tpm_access`.
     """
-    token = credentials.credentials
+    token = credentials.credentials if credentials else request.cookies.get(ACCESS_COOKIE)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No autenticado"
+        )
     payload = decode_access_token(token)
 
     if not payload:
@@ -46,6 +55,7 @@ def get_current_user(
     return user
 
 def get_current_user_optional(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
     db: Session = Depends(get_db),
 ) -> Optional[User]:
@@ -55,9 +65,10 @@ def get_current_user_optional(
     reportes tanto de usuarios logueados como anónimos (ej. reporte de
     errores de frontend, que puede ocurrir antes de loguearse).
     """
-    if not credentials:
+    token = credentials.credentials if credentials else request.cookies.get(ACCESS_COOKIE)
+    if not token:
         return None
-    payload = decode_access_token(credentials.credentials)
+    payload = decode_access_token(token)
     if not payload:
         return None
     user = db.query(User).filter(User.id == int(payload["sub"])).first()
@@ -156,3 +167,12 @@ def get_current_staff_or_teacher(current_user: User = Depends(get_current_user))
             detail="Acceso solo para staff o profesores"
         )
     return current_user
+
+
+def require_verified_email(user) -> None:
+    """SEC-04 (politica suave): retiros y pagos exigen email verificado. Las cuentas previas quedaron verificadas en la migracion."""
+    if not user.is_verified:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Verifica tu email para continuar. Revisa tu correo o pide un nuevo enlace desde tu perfil."
+        )

@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import Cookies from "js-cookie";
 import { useChatStore } from "@/store/chatStore";
 
 export interface User {
@@ -22,7 +21,6 @@ export interface User {
 
 interface AuthStore {
   user: User | null;
-  token: string | null;
   isLoading: boolean;
   hasHydrated: boolean;
 
@@ -37,18 +35,24 @@ export const useAuthStore = create<AuthStore>()(
   persist(
     (set) => ({
       user: null,
-      token: Cookies.get("access_token") || null,
       isLoading: false,
       hasHydrated: false,
 
-      login: (token, user) => {
-        Cookies.set("access_token", token, { expires: 7, secure: true });
-        set({ user, token, isLoading: false });
+      // SEC-05: el token ya no se guarda en el navegador (lo fija el backend en cookies HttpOnly). El primer
+      // argumento se conserva por compatibilidad con las pantallas de login; se ignora.
+      login: (_token, user) => {
+        set({ user, isLoading: false });
       },
 
       logout: () => {
-        Cookies.remove("access_token");
-        set({ user: null, token: null, isLoading: false });
+        // Revoca la sesión en el servidor y borra las cookies (no se puede desde JS: son HttpOnly).
+        try {
+          void fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1"}/auth/logout`, {
+            method: "POST",
+            credentials: "include",
+          }).catch(() => {});
+        } catch {}
+        set({ user: null, isLoading: false });
         // N3: cierra el WS global del chat y borra el cache de mensajes en
         // memoria — deliberadamente no persiste a disco (ver
         // store/chatStore.ts), pero sí hay que vaciarlo en logout para no

@@ -75,7 +75,7 @@ def seed():
     db = SessionLocal()
     mk = lambda role, u: User(email=f"{u}@audit-tpm.com", username=u, name=u.title(), surname="Audit",
                               password_hash=hash_password("Password123"), role=UserRole(role),
-                              is_active=True, onboarding_completed=True)
+                              is_active=True, onboarding_completed=True, is_verified=True)
     admin, tu, su = mk("superadmin", "admin"), mk("teacher", "profe"), mk("student", "alumno")
     db.add_all([admin, tu, su]); db.flush()
     tp = TeacherProfile(user_id=tu.id, user_username="profe", status=TeacherStatus.approved, timezone="UTC",

@@ -76,6 +76,17 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | used_prepaid_credit | BOOLEAN | ? default=False |
 | reminder_sent_at | DATETIME | ? |
 
+## email_verification_tokens
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| id | INTEGER | PK |
+| user_id | INTEGER | FK→users.id |
+| token_hash | VARCHAR | unique |
+| is_used | BOOLEAN | default=False |
+| expires_at | DATETIME |  |
+| created_at | DATETIME | ? |
+
 ## enrollments
 
 | Columna | Tipo | Notas |
@@ -349,6 +360,18 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | chat_enabled | BOOLEAN | ? default=True |
 | chat_retention_days | INTEGER | ? default=90 |
 | chat_reactivation_hours | INTEGER | ? default=24 |
+
+## refresh_tokens
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| id | INTEGER | PK |
+| user_id | INTEGER | FK→users.id |
+| token_hash | VARCHAR | unique |
+| family_id | VARCHAR |  |
+| expires_at | DATETIME |  |
+| revoked_at | DATETIME | ? |
+| created_at | DATETIME | ? |
 
 ## reviews
 

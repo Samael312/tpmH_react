@@ -18,4 +18,5 @@ RUN mkdir -p /app/uploads
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# SEC-01: --proxy-headers => IP real del cliente tras el proxy. Un solo worker (limitador y scheduler en memoria).
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]

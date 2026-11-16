@@ -6,9 +6,10 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 |---|---|---|---|---|
 | `/forgot-password` | `app/(auth)/forgot-password/page.tsx` | pública | 208 |  |
 | `/reset-password` | `app/(auth)/reset-password/page.tsx` | pública | 213 |  |
-| `/login` | `app/(public)/login/page.tsx` | pública | 343 |  |
+| `/verify-email` | `app/(auth)/verify-email/page.tsx` | pública | 107 |  |
+| `/login` | `app/(public)/login/page.tsx` | pública | 331 |  |
 | `/privacy` | `app/(public)/privacy/page.tsx` | pública | 17 |  |
-| `/register/google-complete` | `app/(public)/register/google-complete/page.tsx` | pública | 254 |  |
+| `/register/google-complete` | `app/(public)/register/google-complete/page.tsx` | pública | 252 |  |
 | `/register` | `app/(public)/register/page.tsx` | pública | 650 |  |
 | `/terms` | `app/(public)/terms/page.tsx` | pública | 17 |  |
 | `/dashboard/availability` | `app/(student)/dashboard/availability/page.tsx` | student | 448 |  |
@@ -18,7 +19,7 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/dashboard/materials` | `app/(student)/dashboard/materials/page.tsx` | student | 490 | app/student/materials/page.tsx |
 | `/dashboard/onboarding` | `app/(student)/dashboard/onboarding/page.tsx` | student | 888 |  |
 | `/dashboard` | `app/(student)/dashboard/page.tsx` | student | 770 |  |
-| `/dashboard/profile` | `app/(student)/dashboard/profile/page.tsx` | student | 962 |  |
+| `/dashboard/profile` | `app/(student)/dashboard/profile/page.tsx` | student | 971 |  |
 | `/dashboard/schedule` | `app/(student)/dashboard/schedule/page.tsx` | student | 1796 |  |
 | `/dashboard/support` | `app/(student)/dashboard/support/page.tsx` | student | 21 |  |
 | `/dashboard/teachers/[username]` | `app/(student)/dashboard/teachers/[username]/page.tsx` | student | 317 |  |
@@ -36,7 +37,7 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/admin/teachers` | `app/(superadmin)/admin/teachers/page.tsx` | superadmin, teacher_admin | 649 |  |
 | `/admin/users` | `app/(superadmin)/admin/users/page.tsx` | superadmin, teacher_admin | 1064 | frontend/app/(superadmin)/admin/users/page.tsx |
 | `/teacher/availability` | `app/(teacher)/teacher/availability/page.tsx` | teacher, teacher_admin | 420 |  |
-| `/teacher/calendar/callback` | `app/(teacher)/teacher/calendar/callback/page.tsx` | teacher, teacher_admin | 136 |  |
+| `/teacher/calendar/callback` | `app/(teacher)/teacher/calendar/callback/page.tsx` | teacher, teacher_admin | 137 |  |
 | `/teacher/chat` | `app/(teacher)/teacher/chat/page.tsx` | teacher, teacher_admin | 138 |  |
 | `/teacher/cohorts` | `app/(teacher)/teacher/cohorts/page.tsx` | teacher, teacher_admin | 1325 |  |
 | `/teacher/dashboard` | `app/(teacher)/teacher/dashboard/page.tsx` | teacher, teacher_admin | 952 |  |
@@ -45,7 +46,7 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/teacher/onboarding` | `app/(teacher)/teacher/onboarding/page.tsx` | teacher, teacher_admin | 1129 |  |
 | `/teacher/packages` | `app/(teacher)/teacher/packages/page.tsx` | teacher, teacher_admin | 1150 |  |
 | `/teacher/payments` | `app/(teacher)/teacher/payments/page.tsx` | teacher, teacher_admin | 226 |  |
-| `/teacher/profile` | `app/(teacher)/teacher/profile/page.tsx` | teacher, teacher_admin | 1335 |  |
+| `/teacher/profile` | `app/(teacher)/teacher/profile/page.tsx` | teacher, teacher_admin | 1344 |  |
 | `/teacher/profile/preview` | `app/(teacher)/teacher/profile/preview/page.tsx` | teacher, teacher_admin | 86 |  |
 | `/teacher/students` | `app/(teacher)/teacher/students/page.tsx` | teacher, teacher_admin | 499 |  |
 | `/teacher/support` | `app/(teacher)/teacher/support/page.tsx` | teacher, teacher_admin | 21 |  |

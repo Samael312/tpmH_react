@@ -150,10 +150,12 @@ let pingTimer: ReturnType<typeof setInterval> | null = null;
 let pongTimer: ReturnType<typeof setTimeout> | null = null;
 let lifecycleListenersAttached = false;
 
-function buildWsUrl(token: string): string {
+// SEC-05: el socket se autentica con la cookie HttpOnly del handshake; el token ya no viaja en la URL.
+// `currentToken` queda solo como marca de "hay sesión conectada" (cualquier valor no vacío).
+function buildWsUrl(): string {
   const httpBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
   const wsBase = httpBase.replace(/^http/, "ws");
-  return `${wsBase}/chat/ws?token=${encodeURIComponent(token)}`;
+  return `${wsBase}/chat/ws`;
 }
 
 export const useChatStore = create<ChatStoreState>()((set, get) => ({
@@ -447,7 +449,7 @@ function resyncAfterReconnect() {
 
 function openSocket() {
   if (!currentToken) return;
-  const socket = new WebSocket(buildWsUrl(currentToken));
+  const socket = new WebSocket(buildWsUrl());
   ws = socket;
 
   socket.onopen = () => {

@@ -5,7 +5,6 @@ import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { useChatStore, onChatMessage, ChatMessage as StoreChatMessage } from "@/store/chatStore";
-import { decodeToken } from "@/lib/auth";
 
 export interface ChatConversation {
   id: number;
@@ -124,21 +123,20 @@ export async function openGroupConversation(cohortId: number): Promise<ChatConve
 // puentea sus eventos hacia React Query para que la lista de
 // conversaciones y el badge de no leídos se actualicen en el momento.
 export function useChatSocketBootstrap(enabled: boolean) {
-  const token = useAuthStore((s) => s.token);
-  const userId = useAuthStore((s) => (s.token ? Number(decodeToken(s.token)?.sub) : undefined));
+  const userId = useAuthStore((s) => s.user?.id);
   const queryClient = useQueryClient();
   const connect = useChatStore((s) => s.connect);
   const disconnect = useChatStore((s) => s.disconnect);
 
   useEffect(() => {
-    if (!enabled || !token || !userId) {
+    if (!enabled || !userId) {
       disconnect();
       return;
     }
-    connect(token, userId);
+    connect("cookie", userId);
     return () => disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, token, userId]);
+  }, [enabled, userId]);
 
   // Puente store → React Query, en dos capas:
   //  1) Al llegar un mensaje se actualiza YA el cache local (preview, hora,

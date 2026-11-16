@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional
 import json
 
 from app.db.base import get_db
+from app.core.rate_limit import limiter, user_or_ip_key
 from app.auth.dependencies import get_current_user_optional
 from app.models.user import User
 from app.schemas.chipi import ChipiRequest, ChipiResponse
@@ -21,10 +24,13 @@ from app.core.chipi.service import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/chat")
+@limiter.limit("20/minute;300/day", key_func=user_or_ip_key)  # SEC-02: cada llamada cuesta OpenAI + consultas a BD
 async def chat_with_chipi(
+    request: Request,
     data: ChipiRequest,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional),
@@ -95,8 +101,10 @@ async def chat_with_chipi(
                 # Señal de fin del stream
                 yield f"data: {json.dumps({'done': True})}\n\n"
 
-            except Exception as e:
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            except Exception:
+                # SEC-02: no filtrar el texto de la excepcion (puede traer detalles de OpenAI/BD).
+                logger.exception("Chipi: fallo en el streaming")
+                yield f"data: {json.dumps({'error': 'Chipi no está disponible ahora mismo. Inténtalo de nuevo.'})}\n\n"
 
         return StreamingResponse(
             generate(),
@@ -117,8 +125,9 @@ async def chat_with_chipi(
         )
         return ChipiResponse(response=response, screen=data.screen)
 
-    except ValueError as e:
+    except ValueError:
+        logger.exception("Chipi: fallo en la respuesta")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            detail="Chipi no está disponible ahora mismo. Inténtalo de nuevo."
         )

@@ -115,6 +115,7 @@ def test_d7_blocks_package_change_below_minimum_both_directions(
 
     r = client.post("/api/v1/payments/notify-payment", json={
         "type": "package_change", "enrollment_id": enrollment_id, "package_id": new_pkg["id"],
+        "payment_method": "paypal", "payment_info": {"paypal_or_zelle": "flow-tests@example.com"},
     }, headers=auth_headers(student_token))
 
     assert r.status_code == 400, r.text
@@ -139,6 +140,7 @@ def test_d7_allows_package_change_at_or_above_minimum_both_directions(
 
     r = client.post("/api/v1/payments/notify-payment", json={
         "type": "package_change", "enrollment_id": enrollment_id, "package_id": new_pkg["id"],
+        "payment_method": "paypal", "payment_info": {"paypal_or_zelle": "flow-tests@example.com"},
     }, headers=auth_headers(student_token))
 
     assert r.status_code == 200, r.text
@@ -161,6 +163,7 @@ def test_d7_zero_minimum_means_no_restriction(client, student_token, teacher_tok
 
     r = client.post("/api/v1/payments/notify-payment", json={
         "type": "package_change", "enrollment_id": enrollment_id, "package_id": new_pkg["id"],
+        "payment_method": "paypal", "payment_info": {"paypal_or_zelle": "flow-tests@example.com"},
     }, headers=auth_headers(student_token))
 
     assert r.status_code == 200, r.text

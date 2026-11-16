@@ -57,7 +57,13 @@ class TTSBatchRequest(BaseModel):
             raise ValueError("La lista de palabras no puede estar vacía")
         if len(v) > 50:
             raise ValueError("Máximo 50 palabras por request")
-        return [w.strip() for w in v if w.strip()]
+        words = [w.strip() for w in v if w.strip()]
+        if not words:
+            raise ValueError("La lista de palabras no puede estar vacía")
+        # SEC-02: el tope de 100 caracteres solo existia para /word; el batch aceptaba palabras enormes.
+        if any(len(w) > 100 for w in words):
+            raise ValueError("Cada palabra puede tener como máximo 100 caracteres")
+        return words
 
 
 class TTSBatchResponse(BaseModel):

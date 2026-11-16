@@ -1,27 +1,35 @@
 import axios from "axios";
-import Cookies from "js-cookie";
 import { useAuthStore } from "@/store/authStore";
 import { reportFrontendError } from "@/lib/errorReporting";
 import { getErrorMessage } from "@/lib/errorMessage";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
+
+// SEC-05: la sesión vive en cookies HttpOnly que fija el backend; el navegador las envía solo con
+// withCredentials. Ya no hay token en JS ni cabecera Authorization.
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1",
+  baseURL: API_BASE,
   headers: { "Content-Type": "application/json" },
+  withCredentials: true,
 });
 
-// ── Request: adjuntar token ──
-// BUG-16 fix: leer el token directamente de la cookie 'access_token' en vez
-// de useAuthStore.getState().token. La cookie es la única fuente de verdad
-// (proxy.ts, el middleware de rutas protegidas, corre en el servidor/edge y
-// solo puede leer cookies) — mantener el token también en Zustand/localStorage
-// duplicaba la fuente de verdad y podía desincronizarse.
-api.interceptors.request.use((config) => {
-  const token = Cookies.get("access_token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+// Un único refresh en vuelo: si varias peticiones reciben 401 a la vez, todas esperan al mismo
+// POST /auth/refresh (el refresh token rota: dos refresh simultáneos revocarían la sesión).
+let refreshInFlight: Promise<void> | null = null;
+function refreshSession(): Promise<void> {
+  if (!refreshInFlight) {
+    refreshInFlight = axios
+      .post(`${API_BASE}/auth/refresh`, null, { withCredentials: true })
+      .then(() => undefined)
+      .finally(() => {
+        refreshInFlight = null;
+      });
   }
-  return config;
-});
+  return refreshInFlight;
+}
+
+// Endpoints donde un 401 significa "credenciales incorrectas", no "sesión vencida".
+const NO_REFRESH_URLS = ["/auth/login", "/auth/google", "/auth/register", "/auth/refresh", "/auth/logout"];
 
 // ── Response: refrescar user en store si el backend devuelve datos actualizados
 api.interceptors.response.use(
@@ -52,14 +60,27 @@ api.interceptors.response.use(
     }
     return res;
   },
-  (err) => {
-    // 👇 SOLUCIÓN: Verificamos si la petición fue al endpoint de login
-    const isLoginEndpoint = err.config?.url?.includes("/auth/login");
+  async (err) => {
+    const config = err.config as (typeof err.config & { _retried?: boolean }) | undefined;
+    const isAuthEndpoint = NO_REFRESH_URLS.some((u) => config?.url?.includes(u));
 
-    // 401 → logout (SOLO si no estamos intentando iniciar sesión)
-    if (err.response?.status === 401 && !isLoginEndpoint) {
+    // 401 con sesión vencida: un intento de refresh y se reintenta la petición original una vez.
+    if (err.response?.status === 401 && config && !isAuthEndpoint && !config._retried) {
+      config._retried = true;
+      try {
+        await refreshSession();
+        return api(config);
+      } catch {
+        // refresh fallido: la sesión terminó de verdad (cae al logout de abajo)
+      }
+    }
+
+    // 401 definitivo → logout (no si se está iniciando sesión)
+    if (err.response?.status === 401 && !isAuthEndpoint) {
       useAuthStore.getState().logout();
-      window.location.href = "/login";
+      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+        window.location.href = "/login";
+      }
     }
 
     // Reportamos a la pantalla de Logs cualquier otro fallo de API

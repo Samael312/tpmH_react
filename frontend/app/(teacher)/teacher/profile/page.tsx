@@ -537,6 +537,7 @@ export default function TeacherProfilePage() {
   // Eliminar cuenta
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
   const [deleting, setDeleting] = useState(false);
   const toast = useToast();
 
@@ -679,7 +680,7 @@ export default function TeacherProfilePage() {
     if (deleteInput !== profile?.user_username) return;
     setDeleting(true);
     try {
-      await api.delete("/users/me");
+      await api.delete("/users/me", { data: { confirm_username: deleteInput, password: deletePassword || undefined } });
       logout();
       window.location.href = "/";
     } catch (e) {
@@ -1300,6 +1301,14 @@ export default function TeacherProfilePage() {
                         placeholder={profile?.user_username}
                         className="w-full bg-white border-2 border-rose-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-300 px-3.5 py-2.5 focus:outline-none focus:border-rose-400 transition-all duration-200"
                       />
+                      <input
+                          type="password"
+                          value={deletePassword}
+                          onChange={e => setDeletePassword(e.target.value)}
+                          placeholder="Tu contraseña (si tu cuenta tiene)"
+                          autoComplete="current-password"
+                          className="mt-2 w-full bg-white border-2 border-rose-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-300 px-3.5 py-2.5 focus:outline-none focus:border-rose-400 transition-all duration-200"
+                        />
                     </div>
                     <div className="flex gap-2">
                       <button

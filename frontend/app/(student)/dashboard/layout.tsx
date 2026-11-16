@@ -7,6 +7,7 @@ import api from "@/lib/api";
 import NavBar from "@/components/layout/NavBar";
 import DashboardTopbar from "@/components/layout/DashboardTopbar";
 import ChatWidget from "@/components/chat/ChatWidget";
+import VerifyEmailBanner from "@/components/layout/VerifyEmailBanner";
 import { useLandingData } from "@/hooks/useLandingData";
 import { usePlatformConfig } from "@/hooks/useStudentData";
 import { useChatSocketBootstrap } from "@/hooks/useChat";
@@ -16,7 +17,7 @@ const FULLSCREEN_ROUTES = ["/dashboard/onboarding"];
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, token, setUser, hasHydrated } = useAuthStore();
+  const { user, setUser, hasHydrated } = useAuthStore();
   const { platformName } = useLandingData();
   const { config: platformConfig } = usePlatformConfig();
   const [checked, setChecked] = useState(false);
@@ -39,8 +40,10 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   useEffect(() => {
     if (!hasHydrated) return;
     const currentUser = userRef.current;
-    if (!currentUser || !token) {
-      router.replace("/login");
+    if (!currentUser) {
+      // SEC-05 / UX-01: sesión por cookie HttpOnly pero sin `user` en localStorage -> se recupera de /users/me.
+      // Si la sesión no es válida, el interceptor de api.ts intenta el refresh y, si falla, redirige al login.
+      api.get("/users/me").then((r) => setUser({ ...r.data })).catch(() => router.replace("/login"));
       return;
     }
 
@@ -66,6 +69,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
 
       setUser({
         ...latestUser,
+        id: userData.id ?? latestUser.id, // el login no trae el id; el chat lo necesita (antes salía del JWT)
         onboarding_completed: onboardingCompleted,
         // solo sobreescribe si el perfil trae un valor real — nunca con "UTC" falso
         timezone: studentData?.timezone || latestUser.timezone,
@@ -85,11 +89,11 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         setChecked(true);
       }
     });
-  }, [pathname, hasHydrated, token, router, setUser]);
+  }, [pathname, hasHydrated, !!user, router, setUser]);
 
   // Si el store ya no tiene user/token (p.ej. logout en curso), no renderizar
   // el dashboard con datos nulos: mostrar spinner mientras se redirige.
-  if (hasHydrated && (!user || !token) && !isFullscreen) {
+  if (hasHydrated && !user && !isFullscreen) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
@@ -123,6 +127,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
 
         <div className="flex-1 overflow-y-auto relative">
           <div className="max-w-7xl mx-auto px-6 py-8 md:px-10 md:py-4 min-h-full flex flex-col">
+            <VerifyEmailBanner />
             <div className="flex-1">{children}</div>
             <footer className="text-center py-6 mt-12 text-slate-400 text-sm font-medium border-t border-slate-200/60">
               © {new Date().getFullYear()} {platformName}. Todos los derechos reservados.

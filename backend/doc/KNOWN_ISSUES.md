@@ -29,11 +29,11 @@ Severidad: 🔴 crítico · 🟠 alto · 🟡 medio · 🔵 bajo.
 | AUD-22 | 🔵 | Guarda anti doble clic (15 s) puede confundir la cuota 2 con la 1 si se notifica justo tras aprobar | `test_installments_unlock_credits_progressively` (envejece el pago para evitarlo) | corregido (Fase 2) (nuevo) |
 | AUD-23 | 🟠 | Sobre-reserva de créditos: 4 reservas simultáneas con 1 crédito libre se aceptan las 4 (sin lock de fila en `enrollments`). Confirmado en PostgreSQL real | `tests/audit/concurrency_live.py` (R2) | corregido (Fase 2) (nuevo) |
 | AUD-02b | 🟠 | Doble reserva del mismo horario con 2 alumnos simultáneos: 2 clases creadas (HTTP 201 ambos). Confirmado en PostgreSQL real | `concurrency_live.py` (R1) | corregido (Fase 2) (confirma AUD-02) |
-| SEC-01 | 🟠 | Rate-limit ve IP del proxy; memoria; falta `--proxy-headers` | — | abierto |
-| SEC-02 | 🟠 | Chipi anónimo sin límites; `role` libre en history; TTS sin cuota | — | abierto |
-| SEC-04 | 🟡 | Email sin verificar + vinculación Google sin `email_verified` | — | abierto |
-| SEC-05 | 🟡 | JWT 7 d en cookie no HttpOnly, sin revocación, CSP `unsafe-inline` | — | abierto |
-| SEC-06 | 🟡 | `/logs/frontend` anónimo sin tope (confirmado: acepta 200 KB), OAuth `state`, WS token en query, borrar cuenta, `application/pptx`, etc. | `test_error_logs_endpoint_accepts_anonymous_reports` (documenta) | abierto |
+| SEC-01 | 🟠 | Rate-limit veía la IP del proxy | `test_f3_security::test_proxy_headers_*`, `test_launch_configs_*` | **corregido** (Fase 3a): `--proxy-headers --forwarded-allow-ips=*` en `railway.toml` y `Dockerfile`; sigue 1 worker (limitador y scheduler en memoria) |
+| SEC-02 | 🟠 | Chipi anónimo sin límites; `role` libre en history; TTS sin cuota | `test_f3_security.py` (Chipi/TTS) | **corregido** (Fase 3a): `role` solo user/assistant, mensaje ≤ 2000, historial ≤ 20, 20/min y 300/día por usuario (IP si anónimo), TTS 60/min y batch 6/min, errores sin detalles |
+| SEC-04 | 🟡 | Email sin verificar + vinculación Google sin `email_verified` | `test_f3_email_verification.py` | **corregido** (Fase 3a): token de 24 h guardado como hash, `/auth/verify-email` y `/auth/resend-verification`; Google exige `iss` y `email_verified`, solo vincula cuentas verificadas; bug que dejaba `is_verified` siempre False; retiros/pagos/cohortes exigen verificado. Requiere migración `a7b8c9d0e1f2` |
+| SEC-05 | 🟡 | JWT 7 d en cookie no HttpOnly, sin revocación, CSP `unsafe-inline` | `test_f3_auth_cookies.py` | **corregido** (Fase 3b, salvo CSP): cookies HttpOnly `tpm_access`/`tpm_refresh`/`tpm_session`, refresh con rotación y detección de reutilización (`refresh_tokens`), `/auth/refresh` y `/auth/logout`, comprobación de `Origin`, WS por cookie, cambio/restablecimiento de contraseña y borrado de cuenta revocan sesiones. **Pendiente:** retirar Bearer/`?token=` y el token del JSON (transición), bajar `ACCESS_TOKEN_EXPIRE_MINUTES` a 30, CSP sin `unsafe-inline`. Requiere migración `b8c9d0e1f2a3` |
+| SEC-06 | 🟡 | `/logs/frontend` anónimo sin tope, OAuth `state`, WS token en query, borrar cuenta, `application/pptx`, etc. | `test_f3_security.py` | **parcial** (Fase 3a): logs con tope (stack 8000, extra 4000) y 30/min; `state` OAuth firmado y validado; MIME pptx real; borrar cuenta exige contraseña/confirmación y sin saldo/clases/paquetes pendientes; WS con tope de 20 000 caracteres y 20 envíos/10 s. el WS ya acepta la cookie (Fase 3b); `?token=` se retira al cerrar la transición |
 
 ## Corregidos en la Fase 1 (cálculos de dinero, `tests/audit/test_money_calcs.py`)
 - **Cuotas regalaban créditos:** `_installment_credit_amount` liberaba `ceil(clases/cuotas)` por cuota sin tope (1 clase y 3 cuotas liberaba 1+1+1; 5 clases y 4 cuotas, 2+2+2=6). Ahora el acumulado nunca supera `classes_count`.
@@ -68,3 +68,10 @@ jobs de 24 h/7 d pueden no correr con reinicios frecuentes; migraciones con pref
 - UI: `/admin/payments` pestaña Retiros llama a `GET /payments/admin/withdrawals/pending` -> 404 (AUD-12 confirmado en navegador).
 - UX-01 (frontend/doc/KNOWN_ISSUES.md): cookie válida + `localStorage` vacío deja `/teacher/*` en spinner infinito.
 
+
+
+## Corregidos en la Fase 3a (seguridad backend, `tests/audit/test_f3_*.py`)
+- **JWT sin `sub` -> 500:** un JWT firmado con la misma clave pero sin `sub` (p. ej. el `state` de OAuth) rompía `get_current_user`. `decode_access_token` ahora solo acepta tokens con `sub` numérico y sin `typ`.
+- **Google:** `verify_google_token` valida `iss` y `email_verified`; el email se normaliza a minúsculas; no se puede reclamar una cuenta ya vinculada a otro Google.
+- **Verificación de email suave:** las cuentas existentes quedan verificadas en la migración; las nuevas reciben el enlace al registrarse. Aviso con «Reenviar enlace» en los paneles de alumno y profesor (`VerifyEmailBanner`) y página `/verify-email`.
+- **tests/flow:** 29 -> 0 obsoletos revisados (ver `TESTING.md`).

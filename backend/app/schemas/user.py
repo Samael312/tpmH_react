@@ -86,6 +86,15 @@ class UpdateProfileRequest(BaseModel):
     nationality: Optional[str] = None
     onboarding_completed: Optional[bool] = None
 
+class DeleteAccountRequest(BaseModel):
+    """
+    SEC-06: borrar la cuenta exige re-autenticarse (un token robado ya no basta para anonimizarla).
+    `password` es obligatoria si la cuenta tiene contrasena; las cuentas solo-Google confirman con su usuario.
+    """
+    password: Optional[str] = None
+    confirm_username: str
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str

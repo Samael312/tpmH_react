@@ -24,6 +24,25 @@ endpoint con el decorador `@limiter.limit(..., key_func=...)`.
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+def user_or_ip_key(request) -> str:
+    """
+    Clave de rate-limit: el usuario autenticado (claim `sub` del JWT) o, si es anonimo / el token
+    no es valido, la IP. Asi un usuario no comparte cupo con otros detras de la misma IP (NAT,
+    proxy) y un anonimo no puede agotar el cupo de los demas. Un token invalido o vencido cae a la IP
+    (no se puede falsificar otro usuario porque la firma si se verifica).
+    """
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        try:
+            from app.auth.jwt import decode_access_token
+            payload = decode_access_token(auth[7:].strip())
+            if payload and payload.get("sub"):
+                return f"user:{payload['sub']}"
+        except Exception:
+            pass
+    return get_remote_address(request)
+
+
 limiter = Limiter(
     key_func=get_remote_address,
     # Límite general de "red de seguridad" para cualquier endpoint que

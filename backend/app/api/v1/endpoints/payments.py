@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 import math
 from app.auth.dependencies import (
+    require_verified_email,
     get_current_staff,
     get_current_staff_or_teacher,
     get_current_student,
@@ -65,6 +66,7 @@ from app.schemas.payments import (
 )
 
 router = APIRouter()
+
 logger = logging.getLogger(__name__)
 
 
@@ -1419,6 +1421,7 @@ def request_withdrawal_v2(
     current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db),
 ):
+    require_verified_email(current_user)
     teacher = current_user.teacher_profile
     # BUG-13 fix: bloquear la fila con SELECT ... FOR UPDATE para evitar que
     # dos solicitudes de retiro concurrentes lean el mismo saldo antes de
@@ -1612,6 +1615,7 @@ def notify_payment(
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db),
 ):
+    require_verified_email(current_user)
     student_id = current_user.student_profile.id
 
     # BUG-04/12: se eliminó el tipo "single_class" (reservar una clase suelta

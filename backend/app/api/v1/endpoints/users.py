@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 import logging
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, UploadFile, File
 from sqlalchemy.orm import Session
 from app.core.phone import normalize_phone
 from app.db.base import get_db
@@ -12,7 +12,9 @@ from app.auth.dependencies import get_current_student, get_current_user
 from app.auth.passwords import hash_password, verify_password
 from app.models.user import User
 from app.models.student import StudentProfile
-from app.schemas.user import UserResponse, UpdateProfileRequest, ChangePasswordRequest, StudentProfileResponse
+from app.schemas.user import (
+    UserResponse, UpdateProfileRequest, ChangePasswordRequest, StudentProfileResponse, DeleteAccountRequest,
+)
 from app.models.student_preferences import StudentSchedulePreference
 from app.core.timezone import convert_local_time_to_utc, validate_timezone
 from app.core.schedule_recalc import recalculate_student_preferences_timezone
@@ -183,6 +185,7 @@ def update_profile(
 @limiter.limit("10/hour")
 def change_password(
     request: Request,
+    response: Response,
     data: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -201,13 +204,63 @@ def change_password(
         )
 
     current_user.password_hash = hash_password(data.new_password)
+    # SEC-05: tras cambiar la contrasena se cierran TODAS las demas sesiones; la actual recibe cookies nuevas.
+    from app.auth.session import revoke_all_sessions, set_auth_cookies
+    revoke_all_sessions(db, current_user.id)
     db.commit()
+    set_auth_cookies(response, current_user, db)
 
     return {"message": "Contraseña actualizada correctamente"}
 
 
+def _account_deletion_blockers(user: User, db: Session) -> list[str]:
+    """
+    SEC-06: motivos por los que NO se puede borrar la cuenta todavia (dinero o compromisos pendientes).
+    Borrar con saldo/retiros/paquetes en curso dejaba al usuario sin forma de reclamarlos.
+    """
+    from app.core.timezone import utc_now
+    from app.models.class_ import Class
+    from app.models.payment import TeacherWallet, Withdrawal
+
+    reasons: list[str] = []
+    now = utc_now()
+    live = ~Class.status.in_(["cancelled", "expired"])
+    open_enrollment = Enrollment.status.in_(
+        [EnrollmentStatus.active, EnrollmentStatus.pending_renewal, EnrollmentStatus.pending_package_change]
+    )
+
+    sp = user.student_profile
+    if sp:
+        if db.query(Class).filter(Class.student_id == sp.id, Class.start_time_utc > now, live).first():
+            reasons.append("Tienes clases futuras agendadas. Cancélalas antes de eliminar tu cuenta.")
+        for e in db.query(Enrollment).filter(Enrollment.student_id == sp.id, open_enrollment).all():
+            has_credit = (
+                (e.prepaid_unlimited_credits or 0) > 0 if e.classes_total is None
+                else (e.classes_used or 0) < e.classes_total
+            )
+            if has_credit:
+                reasons.append("Tienes un paquete con clases disponibles. Úsalas o pide un reembolso antes de eliminar tu cuenta.")
+                break
+        if db.query(Payment).filter(Payment.student_id == sp.id, Payment.status == "pending_review").first():
+            reasons.append("Tienes pagos pendientes de revisión.")
+
+    tp = user.teacher_profile
+    if tp:
+        wallet = db.query(TeacherWallet).filter(TeacherWallet.teacher_id == tp.id).first()
+        if wallet and (wallet.available_balance or 0) > 0:
+            reasons.append(f"Tienes ${wallet.available_balance:.2f} disponibles en tu billetera. Retíralos antes de eliminar tu cuenta.")
+        if db.query(Withdrawal).filter(Withdrawal.teacher_id == tp.id, Withdrawal.status.in_(["pending", "processing"])).first():
+            reasons.append("Tienes un retiro pendiente de procesar.")
+        if db.query(Class).filter(Class.teacher_id == tp.id, Class.start_time_utc > now, live).first():
+            reasons.append("Tienes clases futuras agendadas. Cancélalas o reasígnalas antes de eliminar tu cuenta.")
+        if db.query(Enrollment).filter(Enrollment.teacher_id == tp.id, open_enrollment).first():
+            reasons.append("Tienes alumnos con paquetes activos. Resuélvelos antes de eliminar tu cuenta.")
+    return reasons
+
+
 @router.delete("/me")
 def delete_account(
+    data: DeleteAccountRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -223,6 +276,16 @@ def delete_account(
     (is_active=False) para que ninguna sesión existente siga funcionando.
     """
     from app.core.timezone import utc_now
+
+    # SEC-06: re-autenticacion + confirmacion explicita + sin compromisos pendientes.
+    if data.confirm_username.strip().lower() != (current_user.username or "").lower():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "El nombre de usuario de confirmación no coincide")
+    if current_user.password_hash:
+        if not data.password or not verify_password(data.password, current_user.password_hash):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "La contraseña es incorrecta")
+    blockers = _account_deletion_blockers(current_user, db)
+    if blockers:
+        raise HTTPException(status.HTTP_409_CONFLICT, " ".join(blockers))
 
     anon_tag = f"deleted_{current_user.id}_{int(utc_now().timestamp())}"
 
@@ -242,6 +305,8 @@ def delete_account(
     current_user.password_hash = None
     current_user.is_active = False
     current_user.is_verified = False
+    from app.auth.session import revoke_all_sessions
+    revoke_all_sessions(db, current_user.id)
 
     if current_user.student_profile:
         current_user.student_profile.user_username = anon_tag
