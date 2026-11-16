@@ -446,7 +446,16 @@ def update_teacher_commission(
             detail="Profesor no encontrado"
         )
 
-    old_rate = teacher.commission_rate
+    # Separación de funciones: un teacher_admin no fija su propia comisión.
+    if current_user.role == UserRole.teacher_admin:
+        own = current_user.teacher_profile
+        if own and own.id == teacher.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No puedes cambiar tu propia comisión; la fija el superadmin"
+            )
+
+    old_rate = teacher.commission_rate if teacher.commission_rate is not None else 0.15
     teacher.commission_rate = data.commission_rate
     db.commit()
 
@@ -601,6 +610,7 @@ def list_support_tickets(
             created_at=t.created_at,
             resolved_at=t.resolved_at,
             user_notified_seen=t.user_notified_seen or False,
+            class_id=t.class_id, requested_status=t.requested_status, decision=t.decision,
             user_id=user.id,
             user_name=user.name,
             user_surname=user.surname,
@@ -609,6 +619,27 @@ def list_support_tickets(
             user_role=user.role.value if hasattr(user.role, "value") else user.role,
         ))
     return result
+
+
+def _apply_class_correction(ticket: SupportTicket, db: Session) -> None:
+    """Aplica una correccion aprobada. No hace commit (lo hace el caller)."""
+    from app.core.class_logic import cancel_class_and_refund, sync_student_lifetime_class_counter
+    from app.models.class_ import Class
+
+    class_ = db.query(Class).filter(Class.id == ticket.class_id).first()
+    if not class_ or class_.status != "no_show":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "La clase ya no esta en no_show: no se puede aplicar la correccion. Rechaza el ticket.",
+        )
+    if ticket.requested_status == "completed":
+        # no_show y completed consumen el credito por igual: el contador del paquete no cambia.
+        sync_student_lifetime_class_counter(class_, "no_show", "completed", db=db)
+        class_.status = "completed"
+    elif ticket.requested_status == "cancelled":
+        cancel_class_and_refund(class_, db, apply_late_cancel_penalty=False)  # devuelve el credito
+    else:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Estado solicitado invalido")
 
 
 @router.patch("/support-tickets/{ticket_id}/resolve", response_model=SupportTicketWithUserResponse)
@@ -632,6 +663,18 @@ def resolve_support_ticket(
     user = ticket.user
     if not user:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario del ticket no encontrado")
+
+    if ticket.category == SupportCategory.class_correction:
+        # NEG-02: solo el superadmin aprueba/rechaza; al aprobar se aplica el cambio.
+        if current_user.role != UserRole.superadmin:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo el superadmin resuelve correcciones de clase")
+        if data.decision is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Indica la decision: approved o rejected")
+        if data.decision == "approved":
+            _apply_class_correction(ticket, db)
+        ticket.decision = data.decision
+    elif data.decision is not None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "La decision solo aplica a correcciones de clase")
 
     ticket.admin_response = data.admin_response
     ticket.status = SupportTicketStatus.answered
@@ -662,6 +705,7 @@ def resolve_support_ticket(
         created_at=ticket.created_at,
         resolved_at=ticket.resolved_at,
         user_notified_seen=ticket.user_notified_seen or False,
+        class_id=ticket.class_id, requested_status=ticket.requested_status, decision=ticket.decision,
         user_id=user.id,
         user_name=user.name,
         user_surname=user.surname,

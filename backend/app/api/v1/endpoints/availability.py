@@ -268,6 +268,87 @@ def delete_exception(
     
     return None # HTTP 204 No Content no requiere cuerpo en la respuesta
 
+# NOTA: las rutas /featured-teacher/* van ANTES de /{teacher_username}/slots; si no, esta
+# última las captura (teacher_username="featured-teacher") y responde 404.
+featured_teacher = os.getenv("FEATURED_TEACHER_USERNAME", "mar12")  # Fallback a "mar12" si no está definido
+
+
+def _resolve_featured_teacher_username(db: Session) -> Optional[str]:
+    """
+    Misma resolución que usa get_featured_teacher_slots (DB primero,
+    env var como fallback), factorizada para reusarla también en el
+    endpoint liviano que solo necesita el username (sin traer slots).
+    """
+    from app.models.payment_config import PlatformConfig
+    from app.core.config import settings
+
+    config = db.query(PlatformConfig).first()
+
+    teacher_username = None
+    if config and config.featured_teacher_id:
+        teacher = db.query(TeacherProfile).filter(
+            TeacherProfile.id == config.featured_teacher_id
+        ).first()
+        if teacher:
+            teacher_username = teacher.user_username
+
+    if not teacher_username:
+        teacher_username = settings.FEATURED_TEACHER_USERNAME
+
+    return teacher_username
+
+
+@router.get("/featured-teacher/username")
+def get_featured_teacher_username(db: Session = Depends(get_db)):
+    """
+    Solo el username del profesor featured — para pantallas de booking en
+    modo single-tenant que necesitan resolverlo UNA vez y reusarlo en
+    endpoints que requieren el username como path param (slots, paquetes,
+    etc.), en vez de tener que enseñarle esa lógica a cada uno.
+    """
+    teacher_username = _resolve_featured_teacher_username(db)
+    if not teacher_username:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No hay profesora featured configurada"
+        )
+    return {"username": teacher_username}
+
+
+@router.get(
+    "/featured-teacher/slots",
+    response_model=List[AvailableSlotResponse]
+)
+def get_featured_teacher_slots(
+    date: str = Query(...),
+    duration: int = Query(60, ge=15, le=180),
+    class_type: str = Query("regular"),
+    current_user: Optional[User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Slots disponibles de la profesora featured.
+    """
+    teacher_username = _resolve_featured_teacher_username(db)
+
+    if not teacher_username:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No hay profesora featured configurada"
+        )
+
+    # 3. Reusar el endpoint existente
+    return get_teacher_available_slots(
+        teacher_username=teacher_username,
+        date=date,
+        duration=duration,
+        class_type=class_type,
+        bypass_min_notice=False,  # llamada directa: sin esto recibía el objeto Query() (truthy)
+        current_user=current_user,
+        db=db,
+    )
+
+
 # ─── ENDPOINT PÚBLICO (VISTA ESTUDIANTE) ────────────────────────────────────
 
 @router.get(
@@ -484,83 +565,6 @@ def get_teacher_available_slots(
         ))
 
     return result
-
-featured_teacher = os.getenv("FEATURED_TEACHER_USERNAME", "mar12")  # Fallback a "mar12" si no está definido
-
-
-def _resolve_featured_teacher_username(db: Session) -> Optional[str]:
-    """
-    Misma resolución que usa get_featured_teacher_slots (DB primero,
-    env var como fallback), factorizada para reusarla también en el
-    endpoint liviano que solo necesita el username (sin traer slots).
-    """
-    from app.models.payment_config import PlatformConfig
-    from app.core.config import settings
-
-    config = db.query(PlatformConfig).first()
-
-    teacher_username = None
-    if config and config.featured_teacher_id:
-        teacher = db.query(TeacherProfile).filter(
-            TeacherProfile.id == config.featured_teacher_id
-        ).first()
-        if teacher:
-            teacher_username = teacher.user_username
-
-    if not teacher_username:
-        teacher_username = settings.FEATURED_TEACHER_USERNAME
-
-    return teacher_username
-
-
-@router.get("/featured-teacher/username")
-def get_featured_teacher_username(db: Session = Depends(get_db)):
-    """
-    Solo el username del profesor featured — para pantallas de booking en
-    modo single-tenant que necesitan resolverlo UNA vez y reusarlo en
-    endpoints que requieren el username como path param (slots, paquetes,
-    etc.), en vez de tener que enseñarle esa lógica a cada uno.
-    """
-    teacher_username = _resolve_featured_teacher_username(db)
-    if not teacher_username:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No hay profesora featured configurada"
-        )
-    return {"username": teacher_username}
-
-
-@router.get(
-    "/featured-teacher/slots",
-    response_model=List[AvailableSlotResponse]
-)
-def get_featured_teacher_slots(
-    date: str = Query(...),
-    duration: int = Query(60, ge=15, le=180),
-    class_type: str = Query("regular"),
-    current_user: Optional[User] = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Slots disponibles de la profesora featured.
-    """
-    teacher_username = _resolve_featured_teacher_username(db)
-
-    if not teacher_username:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No hay profesora featured configurada"
-        )
-
-    # 3. Reusar el endpoint existente
-    return get_teacher_available_slots(
-        teacher_username=teacher_username,
-        date=date,
-        duration=duration,
-        class_type=class_type,
-        current_user=current_user,
-        db=db,
-    )
 
 def _to_exception_response(exc: TeacherAvailabilityException) -> ExceptionResponse:
     duration = exc.end_time_utc - exc.start_time_utc

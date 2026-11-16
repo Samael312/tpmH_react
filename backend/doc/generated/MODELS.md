@@ -407,7 +407,7 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 |---|---|---|
 | id | INTEGER | PK |
 | user_id | INTEGER | FK→users.id |
-| category | VARCHAR(8) | default=SupportCategory.question |
+| category | VARCHAR(16) | default=SupportCategory.question |
 | subject | VARCHAR |  |
 | message | TEXT |  |
 | screen_context | VARCHAR | ? |
@@ -416,6 +416,9 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | resolved_at | DATETIME | ? |
 | resolved_by | INTEGER | ? |
 | user_notified_seen | BOOLEAN | ? default=False |
+| class_id | INTEGER | FK→classes.id ? |
+| requested_status | VARCHAR | ? |
+| decision | VARCHAR | ? |
 | created_at | DATETIME | ? |
 
 ## system_catalogs

@@ -44,6 +44,8 @@ export interface PendingPayment {
   payment_expires_at?: string | null
   package_name?: string | null
   installment_total?: number | null
+  // true si es un pago de las propias clases de un teacher_admin (lo resuelve el superadmin)
+  is_own_payment?: boolean
   // El backend puede devolver null si el profesor fue eliminado; se deja
   // opcional para que el renderizado condicional (`{p.teacher_name && ...}`)
   // siga siendo seguro en ese caso.
@@ -327,10 +329,14 @@ export function useTeacherAppeals(teacherId: number | undefined) {
 // ─── Tickets de soporte (bugs / errores / dudas de student o teacher) ────────
 export interface SupportTicketWithUser {
   id: number
-  category: 'bug' | 'error' | 'question' | 'other'
+  category: 'bug' | 'error' | 'question' | 'other' | 'class_correction'
   subject: string
   message: string
   screen_context: string | null
+  // Solo class_correction (NEG-02)
+  class_id?: number | null
+  requested_status?: 'completed' | 'cancelled' | null
+  decision?: 'approved' | 'rejected' | null
   status: 'pending' | 'answered'
   admin_response: string | null
   created_at: string

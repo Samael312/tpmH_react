@@ -99,7 +99,8 @@ def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
 
     # Mismo mensaje para usuario no encontrado y contraseña incorrecta
     # Nunca le digas al atacante cuál de los dos falló
-    if not user or not verify_password(data.password, user.password_hash):
+    # Cuenta creada solo con Google: password_hash es NULL (verify_password daba 500).
+    if not user or not user.password_hash or not verify_password(data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas"

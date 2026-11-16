@@ -10,6 +10,9 @@ class SupportCategory(str, enum.Enum):
     error = "error"
     question = "question"
     other = "other"
+    # NEG-02: un profesor pide cambiar una clase pasada a no_show automático
+    # (completed o cancelled); la resuelve solo el superadmin.
+    class_correction = "class_correction"
 
 
 class SupportTicketStatus(str, enum.Enum):
@@ -49,6 +52,11 @@ class SupportTicket(Base):
     resolved_by = Column(Integer, nullable=True)  # user_id del staff que respondió
 
     user_notified_seen = Column(Boolean, default=False)
+
+    # Solo para category=class_correction
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
+    requested_status = Column(String, nullable=True)   # "completed" | "cancelled"
+    decision = Column(String, nullable=True)           # "approved" | "rejected"
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

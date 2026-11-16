@@ -17,6 +17,7 @@ const CATEGORY_CONFIG: Record<string, { label: string; icon: React.ReactNode }> 
   error: { label: 'Error', icon: <AlertTriangle className="w-3.5 h-3.5" /> },
   question: { label: 'Duda', icon: <HelpCircle className="w-3.5 h-3.5" /> },
   other: { label: 'Otro', icon: <MoreHorizontal className="w-3.5 h-3.5" /> },
+  class_correction: { label: 'Corrección de clase', icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
 }
 
 const STATUS_TABS = [
@@ -44,12 +45,17 @@ function ResolveModal({
   const [error, setError] = useState('')
   const toast = useToast()
 
-  const submit = async () => {
+  const isCorrection = ticket.category === 'class_correction'
+
+  const submit = async (decision?: 'approved' | 'rejected') => {
     if (!response.trim()) return
     setSending(true)
     setError('')
     try {
-      await api.patch(`/admin/support-tickets/${ticket.id}/resolve`, { admin_response: response.trim() })
+      await api.patch(`/admin/support-tickets/${ticket.id}/resolve`, {
+        admin_response: response.trim(),
+        ...(isCorrection ? { decision } : {}),
+      })
       toast.success('Ticket respondido correctamente')
       onResolved()
       onClose()
@@ -81,9 +87,18 @@ function ResolveModal({
           <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{ticket.message}</p>
         </div>
 
+        {isCorrection && (
+          <div className="bg-amber-50 rounded-2xl p-4 mb-5 text-sm text-amber-800">
+            Clase #{ticket.class_id}: pasar de <strong>no asistió</strong> a{' '}
+            <strong>{ticket.requested_status === 'completed' ? 'completada (el crédito sigue consumido)' : 'cancelada (se devuelve el crédito)'}</strong>.
+          </div>
+        )}
+
         {ticket.status === 'answered' ? (
           <div className="bg-emerald-50 rounded-2xl p-4">
-            <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Ya respondido</p>
+            <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">
+              Ya respondido{ticket.decision ? ` · ${ticket.decision === 'approved' ? 'aprobada' : 'rechazada'}` : ''}
+            </p>
             <p className="text-sm text-emerald-800 leading-relaxed whitespace-pre-wrap">{ticket.admin_response}</p>
           </div>
         ) : (
@@ -109,8 +124,26 @@ function ResolveModal({
               </div>
             )}
 
+            {isCorrection ? (
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => submit('rejected')}
+                  disabled={!response.trim() || sending}
+                  className="flex-1 py-3.5 text-sm font-bold text-rose-600 bg-rose-50 rounded-xl disabled:opacity-50"
+                >
+                  Rechazar
+                </button>
+                <button
+                  onClick={() => submit('approved')}
+                  disabled={!response.trim() || sending}
+                  className="flex-1 py-3.5 text-sm font-bold text-white bg-emerald-500 rounded-xl disabled:opacity-50"
+                >
+                  Aprobar cambio
+                </button>
+              </div>
+            ) : (
             <button
-              onClick={submit}
+              onClick={() => submit()}
               disabled={!response.trim() || sending}
               className="w-full mt-4 py-3.5 text-sm font-bold text-white rounded-xl
                          bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500
@@ -127,6 +160,7 @@ function ResolveModal({
                 </>
               )}
             </button>
+            )}
           </>
         )}
       </div>
@@ -179,6 +213,7 @@ export default function AdminSupportPage() {
           <option value="error">Error</option>
           <option value="question">Duda</option>
           <option value="other">Otro</option>
+          <option value="class_correction">Corrección de clase</option>
         </select>
       </div>
 

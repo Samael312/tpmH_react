@@ -28,11 +28,11 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/admin/flow-tester` | `app/(superadmin)/admin/flow-tester/page.tsx` | superadmin, teacher_admin | 552 |  |
 | `/admin/god-mode` | `app/(superadmin)/admin/god-mode/page.tsx` | superadmin, teacher_admin | 97 |  |
 | `/admin/logs` | `app/(superadmin)/admin/logs/page.tsx` | superadmin, teacher_admin | 31 |  |
-| `/admin/payments` | `app/(superadmin)/admin/payments/page.tsx` | superadmin, teacher_admin | 576 |  |
+| `/admin/payments` | `app/(superadmin)/admin/payments/page.tsx` | superadmin, teacher_admin | 582 |  |
 | `/admin/settings` | `app/(superadmin)/admin/settings/page.tsx` | superadmin, teacher_admin | 1611 |  |
 | `/admin/students/banned` | `app/(superadmin)/admin/students/banned/page.tsx` | superadmin, teacher_admin | 165 |  |
 | `/admin/students` | `app/(superadmin)/admin/students/page.tsx` | superadmin, teacher_admin | 472 |  |
-| `/admin/support` | `app/(superadmin)/admin/support/page.tsx` | superadmin, teacher_admin | 244 |  |
+| `/admin/support` | `app/(superadmin)/admin/support/page.tsx` | superadmin, teacher_admin | 279 |  |
 | `/admin/teachers` | `app/(superadmin)/admin/teachers/page.tsx` | superadmin, teacher_admin | 649 |  |
 | `/admin/users` | `app/(superadmin)/admin/users/page.tsx` | superadmin, teacher_admin | 1064 | frontend/app/(superadmin)/admin/users/page.tsx |
 | `/teacher/availability` | `app/(teacher)/teacher/availability/page.tsx` | teacher, teacher_admin | 420 |  |

@@ -1,17 +1,22 @@
 # app/api/v1/endpoints/support.py
 
+from datetime import timedelta
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_teacher_or_teacher_admin, get_current_user
+from app.core.class_logic import CLASS_STATUS_WINDOW_HOURS
+from app.core.timezone import utc_now
+from app.models.class_ import Class, ClassType
 from app.core.email import send_admin_new_support_ticket_email
 from app.core.notifications import create_notification
 from app.db.base import get_db
 from app.models.support_ticket import SupportCategory, SupportTicket, SupportTicketStatus
 from app.models.user import User, UserRole
 from app.schemas.support import (
+    CreateClassCorrectionRequest,
     CreateSupportTicketRequest,
     SupportTicketResponse,
     UnreadSupportCountResponse,
@@ -87,6 +92,73 @@ def create_support_ticket(
             message=data.message,
         )
 
+    return ticket
+
+
+@router.post("/class-corrections", response_model=SupportTicketResponse, status_code=status.HTTP_201_CREATED)
+def create_class_correction_ticket(
+    data: CreateClassCorrectionRequest,
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    NEG-02: el profesor (o teacher_admin) pide cambiar una clase suya que quedo en
+    `no_show` una vez cerrada la ventana de 72 h. Lo resuelve el superadmin:
+    - `completed`: no cambia el credito (no_show y completed ya lo consumen).
+    - `cancelled`: se devuelve el credito.
+    """
+    teacher = current_user.teacher_profile
+    if not teacher:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Perfil de profesor no encontrado")
+    class_ = db.query(Class).filter(Class.id == data.class_id, Class.teacher_id == teacher.id).first()
+    if not class_:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Clase no encontrada")
+    if class_.class_type == ClassType.external:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Las clases externas no se pueden corregir")
+    if class_.status != "no_show":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Solo se puede pedir correccion de una clase en estado no_show")
+    if utc_now() - class_.end_time_utc <= timedelta(hours=CLASS_STATUS_WINDOW_HOURS):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Aun estas dentro de las {CLASS_STATUS_WINDOW_HOURS} h: cambia el estado directamente desde la clase.",
+        )
+    if db.query(SupportTicket).filter(
+        SupportTicket.class_id == class_.id,
+        SupportTicket.category == SupportCategory.class_correction,
+        SupportTicket.status == SupportTicketStatus.pending,
+    ).first():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay una solicitud de correccion pendiente para esta clase")
+
+    label = "completada" if data.requested_status == "completed" else "cancelada"
+    ticket = SupportTicket(
+        user_id=current_user.id,
+        category=SupportCategory.class_correction,
+        subject=f"Correccion de clase #{class_.id}: pasar a {label}",
+        message=data.reason,
+        class_id=class_.id,
+        requested_status=data.requested_status,
+    )
+    db.add(ticket)
+    db.flush()
+    create_notification(
+        db,
+        type="support_ticket",
+        title="Solicitud de correccion de clase",
+        message=f"{current_user.name} {current_user.surname}: clase #{class_.id} -> {label}",
+        related_support_ticket_id=ticket.id,
+    )
+    db.commit()
+    db.refresh(ticket)
+
+    for admin in db.query(User).filter(User.role == UserRole.superadmin, User.is_active == True).all():  # noqa: E712
+        send_admin_new_support_ticket_email(
+            to_email=admin.email,
+            user_name=f"{current_user.name} {current_user.surname}",
+            user_role_label="Profesor",
+            category_label="Correccion de clase",
+            subject=ticket.subject,
+            message=ticket.message,
+        )
     return ticket
 
 

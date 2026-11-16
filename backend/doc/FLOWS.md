@@ -28,16 +28,16 @@ Registro `teacher` -> onboarding (`/teacher/onboarding`: perfil, vídeo, zona ho
 - Reagendar: `PATCH /classes/{id}/reschedule` (alumno, regla 12 h), `reschedule_class_teacher`, y variante admin (`classes.py` ~418/780/833). Estado resultante: `resolve_status_after_reschedule`. Ninguno valida disponibilidad declarada (AUD-01).
 
 ## 5. Renovación y cambio de paquete
-`notify-payment` con `type`: `renewal` (mismo enrollment, AUD-03), `package_change` (upgrade: paga diferencia; downgrade/`full_refund`: pide `payment_info`), `unlimited_recharge` (más créditos prepagados). Al aprobar (`validate_payment`) se aplican créditos/estado. Endpoints heredados `/packages/request-renewal`, `/request-package-change`, `/{id}/cancel-package-change` **no los usa el frontend** (código muerto con menos protecciones).
+`notify-payment` con `type`: `renewal` (mismo enrollment; suma los créditos sobrantes), `package_change` (upgrade: paga diferencia; downgrade/`full_refund`: pide `payment_info`), `unlimited_recharge` (más créditos prepagados). Al aprobar (`validate_payment`) se aplican créditos/estado. Endpoints heredados `/packages/request-renewal`, `/request-package-change`, `/{id}/cancel-package-change` **no los usa el frontend** (código muerto con menos protecciones).
 
 ## 6. Dinero del profesor
-Billetera `TeacherWallet` (`available_balance`, `total_earned`, `total_withdrawn`) se acredita al aprobar pagos. Retiro: `POST /payments/request-withdrawal` -> staff `POST /payments/admin/withdrawals/{id}/process` (`complete`/`reject`) -> email `send_withdrawal_processed_email`. `GET /payments/admin/withdrawals/pending` **sin decorador, devuelve 404** (AUD-12).
+Billetera `TeacherWallet` (`available_balance`, `total_earned`, `total_withdrawn`) se acredita al aprobar pagos. Retiro: `POST /payments/request-withdrawal` -> staff `POST /payments/admin/withdrawals/{id}/process` (`complete`/`reject`) -> email `send_withdrawal_processed_email`. `GET /payments/admin/withdrawals/pending` lista los retiros pendientes.
 
 ## 7. Cohortes (grupal)
 Profesor crea cohorte (`cohorts.py`) -> alumnos se inscriben (Enrollment ligado a la cohorte, pago como paquete) -> al llegar al mínimo o cierre manual (`close_cohort`) se generan sesiones `Class(group)` + `ClassParticipant` -> cancelar (`cancel_cohort`) libera cupos, cancela futuras (`cancel_future_cohort_sessions`) y avisa. Migrar a individual: `release_cohort_seat`.
 
 ## 8. Disponibilidad y slots
-Profesor edita semanal/excepciones (`availability.py`); alumno pide slots (`GET /availability/slots` requiere login) -> `get_available_slots_utc` resta clases ocupadas y buffer; el frontend (`lib/scheduleUtc.ts`, `lib/tzFormat.ts`) convierte a hora local. `/availability/featured-teacher/slots` roto para alumnos (AUD-20).
+Profesor edita semanal/excepciones (`availability.py`); alumno pide slots (`GET /availability/slots` requiere login) -> `get_available_slots_utc` resta clases ocupadas y buffer; el frontend (`lib/scheduleUtc.ts`, `lib/tzFormat.ts`) convierte a hora local. `/availability/featured-teacher/slots` va declarada antes de `/{teacher_username}/slots` (si no, esta la tapa).
 
 ## 9. Calendar / Meet
 Profesor conecta Google Calendar (`calendar.py` OAuth; `state`=id de perfil sin verificar) -> `sync_calendar_logic` (30 min) lee busy e importa eventos externos (Preply, etc.) como `Class(external)`; eventos creados por la plataforma se marcan con `extendedProperties` para no reimportarlos.

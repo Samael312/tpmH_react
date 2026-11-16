@@ -178,10 +178,10 @@ export default function TeacherPaymentsPage() {
                 )}
 
                 {isPendingTab ? (
-                  !canManagePayments ? (
+                  !canManagePayments || p.is_own_payment ? (
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-2 rounded-xl">
-                        En espera de confirmación por el staff
+                        {p.is_own_payment ? "Pendiente de revisión por el superadmin" : "Pendiente de revisión por el staff"}
                       </span>
                     </div>
                   ) : (

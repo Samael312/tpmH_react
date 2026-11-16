@@ -164,6 +164,8 @@ export interface TeacherPaymentEntry {
   class_start_utc?: string | null
   package_name?: string | null
   installment_total?: number | null
+  // true si es un pago de las propias clases de un teacher_admin (lo resuelve el superadmin)
+  is_own_payment?: boolean
   // Solo en /payments/pending-review (pagos de una sola clase con vencimiento)
   payment_expires_at?: string | null
   // Solo en /payments/history

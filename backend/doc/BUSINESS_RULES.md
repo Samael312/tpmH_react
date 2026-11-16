@@ -7,8 +7,8 @@ Verificado con `tests/audit` salvo donde se indica. Los bugs conocidos que contr
 | Rol | Puede |
 |---|---|
 | `student` | reservar, pagar (notificar), cancelar/reagendar sus clases, tareas, reseñas, chat, soporte |
-| `teacher` | su agenda, disponibilidad, paquetes, alumnos, estados de sus clases, **validar pagos de sus alumnos**, billetera y retiros, materiales/tareas |
-| `teacher_admin` | todo lo de `teacher` + panel staff (`get_current_staff`): pagos, retiros, config, comisiones (ver SEC-03), God Mode solo sobre sus propios datos |
+| `teacher` | su agenda, disponibilidad, paquetes, alumnos, estados de sus clases, ver sus pagos como «pendiente de revisión» (**no aprueba ni rechaza**: solo staff), billetera y retiros, materiales/tareas |
+| `teacher_admin` | todo lo de `teacher` + panel staff (`get_current_staff`): pagos, retiros, config, comisiones; **no valida los pagos de sus propias clases ni cambia su propia comisión** (lo hace el `superadmin`), God Mode solo sobre sus propios datos |
 | `superadmin` | todo el panel, config de plataforma, comisiones, retiros, God Mode global |
 
 Registro (`POST /auth/register`) solo admite `student`/`teacher`; los roles privilegiados se rechazan. Un profesor nace `pending` y necesita aprobación staff (`approved`; también `suspended`, etc.).
@@ -55,13 +55,13 @@ Un slot cancelado se puede volver a reservar. Reagendar al mismo horario se perm
 
 ## Paquetes y créditos
 
-- Paquete finito: `classes_count`, `price`, `price_per_class` (obligatorio, `price_per_class × classes_count == price`), `duration_minutes`. Ilimitado: `classes_count = NULL`, se compran **créditos prepagados** (`credits_requested`, ≥1) a precio unitario; `prepaid_unlimited_credits` baja al agendar y sube al cancelar; recarga con tipo `unlimited_recharge` (`credits_requested ≤ 0` hoy se acepta: AUD-21).
+- Paquete finito: `classes_count`, `price`, `price_per_class` (obligatorio, `price_per_class × classes_count == price`), `duration_minutes`. Ilimitado: `classes_count = NULL`, se compran **créditos prepagados** (`credits_requested`, ≥1) a precio unitario; `prepaid_unlimited_credits` baja al agendar y sube al cancelar; recarga con tipo `unlimited_recharge` (`credits_requested < 1` -> 400).
 - Comprar exige haber **completado la prueba** con ese profesor (si no, 400), paquete activo y del profesor (si no, 404).
-- **Cuotas** (`allow_installments`, `installment_count`, `installment_amount`): cada cuota aprobada libera créditos proporcionales (`unlocked_credits`: 2 de 4 tras la 1ª, `payment_status=partially_paid`; tras la 2ª, 4 y `paid`). Sin cuota pagada no se pueden agendar los créditos restantes. Paquete sin cuotas + `installment_index` -> 400.
+- **Cuotas** (`allow_installments`, `installment_count`, `installment_amount`; la cuota fijada a mano no puede dejar la última en ≤ 0; la última cuota = precio − cuota × (n−1)): cada cuota aprobada libera `ceil(clases/cuotas)` créditos con tope en el total del paquete (la última libera el resto) (`unlocked_credits`: 2 de 4 tras la 1ª, `payment_status=partially_paid`; tras la 2ª, 4 y `paid`). Sin cuota pagada no se pueden agendar los créditos restantes. Paquete sin cuotas + `installment_index` -> 400.
 - Doble clic: la segunda notificación idéntica en <15 s se trata como duplicada (devuelve el pago existente); notificar con un paquete ya pagado -> 400.
 - Pago rechazado: el alumno vuelve a `needs_package`, ve `last_rejected_payment.rejection_reason` y puede reintentar.
-- **Renovación** (`type=renewal`): reutiliza el mismo enrollment. Si estaba agotado queda sin créditos tras aprobar (AUD-03); si estaba activo pierde los sobrantes (`unlocked_credits = 0`).
-- **Cambio de paquete** (`type=package_change`): mismo paquete -> 400; **upgrade** cobra solo la diferencia (4 clases faltantes × `price_per_class` = 100 en el test; al aprobar `unlocked_credits` = nuevas clases); **downgrade/reembolso** exige `payment_info` con contacto (no vacío; solo espacios -> 422). `min_classes_before_package_change` (default 0) usa `classes_used`.
+- **Renovación** (`type=renewal`): reutiliza el mismo enrollment y reinicia `classes_used`. Los créditos sobrantes **se suman** a los del paquete nuevo (disponibles = sobrantes + clases del paquete nuevo). Si venía de un paquete ilimitado, los prepagados sobrantes pasan al nuevo.
+- **Cambio de paquete** (`type=package_change`): mismo paquete -> 400; **upgrade** cobra `(clases del nuevo − créditos disponibles) × price_per_class del nuevo` (ej.: P4 a $25 con 2 disponibles -> P8 a $25: 6 × 25 = $150) y el alumno queda con **todos los créditos del paquete nuevo disponibles** (8); las clases ya usadas no cuentan contra el nuevo (`unlocked_credits` = ocupadas + clases del nuevo, `classes_used` = 0). **Mismo nº de clases** sin consumir ninguna se trata como el caso A: cobra/reembolsa la diferencia de precio, no es gratis. **Bajada con clases usadas:** `diferencia = precio del nuevo − (price_per_class del actual × clases sin usar)`; paga si es positiva, reembolso si es negativa, y también queda con los créditos completos del nuevo; **downgrade/reembolso** exige `payment_info` con contacto (no vacío; solo espacios -> 422). `min_classes_before_package_change` (default 0) usa `classes_used`.
 - `manual-grant` (profesor/staff da créditos sin pago): en paquete ilimitado da 0 créditos.
 
 ## Dinero
@@ -71,8 +71,8 @@ Un slot cancelado se puede volver a reservar. Reagendar al mismo horario se perm
 - La comisión se **congela en el pago**: cambiarla después no altera pagos ya aprobados.
 - Un pago no se aprueba dos veces. Rechazar exige `rejection_reason` y no acredita nada. Un alumno no puede validar; un profesor solo valida pagos de sus alumnos.
 - `commission_rate` NULL rompe (AUD-11). `default_commission_rate` de la config **no se aplica** a profesores nuevos.
-- **Reembolso**: pone `amount_teacher = 0` y **no descuenta** la billetera (AUD-14).
-- **Retiros**: `POST /payments/request-withdrawal` (`amount > 0`, `payment_info`); no más que `available_balance` (con 85.00 disponible, 85.01 -> 400, 85.00 -> 201 y saldo 0.0); un solo retiro pendiente; el monto se reserva al solicitar. Staff `POST /payments/admin/withdrawals/{id}/process` con `complete` (suma `total_withdrawn`, guarda `reference`) o `reject` (devuelve saldo). Procesar dos veces -> 404 la segunda. Mínimo $10 solo en la UI (AUD-13). Listar pendientes está roto (AUD-12).
+- **Reembolso** (`payment_type=refund`): al aprobarlo se descuenta de la billetera del profesor **solo su parte** (`monto × neto/total` del último pago aprobado del enrollment, con la comisión congelada en ese pago; la plataforma asume la suya: 100 pagados -> 85 al profesor, reembolso de 100 descuenta 85). `amount_teacher`/`amount_platform` del reembolso quedan en negativo. Si el saldo del profesor no cubre su parte (ya retiró) se **bloquea** (400 «contacta con soporte»), tanto al pedirlo como al aprobarlo. **Plazo:** 7 días desde la aprobación del último pago real del enrollment, solo en reembolsos voluntarios (bajada de paquete con devolución); los reembolsos por profesor suspendido o grupo cancelado no tienen plazo.
+- **Retiros**: `POST /payments/request-withdrawal` (`amount > 0`, `payment_info`); no más que `available_balance` (con 85.00 disponible, 85.01 -> 400, 85.00 -> 201 y saldo 0.0); un solo retiro pendiente; el monto se reserva al solicitar. Staff `POST /payments/admin/withdrawals/{id}/process` con `complete` (suma `total_withdrawn`, guarda `reference`) o `reject` (devuelve saldo). Procesar dos veces -> 404 la segunda. Mínimo $10 solo en la UI (AUD-13). Listar pendientes: `GET /payments/admin/withdrawals/pending`.
 
 ## Disponibilidad
 
@@ -91,7 +91,21 @@ Semanal: filas `TeacherAvailability` (`day_of_week`, `start_time_utc`, `end_time
 
 ## Cuenta
 
-- Contraseña 8–128 caracteres; contraseñas unicode muy largas funcionan (se verificó una de 240 bytes). Username 3–50, único, minúsculas en registro (login lo distingue: AUD-16). Email sin normalizar (AUD-17). Login con cuenta solo-Google -> 500 (AUD-19).
+- Contraseña 8–128 caracteres; contraseñas unicode muy largas funcionan (se verificó una de 240 bytes). Username 3–50, único, minúsculas en registro (login lo distingue: AUD-16). Email sin normalizar (AUD-17). Login con contraseña en cuenta solo-Google -> 401.
 - Recuperación: respuesta idéntica exista o no el email; token de un solo uso con caducidad.
 - `DELETE /users/me` anonimiza (no comprueba saldo/paquetes/clases).
 - Rate limits: login 10/min, register 5/h, forgot-* 5/h, reset 10/h, google 20/min, google/register 10/h, change-password 10/h; global por IP 200/min (SEC-01).
+
+## Corrección de clases `no_show` automáticas (NEG-02)
+
+- `finalize_past_classes`: una clase `finalized` cuyo fin fue hace más de **72 h** (`CLASS_STATUS_WINDOW_HOURS`) pasa sola a `no_show` y **consume el crédito** (`classes_used` +1). `confirmed` pasada -> `finalized` -> `no_show` se resuelve en la misma pasada si el job estuvo caído.
+- Dentro de las 72 h el profesor cambia el estado directo (`PATCH /classes/{id}/status`); después queda bloqueado.
+- Pasadas las 72 h, el profesor o `teacher_admin` pide corregirla con `POST /support/class-corrections` (`class_id`, `requested_status` = `completed` | `cancelled`, `reason` ≥ 10 caracteres). Solo clases propias, en `no_show`, no externas, y sin otra solicitud pendiente.
+- Resuelve **solo el `superadmin`** con `PATCH /admin/support-tickets/{id}/resolve` + `decision` (`approved` | `rejected`). Aprobada `completed`: no cambia el crédito. Aprobada `cancelled`: se devuelve el crédito. Rechazada: la clase no cambia. Requiere migración Alembic `d1e2f3a4b5c6` (nuevo valor de enum `class_correction` y columnas `class_id`, `requested_status`, `decision`).
+
+## Pagos: quién aprueba (NEG-01)
+
+- `PATCH /payments/{id}/validate` solo para `superadmin` y `teacher_admin`. Los profesores normales reciben 403 y ven sus pagos como «pendiente de revisión».
+- Un `teacher_admin` recibe 403 al validar pagos cuyo profesor es él mismo (`is_own_payment` en `/payments/pending-review` e `/history`); los resuelve el `superadmin`.
+- `PATCH /admin/teachers/{id}/commission`: un `teacher_admin` no puede cambiar su propia comisión (403); sí la de otros.
+- `POST /payments/manual-grant` (dar créditos sin pago) sigue permitido a profesores para sus alumnos: no mueve dinero.

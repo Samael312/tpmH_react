@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from typing import Optional
+from typing import Literal, Optional
 from datetime import datetime
 
 
@@ -39,6 +39,23 @@ class CreateSupportTicketRequest(BaseModel):
         return v
 
 
+class CreateClassCorrectionRequest(BaseModel):
+    """Profesor/teacher_admin pide corregir una clase que pasó a no_show automáticamente."""
+    class_id: int
+    requested_status: Literal["completed", "cancelled"]
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, v):
+        v = v.strip()
+        if len(v) < 10:
+            raise ValueError("Describe la situación y los motivos (mínimo 10 caracteres)")
+        if len(v) > 2000:
+            raise ValueError("El texto es demasiado largo (máx. 2000 caracteres)")
+        return v
+
+
 class SupportTicketResponse(BaseModel):
     """Vista del propio usuario sobre sus tickets (bandeja 'Mi soporte')."""
     id: int
@@ -51,6 +68,10 @@ class SupportTicketResponse(BaseModel):
     created_at: datetime
     resolved_at: Optional[datetime] = None
     user_notified_seen: bool
+    # Solo en tickets class_correction
+    class_id: Optional[int] = None
+    requested_status: Optional[str] = None
+    decision: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -64,6 +85,8 @@ class UnreadSupportCountResponse(BaseModel):
 
 class ResolveSupportTicketRequest(BaseModel):
     admin_response: str
+    # Obligatorio en tickets class_correction: aprueba (aplica el cambio) o rechaza.
+    decision: Optional[Literal["approved", "rejected"]] = None
 
     @field_validator("admin_response")
     @classmethod

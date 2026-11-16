@@ -634,6 +634,11 @@ def get_student_booking_stage(student_id: int, teacher_id: int, db: Session) -> 
 
 # ─── Finalización automática ────────────────────────────────────────────────
 
+# Pasadas estas horas desde el fin de la clase el profesor ya no puede marcarla
+# (completed/no_show/finalized) y una clase `finalized` pasa sola a `no_show`.
+CLASS_STATUS_WINDOW_HOURS = 72
+
+
 def finalize_past_classes(db: Session) -> int:
     """
     Marca como 'finalized' las clases confirmadas cuyo horario ya terminó,
@@ -651,6 +656,25 @@ def finalize_past_classes(db: Session) -> int:
     for c in expired_confirmed:
         c.status = "finalized"
         count += 1
+
+    # NEG-02: pasadas CLASS_STATUS_WINDOW_HOURS sin que el profesor la marque,
+    # una clase `finalized` pasa a `no_show` (consume el credito). El profesor
+    # puede pedir corregirla con un ticket que resuelve el superadmin.
+    # Misma pasada: si el job estuvo caido, confirmed -> finalized -> no_show
+    # se resuelve de una vez.
+    auto_cutoff = now - timedelta(hours=CLASS_STATUS_WINDOW_HOURS)
+    unresolved = db.query(Class).filter(
+        Class.status == "finalized",
+        Class.end_time_utc < auto_cutoff,
+    ).all()
+    # La sesion puede no hacer autoflush: sumar a mano las que se acaban de finalizar.
+    unresolved += [c for c in expired_confirmed if c.end_time_utc < auto_cutoff and c not in unresolved]
+    for c in unresolved:
+        sync_student_lifetime_class_counter(c, "finalized", "no_show", db=db)
+        c.status = "no_show"
+        count += 1
+        if c.class_type == ClassType.regular and c.enrollment_id:
+            update_enrollment_counter(c.enrollment_id, delta=1, db=db)
 
     # BUG-04/12 fix: "pending" y "pending_payment" para clases regulares ya
     # no pueden producirse (el flujo de "reservar y pagar después" fue

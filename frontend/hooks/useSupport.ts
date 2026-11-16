@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 
-export type SupportCategory = "bug" | "error" | "question" | "other";
+export type SupportCategory = "bug" | "error" | "question" | "other" | "class_correction";
 export type SupportTicketStatus = "pending" | "answered";
 
 export interface SupportTicket {

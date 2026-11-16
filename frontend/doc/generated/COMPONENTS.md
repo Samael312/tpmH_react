@@ -10,7 +10,7 @@
 - `components/chat/ChatWidget.tsx` (100 líneas, referenciado en 6 archivos) — exports: ChatWidget
 - `components/chat/ConversationList.tsx` (87 líneas, referenciado en 3 archivos) — exports: ConversationList
 - `components/chipi/ChipiWidget.tsx` (541 líneas, referenciado en 46 archivos) — exports: ChipiWidget
-- `components/classes/ClassCard.tsx` (783 líneas, referenciado en 6 archivos) — exports: ClassCardData, ClassCard
+- `components/classes/ClassCard.tsx` (867 líneas, referenciado en 6 archivos) — exports: ClassCardData, ClassCard
 - `components/classes/GroupWaitingPanel.tsx` (180 líneas, referenciado en 2 archivos) — exports: GroupWaitingPanel — frontend/components/classes/GroupWaitingPanel.tsx
 - `components/classes/MeetLinkModal.tsx` (194 líneas, referenciado en 1 archivos) — exports: MeetLinkModalClassItem, MeetLinkModal
 - `components/classes/RescheduleModal.tsx` (498 líneas, referenciado en 5 archivos) — exports: RescheduleCalendar, RescheduleModalClassItem, RescheduleModal
@@ -58,7 +58,7 @@
 
 ## hooks/
 
-- `hooks/useAdminData.ts` (561 líneas, referenciado en 9 archivos) — exports: PendingPayment, Teacher, Student, WithdrawalRecord, PaymentHistoryItem, usePaymentsHistory, useStudents, useStudentDetail, useWithdrawals, useAdminStats, usePendingPayments, useTeachers
+- `hooks/useAdminData.ts` (567 líneas, referenciado en 9 archivos) — exports: PendingPayment, Teacher, Student, WithdrawalRecord, PaymentHistoryItem, usePaymentsHistory, useStudents, useStudentDetail, useWithdrawals, useAdminStats, usePendingPayments, useTeachers
 - `hooks/useBusinessRules.ts` (63 líneas, referenciado en 7 archivos) — exports: BusinessRules, CLASS_DURATION_OPTIONS, useBusinessRules
 - `hooks/useChat.ts` (257 líneas, referenciado en 13 archivos) — exports: ChatConversation, ChatMessage, markConversationRead, useChatConversations, useUnreadChatCount, openDirectConversation, openGroupConversation, useChatSocketBootstrap, useChatThread
 - `hooks/useChatAdmin.ts` (88 líneas, referenciado en 1 archivos) — exports: ChatConversationAdmin, useChatAdminConversations, useChatAdminMessages — hooks/useChatAdmin.ts N5: panel de auditoría de chats para superadmin/teacher_admin — ver backend/app/api/v1/endpoints/chat.py (sección "N5: Auditoría"). Listar
@@ -69,7 +69,7 @@
 - `hooks/useStudentData.ts` (699 líneas, referenciado en 25 archivos) — exports: AVAILABLE_SLOTS_QUERY_PREFIX, invalidateAvailableSlots, BookingStage, RejectedPaymentInfo, PendingRechargeInfo, StudentClass, AvailableSlot, PackageInfo, StudentEnrollment, StudentMaterial, StudentHomework, TeacherResolution
 - `hooks/useSupport.ts` (95 líneas, referenciado en 3 archivos) — exports: SupportCategory, SupportTicketStatus, SupportTicket, useMySupportTickets, createSupportTicket, markSupportTicketSeen, useUnreadSupportCount, useSupportQueryInvalidation
 - `hooks/useSystemCatalogs.ts` (54 líneas, referenciado en 7 archivos) — exports: StudentGoal, PaymentMethodOption, ThemePreset, SubjectTheme, GoalCategoryKey, StudentGoalsCatalog, SystemCatalogs, SYSTEM_CATALOGS_QUERY_KEY, useSystemCatalogs
-- `hooks/useTeacherData.ts` (713 líneas, referenciado en 12 archivos) — exports: TeacherClass, TeacherProfile, WeeklySlot, WalletData, CalendarStatus, StudentEnrollmentSummary, StudentMaterialSummary, TeacherStudentFull, WithdrawalHistoryItem, IncomeHistoryItem, TeacherMaterial, TeacherPaymentEntry
+- `hooks/useTeacherData.ts` (715 líneas, referenciado en 12 archivos) — exports: TeacherClass, TeacherProfile, WeeklySlot, WalletData, CalendarStatus, StudentEnrollmentSummary, StudentMaterialSummary, TeacherStudentFull, WithdrawalHistoryItem, IncomeHistoryItem, TeacherMaterial, TeacherPaymentEntry
 - `hooks/useToast.ts` (16 líneas, referenciado en 37 archivos) — exports: useToast
 
 ## store/

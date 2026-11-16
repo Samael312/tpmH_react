@@ -6,7 +6,6 @@ Llamadas `api.<verbo>(...)` por archivo (regex; las URLs construidas dinámicame
 
 - GET `/admin/support-tickets${qs ` en `hooks/useAdminData.ts`
 - GET `/admin/teachers{x}` en `hooks/useAdminData.ts`
-- GET `/payments/admin/withdrawals/pending` en `hooks/useAdminData.ts`
 - GET `/payments/booking-status{x}` en `hooks/useStudentData.ts`
 
 ## Por archivo
@@ -48,7 +47,7 @@ Llamadas `api.<verbo>(...)` por archivo (regex; las URLs construidas dinámicame
 - `app/(teacher)/teacher/profile/page.tsx`: DELETE /teachers/me/video, DELETE /users/me, PATCH /teachers/me/profile, PATCH /users/me, POST /teachers/me/video, POST /users/me/change-password, POST /users/me/photo
 - `app/(teacher)/teacher/wallet/page.tsx`: POST /payments/request-withdrawal
 - `components/chipi/ChipiWidget.tsx`: POST /chipi/chat
-- `components/classes/ClassCard.tsx`: DELETE /classes/teacher/{x}, DELETE /classes/{x}, DELETE /classes/{x}/leave, PATCH /classes/{x}/status, POST /cohorts/{x}/leave
+- `components/classes/ClassCard.tsx`: DELETE /classes/teacher/{x}, DELETE /classes/{x}, DELETE /classes/{x}/leave, PATCH /classes/{x}/status, POST /cohorts/{x}/leave, POST /support/class-corrections
 - `components/classes/MeetLinkModal.tsx`: PATCH /classes/{x}/meet-link
 - `components/payments/BuyCreditsModal.tsx`: POST /payments/notify-payment
 - `components/payments/PackageCheckout.tsx`: POST /payments/notify-payment

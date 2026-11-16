@@ -224,7 +224,6 @@ def test_unlimited_requires_positive_credits(client, world, db):
         assert r.status_code == 400, (c, r.status_code)
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-21: unlimited_recharge acepta credits_requested negativo (pago de monto negativo)")
 def test_unlimited_recharge_negative_or_zero_rejected(client, world, db):
     unl = _unlimited(db, world["tp"])
     complete_trial(client, world)

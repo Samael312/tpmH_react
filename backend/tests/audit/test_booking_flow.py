@@ -107,7 +107,8 @@ def test_student_cannot_touch_other_students_class(client, world, db):
     assert client.delete(f"{API}/classes/teacher/{cid}", headers=hdr(other)).status_code == 403
 
 
-def test_finalize_past_classes_leaves_finalized_forever(client, world, db):
+def test_finalize_past_classes_turns_old_unresolved_class_into_no_show(client, world, db):
+    """NEG-02: una clase sin marcar 72 h después de terminar pasa a no_show y consume el crédito."""
     from app.core.class_logic import finalize_past_classes
     from app.core.timezone import utc_now
     eid, _ = ready_student(client, world)
@@ -116,9 +117,7 @@ def test_finalize_past_classes_leaves_finalized_forever(client, world, db):
     c.start_time_utc = utc_now() - timedelta(hours=100)
     c.end_time_utc = utc_now() - timedelta(hours=99)
     db.commit()
-    assert finalize_past_classes(db) == 1
+    assert finalize_past_classes(db) == 2  # confirmed -> finalized -> no_show en la misma pasada
     db.expire_all()
-    assert db.get(Class, cid).status == "finalized"
+    assert db.get(Class, cid).status == "no_show"
     assert finalize_past_classes(db) == 0
-    # Documenta el hallazgo: sin intervención del profesor, queda en 'finalized'
-    assert db.get(Class, cid).status == "finalized"

@@ -178,6 +178,11 @@ export default function ClassCard({
   const [newTime, setNewTime] = useState("");
   const [error, setError] = useState("");
   const [showMeetLinkModal, setShowMeetLinkModal] = useState(false);
+  // NEG-02: pedir al soporte cambiar un no_show automatico (pasadas las 72h)
+  const [showCorrectionModal, setShowCorrectionModal] = useState(false);
+  const [correctionStatus, setCorrectionStatus] = useState<"completed" | "cancelled">("completed");
+  const [correctionReason, setCorrectionReason] = useState("");
+  const [correctionSending, setCorrectionSending] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<"leave_group" | "leave_session" | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
@@ -441,7 +446,41 @@ export default function ClassCard({
   };
 
   const statusActions: StatusAction[] = [];
+  const canRequestCorrection =
+    role === "teacher" && !readOnly && !isExternal && class_.status === "no_show" && !withinManualStatusWindow;
+  const submitCorrection = async () => {
+    if (correctionReason.trim().length < 10) {
+      toast.error("Describe la situación y los motivos (mínimo 10 caracteres)");
+      return;
+    }
+    setCorrectionSending(true);
+    try {
+      await api.post("/support/class-corrections", {
+        class_id: class_.id,
+        requested_status: correctionStatus,
+        reason: correctionReason.trim(),
+      });
+      toast.success("Solicitud enviada a soporte");
+      setShowCorrectionModal(false);
+      setCorrectionReason("");
+      onUpdate?.();
+    } catch (e) {
+      toast.error(getErrorMessage(e, "No se pudo enviar la solicitud"));
+    } finally {
+      setCorrectionSending(false);
+    }
+  };
   if (!readOnly) {
+    if (canRequestCorrection) {
+      statusActions.push({
+        key: "correction",
+        label: "Pedir corrección",
+        icon: <AlertCircle className="w-3.5 h-3.5" />,
+        onClick: () => setShowCorrectionModal(true),
+        pillClass: "text-amber-700 bg-amber-50 hover:bg-amber-100",
+        menuClass: "text-amber-700 hover:bg-amber-50",
+      });
+    }
     if (showTeacherActions && teacherNextActions.includes("completed")) {
       statusActions.push({
         key: "completed",
@@ -727,6 +766,51 @@ export default function ClassCard({
               {action.icon} {action.label}
             </button>
           ))}
+        </div>,
+        document.body
+      )}
+
+      {showCorrectionModal && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowCorrectionModal(false)} />
+          <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6">
+            <h2 className="text-lg font-black text-slate-800">Pedir corrección de clase</h2>
+            <p className="text-xs text-slate-500 mt-1 mb-4">
+              Pasadas 72 h esta clase quedó como no asistida y consumió el crédito. Soporte aprobará o rechazará el cambio.
+            </p>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Cambiar a</label>
+            <select
+              value={correctionStatus}
+              onChange={(e) => setCorrectionStatus(e.target.value as "completed" | "cancelled")}
+              className="w-full bg-slate-50 rounded-xl text-sm font-bold text-slate-700 px-4 py-3 mb-4 focus:outline-none"
+            >
+              <option value="completed">Completada (el crédito sigue consumido)</option>
+              <option value="cancelled">Cancelada (se devuelve el crédito)</option>
+            </select>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Situación y motivos</label>
+            <textarea
+              value={correctionReason}
+              onChange={(e) => setCorrectionReason(e.target.value)}
+              rows={4}
+              maxLength={2000}
+              className="w-full bg-slate-50 rounded-xl text-sm text-slate-800 px-4 py-3 focus:outline-none resize-none"
+            />
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setShowCorrectionModal(false)}
+                className="flex-1 py-3 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={submitCorrection}
+                disabled={correctionSending || correctionReason.trim().length < 10}
+                className="flex-1 py-3 text-sm font-bold text-white bg-pink-500 rounded-xl disabled:opacity-50"
+              >
+                {correctionSending ? "Enviando..." : "Enviar a soporte"}
+              </button>
+            </div>
+          </div>
         </div>,
         document.body
       )}

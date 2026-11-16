@@ -25,14 +25,14 @@ Esfuerzo: S (<2 h) · M (medio día) · L (1–2 días). Una fase = una rama y u
 
 ## Fase 1 — Críticos rápidos (dinero y rutas rotas)
 
-- [ ] **AUD-12** (S) ruta `get_pending_withdrawals` sin `@router.get` · verif.: `test_withdrawals_pending_real_path` + pestaña Retiros
-- [ ] **AUD-03** (M) renovar paquete agotado: reactivar y **sumar** los créditos sobrantes · verif.: xfail en `test_findings`
-- [ ] **AUD-14** (M) reembolso descuenta billetera; **plazo 7 días desde la aprobación** (incluye bajadas con devolución); si el saldo no cubre → bloquear y avisar «contacta con soporte» · verif.: xfail en `test_findings`
-- [ ] **AUD-21** (S) `credits_requested` > 0 · verif.: `test_unlimited_recharge_negative_or_zero_rejected`
-- [ ] **AUD-20** (S) `bypass_min_notice` recibe `Query` · verif.: `test_featured_teacher_slots_work_for_students`
-- [ ] **NEG-01** (L) pagos: quitar la aprobación a profesores normales (UI y API; solo ven «pendiente de revisión»); `superadmin`/`teacher_admin` aprueban; nadie aprueba el pago de su propio profesor · verif.: tests nuevos de permisos (relacionado con SEC-03)
-- [ ] **NEG-02** (L) `finalized` → `no_show` automático a las 72 h + ticket de soporte para corregirlo (categoría nueva, aprobación por soporte, crédito según decisión)
-- [ ] **AUD-19** (S) login cuenta solo-Google → 401, no 500
+- [x] **AUD-12** (S) ruta `get_pending_withdrawals` sin `@router.get` · verif.: `test_withdrawals_pending_real_path` + pestaña Retiros
+- [x] **AUD-03** (M) renovar paquete agotado: reactivar y **sumar** los créditos sobrantes · verif.: xfail en `test_findings`
+- [x] **AUD-14** (M) reembolso descuenta billetera; **plazo 7 días desde la aprobación** (incluye bajadas con devolución); si el saldo no cubre → bloquear y avisar «contacta con soporte» · verif.: xfail en `test_findings`
+- [x] **AUD-21** (S) `credits_requested` > 0 · verif.: `test_unlimited_recharge_negative_or_zero_rejected`
+- [x] **AUD-20** (S) `bypass_min_notice` recibe `Query` · verif.: `test_featured_teacher_slots_work_for_students`
+- [x] **NEG-01** (L) pagos: quitar la aprobación a profesores normales (UI y API; solo ven «pendiente de revisión»); `superadmin`/`teacher_admin` aprueban; nadie aprueba el pago de su propio profesor · verif.: tests nuevos de permisos (relacionado con SEC-03)
+- [x] **NEG-02** (L) `finalized` → `no_show` automático a las 72 h + ticket de soporte para corregirlo (categoría nueva, aprobación por soporte, crédito según decisión)
+- [x] **AUD-19** (S) login cuenta solo-Google → 401, no 500
 
 Salida: xfails de la fase en verde.
 
@@ -52,7 +52,7 @@ Salida: `python -m tests.audit.concurrency_live` termina con 0 FALLO.
 
 - [ ] **SEC-01** (M) `--proxy-headers` + IP real; rate-limit compartido si hay >1 worker
 - [ ] **SEC-02** (M) Chipi: rate-limit, tope de tamaño, solo `role` user/assistant; TTS con cuota
-- [ ] **SEC-03** (M) `teacher_admin` sin aprobar sus propios pagos ni fijar su comisión
+- [x] **SEC-03** (M) `teacher_admin` sin aprobar sus propios pagos ni fijar su comisión
 - [ ] **SEC-04** (M) verificación de email; Google solo con `email_verified`
 - [ ] **SEC-05** (L) JWT en cookie HttpOnly, vida corta + refresco, CSP sin `unsafe-*`
 - [ ] **SEC-06** (M) tope en `/logs/frontend`, `state` OAuth, token WS fuera de la query, `application/pptx`, borrado de cuenta

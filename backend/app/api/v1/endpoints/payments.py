@@ -1,10 +1,11 @@
 # app/routers/payments.py / app/api/v1/endpoints/payments.py
 
 import logging
-from datetime import timedelta
+from datetime import timedelta, timezone
 from typing import List, Optional
 from app.core.timezone import format_local_datetime
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 import math
 from app.auth.dependencies import (
@@ -116,6 +117,80 @@ def _credit_wallet(teacher_id: int, amount_teacher: float, db: Session):
     wallet.total_earned += amount_teacher
 
 
+REFUND_WINDOW_DAYS = 7
+_REFUNDABLE_PAYMENT_TYPES = ("package", "renewal", "package_change", "unlimited_recharge", "group_enrollment")
+
+
+def _ensure_refund_within_window(enrollment_id: int, db: Session) -> None:
+    """
+    Reembolso voluntario (bajada de paquete con devolución): solo dentro de los
+    REFUND_WINDOW_DAYS días posteriores a la aprobación del último pago real del
+    enrollment. Los reembolsos por culpa de la plataforma (profesor suspendido,
+    grupo cancelado) no pasan por aquí.
+    """
+    last_validated = db.query(func.max(Payment.validated_at)).filter(
+        Payment.enrollment_id == enrollment_id,
+        Payment.status == "approved",
+        Payment.payment_type.in_(_REFUNDABLE_PAYMENT_TYPES),
+        Payment.is_manual_grant.isnot(True),
+    ).scalar()
+    if last_validated is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No hay ningún pago aprobado que reembolsar.")
+    if last_validated.tzinfo is None:
+        last_validated = last_validated.replace(tzinfo=timezone.utc)
+    if utc_now() - last_validated > timedelta(days=REFUND_WINDOW_DAYS):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"El plazo para pedir un reembolso es de {REFUND_WINDOW_DAYS} días desde la aprobación de tu pago "
+            "y ya venció. Si crees que corresponde, contacta con soporte.",
+        )
+
+
+def _teacher_refund_share(enrollment_id: Optional[int], teacher_id: int, amount: float, db: Session) -> float:
+    """
+    Parte del reembolso que asume el profesor: `amount` × (neto del profesor / total) del último
+    pago aprobado del enrollment (comisión congelada en ese pago). La plataforma asume su comisión.
+    Sin pago de referencia, cae a (1 - commission_rate) del profesor.
+    """
+    ref = None
+    if enrollment_id is not None:
+        ref = db.query(Payment).filter(
+            Payment.enrollment_id == enrollment_id,
+            Payment.status == "approved",
+            Payment.payment_type.in_(_REFUNDABLE_PAYMENT_TYPES),
+            Payment.is_manual_grant.isnot(True),
+            Payment.amount_total > 0,
+        ).order_by(Payment.validated_at.desc()).first()
+    if ref is not None:
+        ratio = (ref.amount_teacher or 0.0) / ref.amount_total
+    else:
+        teacher = db.query(TeacherProfile).filter(TeacherProfile.id == teacher_id).first()
+        rate = teacher.commission_rate if teacher and teacher.commission_rate is not None else 0.15
+        ratio = 1 - rate
+    return round(amount * max(min(ratio, 1.0), 0.0), 2)
+
+
+def _ensure_teacher_can_cover_refund(
+    enrollment_id: Optional[int], teacher_id: int, amount: float, db: Session, lock: bool = False,
+) -> tuple[TeacherWallet | None, float]:
+    """
+    Devuelve (billetera, parte del profesor). Si el profesor ya retiró y su saldo no cubre su
+    parte, se bloquea y se avisa de que contacte con soporte.
+    """
+    share = _teacher_refund_share(enrollment_id, teacher_id, amount, db)
+    query = db.query(TeacherWallet).filter(TeacherWallet.teacher_id == teacher_id)
+    if lock:
+        query = query.with_for_update()
+    wallet = query.first()
+    balance = round(wallet.available_balance or 0.0, 2) if wallet else 0.0
+    if share > balance + 0.001:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "El saldo del profesor no cubre este reembolso en este momento. Contacta con soporte para procesarlo.",
+        )
+    return wallet, share
+
+
 DUPLICATE_PAYMENT_NOTIFICATION_WINDOW_SECONDS = 15
 
 
@@ -190,17 +265,18 @@ def _apply_instant_package_change(
     enrollment.classes_total = new_package.classes_count
     enrollment.prepaid_unlimited_credits = 0
     enrollment.change_requested_package_id = None
-    if occupied_slots >= new_package.classes_count:
-        enrollment.unlocked_credits = occupied_slots
-        enrollment.status = EnrollmentStatus.completed
-    else:
-        enrollment.unlocked_credits = new_package.classes_count
-        enrollment.status = EnrollmentStatus.active
     # Migración grupal -> individual: si el enrollment venía de una
     # cohorte y el paquete nuevo ya no es grupal, libera su cupo.
     if enrollment.cohort_id and not new_package.is_group:
         from app.core.group_cohort_logic import release_cohort_seat
         release_cohort_seat(enrollment, db)
+    # Decisión de negocio: tras el cambio el alumno queda con los créditos
+    # COMPLETOS del paquete nuevo disponibles (lo ya usado no cuenta contra
+    # él). Como "disponibles = unlocked - ocupadas", se suma lo ocupado.
+    occupied_now = _get_enrollment_occupied_slots(enrollment, db)
+    enrollment.unlocked_credits = occupied_now + new_package.classes_count
+    enrollment.classes_used = 0
+    enrollment.status = EnrollmentStatus.active
     db.commit()
 
 
@@ -256,14 +332,18 @@ def _get_enrollment_available_credits(enrollment: Enrollment, db: Session) -> in
 def _installment_credit_amount(classes_count: int, installment_count: int, installment_index: int) -> int:
     """
     Créditos que se liberan al pagar la cuota `installment_index` (1-based).
-    Cada cuota libera ceil(classes_count / installment_count), EXCEPTO la
-    última, que libera el resto exacto (puede ser menor que las anteriores).
+    Cada cuota libera ceil(classes_count / installment_count), pero el
+    acumulado nunca supera classes_count (con 1 clase y 3 cuotas: 1, 0, 0;
+    antes liberaba 1, 1, 1). La última cuota libera el resto exacto.
     """
     per_installment = math.ceil(classes_count / installment_count)
-    if installment_index >= installment_count:
-        already_unlocked = per_installment * (installment_count - 1)
-        return max(classes_count - already_unlocked, 0)
-    return per_installment
+
+    def cumulative(index: int) -> int:
+        if index >= installment_count:
+            return classes_count
+        return min(classes_count, per_installment * max(index, 0))
+
+    return cumulative(installment_index) - cumulative(installment_index - 1)
 
 
 def _sync_student_teacher_username(current_user: User, teacher: TeacherProfile, db: Session):
@@ -755,6 +835,11 @@ def get_payments_pending_review(
             "student_name": f"{student_user.name} {student_user.surname}" if student_user else "Desconocido",
             "student_username": student_user.username if student_user else None,
             "teacher_name": f"{teacher_user.name} {teacher_user.surname}" if teacher_user else None,
+            # teacher_admin no valida pagos de sus propias clases (los resuelve el superadmin)
+            "is_own_payment": bool(
+                current_user.role == UserRole.teacher_admin and current_user.teacher_profile
+                and p.teacher_id == current_user.teacher_profile.id
+            ),
         }
         # BUG-04/12: "single_class" ya no se genera para pagos nuevos, pero se
         # preserva el branch por compatibilidad con filas históricas previas
@@ -813,6 +898,11 @@ def get_payments_history(
             "student_name": f"{student_user.name} {student_user.surname}" if student_user else "Desconocido",
             "student_username": student_user.username if student_user else None,
             "teacher_name": f"{teacher_user.name} {teacher_user.surname}" if teacher_user else None,
+            # teacher_admin no valida pagos de sus propias clases (los resuelve el superadmin)
+            "is_own_payment": bool(
+                current_user.role == UserRole.teacher_admin and current_user.teacher_profile
+                and p.teacher_id == current_user.teacher_profile.id
+            ),
         }
         if p.payment_type == "single_class" and p.class_id:
             class_ = db.query(Class).filter(Class.id == p.class_id).first()
@@ -837,18 +927,27 @@ def get_payments_history(
 def validate_payment(
     payment_id: int,
     data: ValidatePaymentRequest,
-    current_user: User = Depends(get_current_staff_or_teacher),
+    current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db),
 ):
+    """
+    NEG-01: solo `superadmin` y `teacher_admin` aprueban/rechazan pagos (los profesores
+    normales ven el pago como «pendiente de revisión»). Un `teacher_admin` no valida los
+    pagos de sus propias clases: los resuelve el `superadmin`.
+    """
     payment = db.query(Payment).filter(Payment.id == payment_id, Payment.status == "pending_review").first()
     if not payment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pago no encontrado o ya procesado")
 
     from app.models.student_teacher_link import StudentTeacherLink
 
-    if current_user.role == "teacher":
-        if not current_user.teacher_profile or payment.teacher_id != current_user.teacher_profile.id:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo puedes validar pagos de tus estudiantes")
+    if current_user.role == UserRole.teacher_admin:
+        own = current_user.teacher_profile
+        if own and payment.teacher_id == own.id:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "No puedes validar los pagos de tus propias clases: los resuelve el superadmin",
+            )
 
     now = utc_now()
 
@@ -904,11 +1003,20 @@ def validate_payment(
     teacher = db.query(TeacherProfile).filter(TeacherProfile.id == payment.teacher_id).first()
 
     if payment.payment_type == "refund":
-        # Es dinero que sale de la plataforma hacia el estudiante, no un
-        # cobro — no corresponde acreditar nada a la billetera del profesor.
-        payment.amount_teacher = 0
-        payment.amount_platform = 0
-        amount_teacher = 0
+        # Dinero que sale hacia el estudiante: se descuenta de la billetera del
+        # profesor SU parte (la plataforma asume su comisión; decisión de
+        # negocio). Si el saldo no alcanza se bloquea y el pago sigue pendiente.
+        # amount_teacher/amount_platform quedan en negativo para que el
+        # historial refleje el descuento.
+        wallet, teacher_share = _ensure_teacher_can_cover_refund(
+            payment.enrollment_id, payment.teacher_id, payment.amount_total, db, lock=True,
+        )
+        if wallet is not None and teacher_share:
+            wallet.available_balance = round(wallet.available_balance - teacher_share, 2)
+            wallet.total_earned = round((wallet.total_earned or 0.0) - teacher_share, 2)
+        payment.amount_teacher = -teacher_share
+        payment.amount_platform = -round(payment.amount_total - teacher_share, 2)
+        amount_teacher = -teacher_share
     elif not payment.is_manual_grant:
         amount_teacher, amount_platform = _apply_commission(payment.amount_total, teacher)
         payment.amount_teacher = amount_teacher
@@ -999,13 +1107,24 @@ def validate_payment(
                 is_change = enrollment.status == EnrollmentStatus.pending_package_change or payment.payment_type in ("package_change", "refund")
 
                 if is_renewal or is_change:
+                    # Créditos que le sobraban ANTES del cambio (con el paquete
+                    # y el recuento de ocupadas viejos). Decisión de negocio:
+                    # en una RENOVACIÓN se suman a los del paquete nuevo; en un
+                    # CAMBIO ya están pagados en la diferencia, no se suman.
+                    old_was_finite = bool(enrollment.package and enrollment.package.classes_count is not None)
+                    if old_was_finite:
+                        prev_available = max(
+                            (enrollment.unlocked_credits or 0) - _get_enrollment_occupied_slots(enrollment, db), 0
+                        )
+                    else:
+                        prev_available = enrollment.prepaid_unlimited_credits or 0
+                    carried_credits = prev_available if is_renewal else 0
+
                     enrollment.package_id = target_package.id
                     enrollment.classes_total = target_package.classes_count
-                    enrollment.unlocked_credits = 0  # arranca limpio con el paquete nuevo
                     if target_package.classes_count is not None:
                         enrollment.prepaid_unlimited_credits = 0
-                    if is_renewal:
-                        enrollment.classes_used = 0
+                    enrollment.classes_used = 0  # ciclo nuevo (renovación o cambio)
                     enrollment.status = EnrollmentStatus.active
                     enrollment.renewal_requested_package_id = None
                     enrollment.change_requested_package_id = None
@@ -1015,6 +1134,20 @@ def validate_payment(
                     if enrollment.cohort_id and not target_package.is_group:
                         from app.core.group_cohort_logic import release_cohort_seat
                         release_cohort_seat(enrollment, db)
+                    # Base de créditos: lo ya ocupado (clases del ciclo viejo
+                    # siguen ligadas al enrollment y restan a "disponibles")
+                    # más los sobrantes arrastrados. Arriba/abajo se suman los
+                    # créditos del paquete nuevo (o de cada cuota).
+                    enrollment.unlocked_credits = (
+                        _get_enrollment_occupied_slots(enrollment, db) + carried_credits
+                        if target_package.classes_count is not None else 0
+                    )
+                    if target_package.classes_count is None and old_was_finite:
+                        # finito -> ilimitado: los sobrantes pasan a créditos
+                        # prepagados (ilimitado -> ilimitado ya conserva los suyos)
+                        enrollment.prepaid_unlimited_credits = (
+                            (enrollment.prepaid_unlimited_credits or 0) + carried_credits
+                        )
 
                 if target_package.classes_count is None:
                     # BUG-18 fix: paquete ILIMITADO. 'installment_index' aquí
@@ -1056,7 +1189,10 @@ def validate_payment(
                         if payment.payment_type == "group_enrollment"
                         else target_package.classes_count
                     )
-                    if occupied_slots >= target_credits:
+                    if is_renewal or is_change:
+                        # unlocked_credits ya trae la base (ocupadas + sobrantes)
+                        enrollment.unlocked_credits = (enrollment.unlocked_credits or 0) + target_credits
+                    elif occupied_slots >= target_credits:
                         enrollment.unlocked_credits = occupied_slots
                         enrollment.status = EnrollmentStatus.completed
                     else:
@@ -1464,6 +1600,8 @@ def notify_payment(
     if data.type == "unlimited_recharge":
         if not data.enrollment_id or not data.credits_requested:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "enrollment_id y credits_requested son requeridos")
+        if data.credits_requested < 1:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "credits_requested debe ser al menos 1")
         if not data.payment_method:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "payment_method es requerido")
         method = validate_payment_method(data.payment_method, db)
@@ -1669,7 +1807,12 @@ def notify_payment(
         # (más preciso -- evita arrastrar redondeo -- y más rápido).
         price_per_class_old = get_price_per_class(current_enrollment.package) or (old_price / old_total)
         occupied_slots = _get_enrollment_occupied_slots(current_enrollment, db)
-        is_downgrade = new_package.classes_count < old_total
+        # Mismo nº de clases sin consumir ninguna: se trata como el caso A
+        # (diferencia de precio), si no deficit == 0 regalaba el cambio a un
+        # paquete más caro (mismo nº de clases, otra duración/precio).
+        is_downgrade = new_package.classes_count < old_total or (
+            new_package.classes_count == old_total and occupied_slots == 0
+        )
 
         if not is_downgrade:
             # ── Upgrade (o lateral): comportamiento existente, se cobra
@@ -1761,6 +1904,9 @@ def notify_payment(
                 status.HTTP_400_BAD_REQUEST,
                 "Completa al menos un dato de contacto o de cuenta para poder procesar tu reembolso"
             )
+        if payment_type == "refund":
+            _ensure_refund_within_window(current_enrollment.id, db)
+            _ensure_teacher_can_cover_refund(current_enrollment.id, current_enrollment.teacher_id, amount, db)
 
         current_enrollment.status = EnrollmentStatus.pending_package_change
         current_enrollment.change_requested_package_id = new_package.id if apply_new_package else None
@@ -2005,6 +2151,8 @@ def request_refund_teacher_suspended(
     if duplicate:
         return {"payment_id": duplicate.id, "message": notify_msg}
 
+    _ensure_teacher_can_cover_refund(enrollment.id, enrollment.teacher_id, amount, db)
+
     enrollment.status = EnrollmentStatus.pending_package_change
     enrollment.change_requested_package_id = None
     enrollment.renewal_requested_package_id = None
@@ -2088,6 +2236,7 @@ def request_refund_cohort_cancelled(
         f"Se generó una solicitud de reembolso de ${amount:.2f} porque el grupo fue cancelado. "
         "En cuanto el staff la procese, vas a poder elegir un paquete o grupo nuevo."
     )
+    _ensure_teacher_can_cover_refund(enrollment.id, enrollment.teacher_id, amount, db)
 
     payment = Payment(
         enrollment_id=enrollment.id, student_id=student_id, teacher_id=enrollment.teacher_id,
@@ -2113,6 +2262,9 @@ def request_refund_cohort_cancelled(
         )
 
     return {"payment_id": payment.id, "message": notify_msg}
+
+
+@router.get("/admin/withdrawals/pending")
 def get_pending_withdrawals(
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db),

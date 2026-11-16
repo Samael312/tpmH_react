@@ -45,7 +45,6 @@ def test_two_students_cannot_book_same_trial_slot(client, world, db):
     assert r.status_code == 409, f"2º alumno agendó el mismo horario ({r.status_code})"
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-03: renovar un paquete agotado deja el enrollment 'completed' sin créditos (se cuentan las clases del ciclo anterior)")
 def test_renewal_after_full_cycle_gives_new_credits(client, world, db):
     eid, _ = ready_student(client, world)
     ids = []
@@ -251,7 +250,6 @@ def test_withdrawal_reject_restores_balance(client, world, db):
     assert _wallet(db, world["tp"].id).available_balance == 85.0
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-12: falta el decorador @router.get en get_pending_withdrawals (404)")
 def test_admin_can_list_pending_withdrawals(client, world, db):
     r = client.get(f"{API}/payments/admin/withdrawals/pending", headers=hdr(world["admin"]))
     assert r.status_code == 200
@@ -265,7 +263,6 @@ def test_withdrawal_minimum_amount(client, world, db):
     assert r.status_code == 422
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-14: un reembolso aprobado no descuenta lo ya acreditado a la billetera del profesor")
 def test_refund_claws_back_teacher_wallet(client, world, db):
     small = Package(teacher_id=world["tp"].id, name="P2", subject="English", classes_count=2,
                     price=50.0, price_per_class=25.0, duration_minutes=50, is_active=True)
@@ -296,7 +293,6 @@ def _teacher_admin(db):
     return u, tp
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-15: teacher_admin puede cambiar su propia comisión (sin separación de funciones)")
 def test_teacher_admin_cannot_change_own_commission(client, world, db):
     u, tp = _teacher_admin(db)
     r = client.patch(f"{API}/admin/teachers/{tp.id}/commission", json={"commission_rate": 0.0}, headers=hdr(u))
@@ -368,7 +364,6 @@ def test_email_case_duplicates_rejected(client):
     assert r.status_code == 400
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-19: login con password a una cuenta solo-Google (password_hash NULL) da 500")
 def test_password_login_on_google_only_account_is_401(client, db):
     db.add(User(email="g@x.com", username="guser", name="G", surname="U", password_hash=None))
     db.commit()
@@ -423,7 +418,6 @@ def test_public_platform_config_has_no_secrets(client, world):
 
 # ─── Disponibilidad / slots / zonas horarias ───────────────────────────────
 
-@pytest.mark.xfail(strict=True, reason="AUD-20: /availability/featured-teacher/slots llama al handler sin bypass_min_notice y recibe el objeto Query() (truthy): da 403 a alumnos")
 def test_featured_teacher_slots_work_for_students(client, world, db):
     cfg = db.query(PlatformConfig).first()
     cfg.featured_teacher_id = world["tp"].id

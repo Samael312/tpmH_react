@@ -6,11 +6,11 @@ Severidad: 🔴 crítico · 🟠 alto · 🟡 medio · 🔵 bajo.
 
 | ID | Sev | Resumen | Test | Estado |
 |---|---|---|---|---|
-| AUD-03 | 🔴 | Renovar paquete agotado deja `completed` sin créditos (`payments.py:1046/568`) | `test_findings::test_renewal_after_full_cycle_gives_new_credits` | abierto |
+| AUD-03 | 🔴 | Renovar paquete agotado deja `completed` sin créditos | `test_findings::test_renewal_after_full_cycle_gives_new_credits` | **corregido** (Fase 1) |
 | AUD-01 | 🔴 | `book_class` y reagendados no validan disponibilidad del profesor | AUD-01 `test_booking_outside_teacher_availability_rejected`; AUD-06 (reagendar) `test_student_reschedule_outside_availability_rejected` | abierto |
 | AUD-02 | 🔴 | Doble reserva: `pending_trial`/`group` no bloquean; sin lock ni constraint | `test_two_students_cannot_book_same_trial_slot` | abierto |
-| AUD-12 | 🔴 | `get_pending_withdrawals` sin `@router.get` (`payments.py:2116`) -> 404 | `test_admin_can_list_pending_withdrawals` | abierto |
-| AUD-14 | 🔴 | Reembolso no descuenta billetera del profesor | `test_refund_claws_back_teacher_wallet` | abierto |
+| AUD-12 | 🔴 | `get_pending_withdrawals` sin `@router.get` -> 404 | `test_admin_can_list_pending_withdrawals` | **corregido** (Fase 1) |
+| AUD-14 | 🔴 | Reembolso no descuenta billetera del profesor | `test_findings::test_refund_claws_back_teacher_wallet`, `test_money_calcs` | **corregido** (Fase 1) |
 | AUD-04 | 🟠 | Se puede completar una clase futura | `test_cannot_complete_future_class` | abierto |
 | AUD-05 | 🟠 | `PATCH status=cancelled` penaliza al alumno aunque cancele el profesor | `test_teacher_status_cancel_does_not_penalize_student` | abierto |
 | AUD-09 | 🟠 | `update_enrollment_counter` pisa `pending_renewal`/`cancelled` | `test_counter_update_keeps_pending_renewal_status` | abierto |
@@ -19,13 +19,13 @@ Severidad: 🔴 crítico · 🟠 alto · 🟡 medio · 🔵 bajo.
 | AUD-10 | 🟡 | `get_business_rules` ignora el valor 0 (`or`) | `test_business_rules_accept_zero` | abierto |
 | AUD-11 | 🟡 | `commission_rate` NULL -> TypeError | `test_commission_null_rate_falls_back_to_default` | abierto |
 | AUD-13 | 🟡 | Mínimo de retiro ($10) solo en UI | `test_withdrawal_minimum_amount` | abierto |
-| AUD-15 / SEC-03 | 🟠 | `teacher_admin` cambia su propia comisión; sin separación de funciones | `test_teacher_admin_cannot_change_own_commission` | abierto |
+| AUD-15 / SEC-03 | 🟠 | `teacher_admin` cambia su propia comisión; sin separación de funciones | `test_teacher_admin_cannot_change_own_commission` | **corregido** (Fase 1: comisión propia y pagos propios; resto de SEC-03 sigue en Fase 3) |
 | AUD-16 | 🟡 | Login por username distingue mayúsculas | `test_login_username_case_insensitive` | abierto |
 | AUD-17 | 🟡 | Email no normalizado (`A@x.com` ≠ `a@x.com`) | `test_email_case_duplicates_rejected` | abierto |
 | AUD-18 | 🟡 | Reagendado grupal por profesor: falso conflicto (`student_id=None`) | skip (necesita cohorte) | sin reproducir |
-| AUD-19 | 🟡 | Login con cuenta solo-Google -> 500 | `test_password_login_on_google_only_account_is_401` | abierto |
-| AUD-20 | 🟡 | `/availability/featured-teacher/slots` pasa `Query` como `bypass_min_notice` -> 403 alumnos | `test_featured_teacher_slots_work_for_students` | abierto |
-| AUD-21 | 🟡 | `unlimited_recharge` acepta `credits_requested` negativo (pago negativo) | `test_edge_cases::test_unlimited_recharge_negative_or_zero_rejected` | abierto (nuevo) |
+| AUD-19 | 🟡 | Login con cuenta solo-Google -> 500 | `test_password_login_on_google_only_account_is_401` | **corregido** (Fase 1) |
+| AUD-20 | 🟡 | `/availability/featured-teacher/slots`: la ruta genérica `/{teacher_username}/slots` la tapaba (404) y además pasaba `Query()` como `bypass_min_notice` | `test_featured_teacher_slots_work_for_students` | **corregido** (Fase 1) |
+| AUD-21 | 🟡 | `unlimited_recharge` acepta `credits_requested` negativo (pago negativo) | `test_edge_cases::test_unlimited_recharge_negative_or_zero_rejected` | **corregido** (Fase 1) |
 | AUD-22 | 🔵 | Guarda anti doble clic (15 s) puede confundir la cuota 2 con la 1 si se notifica justo tras aprobar | `test_installments_unlock_credits_progressively` (envejece el pago para evitarlo) | abierto (nuevo) |
 | AUD-23 | 🟠 | Sobre-reserva de créditos: 4 reservas simultáneas con 1 crédito libre se aceptan las 4 (sin lock de fila en `enrollments`). Confirmado en PostgreSQL real | `tests/audit/concurrency_live.py` (R2) | abierto (nuevo) |
 | AUD-02b | 🟠 | Doble reserva del mismo horario con 2 alumnos simultáneos: 2 clases creadas (HTTP 201 ambos). Confirmado en PostgreSQL real | `concurrency_live.py` (R1) | abierto (confirma AUD-02) |
@@ -35,8 +35,14 @@ Severidad: 🔴 crítico · 🟠 alto · 🟡 medio · 🔵 bajo.
 | SEC-05 | 🟡 | JWT 7 d en cookie no HttpOnly, sin revocación, CSP `unsafe-inline` | — | abierto |
 | SEC-06 | 🟡 | `/logs/frontend` anónimo sin tope (confirmado: acepta 200 KB), OAuth `state`, WS token en query, borrar cuenta, `application/pptx`, etc. | `test_error_logs_endpoint_accepts_anonymous_reports` (documenta) | abierto |
 
+## Corregidos en la Fase 1 (cálculos de dinero, `tests/audit/test_money_calcs.py`)
+- **Cuotas regalaban créditos:** `_installment_credit_amount` liberaba `ceil(clases/cuotas)` por cuota sin tope (1 clase y 3 cuotas liberaba 1+1+1; 5 clases y 4 cuotas, 2+2+2=6). Ahora el acumulado nunca supera `classes_count`.
+- **Última cuota negativa:** `installment_amount` fijado a mano podía dejar la última cuota en 0 o negativa. El schema de paquete lo rechaza (422).
+- **Cambio a paquete de igual nº de clases y mayor precio era gratis** (`deficit == 0`). Ahora, sin clases consumidas, se cobra la diferencia de precio (caso A).
+- **Cambio de paquete con clases usadas:** el alumno pagaba el paquete nuevo completo pero recibía menos créditos (las clases usadas contaban contra el nuevo) y, al bajar, el enrollment podía quedar `completed` sin nada. Ahora queda con los créditos completos del paquete nuevo.
+
 ## Lógica sin ID
-`finalized` no se auto-resuelve; doble contabilidad de créditos (`occupied` vs `classes_used`; el aviso de bajo crédito usa la segunda);
+doble contabilidad de créditos (`occupied` vs `classes_used`; el aviso de bajo crédito usa la segunda);
 `get_student_booking_stage` escribe en un GET; `finalize_past_classes` en cada `GET my-classes`; rama muerta en `finalize_past_classes`;
 `manual-grant` ilimitado = 0 créditos; `cancel_class_admin` no notifica grupales; sin idempotencia fuerte en `validate_payment`/`process_withdrawal_v2`;
 `transaction_reference` no único; DST en disponibilidad recurrente; `default_commission_rate` nunca se aplica.
@@ -48,7 +54,7 @@ imports duplicados en `availability.py`; `requirements.txt` UTF-16 con `opencode
 jobs de 24 h/7 d pueden no correr con reinicios frecuentes; migraciones con prefijo `a1b2c3d4e5f6_*` duplicado; archivos gigantes (`payments.py` 2130 líneas).
 
 ## Decisiones de negocio pendientes (preguntadas al dueño, sin respuesta)
-1. ¿`finalized` se auto-completa tras N horas o decide siempre el profesor?
+1. ~~¿`finalized` se auto-completa tras N horas?~~ Resuelto: pasa a `no_show` a las 72 h (NEG-02).
 2. Al renovar un paquete activo, ¿se arrastran los créditos sobrantes?
 3. ¿Quién aprueba pagos/retiros y cambia comisiones: solo `superadmin` o también `teacher_admin`/profesor?
 4. ¿Despliegue con más de un worker?

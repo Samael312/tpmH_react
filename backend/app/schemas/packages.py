@@ -128,6 +128,22 @@ class PackageCreate(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def validate_installment_amount(self):
+        # Si el profesor fija la cuota a mano, la última cuota es
+        # price - cuota*(n-1): con una cuota demasiado grande quedaba en
+        # cero o negativa (se cobraría un monto negativo).
+        if self.allow_installments and self.installment_amount is not None and self.installment_count:
+            if self.installment_amount <= 0:
+                raise ValueError("El monto de la cuota debe ser mayor que 0")
+            last = round(self.price - self.installment_amount * (self.installment_count - 1), 2)
+            if last <= 0:
+                raise ValueError(
+                    f"Con {self.installment_count} cuotas de ${self.installment_amount:.2f} la última cuota "
+                    f"quedaría en ${last:.2f}. Reduce el monto de la cuota o el número de cuotas."
+                )
+        return self
+
+    @model_validator(mode="after")
     def validate_fixed_schedule_complete(self):
         # D14: si se eligió horario fijo, el patrón (días + hora) es
         # obligatorio -- de lo contrario no habría nada que usar para
