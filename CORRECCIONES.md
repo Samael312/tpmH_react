@@ -10,18 +10,28 @@ Esfuerzo: S (<2 h) · M (medio día) · L (1–2 días). Una fase = una rama y u
 
 ## Fase 0 — Preparación
 
-- [ ] Rama de desarrollo en Neon (no ejecutar `tests/flow` ni `concurrency_live.py` contra datos reales)
-- [ ] Rotar secretos que hayan salido de la máquina (DB, OpenAI, Resend, Cloudinary, Google, `SECRET_KEY`)
-- [ ] Línea base: `python -m pytest tests/audit -q` → 81 passed, 1 skipped, 20 xfailed
-- [ ] Decisiones de negocio: ¿`finalized` se auto-completa? · ¿al renovar se arrastran créditos? · ¿quién aprueba pagos/retiros/comisiones? · ¿cuántos workers?
+- [x] Rama de desarrollo en Neon (`backend/.env` ya apunta a ella)
+- [x] Rotar secretos: aplazado por decisión del usuario (no hace falta por ahora)
+- [x] Línea base: `python -m pytest tests/audit -q` → 81 passed, 1 skipped, 20 xfailed
+- [x] Decisiones de negocio (ver abajo)
+
+### Decisiones de negocio acordadas
+
+- **Clases `finalized`:** pasadas 72 h sin que el profesor la marque, se marca `no_show` automáticamente (consume el crédito). El profesor o `teacher_admin` puede pedir el cambio con un ticket a soporte, describiendo la situación y los motivos; **soporte aprueba o rechaza**. Si se aprueba `completed`, no cambia el crédito; si se aprueba `cancelled`, se devuelve el crédito.
+- **Renovación:** los créditos sobrantes **se suman** a los del paquete nuevo.
+- **Aprobación de pagos:** solo `superadmin` y `teacher_admin` ven las cuentas de dinero y aprueban/rechazan pagos. Los profesores normales **no** aprueban nada: solo ven «pendiente de revisión». Un `teacher_admin` no aprueba pagos de su propio profesor (los aprueba el `superadmin`). `teacher_admin` (único, dueño de la plataforma) puede aprobar todos los demás pagos y cambiar su propia comisión.
+- **Reembolsos:** plazo máximo de **7 días desde la aprobación del pago** (también en bajadas de paquete con devolución). Si el profesor ya retiró y su saldo no cubre el reembolso, **se bloquea** y se avisa al usuario de que contacte con soporte.
+- **Workers:** 1 solo proceso `uvicorn` (el scheduler APScheduler es interno; con N workers se duplicaría). Añadir `--proxy-headers` (Fase 3); escalar solo separando el scheduler en otro servicio.
 
 ## Fase 1 — Críticos rápidos (dinero y rutas rotas)
 
 - [ ] **AUD-12** (S) ruta `get_pending_withdrawals` sin `@router.get` · verif.: `test_withdrawals_pending_real_path` + pestaña Retiros
-- [ ] **AUD-03** (M) renovar paquete agotado · verif.: xfail en `test_findings`
-- [ ] **AUD-14** (M) reembolso descuenta billetera · verif.: xfail en `test_findings`
+- [ ] **AUD-03** (M) renovar paquete agotado: reactivar y **sumar** los créditos sobrantes · verif.: xfail en `test_findings`
+- [ ] **AUD-14** (M) reembolso descuenta billetera; **plazo 7 días desde la aprobación** (incluye bajadas con devolución); si el saldo no cubre → bloquear y avisar «contacta con soporte» · verif.: xfail en `test_findings`
 - [ ] **AUD-21** (S) `credits_requested` > 0 · verif.: `test_unlimited_recharge_negative_or_zero_rejected`
 - [ ] **AUD-20** (S) `bypass_min_notice` recibe `Query` · verif.: `test_featured_teacher_slots_work_for_students`
+- [ ] **NEG-01** (L) pagos: quitar la aprobación a profesores normales (UI y API; solo ven «pendiente de revisión»); `superadmin`/`teacher_admin` aprueban; nadie aprueba el pago de su propio profesor · verif.: tests nuevos de permisos (relacionado con SEC-03)
+- [ ] **NEG-02** (L) `finalized` → `no_show` automático a las 72 h + ticket de soporte para corregirlo (categoría nueva, aprobación por soporte, crédito según decisión)
 - [ ] **AUD-19** (S) login cuenta solo-Google → 401, no 500
 
 Salida: xfails de la fase en verde.
