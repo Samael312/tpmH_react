@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { fetchAllPages } from "@/lib/pagination";
 import { GodModeAction } from "@/lib/godModeActions";
 
 export interface GodModeAuditLogEntry {
@@ -48,8 +49,7 @@ export function useGodModeEntityHistory(entityType: string, entityId: number | u
   const query = useQuery({
     queryKey: ["god-mode", "audit-log", entityType, entityId],
     queryFn: async () => {
-      const res = await api.get(`/god-mode/audit-log/${entityType}/${entityId}`);
-      return res.data as GodModeAuditLogEntry[];
+      return (await fetchAllPages<GodModeAuditLogEntry>(`/god-mode/audit-log/${entityType}/${entityId}`)).rows;
     },
     enabled: !!entityId,
   });
@@ -105,8 +105,7 @@ export function useGodModeTeachers() {
   const query = useQuery({
     queryKey: ["god-mode", "lookup", "teachers"],
     queryFn: async () => {
-      const res = await api.get("/god-mode/lookup/teachers");
-      return res.data as GodModeLookupTeacher[];
+      return (await fetchAllPages<GodModeLookupTeacher>("/god-mode/lookup/teachers")).rows;
     },
   });
   return { teachers: query.data ?? [], loading: query.isLoading };
@@ -116,8 +115,7 @@ export function useGodModeTeacherStudents(teacherId: number | undefined) {
   const query = useQuery({
     queryKey: ["god-mode", "lookup", "teacher-students", teacherId],
     queryFn: async () => {
-      const res = await api.get(`/god-mode/lookup/teachers/${teacherId}/students`);
-      return res.data as GodModeLookupStudent[];
+      return (await fetchAllPages<GodModeLookupStudent>(`/god-mode/lookup/teachers/${teacherId}/students`)).rows;
     },
     enabled: !!teacherId,
   });
@@ -128,10 +126,9 @@ export function useGodModeStudentEnrollments(studentId: number | undefined, teac
   const query = useQuery({
     queryKey: ["god-mode", "lookup", "student-enrollments", studentId, teacherId],
     queryFn: async () => {
-      const res = await api.get(`/god-mode/lookup/students/${studentId}/enrollments`, {
+      return (await fetchAllPages<GodModeLookupEnrollment>(`/god-mode/lookup/students/${studentId}/enrollments`, {
         params: teacherId ? { teacher_id: teacherId } : undefined,
-      });
-      return res.data as GodModeLookupEnrollment[];
+      })).rows;
     },
     enabled: !!studentId,
   });
@@ -185,8 +182,7 @@ export function useGodModeTeacherCohorts(teacherId: number | undefined) {
   const query = useQuery({
     queryKey: ["god-mode", "lookup", "teacher-cohorts", teacherId],
     queryFn: async () => {
-      const res = await api.get(`/god-mode/lookup/teachers/${teacherId}/cohorts`);
-      return res.data as GodModeLookupCohort[];
+      return (await fetchAllPages<GodModeLookupCohort>(`/god-mode/lookup/teachers/${teacherId}/cohorts`)).rows;
     },
     enabled: !!teacherId,
   });

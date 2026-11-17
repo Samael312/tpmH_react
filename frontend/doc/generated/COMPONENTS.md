@@ -65,20 +65,21 @@
 
 ## hooks/
 
-- `hooks/useAdminData.ts` (567 líneas, referenciado en 9 archivos) — exports: PendingPayment, Teacher, Student, WithdrawalRecord, PaymentHistoryItem, usePaymentsHistory, useStudents, useStudentDetail, useWithdrawals, useAdminStats, usePendingPayments, useTeachers
+- `hooks/useAdminData.ts` (569 líneas, referenciado en 9 archivos) — exports: PendingPayment, Teacher, Student, WithdrawalRecord, PaymentHistoryItem, usePaymentsHistory, useStudents, useStudentDetail, useWithdrawals, useAdminStats, usePendingPayments, useTeachers
 - `hooks/useBusinessRules.ts` (66 líneas, referenciado en 9 archivos) — exports: BusinessRules, CLASS_DURATION_OPTIONS, useBusinessRules
 - `hooks/useChat.ts` (255 líneas, referenciado en 12 archivos) — exports: ChatConversation, ChatMessage, markConversationRead, useChatConversations, useUnreadChatCount, openDirectConversation, openGroupConversation, useChatSocketBootstrap, useChatThread
 - `hooks/useChatAdmin.ts` (88 líneas, referenciado en 1 archivos) — exports: ChatConversationAdmin, useChatAdminConversations, useChatAdminMessages — hooks/useChatAdmin.ts N5: panel de auditoría de chats para superadmin/teacher_admin — ver backend/app/api/v1/endpoints/chat.py (sección "N5: Auditoría"). Listar
+- `hooks/useDebouncedValue.ts` (18 líneas, referenciado en 1 archivos) — exports: useDebouncedValue
 - `hooks/useEmailSettings.ts` (32 líneas, referenciado en 2 archivos) — exports: EMAIL_SETTINGS_KEY, useEmailSettings
 - `hooks/useErrorLogs.ts` (109 líneas, referenciado en 1 archivos) — exports: ErrorLogEntry, ErrorLogStats, ErrorLogUserOption, ErrorLogFilters, useErrorLogs, useErrorLogStats, useErrorLogUsers
-- `hooks/useGodMode.ts` (304 líneas, referenciado en 4 archivos) — exports: GodModeAuditLogEntry, useGodModeAuditLog, useGodModeEntityHistory, GodModeLookupTeacher, GodModeLookupStudent, GodModeLookupEnrollment, GodModeLookupClass, useGodModeTeachers, useGodModeTeacherStudents, useGodModeStudentEnrollments, useGodModePairClasses, GodModeLookupPackage
+- `hooks/useGodMode.ts` (300 líneas, referenciado en 4 archivos) — exports: GodModeAuditLogEntry, useGodModeAuditLog, useGodModeEntityHistory, GodModeLookupTeacher, GodModeLookupStudent, GodModeLookupEnrollment, GodModeLookupClass, useGodModeTeachers, useGodModeTeacherStudents, useGodModeStudentEnrollments, useGodModePairClasses, GodModeLookupPackage
 - `hooks/useLandingData.ts` (215 líneas, referenciado en 14 archivos) — exports: LandingTeacher, LandingReview, LandingPackage, LandingGroupStep, TitleGradientMap, LandingContent, LANDING_CONTENT_DEFAULTS, useLandingData
 - `hooks/useRevealOnScroll.ts` (45 líneas, referenciado en 1 archivos) — exports: useRevealOnScroll
 - `hooks/useSpokenLanguages.ts` (52 líneas, referenciado en 2 archivos) — exports: MY_SPOKEN_LANGUAGES_KEY, useMySpokenLanguages
-- `hooks/useStudentData.ts` (708 líneas, referenciado en 25 archivos) — exports: AVAILABLE_SLOTS_QUERY_PREFIX, invalidateAvailableSlots, BookingStage, RejectedPaymentInfo, PendingRechargeInfo, StudentClass, AvailableSlot, PackageInfo, StudentEnrollment, StudentMaterial, StudentHomework, TeacherResolution
+- `hooks/useStudentData.ts` (712 líneas, referenciado en 25 archivos) — exports: AVAILABLE_SLOTS_QUERY_PREFIX, invalidateAvailableSlots, BookingStage, RejectedPaymentInfo, PendingRechargeInfo, StudentClass, AvailableSlot, PackageInfo, StudentEnrollment, StudentMaterial, StudentHomework, TeacherResolution
 - `hooks/useSupport.ts` (95 líneas, referenciado en 3 archivos) — exports: SupportCategory, SupportTicketStatus, SupportTicket, useMySupportTickets, createSupportTicket, markSupportTicketSeen, useUnreadSupportCount, useSupportQueryInvalidation
 - `hooks/useSystemCatalogs.ts` (56 líneas, referenciado en 9 archivos) — exports: StudentGoal, PaymentMethodOption, ThemePreset, SubjectTheme, GoalCategoryKey, StudentGoalsCatalog, SystemCatalogs, SYSTEM_CATALOGS_QUERY_KEY, useSystemCatalogs
-- `hooks/useTeacherData.ts` (718 líneas, referenciado en 12 archivos) — exports: TeacherClass, TeacherProfile, WeeklySlot, WalletData, CalendarStatus, StudentEnrollmentSummary, StudentMaterialSummary, TeacherStudentFull, WithdrawalHistoryItem, IncomeHistoryItem, TeacherMaterial, TeacherPaymentEntry
+- `hooks/useTeacherData.ts` (716 líneas, referenciado en 12 archivos) — exports: TeacherClass, TeacherProfile, WeeklySlot, WalletData, CalendarStatus, StudentEnrollmentSummary, StudentMaterialSummary, TeacherStudentFull, WithdrawalHistoryItem, IncomeHistoryItem, TeacherMaterial, TeacherPaymentEntry
 - `hooks/useToast.ts` (16 líneas, referenciado en 40 archivos) — exports: useToast
 
 ## store/
@@ -90,20 +91,23 @@
 
 ## lib/
 
-- `lib/api.ts` (107 líneas, referenciado en 78 archivos) — exports: —
+- `lib/api.ts` (107 líneas, referenciado en 81 archivos) — exports: —
 - `lib/auth.ts` (25 líneas, referenciado en 16 archivos) — exports: decodeToken, isTokenExpired
+- `lib/cloudinaryImage.ts` (41 líneas, referenciado en 3 archivos) — exports: withWidthParam, cloudinaryOptimized — Imágenes de Cloudinary optimizadas por el propio Cloudinary (Fase 11). Con el optimizador de Next.js cada imagen se descarga de Cloudinary, se recodifica en el 
 - `lib/color.ts` (36 líneas, referenciado en 19 archivos) — exports: hexToRgb, shadeColor, DEFAULT_THEME_COLOR, THEME_PRESETS
-- `lib/csp.ts` (49 líneas, referenciado en 5 archivos) — exports: buildCsp — Content-Security-Policy con nonce por petición (SEC-05, paso final). La construye proxy.ts en cada respuesta de página (ver node_modules/next/dist/docs/01-app/0
+- `lib/csp.ts` (50 líneas, referenciado en 5 archivos) — exports: buildCsp — Content-Security-Policy con nonce por petición (SEC-05, paso final). La construye proxy.ts en cada respuesta de página (ver node_modules/next/dist/docs/01-app/0
 - `lib/displayName.ts` (11 líneas, referenciado en 5 archivos) — exports: displayName
 - `lib/emailSettings.ts` (86 líneas, referenciado en 4 archivos) — exports: EmailProbability, EmailCategory, EmailSettings, PROBABILITY_LABEL, PROBABILITY_STYLE, quotaPercent, usageLabel, alertMessage, buildUpdate — Fase 7: lógica pura del panel de control de correos (sin React, testeable con Vitest).
 - `lib/errorMessage.ts` (41 líneas, referenciado en 48 archivos) — exports: getErrorMessage
 - `lib/errorReporting.ts` (99 líneas, referenciado en 6 archivos) — exports: FrontendErrorReport, reportFrontendError, installGlobalErrorReporting
 - `lib/godModeActions.ts` (387 líneas, referenciado en 3 archivos) — exports: GodModeFieldType, GodModeField, GodModeAction, GOD_MODE_ACTIONS, GOD_MODE_CATEGORIES — Registro declarativo de todas las acciones del Modo Dios. En vez de construir 13 pantallas separadas (una por endpoint), cada acción se describe acá como datos:
 - `lib/gradientTitle.tsx` (94 líneas, referenciado en 3 archivos) — exports: GradientPreset, GRADIENT_PRESETS, getGradientPreset, renderGradientTitle, stripGradientMarkers — frontend/lib/gradientTitle.tsx Soporte para "títulos con color" en el landing (config del superadmin): el admin escribe el texto normal y envuelve las palabras 
+- `lib/imageLoader.ts` (14 líneas, referenciado en 1 archivos) — exports: imageLoader
 - `lib/landingServer.ts` (107 líneas, referenciado en 4 archivos) — exports: getLandingDataServer, buildDefaultSiteTitle
 - `lib/mobileTopBar.tsx` (67 líneas, referenciado en 36 archivos) — exports: MobileTopBarProvider, useMobileTopBar, usePageTopBar
 - `lib/nationalities.ts` (43 líneas, referenciado en 12 archivos) — exports: countryCodeToFlag, NationalityOption, NATIONALITIES, getFlagForNationality — Lista de nacionalidades con bandera generada por código ISO 3166-1 alpha-2. Se guarda el NOMBRE del país (no el código) en la BD, para que sea legible directame
 - `lib/packageThemes.ts` (47 líneas, referenciado en 4 archivos) — exports: PackageTheme, SUBJECT_THEME_MAP, DEFAULT_PACKAGE_THEME, getSuggestedTheme, ICON_PICKER_OPTIONS, priceLabelSuffix
+- `lib/pagination.ts` (61 líneas, referenciado en 10 archivos) — exports: PAGE_SIZE, MAX_ITEMS, AllPages, fetchAllPages
 - `lib/platformTenantMode.ts` (34 líneas, referenciado en 2 archivos) — exports: usePlatformTenantMode
 - `lib/scheduleUtc.ts` (29 líneas, referenciado en 2 archivos) — exports: getNextWeekdayDate, utcTimeToLocal — Utilidades para convertir horarios semanales recurrentes (guardados como "HH:MM" UTC + day_of_week) a la hora local del navegador, de forma consistente con la l
 - `lib/spokenLanguages.ts` (114 líneas, referenciado en 13 archivos) — exports: MAX_SPOKEN_LANGUAGES, SpokenLevel, SPOKEN_LEVELS, LEVEL_LABELS, SpokenLanguage, languageKey, parseSpoken, toggleLanguage, setLevel, isSelected, levelOf, allHaveLevel — Fases 8 y 10: idiomas que HABLA el usuario y su nivel. Lógica pura (sin React) para poder testearla con Vitest. No confundir con `TeacherProfile.languages` (los

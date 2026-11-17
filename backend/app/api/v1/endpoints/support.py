@@ -65,7 +65,7 @@ def create_support_ticket(
     db.add(ticket)
     db.flush()  # asigna ticket.id antes de crear la notificación
 
-    role_label = "Profesor" if current_user.role == UserRole.teacher else "Estudiante"
+    role_label = "Profesor" if current_user.role in (UserRole.teacher, UserRole.teacher_admin) else "Estudiante"
     create_notification(
         db,
         type="support_ticket",

@@ -83,3 +83,12 @@ def test_commission_update_handles_null_previous_rate(client, world, db):
     r = client.patch(f"{API}/admin/teachers/{world['tp'].id}/commission", json={"commission_rate": 0.3},
                      headers=hdr(world["admin"]))
     assert r.status_code == 200, r.text
+
+
+def test_teacher_admin_username_change_also_updates_teacher_profile(client, world, db):
+    """Un teacher_admin es profesor: al cambiar su username el perfil de profesor debe seguirlo."""
+    u, tp = _teacher_admin(db, "tadm_user")
+    r = client.patch(f"{API}/users/me", json={"username": "tadmin_nuevo"}, headers=hdr(u))
+    assert r.status_code == 200, r.text
+    db.expire_all()
+    assert db.get(TeacherProfile, tp.id).user_username == "tadmin_nuevo"

@@ -21,6 +21,10 @@ interface Options<Row, Body> {
   rows?: (body: Body) => Row[];
   pageSize?: number;
   maxItems?: number;
+  /** Nombre del parámetro de desplazamiento (`offset` por defecto; `/admin/users` usa `skip`). */
+  offsetParam?: string;
+  /** Total sacado del cuerpo, para listados que lo traen ahí en vez de en `X-Total-Count`. */
+  totalOf?: (body: Body) => number | undefined;
 }
 
 /**
@@ -31,20 +35,22 @@ interface Options<Row, Body> {
  */
 export async function fetchAllPages<Row, Body = Row[]>(
   path: string,
-  { params, rows = (b) => b as unknown as Row[], pageSize = PAGE_SIZE, maxItems = MAX_ITEMS }: Options<Row, Body> = {},
+  { params, rows = (b) => b as unknown as Row[], pageSize = PAGE_SIZE, maxItems = MAX_ITEMS, offsetParam = "offset", totalOf }: Options<Row, Body> = {},
 ): Promise<AllPages<Row, Body>> {
   const all: Row[] = [];
   let firstBody: Body | undefined;
   let total = 0;
 
   for (;;) {
-    const res = await api.get<Body>(path, { params: { ...params, limit: pageSize, offset: all.length } });
+    const res = await api.get<Body>(path, { params: { ...params, limit: pageSize, [offsetParam]: all.length } });
     if (firstBody === undefined) firstBody = res.data;
     const page = rows(res.data) ?? [];
     all.push(...page);
 
+    const fromBody = totalOf?.(res.data);
     const header = Number(res.headers?.["x-total-count"]);
-    total = Number.isFinite(header) && header >= 0 ? header : all.length;
+    total =
+      typeof fromBody === "number" && fromBody >= 0 ? fromBody : Number.isFinite(header) && header >= 0 ? header : all.length;
 
     if (page.length === 0 || all.length >= total) break; // terminó (o el servidor no devuelve más)
     if (all.length >= maxItems) break;

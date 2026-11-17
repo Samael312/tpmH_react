@@ -187,16 +187,22 @@ Son **estimaciones a partir del código** (cuántos correos genera cada evento y
 - [x] **Índices** (migración `b1d5e6f7a8c9`, `app/models/indexes.py`): solo había índices en claves primarias, logs, tokens y chat; las claves foráneas de `classes`, `payments`, `enrollments`, `materials`, `homework`, etc. y `teacher_profiles.user_id`/`student_profiles.user_id` no tenían ninguno (PostgreSQL no los crea solo). 26 índices nuevos con `if_not_exists`. _Tests: `tests/audit/test_performance_indexes.py` (5)._
 - [x] **Timeouts a servicios externos:** OpenAI 30 s con 1 reintento (el SDK traía 600 s con 2), Cloudinary (conexión 10 s, lectura 120 s; antes sin límite), revocar token de Google 10 s, intercambio OAuth 15 s. Variables `OPENAI_TIMEOUT_SECONDS` y `CLOUDINARY_READ_TIMEOUT_SECONDS`.
 - [x] **gzip en la API** (`GZipMiddleware`, nivel 5, desde 1000 bytes; no comprime el streaming de Chipi). _Tests: `tests/audit/test_gzip.py` (5)._ Variable `API_GZIP_MIN_BYTES` (0 = desactivado).
-- [x] **Frontend lista todas las páginas** (`lib/pagination.ts` → `fetchAllPages`): los listados ya no se cortan a 200 filas; una sola petición si hay menos. Aplicado a 17 puntos (pagos, retiros, ingresos, tickets, alumnos, clases, cohortes, conversaciones y listados de admin). _Tests: `tests/pagination.test.ts` (10)._
+- [x] **Frontend lista todas las páginas** (`lib/pagination.ts` → `fetchAllPages`): los listados ya no se cortan a 200 filas; una sola petición si hay menos. Aplicado a 22 puntos (pagos, retiros, ingresos, tickets, alumnos, clases, cohortes, conversaciones, listados de admin y Modo Dios). Encontró además un fallo real: las pantallas de alumnos del admin (`/admin/users`) mostraban solo los 50 primeros aunque el contador dijera más. _Tests: `tests/pagination.test.ts` (10)._
+- [x] **Paginación del Modo Dios** (historial de una entidad, profesores, alumnos de un profesor, enrollments y cohortes), y el historial ya no hace una consulta por fila. _Tests: `tests/audit/test_god_mode_pagination.py` (7)._
+- [x] **Tiempos de petición** (`Server-Timing` + aviso de peticiones lentas en el log, `SLOW_REQUEST_MS`), sin base de datos. _Tests: `tests/audit/test_request_timing.py` (6)._
+- [x] **Imágenes de Cloudinary optimizadas por Cloudinary** (`f_auto,q_auto,w_<ancho>`, `lib/imageLoader.ts`): el servidor de Railway deja de recodificarlas. _Tests: `tests/cloudinaryImage.test.ts` (8)._
+- [x] **Dependencias:** `requirements.txt` a UTF-8 y 9 paquetes sin uso fuera (`opencode-*`, `typer`, `rich`, `passlib`, `wsproto`…). `pytest` se queda porque el probador de flujos del superadmin lo ejecuta dentro de la app.
 - [x] **Debounce** (`hooks/useDebouncedValue.ts`) en la auditoría de chats del superadmin (llamaba a la API en cada tecla).
 - [x] **Imágenes:** los 2 `<img>` restantes con `loading="lazy"` y `decoding="async"`.
 - [x] **Fuentes** con `next/font/google` (Poppins 600/700/800 y DM Sans 400/500/600) en lugar del `@import` de Google Fonts; CSP más estricta (`style-src` y `font-src` sin Google) y con la hoja del botón de Google permitida (estaba bloqueada). Comprobado en navegador: sin peticiones a Google Fonts ni violaciones de CSP.
 - [x] **Caché** de 7 días para `/models` y `/assets` (`next.config.ts`).
-- [ ] **Modelo 3D de 22 MB** (`public/models/Chipi_Waving.glb`: 13 MB de texturas JPEG y 9 MB de geometría con 128 000 vértices): pendiente de comprimir. Pasos en «Pendiente de hacer tú».
+- [x] **Modelo 3D (22,85 MB → 6,65 MB)** (`public/models/Chipi_Waving.glb`: 13 MB de texturas JPEG y 9 MB de geometría con 128 000 vértices): pendiente de comprimir. Pasos en «Pendiente de hacer tú».
 - [ ] **Activar el CDN de Railway** en el servicio del frontend (ver `docs/OPERATIONS.md` §8).
 - [x] **Docs:** ENVIRONMENT, OPERATIONS (§4 y §8), KNOWN_ISSUES (backend y frontend), frontend ARCHITECTURE y TESTING.
 
-**Propuestas pendientes de decisión** (todas sin coste): skeletons y `loading.tsx` en las pantallas que faltan (`support`, `onboarding`, `god-mode`, `logs`); interfaz optimista en acciones no críticas; `reactCompiler: true`; `dynamic()` en componentes pesados poco usados; separar `requirements-dev.txt` y quitar paquetes sin uso; middleware de tiempos de petición; web-vitals con muestreo; Cloudinary con `f_auto,q_auto`.
+**Decisiones tomadas sobre las demás propuestas**
+- _No se hace:_ **skeletons nuevos** (las pantallas que parecían no tenerlos delegan en componentes que sí los tienen; el hallazgo era un falso positivo de la búsqueda); **`reactCompiler`** (exige una dependencia nueva y cambia el build, sin medir antes que haga falta); **`dynamic()` en más componentes** y **interfaz optimista** (beneficio especulativo; se decide con datos reales); **web-vitals** (se mide al lanzar a producción, como ya se decidió).
+- _Interfaz solo en español_ por ahora; el idioma de la interfaz y de los correos queda pendiente.
 
 ---
 
@@ -214,14 +220,14 @@ Son **estimaciones a partir del código** (cuántos correos genera cada evento y
 3. **Primer PR en GitHub:** se ejecuta por primera vez `.github/workflows/backend.yml` (audit, migraciones sobre PostgreSQL vacío y concurrencia). Mira la pestaña *Actions*; nunca se ha ejecutado. Conviene añadir el job de Playwright cuando funcione el resto.
 4. **Medir en producción** (cuando exista): objetivo `/users/me` < 400 ms (hoy ≈ 1,7 s sin pool; medir con `latency.py`).
 5. **Fin de la transición de sesión (Fase 3b), al lanzar a producción:** retirar Bearer y `?token=` del backend y bajar el access token a 30 min (`ACCESS_TOKEN_EXPIRE_MINUTES=30`). Pasos: comprobar en los logs que ningún cliente los usa, quitar la rama Bearer de `get_current_user` y `?token=` del WebSocket y las descargas, desplegar primero el frontend y luego el backend. Solo hace falta al lanzar: antes de eso no hay sesiones reales que se puedan cerrar.
-6. **Comprimir el modelo 3D** (22 MB). Se necesita descargar una herramienta externa, así que lo ejecutas tú: desde `frontend/`, `npx @gltf-transform/cli optimize public/models/Chipi_Waving.glb public/models/Chipi_Waving.glb --compress quantize --texture-compress webp --texture-size 1024 --simplify false`. Sin decodificador en el navegador (no hace falta tocar la CSP ni el cargador). Después comprueba a ojo la mascota en la landing (textura y animación del saludo). El original queda en Git.
+6. ~~Comprimir el modelo 3D~~ **Hecho:** `frontend/public/models/Chipi_Waving.glb` pasó de 22,85 MB a 6,65 MB (`gltf-transform optimize --compress quantize --texture-compress webp --texture-size 1024 --simplify false`). Conserva la animación del saludo (99 canales, 3 s) y se comprobó en la landing: carga, textura y pose correctas, sin errores en consola. Usa `EXT_texture_webp` y `KHR_mesh_quantization` (los soporta el cargador de three.js, sin decodificador ni cambios de CSP). El original queda en Git.
 7. **Activar el CDN de Railway** en el servicio del frontend (Settings → Edge → *Enable CDN Caching*) y comprobar con `curl -I -H "Accept-Encoding: br" <url>`.
 8. **Opciones de despliegue y migrar fuera de Railway:** se deja para el final de todo (análisis en `backend/doc/RESOURCE_COSTS.md`).
 
 **Deuda técnica conocida (sin fecha)**
-- Los listados cargan todas las páginas del servidor (Fase 11); si alguno llega a miles de filas, pasarlo a «Cargar más» con filtros en el servidor. `god_mode` aún no pagina.
+- Los listados cargan todas las páginas del servidor (Fase 11); si alguno llega a miles de filas, pasarlo a «Cargar más» con filtros en el servidor.
 - Idioma de la interfaz y de los correos: solo español por ahora; si se añaden más, decidir de dónde sale (preferencia propia, no el dato «idiomas que hablo»).
-- Preferencias de correo por usuario y resumen diario único; agrupar el resto de categorías de correo.
+- **Preferencias de correo por usuario** (anotado, sin implementar; hacerlo cuando el volumen se acerque a los 100 correos/día de Resend). Diseño: columna JSON en `users` con las categorías desactivadas (por defecto todas activas) + migración; sección en el perfil de alumno y de profesor; en `_send` de `app/core/email.py` se envía solo si el interruptor global del superadmin Y el del destinatario lo permiten. Los correos esenciales (verificación de email, recuperación de contraseña, pagos) no se pueden desactivar. Aparte: resumen diario único (un solo correo con clases de mañana, mensajes sin leer y tareas; exige decidir hora y contenido) y agrupar el resto de categorías de correo.
 - Subida directa desde el navegador a Cloudinary (quitaría carga al backend); la cuota de materiales puede superarse por una subida si dos coinciden.
 - Límite de mensajes por segundo por conexión en el chat.
 - Los jobs y el limitador viven en memoria: un solo worker (documentado).

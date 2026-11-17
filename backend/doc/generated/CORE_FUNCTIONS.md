@@ -209,6 +209,11 @@ Las que empiezan por `_` son privadas del módulo.
 
 - `user_or_ip_key(request)` — L27: Clave de rate-limit: el usuario autenticado (claim `sub` del JWT) o, si es anonimo / el token no es valido, la IP. Asi un usuario no comparte cupo con otros detras de la misma IP (NAT, proxy) y un anonimo no puede agotar el cupo de los demas. Un token invalido o vencido cae a la IP (no se puede fals
 
+## app/core/request_timing.py
+
+- `slow_request_ms()` — L26
+- `class RequestTimingMiddleware()` — L33: Middleware ASGI puro (sin BaseHTTPMiddleware: no retiene ni vuelve a trocear el cuerpo).
+
 ## app/core/retention.py
 
 - `purge_error_logs(db: Session, days: int=ERROR_LOG_RETENTION_DAYS)` — L19: Borra los registros de error mas viejos que `days` dias. Devuelve cuantos borro.

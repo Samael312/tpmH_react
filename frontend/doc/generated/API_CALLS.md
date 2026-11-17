@@ -4,8 +4,6 @@ Llamadas `api.<verbo>(...)` por archivo (regex; las URLs construidas dinámicame
 
 ## ⚠ Llamadas que NO casan con ninguna ruta del backend
 
-- GET `/admin/support-tickets${qs ` en `hooks/useAdminData.ts`
-- GET `/admin/teachers{x}` en `hooks/useAdminData.ts`
 - GET `/payments/booking-status{x}` en `hooks/useStudentData.ts`
 
 ## Por archivo
@@ -52,18 +50,18 @@ Llamadas `api.<verbo>(...)` por archivo (regex; las URLs construidas dinámicame
 - `components/layout/VerifyEmailBanner.tsx`: POST /auth/resend-verification
 - `components/payments/BuyCreditsModal.tsx`: POST /payments/notify-payment
 - `components/payments/PackageCheckout.tsx`: POST /payments/notify-payment
-- `hooks/useAdminData.ts`: GET /admin/notifications, GET /admin/notifications/unread-count, GET /admin/platform-config, GET /admin/stats, GET /admin/support-tickets${qs , GET /admin/teachers/{x}/appeals, GET /admin/teachers{x}, GET /admin/users, GET /payments/admin/withdrawals/pending, GET /payments/config, GET /payments/history, GET /payments/pending-review, GET /system-catalogs/business-rules
+- `hooks/useAdminData.ts`: GET /admin/notifications, GET /admin/notifications/unread-count, GET /admin/platform-config, GET /admin/stats, GET /admin/teachers/{x}/appeals, GET /admin/users, GET /payments/config, GET /payments/pending-review, GET /system-catalogs/business-rules
 - `hooks/useBusinessRules.ts`: GET /system-catalogs/business-rules
-- `hooks/useChat.ts`: GET /chat/conversations, GET /chat/conversations/direct/{x}, GET /chat/conversations/group/{x}, GET /chat/conversations/unread-count, POST /chat/conversations/{x}/read
+- `hooks/useChat.ts`: GET /chat/conversations/direct/{x}, GET /chat/conversations/group/{x}, GET /chat/conversations/unread-count, POST /chat/conversations/{x}/read
 - `hooks/useChatAdmin.ts`: GET /chat/admin/conversations, GET /chat/admin/conversations/{x}/messages
 - `hooks/useEmailSettings.ts`: GET /admin/email-settings, PUT /admin/email-settings
 - `hooks/useErrorLogs.ts`: GET /logs, GET /logs/stats, GET /logs/users
-- `hooks/useGodMode.ts`: GET /god-mode/audit-log, GET /god-mode/audit-log/{x}/{x}, GET /god-mode/lookup/class-durations, GET /god-mode/lookup/students/{x}/enrollments, GET /god-mode/lookup/teachers, GET /god-mode/lookup/teachers/{x}/cohorts, GET /god-mode/lookup/teachers/{x}/packages, GET /god-mode/lookup/teachers/{x}/reviews, GET /god-mode/lookup/teachers/{x}/students, GET /god-mode/lookup/teachers/{x}/students/reviewable, GET /god-mode/lookup/teachers/{x}/students/{x}/classes, GET /god-mode/lookup/teachers/{x}/students/{x}/payments
+- `hooks/useGodMode.ts`: GET /god-mode/audit-log, GET /god-mode/lookup/class-durations, GET /god-mode/lookup/teachers/{x}/packages, GET /god-mode/lookup/teachers/{x}/reviews, GET /god-mode/lookup/teachers/{x}/students/reviewable, GET /god-mode/lookup/teachers/{x}/students/{x}/classes, GET /god-mode/lookup/teachers/{x}/students/{x}/payments
 - `hooks/useLandingData.ts`: GET /public/landing
 - `hooks/useSpokenLanguages.ts`: GET /users/me, PATCH /users/me
-- `hooks/useStudentData.ts`: GET /admin/platform-config, GET /availability/featured-teacher/username, GET /availability/{x}/slots, GET /classes/my-classes, GET /homework/student/my-homework, GET /materials/student/my-materials, GET /packages/my-enrollments, GET /packages/teacher/{x}, GET /payments/booking-status, GET /payments/booking-status{x}, GET /reviews/{x}, GET /reviews/{x}/summary, GET /teachers, GET /teachers/{x}, GET /users/me, GET /users/me/preferences, GET /users/me/student-profile, GET /users/me/teachers
-- `hooks/useSupport.ts`: GET /support/tickets/me, GET /support/tickets/me/unread-count, PATCH /support/tickets/{x}/seen, POST /support/tickets
+- `hooks/useStudentData.ts`: GET /admin/platform-config, GET /availability/featured-teacher/username, GET /availability/{x}/slots, GET /homework/student/my-homework, GET /materials/student/my-materials, GET /packages/my-enrollments, GET /packages/teacher/{x}, GET /payments/booking-status, GET /payments/booking-status{x}, GET /reviews/{x}, GET /reviews/{x}/summary, GET /teachers, GET /teachers/{x}, GET /users/me, GET /users/me/preferences, GET /users/me/student-profile, GET /users/me/teachers
+- `hooks/useSupport.ts`: GET /support/tickets/me/unread-count, PATCH /support/tickets/{x}/seen, POST /support/tickets
 - `hooks/useSystemCatalogs.ts`: GET /system-catalogs
-- `hooks/useTeacherData.ts`: GET /availability/me/weekly, GET /calendar/status, GET /classes/teacher/classes, GET /cohorts/teacher, GET /cohorts/{x}/members, GET /homework/my-homework, GET /homework/{x}/submissions, GET /materials/my-materials, GET /packages/my-packages, GET /packages/teacher/enrollments, GET /payments/history, GET /payments/my-income, GET /payments/my-wallet, GET /payments/my-withdrawals, GET /payments/pending-review, GET /reviews/{x}, GET /teachers/me/profile, GET /teachers/me/students, GET /teachers/me/students-full, GET /users/me, POST /payments/request-withdrawal
+- `hooks/useTeacherData.ts`: GET /availability/me/weekly, GET /calendar/status, GET /cohorts/{x}/members, GET /homework/my-homework, GET /homework/{x}/submissions, GET /materials/my-materials, GET /packages/my-packages, GET /payments/my-wallet, GET /payments/pending-review, GET /reviews/{x}, GET /teachers/me/profile, GET /users/me, POST /payments/request-withdrawal
 - `lib/platformTenantMode.ts`: GET /admin/platform-config
 - `store/chatStore.ts`: GET /chat/conversations/{x}/messages, POST /chat/conversations/{x}/messages

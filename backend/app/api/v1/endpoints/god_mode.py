@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import timedelta
@@ -29,6 +29,7 @@ from app.schemas.classes import (
     GodModeForceStatusRequest,
     ClassResponse,
 )
+from app.core.pagination import Pagination, paginate
 from app.core.class_logic import (
     can_book_slot,
     resolve_status_after_reschedule,
@@ -367,6 +368,8 @@ def list_god_mode_audit_log(
 def get_entity_god_mode_history(
     entity_type: str,
     entity_id: int,
+    response: Response,
+    page: Pagination = Depends(),
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db),
 ):
@@ -376,14 +379,21 @@ def get_entity_god_mode_history(
     mostrar un panel "historial" directamente en la ficha del alumno,
     la clase o la cohorte, sin tener que filtrar el log general.
     """
-    logs = db.query(GodModeAuditLog).filter(
-        GodModeAuditLog.entity_type == entity_type,
-        GodModeAuditLog.entity_id == entity_id,
-    ).order_by(GodModeAuditLog.created_at.desc()).all()
+    logs = paginate(
+        db.query(GodModeAuditLog).filter(
+            GodModeAuditLog.entity_type == entity_type,
+            GodModeAuditLog.entity_id == entity_id,
+        ).order_by(GodModeAuditLog.created_at.desc(), GodModeAuditLog.id.desc()),
+        page, response,
+    ).all()
+
+    # Un solo SELECT para los autores (antes uno por cada fila del historial).
+    actor_ids = {log.actor_user_id for log in logs}
+    actors = {u.id: u for u in db.query(User).filter(User.id.in_(actor_ids)).all()} if actor_ids else {}
 
     results = []
     for log in logs:
-        actor = db.query(User).filter(User.id == log.actor_user_id).first()
+        actor = actors.get(log.actor_user_id)
         actor_name = f"{actor.name} {actor.surname}" if actor else None
         results.append(
             GodModeAuditLogResponse(
@@ -1578,6 +1588,8 @@ def god_mode_transfer_student(
 
 @router.get("/lookup/teachers")
 def god_mode_lookup_teachers(
+    response: Response,
+    page: Pagination = Depends(),
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db),
 ):
@@ -1591,7 +1603,7 @@ def god_mode_lookup_teachers(
     if current_user.role == UserRole.teacher_admin:
         query = query.filter(TeacherProfile.id == current_user.teacher_profile.id) if current_user.teacher_profile else query.filter(False)
 
-    teachers = query.order_by(TeacherProfile.user_username).all()
+    teachers = paginate(query.order_by(TeacherProfile.user_username), page, response).all()
     return [
         {
             "id": t.id,
@@ -1606,6 +1618,8 @@ def god_mode_lookup_teachers(
 @router.get("/lookup/teachers/{teacher_id}/students")
 def god_mode_lookup_teacher_students(
     teacher_id: int,
+    response: Response,
+    page: Pagination = Depends(),
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db),
 ):
@@ -1630,7 +1644,9 @@ def god_mode_lookup_teacher_students(
             "username": sp.user_username,
         })
     result.sort(key=lambda s: s["name"])
-    return result
+    # El orden es por nombre (en Python): se recorta despues de ordenar y el total sigue siendo el real.
+    response.headers["X-Total-Count"] = str(len(result))
+    return result[page.offset:page.offset + page.limit]
 
 
 @router.get("/lookup/teachers/{teacher_id}/packages")
@@ -1676,6 +1692,8 @@ def god_mode_lookup_teacher_packages(
 @router.get("/lookup/students/{student_id}/enrollments")
 def god_mode_lookup_student_enrollments(
     student_id: int,
+    response: Response,
+    page: Pagination = Depends(),
     teacher_id: Optional[int] = Query(None, description="Filtra solo enrollments con este profesor"),
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db),
@@ -1694,7 +1712,7 @@ def god_mode_lookup_student_enrollments(
             raise HTTPException(status.HTTP_403_FORBIDDEN, "No tienes perfil de profesor.")
         query = query.filter(Enrollment.teacher_id == teacher_profile.id)
 
-    enrollments = query.order_by(Enrollment.created_at.desc()).all()
+    enrollments = paginate(query.order_by(Enrollment.created_at.desc(), Enrollment.id.desc()), page, response).all()
     return [
         {
             "id": e.id,
@@ -1771,6 +1789,8 @@ def god_mode_lookup_pair_classes(
 @router.get("/lookup/teachers/{teacher_id}/cohorts")
 def god_mode_lookup_teacher_cohorts(
     teacher_id: int,
+    response: Response,
+    page: Pagination = Depends(),
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db),
 ):
@@ -1784,7 +1804,10 @@ def god_mode_lookup_teacher_cohorts(
         if not teacher_profile or teacher_id != teacher_profile.id:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Como teacher_admin solo puedes ver tus propios grupos.")
 
-    cohorts = db.query(GroupCohort).filter(GroupCohort.teacher_id == teacher_id).order_by(GroupCohort.created_at.desc()).all()
+    cohorts = paginate(
+        db.query(GroupCohort).filter(GroupCohort.teacher_id == teacher_id).order_by(GroupCohort.created_at.desc(), GroupCohort.id.desc()),
+        page, response,
+    ).all()
     return [
         {
             "id": c.id,

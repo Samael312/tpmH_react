@@ -111,6 +111,23 @@ describe("fetchAllPages", () => {
     expect(server.calls).toHaveLength(3);
   });
 
+  it("listados con `skip` y total dentro del cuerpo ({ total, users }), como /admin/users", async () => {
+    server.handler = async (_p, cfg) => {
+      const { limit, skip } = cfg.params as unknown as { limit: number; skip: number };
+      const n = Math.max(0, Math.min(limit, 430 - skip));
+      return { data: { total: 430, users: rows(skip, n) }, headers: {} };
+    };
+    const r = await fetchAllPages<{ id: number }, { total: number; users: { id: number }[] }>("/admin/users", {
+      rows: (b) => b.users,
+      totalOf: (b) => b.total,
+      offsetParam: "skip",
+    });
+    expect(r.rows).toHaveLength(430);
+    expect(r.total).toBe(430);
+    expect(server.calls.map((c) => (c.params as Record<string, unknown>).skip)).toEqual([0, 200, 400]);
+    expect(server.calls[0].params).not.toHaveProperty("offset");
+  });
+
   it("un error en una página se propaga (react-query lo reintenta o lo muestra)", async () => {
     server.handler = async () => {
       throw new Error("boom");

@@ -142,3 +142,9 @@ Tras compartir un `.env` (chat, captura, repositorio) considera comprometidas **
 - **CDN de Railway (sin coste extra según su documentación, https://docs.railway.com/networking/cdn):** está **apagado por defecto** y se activa por servicio: servicio del **frontend** → Settings → Edge → *Enable CDN Caching* (o `railway cdn enable --service <nombre>`). No cambia DNS ni SSL. Solo cachea `GET`/`HEAD` sin `Authorization` ni `Set-Cookie`, así que sirve para los estáticos del frontend (`/_next/static`, `public/`) y no para la API. Según esa documentación, el borde comprime con Brotli/gzip lo que el origen envía sin comprimir (respuestas de 256 bytes o más) y nunca retiene `text/event-stream`. **Sin verificar en producción:** hay que activarlo y comprobar con `curl -I -H "Accept-Encoding: br" <url>`.
 - `public/` (modelo 3D, assets) lleva `Cache-Control` de 7 días (`next.config.ts`); `_next/static` ya es `immutable` por defecto de Next.
 - Tras activar el CDN, si se cambia un archivo de `public/` con el mismo nombre, puede tardar hasta 7 días en verse; cambia el nombre del archivo al sustituirlo.
+
+## 9. Rendimiento en producción (Fase 11)
+
+- **Peticiones lentas:** el backend añade `Server-Timing: app;dur=<ms>` a cada respuesta y escribe `Peticion lenta: <método> <ruta> <ms> (<estado>)` en el log cuando pasa de `SLOW_REQUEST_MS` (1500). Búscalo en los logs de Railway para saber qué endpoints optimizar. No consulta ni escribe en la base de datos.
+- **Imágenes:** las de Cloudinary se sirven con `f_auto,q_auto` desde el propio Cloudinary (`frontend/lib/imageLoader.ts`); el servidor de Railway ya no recodifica imágenes. Los créditos de transformación de Cloudinary son compartidos con almacenamiento y ancho de banda: revisa su panel tras el lanzamiento.
+- **Índices:** tras aplicar `b1d5e6f7a8c9`, comprueba en Neon con `EXPLAIN ANALYZE` que las consultas de agenda (clases por profesor y fecha) usan `ix_classes_teacher_start`.

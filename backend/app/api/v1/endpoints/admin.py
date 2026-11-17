@@ -704,7 +704,7 @@ def resolve_support_ticket(
     db.commit()
     db.refresh(ticket)
 
-    portal_path = "/teacher/support" if user.role == UserRole.teacher else "/dashboard/support"
+    portal_path = "/teacher/support" if user.role in (UserRole.teacher, UserRole.teacher_admin) else "/dashboard/support"
     send_support_ticket_response_email(
         to_email=user.email,
         user_name=user.name,

@@ -13,6 +13,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.core.config import settings
 from app.auth.session import ACCESS_COOKIE, REFRESH_COOKIE, allowed_origins
 from app.core.rate_limit import limiter
+from app.core.request_timing import RequestTimingMiddleware
 from app.api.v1.router import api_router
 from app.core.scheduler import start_scheduler, stop_scheduler
 from app.db.base import SessionLocal
@@ -78,6 +79,10 @@ async def reject_foreign_origin_with_cookies(request: Request, call_next):
 # headers X-RateLimit-* a la respuesta.
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
+
+# Tiempo de cada peticion (cabecera Server-Timing + aviso en el log de las lentas, ver app/core/request_timing.py).
+# Se registra el ultimo = middleware mas externo, para medir tambien el tiempo de los demas.
+app.add_middleware(RequestTimingMiddleware)
 
 # ─── Logs centralizados de errores (pantalla de Logs en /admin) ──────
 #

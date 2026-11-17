@@ -45,6 +45,7 @@ El generador también escribe `frontend/doc/generated/*`.
 | `app/core/scheduler.py` | | Jobs APScheduler en proceso: por vencimiento (no mantienen despierto Neon) + diarios/semanal |
 | `app/core/chat_digest.py`, `app/core/retention.py`, `app/core/upload_quota.py` | | Aviso de chat agrupado, purga de logs, cuota de materiales |
 | `app/core/email_settings.py` | | Interruptores, contador diario y modo ahorro de correos |
+| `app/core/request_timing.py` | | `Server-Timing` y aviso de peticiones lentas (Fase 11) |
 | `app/core/spoken_languages.py` | | Idiomas que habla el usuario y su nivel |
 | `app/core/email.py` | | ~40 plantillas de email (Resend) |
 

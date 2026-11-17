@@ -130,11 +130,15 @@ export function useStudents(search?: string) {
   const query = useQuery({
     queryKey: ["admin", "students", search ?? ""],
     queryFn: async () => {
-      const params = new URLSearchParams({ role: 'student', is_banned: 'false' })
-      if (search) params.append('search', search)
-      const res = await api.get(`/admin/users?${params}`)
-      // BUG-10: /admin/users devuelve { total, users }, no un array plano.
-      return res.data as { total: number; users: Student[] }
+      // /admin/users devuelve { total, users } y pagina con `skip`/`limit` (50 por defecto, 200 como máximo): sin
+      // pedir todas las páginas, la pantalla mostraba solo los 50 primeros aunque el contador dijera más.
+      const { rows, total } = await fetchAllPages<Student, { total: number; users: Student[] }>('/admin/users', {
+        params: { role: 'student', is_banned: 'false', search: search || undefined },
+        rows: (b) => b.users,
+        totalOf: (b) => b.total,
+        offsetParam: 'skip',
+      })
+      return { total, users: rows }
     },
   })
 
@@ -371,9 +375,13 @@ export function useBannedStudents() {
   const query = useQuery({
     queryKey: ["admin", "students", "banned"],
     queryFn: async () => {
-      const res = await api.get('/admin/users?role=student&is_banned=true&limit=200')
-      // BUG-10: /admin/users devuelve { total, users }, no un array plano.
-      return res.data as { total: number; users: Student[] }
+      const { rows, total } = await fetchAllPages<Student, { total: number; users: Student[] }>('/admin/users', {
+        params: { role: 'student', is_banned: 'true' },
+        rows: (b) => b.users,
+        totalOf: (b) => b.total,
+        offsetParam: 'skip',
+      })
+      return { total, users: rows }
     },
   })
 

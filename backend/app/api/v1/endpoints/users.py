@@ -139,7 +139,7 @@ def update_profile(
             )
         if current_user.role == "student" and current_user.student_profile:
             current_user.student_profile.user_username = data.username
-        elif current_user.role == "teacher" and current_user.teacher_profile:
+        elif current_user.role in ("teacher", "teacher_admin") and current_user.teacher_profile:
             current_user.teacher_profile.user_username = data.username
 
     if data.email and data.email != current_user.email:

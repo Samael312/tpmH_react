@@ -44,3 +44,6 @@ Pendiente: cookie HttpOnly (ver KNOWN_ISSUES).
 
 ## Fuentes y caché (Fase 11)
 Inter, Poppins (600/700/800) y DM Sans (400/500/600) se cargan con `next/font/google` en `app/layout.tsx` (se descargan en el build y se sirven desde el propio sitio; Tailwind las usa por las variables `--font-poppins` y `--font-dm-sans`). `public/` lleva `Cache-Control` de 7 días. El modelo 3D `public/models/Chipi_Waving.glb` pesa 22 MB (13 MB de texturas JPEG y 9 MB de geometría): ver `CORRECCIONES.md` (Fase 11).
+
+## Imágenes (Fase 11)
+`next.config.ts` usa un cargador propio (`images.loader: "custom"`, `lib/imageLoader.ts`): las URLs de `res.cloudinary.com/.../image/upload/...` se reescriben con `f_auto,q_auto,c_limit,w_<ancho>` para que las optimice el CDN de Cloudinary (AVIF/WebP según el navegador) y el servidor de Railway no gaste CPU ni RAM; el resto (logo local, avatares de Google y ui-avatars) se sirve tal cual con un `?w=` inocuo. La lógica está en `lib/cloudinaryImage.ts` (`tests/cloudinaryImage.test.ts`). Las URLs con transformaciones propias, los vídeos y los PDF no se tocan. Los `<img>` sueltos (avatares de hosts arbitrarios) llevan `loading="lazy"`.
