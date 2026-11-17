@@ -11,7 +11,7 @@ La plataforma **no está en uso**; los `.env` se configuraron para probar en loc
 
 ## ⚠ Lo que sigue siendo real
 
-1. **`DATABASE_URL` sigue siendo la base Neon real** (`neondb`, 34 tablas, revisión Alembic `c9d0e1f2a3b4` = head, ~10 usuarios, 21 clases, 18 pagos). Aunque la plataforma no esté en uso, **`tests/flow` crea y borra datos ahí**. Para aislar: rama `dev` gratuita de Neon y su URL en este `.env`.
+1. **`DATABASE_URL` sigue siendo la base Neon real** (`neondb`, 34 tablas, revisión Alembic `c9d0e1f2a3b4` (el head del repo es ahora `b8c9d0e1f2a3`) = head, ~10 usuarios, 21 clases, 18 pagos). Aunque la plataforma no esté en uso, **`tests/flow` crea y borra datos ahí**. Para aislar: rama `dev` gratuita de Neon y su URL en este `.env`.
 2. **Las claves son reales**: Resend (los emails de las pruebas **se envían de verdad**: usa cuentas tuyas), OpenAI (cada Chipi/TTS gasta saldo), Cloudinary (las subidas quedan en la nube), Google.
 3. `app/db/base.py` usa `load_dotenv(override=True)`: **el `.env` pisa a las variables del sistema**, incluso `DATABASE_URL` pasada por línea de comandos. Por eso `tests/audit` neutraliza `load_dotenv` y aborta si el motor no es SQLite (ver `tests/audit/conftest.py` y `run_server.py`).
 4. `ENVIRONMENT=development` activa `/docs` y `/redoc` y **no** bloquea `flow_tests` (solo se bloquea con `production`). En Railway debe ser `production`.
@@ -90,5 +90,5 @@ Importante: `next.config.ts` construye el CSP; el dominio del backend debe estar
 - `SECRET_KEY` distinta por entorno; ≥ 32 bytes aleatorios (`python -c "import secrets;print(secrets.token_urlsafe(48))"`).
 
 ## Comprobación de conectividad (hecha el 2026-11-16, solo lectura)
-Conexión a Neon con `default_transaction_read_only=on`: PostgreSQL 17.12, revisión Alembic `c9d0e1f2a3b4` (coincide con el único head del repo), 34 tablas, ~11,8 MB. Recuentos: users 10, teacher_profiles 4, student_profiles 6, classes 21, payments 18, enrollments 8, packages 5, teacher_wallets 2, `error_logs` 397, chat_messages 22. No se escribió nada ni se llamó a OpenAI/Resend/Cloudinary/Google.
+Conexión a Neon con `default_transaction_read_only=on`: PostgreSQL 17.12, revisión Alembic `c9d0e1f2a3b4` (el head del repo es ahora `b8c9d0e1f2a3`) (coincide con el único head del repo), 34 tablas, ~11,8 MB. Recuentos: users 10, teacher_profiles 4, student_profiles 6, classes 21, payments 18, enrollments 8, packages 5, teacher_wallets 2, `error_logs` 397, chat_messages 22. No se escribió nada ni se llamó a OpenAI/Resend/Cloudinary/Google.
 `error_logs` es la tabla con más filas: confirma el crecimiento sin tope (RESOURCE_COSTS #9).

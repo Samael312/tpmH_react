@@ -83,9 +83,9 @@ Salida: repetir sondas (200 KB y `role: system` en Chipi → rechazados).
 ## Fase 6 — Pruebas y documentación
 
 - [x] Actualizar `tests/flow` obsoletos (regla D7, `payment_method`, cohorte sin pago confirmado, disponibilidad por hora) · ver `backend/doc/TESTING.md`
-- [ ] Concurrencia en CI sobre PostgreSQL para PRs de reservas/pagos
-- [ ] Paso de migraciones Alembic en el despliegue (no se ejecutan solas)
-- [ ] Regenerar docs y cerrar IDs en `KNOWN_ISSUES.md`
+- [x] Concurrencia en CI sobre PostgreSQL para PRs de reservas/pagos: `.github/workflows/backend.yml` (audit en SQLite, `alembic upgrade head` en PostgreSQL vacío y `concurrency_live.py`) · _sin ejecutar:_ no hay PostgreSQL ni GitHub Actions en este equipo; se valida en el primer PR
+- [x] Migraciones Alembic en el despliegue: documentado en `docs/OPERATIONS.md` con las 3 migraciones nuevas por aplicar (head `b8c9d0e1f2a3`) · _decisión pendiente:_ automatizarlo (ver «Decisiones pendientes»)
+- [x] Regenerar docs y cerrar IDs en `KNOWN_ISSUES.md`
 
 ## Fase 7 — Control de correos (cuota gratuita de Resend: 100 emails/día)
 
@@ -158,3 +158,15 @@ Son **estimaciones a partir del código** (cuántos correos genera cada evento y
 ---
 
 **Orden:** 0 → **1** → **2** → 3 y 4 en paralelo → 5 → 6 (continua) → 7 (correos; puede adelantarse: no depende de las demás) → 8 (idiomas que habla el usuario; independiente, pero toca onboarding y perfil igual que la Fase 7 toca settings).
+
+---
+
+## Decisiones pendientes (se deciden al terminar todas las fases)
+
+1. **Neon y el scheduler (Fase 5):** el job de Meet cada 5 min mantiene Neon despierto 24/7. Opciones: subir a 15–30 min, comprobar antes con una consulta barata/caché, o limitarlo a horas útiles.
+2. **`get_student_booking_stage` escribe en un GET (Fase 5):** cancela el enrollment sin pago notificado al leer. Moverlo a un job cambia el comportamiento; dejarlo es seguro pero es una escritura en lectura.
+3. **Tope de paginación (Fase 5):** hoy 200 por defecto y 500 máximo. Decidir si basta, y si el frontend debe paginar de verdad (hoy solo recibe las primeras 200 filas).
+4. **Migraciones automáticas en el despliegue (Fase 6):** añadir `preDeployCommand = "alembic upgrade head"` en `railway.toml` o seguir ejecutándolas a mano. Antes de desplegar hay que aplicar a mano las 3 migraciones nuevas (`d1e2f3a4b5c6`, `a7b8c9d0e1f2`, `b8c9d0e1f2a3`).
+5. **Migrar fuera de Railway (Fase 5):** análisis hecho en `backend/doc/RESOURCE_COSTS.md`; decidir si se migra.
+6. **Cuota de subidas por profesor y subida directa desde el navegador a Cloudinary (Fase 5).**
+7. **Fin de la transición de sesión (Fase 3b):** retirar Bearer/`?token=` y bajar el access token a 30 min cuando el frontend nuevo esté en producción.

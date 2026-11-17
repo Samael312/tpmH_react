@@ -1,4 +1,4 @@
-# Bugs y deudas conocidos (estado a 2026-11-16, commit 848e6f3, NADA corregido aún)
+# Bugs y deudas conocidos (auditoría de 2026-11-16; corregidos casi todos en las Fases 1–5, ver la columna Estado)
 
 Detalle y causas con archivo:línea en `../../ANALISIS.md` (§5–§8). Cada bug confirmado tiene un test `xfail(strict=True)` en
 `backend/tests/audit/`: al corregirlo el test pasa a XPASS (falla la suite) -> quitar el `xfail`.
@@ -47,6 +47,12 @@ doble contabilidad de créditos (`occupied` vs `classes_used`; el aviso de bajo 
 `manual-grant` ilimitado = 0 créditos; `cancel_class_admin` no notifica grupales; sin idempotencia fuerte en `validate_payment`/`process_withdrawal_v2`;
 `transaction_reference` no único; DST en disponibilidad recurrente; `default_commission_rate` nunca se aplica.
 
+## Corregidos en la Fase 5 (coste y rendimiento)
+- Engine principal con pool (antes `NullPool`); `finalize_past_classes` fuera de los GET de agenda; jobs del scheduler como `def` (ya no bloquean el event loop).
+- N+1 en 9 listados (`/classes/teacher/classes`, `/packages/teacher/enrollments`, `/payments/pending-review`, `/payments/history`, `/admin/support-tickets`, `/admin/teachers`, `/teachers/`): vigilados por `tests/audit/test_perf_queries.py`.
+- Paginación `limit`/`offset` + `X-Total-Count` (`app/core/pagination.py`) en 4 listados. **Pendiente:** el resto de listados y purga de `error_logs`.
+- Subidas a Cloudinary por streaming y en hilo (`upload_file_stream`). **Pendiente:** cuota por profesor.
+
 ## Código muerto / deuda
 Endpoints heredados `/packages/request-renewal`, `/request-package-change`, `/cancel-package-change`; docstring que cita `/cohorts/migrate-to-individual` (no existe);
 `featured_teacher="mar12"` sin uso (`availability.py:488`, `next.config.ts`); `Enrollment.renewal_count`/`previous_enrollment_id`, `Class.payment_expires_at` sin uso;
@@ -54,13 +60,9 @@ imports duplicados en `availability.py`; `requirements.txt` UTF-16 con `opencode
 jobs de 24 h/7 d pueden no correr con reinicios frecuentes; migraciones con prefijo `a1b2c3d4e5f6_*` duplicado; archivos gigantes (`payments.py` 2130 líneas).
 
 ## Decisiones de negocio pendientes (preguntadas al dueño, sin respuesta)
-1. ~~¿`finalized` se auto-completa tras N horas?~~ Resuelto: pasa a `no_show` a las 72 h (NEG-02).
-2. Al renovar un paquete activo, ¿se arrastran los créditos sobrantes?
-3. ¿Quién aprueba pagos/retiros y cambia comisiones: solo `superadmin` o también `teacher_admin`/profesor?
-4. ¿Despliegue con más de un worker?
-5. ¿Corregir por lotes quitando el `xfail` de cada test?
+Todas resueltas (ver «Decisiones de negocio acordadas» en `CORRECCIONES.md`): `finalized` pasa a `no_show` a las 72 h (NEG-02); los créditos sobrantes se suman al renovar; solo `superadmin`/`teacher_admin` aprueban pagos; un solo worker. Quedan las decisiones técnicas apartadas al final de `CORRECCIONES.md`.
 
-## Resultados de concurrencia en vivo (PostgreSQL/Neon, `python -m tests.audit.concurrency_live`)
+## Resultados de concurrencia en vivo ANTES de la Fase 2 (histórico; hoy R1–R5 deben dar 0 FALLO, PostgreSQL/Neon, `python -m tests.audit.concurrency_live`)
 - R1 mismo horario x2 alumnos: **FALLO** (2 clases). R2 créditos x4: **FALLO** (sobre-reserva).
 - R3 aprobar el mismo pago x4: OK (la billetera se acredita una sola vez). R4 retiro simultáneo x4: OK (1 pendiente, saldo 0).
 - R5 cancelar la misma clase x3: las 3 respuestas son 200, pero el crédito no queda negativo (`classes_used=0`): operación idempotente, sin daño observado.
