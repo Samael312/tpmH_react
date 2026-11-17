@@ -1,6 +1,5 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
-from sqlalchemy.pool import NullPool
 import os
 from dotenv import load_dotenv
 
@@ -8,9 +7,16 @@ load_dotenv(override=True)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Pool normal en el engine principal (antes NullPool: una conexión TCP+TLS nueva a
+# Neon por cada commit). pool_pre_ping y pool_recycle cubren que Neon suspenda el
+# compute y cierre las conexiones inactivas. Ajustable por entorno. Con el endpoint
+# *pooled* de Neon (PgBouncer) puede bajarse DB_POOL_SIZE.
 engine = create_engine(
     DATABASE_URL,
-    poolclass=NullPool,  # Importante para Neon (serverless)
+    pool_size=int(os.getenv("DB_POOL_SIZE", "5")),
+    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "5")),
+    pool_pre_ping=True,
+    pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "240")),
 )
 
 SessionLocal = sessionmaker(

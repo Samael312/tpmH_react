@@ -32,7 +32,6 @@ from app.core.class_logic import (
     can_reschedule_class,
     resolve_status_after_reschedule,
     update_enrollment_counter,
-    finalize_past_classes,
     class_counts_towards_package,
     cancel_class_and_refund,
     get_business_rules,
@@ -285,7 +284,6 @@ def get_my_classes_student(
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    finalize_past_classes(db)
     now = utc_now()
     student_id = current_user.student_profile.id
 
@@ -577,7 +575,6 @@ def get_my_classes_teacher(
     current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
-    finalize_past_classes(db)
     now = utc_now()
     teacher_id = current_user.teacher_profile.id
 

@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 
-async def finalize_expired_classes():
+def finalize_expired_classes():
     """
     Job que se ejecuta cada 10 minutos.
     Marca como 'finalized' las clases confirmadas cuyo horario ya pasó.
@@ -37,7 +37,7 @@ async def finalize_expired_classes():
     finally:
         db.close()
 
-async def send_class_reminders():
+def send_class_reminders():
     """
     Job que se ejecuta cada hora.
     Busca clases confirmadas que empiezan en ~24h
@@ -158,7 +158,7 @@ async def send_class_reminders():
     finally:
         db.close()
 
-async def generate_upcoming_meet_links():
+def generate_upcoming_meet_links():
     """
     Job que se ejecuta cada 5 minutos.
     Genera automáticamente el link de videollamada (Google Meet, vía el
@@ -221,7 +221,7 @@ async def generate_upcoming_meet_links():
 # porque el flujo de "reservar y notificar el pago después" fue eliminado
 # (book_class ahora exige el crédito ya pagado/aprobado de antemano).
 
-async def sync_all_teacher_calendars():
+def sync_all_teacher_calendars():
     """
     Job que se ejecuta cada 30 minutos, en segundo plano, sin depender
     de que algún profesor tenga el panel abierto.
@@ -243,7 +243,7 @@ async def sync_all_teacher_calendars():
     finally:
         db.close()
 
-async def notify_low_credit_packages():
+def notify_low_credit_packages():
     """
     Job semanal. Revisa enrollments activos con pocas clases restantes
     (finitos o ilimitados con crédito prepagado) y avisa al estudiante
@@ -298,7 +298,7 @@ async def notify_low_credit_packages():
     finally:
         db.close()
 
-async def purge_old_chat_messages():
+def purge_old_chat_messages():
     """
     Job diario. Borra mensajes de chat interno más viejos que
     PlatformConfig.chat_retention_days (0 = sin límite, no borra nada).
