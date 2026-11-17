@@ -22,6 +22,8 @@ from app.models.teacher_appeal import TeacherAppeal
 from app.schemas.notifications import CreateAppealRequest, TeacherAppealResponse
 from app.core.schedule_recalc import recalculate_teacher_schedule_timezone
 from app.core.platform_config import get_or_create_platform_config
+from app.core.spoken_languages import read_spoken_languages, speaks as speaks_language
+from app.schemas.user import SpokenLanguageItem
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -33,7 +35,7 @@ def _to_public(t: TeacherProfile, hide_whatsapp: bool = False) -> TeacherPublicR
     if t.user:
         resp.name = t.user.name
         resp.surname = t.user.surname
-        resp.spoken_languages = list(t.user.spoken_languages or [])
+        resp.spoken_languages = [SpokenLanguageItem(**i) for i in read_spoken_languages(t.user.spoken_languages)]
     # Interruptor global de admin (platform_config.show_teacher_whatsapp):
     # oculta el WhatsApp de TODOS los profesores sin tocar lo que cada uno
     # cargó en su propio perfil.
@@ -45,7 +47,8 @@ def _to_public(t: TeacherProfile, hide_whatsapp: bool = False) -> TeacherPublicR
 @router.get("/", response_model=List[TeacherPublicResponse])
 def list_approved_teachers(
     subject: Optional[str] = Query(None, description="Filtrar por materia"),
-    language: Optional[str] = Query(None, description="Filtrar por idioma"),
+    language: Optional[str] = Query(None, description="Filtrar por idioma que ENSEÑA"),
+    speaks: Optional[str] = Query(None, max_length=40, description="Filtrar por idioma que HABLA (Fase 10)"),
     db: Session = Depends(get_db)
 ):
     """
@@ -78,6 +81,10 @@ def list_approved_teachers(
                 l.lower() for l in t.languages
             ]
         ]
+
+    # Filtrar por idioma que habla (Fase 10; lo guardado vive en User.spoken_languages)
+    if speaks:
+        teachers = [t for t in teachers if t.user and speaks_language(t.user.spoken_languages, speaks)]
 
     hide_whatsapp = not get_or_create_platform_config(db).show_teacher_whatsapp  # una sola consulta, no una por profesor
     return [_to_public(t, hide_whatsapp=hide_whatsapp) for t in teachers]
@@ -296,7 +303,7 @@ def get_my_students_full(
             "email": u.email,
             "nationality": u.nationality,
             "phone_number": u.phone_number,
-            "spoken_languages": list(u.spoken_languages or []),
+            "spoken_languages": read_spoken_languages(u.spoken_languages),
             "avatar": u.avatar or sp.profile_photo_url,
             "timezone": sp.timezone,
             "goal": sp.goal,

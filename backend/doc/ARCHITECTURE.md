@@ -18,7 +18,10 @@ backend/
     auth/                   dependencias de rol, hash de contraseñas, JWT, verificación de Google
     core/                   lógica de negocio reutilizable (ver generated/CORE_FUNCTIONS.md)
       class_logic.py        reglas de agendado/créditos/estados  <- LEER ANTES DE TOCAR CLASES
-      scheduler.py          jobs APScheduler
+      scheduler.py          jobs APScheduler (por vencimiento + diarios/semanal)
+      chat_digest.py        aviso agrupado de mensajes de chat al profesor
+      retention.py          purga de error_logs y email_log
+      upload_quota.py       cuota de materiales por profesor
       timezone.py           UTC <-> local, slots
       email.py              plantillas Resend
       google_calendar.py / calendar_sync.py   integración Calendar/Meet
@@ -30,7 +33,7 @@ backend/
     models/                 SQLAlchemy (generated/MODELS.md)
     schemas/                Pydantic (generated/SCHEMAS.md)
     db/base.py              engine, SessionLocal, Base, get_db
-  alembic/versions/         migraciones (un solo head f8b3c4d5e6a7)
+  alembic/versions/         migraciones (un solo head a9c4d5e6f7a8)
   tests/flow/               suite de integración (necesita PostgreSQL + .env)
   tests/audit/              suite de auditoría sin .env (SQLite) + run_server.py
   doc/                      esta documentación
@@ -62,16 +65,19 @@ Detalle exacto por ruta: `generated/API_REFERENCE.md`. Endpoint sin prefijo: `GE
 
 ## Scheduler (APScheduler, en el proceso web)
 
-| Job | Intervalo | Qué hace |
-|---|---|---|
-| `finalize_expired_classes` | 10 min | `finalize_past_classes`: `confirmed` pasadas -> `finalized`; no confirmadas pasadas -> `no_show` |
-| `send_class_reminders` | 1 h | email de recordatorio a ~24 h |
-| `generate_upcoming_meet_links` | 5 min | crea Meet vía Calendar del profesor para clases próximas |
-| `sync_all_teacher_calendars` | 30 min | sincroniza Calendar (busy e importación externa) |
-| `notify_low_credit_packages` | 7 días | aviso de pocos créditos |
-| `purge_old_chat_messages` | 24 h | borra mensajes más viejos que `chat_retention_days` (0 = no borra) |
+**Jobs por vencimiento (Fase 9).** No consultan la BD a intervalo fijo (eso mantenía despierta la base de Neon las 24 h): cada uno calcula **cuándo le toca actuar** con una consulta corta y se programa con un `DateTrigger`; sin nada pendiente duerme hasta 24 h. Se recalculan al arrancar (5 s después) y cuando una sesión confirma (`commit`) una escritura de `Class`, `PlatformConfig` o `GoogleCalendarToken` (ganchos de sesión en `scheduler.py`; el chat avisa a mano al marcar un aviso pendiente). Cada job respeta una separación mínima entre ejecuciones (`min_gap`) para que un fallo no se reintente en bucle.
 
-Todos son `IntervalTrigger` (primer disparo **después** del intervalo). Con varios workers se duplican.
+| Job | Cuándo se ejecuta | Qué hace |
+|---|---|---|
+| `finalize_expired_classes` | al terminar la primera clase `confirmed`/`pending_trial`, o 72 h después de terminar una `finalized` (mín. 5 min entre ejecuciones) | `finalize_past_classes`: `confirmed` pasadas -> `finalized` -> `no_show` |
+| `generate_meet_links` | cuando la próxima clase sin link entra en la ventana `meet_link_autogen_minutes` (mín. 5 min) | crea Meet vía Calendar del profesor |
+| `class_reminders` | 25 h antes de la primera clase sin recordatorio (ventana 23–25 h; mín. 10 min) | recordatorio al alumno por clase y **un correo por profesor** con todas sus clases de la ventana |
+| `chat_digest` | `CHAT_DIGEST_DELAY_MINUTES` (10) después del primer aviso pendiente (mín. 5 min) | un correo por profesor con sus conversaciones con mensajes sin leer |
+| `sync_teacher_calendars` | cada 30 min si hay clase en curso o en las próximas 3 h; si no, cada 6 h y siempre antes de que la próxima clase entre en esa ventana; nada si ningún profesor tiene Calendar | sincroniza Calendar (busy e importación externa) |
+
+Jobs con hora fija (`CronTrigger`, UTC; los diarios juntos para despertar Neon una sola vez): `purge_old_chat_messages` 03:00 (borra mensajes más viejos que `chat_retention_days`; 0 = no borra), `purge_old_logs` 03:05 (`error_logs` 30 d y `email_log` 60 d), `release_stale_enrollments` 03:10 (cancela enrollments individuales sin pagar de más de 24 h) y `notify_low_credit_packages` los lunes 14:00 (aviso de pocos créditos).
+
+Con varios workers se duplican (hoy: un solo worker). Tests: `tests/audit/test_due_jobs.py`.
 
 ## Despliegue (Railway)
 

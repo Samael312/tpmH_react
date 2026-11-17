@@ -149,3 +149,18 @@ Semanal: filas `TeacherAvailability` (`day_of_week`, `start_time_utc`, `end_time
 - Quién lo ve: el perfil público del profesor (`GET /teachers/`, `/teachers/{username}`, landing) y el propio usuario; el de un alumno solo lo ve su profesor (`GET /teachers/me/students-full`). Ningún otro endpoint lo expone.
 - Si la fila del catálogo no existe todavía (migración sin aplicar) se usa una lista por defecto en el código.
 
+## Idiomas con nivel (Fase 10, amplía la Fase 8)
+- Cada idioma que habla el usuario lleva un **nivel obligatorio**: `native` (nativo), `fluent` (fluido), `intermediate` (intermedio) o `basic` (básico). Formato guardado y devuelto: `[{"language": "Inglés", "level": "fluent"}]`.
+- Al **guardar** (`PATCH /users/me`) se exige objeto `{language, level}` por idioma (422 si falta o es inválido el nivel; un texto suelto ya no vale). Terminar el onboarding exige ≥ 1 idioma, cada uno con su nivel.
+- Datos de la Fase 8 (textos sueltos): se **leen** como `{language, level: null}` y la interfaz pide completar el nivel; no hay migración de datos.
+- Directorio: `GET /teachers/?speaks=<idioma>` devuelve solo profesores aprobados que hablan ese idioma (sin distinguir mayúsculas ni tildes; vacío = sin filtro; máx. 40 caracteres) y se combina con `subject` y `language` (idioma que enseñan).
+- Política de privacidad actualizada el 17 de noviembre de 2026 (nivel por idioma; versión en inglés añadida).
+
+## Rendimiento, correos y cuotas (Fase 9)
+- **Jobs por vencimiento:** finalizar clases, Meet, recordatorios, resumen de chat y sincronización de Calendar se programan para la hora exacta en que hay algo que hacer (ver `ARCHITECTURE.md`). Consecuencia visible: una clase se finaliza al terminar, no «dentro de los próximos 10 min»; el link de Meet sale justo al entrar en la ventana.
+- **Etapa de reserva sin escribir en GET:** `GET /payments/booking-status` y `GET /users/me/teachers` calculan la etapa sin cancelar nada (`heal=False`; si el paquete activo no se pagó ni tiene pago en revisión devuelven `needs_package` y `/me/teachers` oculta ese enrollment). Los POST (`book`, elegir paquete) siguen cancelándolo. Un barrido diario cancela los enrollments individuales `active` + `unpaid` de más de 24 h sin pago en revisión (los de cohorte no).
+- **Aviso de chat al profesor, agrupado:** la regla de reactivación no cambia (`chat_reactivation_hours`: solo el mensaje de un alumno tras una conversación inactiva avisa), pero el correo sale `CHAT_DIGEST_DELAY_MINUTES` (10) después y **un solo correo por profesor**: si solo hay una conversación con mensajes sin leer, el correo de siempre; si hay varias, un resumen. Si el profesor ya leyó los mensajes en ese rato, no se envía nada.
+- **Recordatorios de clase:** cada alumno recibe su aviso por clase; el profesor recibe **un correo** con todas sus clases de la ventana de 23–25 h (uno solo si es una).
+- **Cuota de materiales:** 500 MB por profesor (`MATERIALS_QUOTA_MB`; 0 = sin límite) sobre los materiales activos con archivo; subir uno que la supere da 413 sin llamar a Cloudinary; eliminar un material libera su espacio. `GET /materials/quota` devuelve `{used_bytes, limit_bytes, unlimited, remaining_bytes}`.
+- **Paginación:** `limit` (defecto 200, máx. 500) y `offset` + cabecera `X-Total-Count` en los listados de pagos, retiros, tickets propios, alumnos del profesor, conversaciones, clases y cohortes; en `my-classes`/clases del profesor y conversaciones los contadores siguen siendo del total.
+- **Retención:** `error_logs` 30 días y `email_log` 60 días (job diario 03:05 UTC).

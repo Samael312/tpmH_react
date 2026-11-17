@@ -1,6 +1,13 @@
 from pydantic import BaseModel, EmailStr, field_validator, Field, computed_field
-from typing import Optional, List
+from typing import Any, Optional, List
 from datetime import datetime
+from app.core.spoken_languages import read_spoken_languages
+
+
+class SpokenLanguageItem(BaseModel):
+    """Idioma que habla el usuario y su nivel (native|fluent|intermediate|basic; nulo en datos antiguos)."""
+    language: str
+    level: Optional[str] = None
 
 # --- BASE ---
 class UserBase(BaseModel):
@@ -23,7 +30,12 @@ class UserResponse(UserBase):
     phone_number: Optional[str] = None
     nationality: Optional[str] = None
     onboarding_completed: bool = False
-    spoken_languages: List[str] = []
+    spoken_languages: List[SpokenLanguageItem] = []
+
+    @field_validator("spoken_languages", mode="before")
+    @classmethod
+    def _coerce_spoken(cls, v):
+        return read_spoken_languages(v)
 
     # Se usa únicamente para calcular is_google_account (abajo); no se
     # expone el id de Google en sí en la respuesta (exclude=True).
@@ -87,7 +99,7 @@ class UpdateProfileRequest(BaseModel):
     nationality: Optional[str] = None
     onboarding_completed: Optional[bool] = None
     # Fase 8: se valida contra el catalogo `spoken_languages` en el endpoint (core/spoken_languages.py)
-    spoken_languages: Optional[List[str]] = None
+    spoken_languages: Optional[List[Any]] = None
 
 class DeleteAccountRequest(BaseModel):
     """

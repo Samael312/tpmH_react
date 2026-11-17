@@ -12,6 +12,9 @@ dockerfilePath = "backend/Dockerfile"
 # SEC-01: --proxy-headers para que el rate-limit vea la IP real del cliente (X-Forwarded-For de Railway).
 # Mantener UN solo worker: el limitador y el scheduler viven en memoria del proceso.
 startCommand = "uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips=*"
+# Fase 9: aplica las migraciones ANTES de arrancar la version nueva; si fallan, el despliegue no sale y la anterior sigue viva.
+# Las migraciones deben ser retrocompatibles (anadir, no borrar ni renombrar) porque durante el relevo corre el codigo viejo.
+preDeployCommand = "alembic upgrade head"
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 

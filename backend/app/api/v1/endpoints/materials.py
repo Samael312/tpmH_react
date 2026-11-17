@@ -18,6 +18,7 @@ from app.schemas.materials import (
     UpdateProgressRequest,
 )
 from app.core.storage import upload_file_stream, delete_file
+from app.core.upload_quota import ensure_quota, get_upload_size, usage as quota_usage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -47,9 +48,13 @@ def create_material(
     file_url = None
     file_public_id = None
     file_type = None
+    file_size = None
 
     # Si hay archivo lo subimos a Cloudinary
     if file:
+        # Cuota por profesor: se comprueba ANTES de enviar nada a Cloudinary (413 si se supera).
+        file_size = get_upload_size(file.file)
+        ensure_quota(db, current_user.teacher_profile.id, file_size)
         try:
             upload_result = upload_file_stream(
                 file.file,
@@ -76,6 +81,7 @@ def create_material(
         file_url=file_url,
         file_public_id=file_public_id,
         file_type=file_type,
+        file_size=file_size,
     )
 
     db.add(material)
@@ -245,6 +251,15 @@ def assign_material(
         "already_assigned": already_assigned,
         "skipped_not_mine": skipped_not_mine,
     }
+
+
+@router.get("/quota")
+def get_my_materials_quota(
+    current_user: User = Depends(get_current_teacher),
+    db: Session = Depends(get_db),
+):
+    """Espacio usado y limite de materiales del profesor (bytes)."""
+    return quota_usage(db, current_user.teacher_profile.id)
 
 
 @router.get("/my-materials", response_model=List[MaterialResponse])

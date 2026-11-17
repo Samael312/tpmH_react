@@ -1593,7 +1593,8 @@ def get_booking_status(
             detail="Tienes más de un profesor vinculado. Especifica teacher_username."
         )
 
-    stage = get_student_booking_stage(student_id, teacher.id, db)
+    # GET: no debe escribir (heal=False); el barrido diario limpia los enrollments sin pagar.
+    stage = get_student_booking_stage(student_id, teacher.id, db, heal=False)
 
     enrollment = db.query(Enrollment).filter(
         Enrollment.student_id == student_id,

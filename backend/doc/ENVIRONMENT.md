@@ -11,7 +11,7 @@ La plataforma **no está en uso**; los `.env` se configuraron para probar en loc
 
 ## ⚠ Lo que sigue siendo real
 
-1. **`DATABASE_URL` sigue siendo la base Neon real** (`neondb`, 34 tablas, revisión Alembic `c9d0e1f2a3b4` (el head del repo es ahora `f8b3c4d5e6a7`) = head, ~10 usuarios, 21 clases, 18 pagos). Aunque la plataforma no esté en uso, **`tests/flow` crea y borra datos ahí**. Para aislar: rama `dev` gratuita de Neon y su URL en este `.env`.
+1. **`DATABASE_URL` sigue siendo la base Neon real** (`neondb`, 34 tablas, revisión Alembic `c9d0e1f2a3b4` (el head del repo es ahora `a9c4d5e6f7a8`) = head, ~10 usuarios, 21 clases, 18 pagos). Aunque la plataforma no esté en uso, **`tests/flow` crea y borra datos ahí**. Para aislar: rama `dev` gratuita de Neon y su URL en este `.env`.
 2. **Las claves son reales**: Resend (los emails de las pruebas **se envían de verdad**: usa cuentas tuyas), OpenAI (cada Chipi/TTS gasta saldo), Cloudinary (las subidas quedan en la nube), Google.
 3. `app/db/base.py` usa `load_dotenv(override=True)`: **el `.env` pisa a las variables del sistema**, incluso `DATABASE_URL` pasada por línea de comandos. Por eso `tests/audit` neutraliza `load_dotenv` y aborta si el motor no es SQLite (ver `tests/audit/conftest.py` y `run_server.py`).
 4. `ENVIRONMENT=development` activa `/docs` y `/redoc` y **no** bloquea `flow_tests` (solo se bloquea con `production`). En Railway debe ser `production`.
@@ -54,7 +54,10 @@ Cuenta de prueba sin tocar la BD real: `python -m tests.audit.run_server` (SQLit
 | `RESEND_API_KEY` | definida | para emails | `core/email.py` | sin ella los envíos fallan en silencio (se capturan) |
 | `EMAIL_FROM` | `soporte@mail.tuprofemaria.com` | no | remitente | el dominio debe estar verificado en Resend |
 | `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | definidas | para archivos | `core/storage.py`, TTS | |
-| `MAX_VIDEO_UPLOAD_MB` | `100` | no | tope de vídeo (`storage.py`) | se lee entero en RAM (RESOURCE_COSTS #7) |
+| `MAX_VIDEO_UPLOAD_MB` | `100` | no | tope de vídeo (`storage.py`) | desde la Fase 5 se sube por streaming (no se carga entero en RAM) |
+| `MATERIALS_QUOTA_MB` | `500` | no | cuota de materiales por profesor (`core/upload_quota.py`); `0` la desactiva | 413 al superarla; borrar un material libera espacio |
+| `ERROR_LOG_RETENTION_DAYS` / `EMAIL_LOG_RETENTION_DAYS` | `30` / `60` | no | purga diaria de `error_logs` / `email_log` (`core/retention.py`); `0` la desactiva | |
+| `CHAT_DIGEST_DELAY_MINUTES` | `10` | no | espera antes de enviar el resumen de mensajes de chat al profesor (`core/chat_digest.py`) | |
 | `TTS_CACHE_FOLDER` | `tts_cache` | no | carpeta Cloudinary del audio cacheado | |
 | `GOOGLE_CLIENT_ID` | definida | para Google | login GSI y Calendar | debe ser el **mismo** que `NEXT_PUBLIC_GOOGLE_CLIENT_ID` |
 | `GOOGLE_CLIENT_SECRET` | definida | Calendar | intercambio OAuth | |
@@ -90,5 +93,5 @@ Importante: `next.config.ts` construye el CSP; el dominio del backend debe estar
 - `SECRET_KEY` distinta por entorno; ≥ 32 bytes aleatorios (`python -c "import secrets;print(secrets.token_urlsafe(48))"`).
 
 ## Comprobación de conectividad (hecha el 2026-11-16, solo lectura)
-Conexión a Neon con `default_transaction_read_only=on`: PostgreSQL 17.12, revisión Alembic `c9d0e1f2a3b4` (el head del repo es ahora `f8b3c4d5e6a7`) (coincide con el único head del repo), 34 tablas, ~11,8 MB. Recuentos: users 10, teacher_profiles 4, student_profiles 6, classes 21, payments 18, enrollments 8, packages 5, teacher_wallets 2, `error_logs` 397, chat_messages 22. No se escribió nada ni se llamó a OpenAI/Resend/Cloudinary/Google.
+Conexión a Neon con `default_transaction_read_only=on`: PostgreSQL 17.12, revisión Alembic `c9d0e1f2a3b4` (el head del repo es ahora `a9c4d5e6f7a8`) (coincide con el único head del repo), 34 tablas, ~11,8 MB. Recuentos: users 10, teacher_profiles 4, student_profiles 6, classes 21, payments 18, enrollments 8, packages 5, teacher_wallets 2, `error_logs` 397, chat_messages 22. No se escribió nada ni se llamó a OpenAI/Resend/Cloudinary/Google.
 `error_logs` es la tabla con más filas: confirma el crecimiento sin tope (RESOURCE_COSTS #9).

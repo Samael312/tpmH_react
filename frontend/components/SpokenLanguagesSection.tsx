@@ -7,18 +7,19 @@ import SpokenLanguagesNotice from '@/components/SpokenLanguagesNotice'
 import { useMySpokenLanguages } from '@/hooks/useSpokenLanguages'
 import { useToast } from '@/hooks/useToast'
 import { getErrorMessage } from '@/lib/errorMessage'
-import { sameLanguages } from '@/lib/spokenLanguages'
+import { allHaveLevel, sameLanguages, type SpokenLanguage } from '@/lib/spokenLanguages'
 
 /** Sección «Idiomas que hablo» del perfil (alumno y profesor). Guarda con PATCH /users/me y avisa con un toast. */
 export default function SpokenLanguagesSection({ profileHref, audience }: { profileHref: string; audience: 'student' | 'teacher' }) {
   const toast = useToast()
   const { languages, loaded, isError, refetch, save } = useMySpokenLanguages(true)
-  const [draft, setDraft] = useState<string[]>([])
+  const [draft, setDraft] = useState<SpokenLanguage[]>([])
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { if (loaded) setDraft(languages) }, [loaded, languages])
 
   const changed = loaded && !sameLanguages(draft, languages)
+  const canSave = changed && allHaveLevel(draft)   // el servidor exige el nivel de cada idioma
 
   const onSave = async () => {
     setSaving(true)
@@ -61,7 +62,7 @@ export default function SpokenLanguagesSection({ profileHref, audience }: { prof
               <button
                 type="button"
                 onClick={onSave}
-                disabled={!changed || saving}
+                disabled={!canSave || saving}
                 className="px-6 py-3 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-pink-500 to-rose-400 shadow-md shadow-pink-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? 'Guardando…' : 'Guardar idiomas'}

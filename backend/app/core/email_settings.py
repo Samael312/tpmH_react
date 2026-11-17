@@ -47,7 +47,9 @@ PAUSABLE_PROBABILITIES = ("muy_alta", "alta")
 EMAIL_CATEGORY: dict[str, str] = {
     "send_class_reminder_email": "class_reminders",
     "send_class_reminder_teacher_email": "class_reminders",
+    "send_class_reminders_teacher_digest_email": "class_reminders",
     "send_new_chat_message_teacher_email": "chat_messages",
+    "send_chat_digest_teacher_email": "chat_messages",
     "send_class_booking_confirmation": "bookings",
     "send_new_booking_teacher_email": "bookings",
     "send_class_confirmed_email": "bookings",

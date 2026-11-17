@@ -2,22 +2,29 @@
 
 import { Check } from 'lucide-react'
 import { useSystemCatalogs } from '@/hooks/useSystemCatalogs'
-import { MAX_SPOKEN_LANGUAGES, atLimit, isSelected, toggleLanguage } from '@/lib/spokenLanguages'
+import {
+  LEVEL_LABELS, MAX_SPOKEN_LANGUAGES, SPOKEN_LEVELS, atLimit, isSelected, setLevel, toggleLanguage,
+  type SpokenLanguage,
+} from '@/lib/spokenLanguages'
 
 interface Props {
-  value: string[]
-  onChange: (next: string[]) => void
+  value: SpokenLanguage[]
+  onChange: (next: SpokenLanguage[]) => void
   max?: number
   disabled?: boolean
   /** id del elemento que etiqueta al grupo (accesibilidad). */
   labelledBy?: string
 }
 
-/** Selector múltiple de «Idiomas que hablo». Las opciones salen del catálogo `spoken_languages` (editable por el superadmin). */
+/**
+ * Selector múltiple de «Idiomas que hablo» con el nivel de cada uno. Las opciones salen del catálogo
+ * `spoken_languages` (editable por el superadmin); el nivel es obligatorio (el servidor lo exige).
+ */
 export default function SpokenLanguagesPicker({ value, onChange, max = MAX_SPOKEN_LANGUAGES, disabled = false, labelledBy }: Props) {
   const { catalogs, loading, isError, refetch } = useSystemCatalogs()
   const options = catalogs.spoken_languages ?? []
   const full = atLimit(value, max)
+  const missing = value.filter(v => v.level === null).length
 
   if (loading) return <p className="text-sm font-semibold text-slate-400">Cargando idiomas…</p>
   if (isError || !options.length) {
@@ -30,7 +37,7 @@ export default function SpokenLanguagesPicker({ value, onChange, max = MAX_SPOKE
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div role="group" aria-labelledby={labelledBy} className="flex flex-wrap gap-2">
         {options.map(lang => {
           const on = isSelected(value, lang)
@@ -52,9 +59,42 @@ export default function SpokenLanguagesPicker({ value, onChange, max = MAX_SPOKE
           )
         })}
       </div>
+
+      {value.length > 0 && (
+        <ul className="space-y-2" aria-label="Nivel de cada idioma">
+          {value.map(item => (
+            <li key={item.language} className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-slate-50 rounded-2xl px-4 py-3">
+              <span className="text-sm font-black text-slate-700 min-w-[6rem]">{item.language}</span>
+              <div role="radiogroup" aria-label={`Nivel de ${item.language}`} className="flex flex-wrap gap-1.5">
+                {SPOKEN_LEVELS.map(level => {
+                  const active = item.level === level
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      aria-label={`${item.language}: ${LEVEL_LABELS[level]}`}
+                      disabled={disabled}
+                      onClick={() => onChange(setLevel(value, item.language, level))}
+                      className={`px-3 py-1 rounded-full text-xs font-bold border transition-all disabled:opacity-40 ${
+                        active ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-400'
+                      }`}
+                    >
+                      {LEVEL_LABELS[level]}
+                    </button>
+                  )
+                })}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
       <p className="text-xs font-semibold text-slate-400" aria-live="polite">
         {value.length} de {max} seleccionados
         {full && ' · llegaste al máximo'}
+        {missing > 0 && <span className="text-amber-600"> · elige el nivel de {missing === 1 ? 'un idioma' : `${missing} idiomas`}</span>}
       </p>
     </div>
   )

@@ -634,12 +634,15 @@ def get_my_teachers(
         teacher = db.query(TeacherProfile).filter(TeacherProfile.id == tid).first()
         if not teacher:
             continue
-        stage = get_student_booking_stage(student_id, tid, db)
+        # GET: no debe escribir (heal=False); el barrido diario limpia los enrollments sin pagar.
+        stage = get_student_booking_stage(student_id, tid, db, heal=False)
         active_enrollment = db.query(Enrollment).filter(
             Enrollment.student_id == student_id,
             Enrollment.teacher_id == tid,
             Enrollment.status.in_([EnrollmentStatus.active, EnrollmentStatus.pending_package_change]),
         ).first()
+        if stage == "needs_package":
+            active_enrollment = None  # el enrollment sin pagar ya esta "liberado" aunque aun no se haya cancelado
 
         # Profesor suspendido/rechazado mientras el estudiante sigue
         # vinculado a él (o incluso con paquete activo): sus créditos

@@ -23,11 +23,15 @@ Con el de 5 min, la BD se despierta ~288 veces/día: **compute 24/7 aunque haya 
 Mitigación: subir el intervalo (Meet cada 15–30 min; finalizar cada 30–60 min), o hacer los jobs «lazy» (solo cuando hay clases en ventana, comprobable con una consulta barata o con caché en memoria), o mover a cron externo solo en horas útiles.
 `scheduler.py` líneas 322–327.
 
+**Resuelto en la Fase 9.** Los jobs de Meet, finalizar clases, recordatorios y sincronización de Calendar dejaron de ser de intervalo fijo: cada uno calcula cuándo le toca (hora de la clase, de su fin, etc.) y se programa con un `DateTrigger`; sin clases próximas duermen hasta 24 h. Los jobs diarios se juntan a las 03:00 UTC. Neon ya puede suspenderse cuando no hay actividad ni clases cerca. Ver `ARCHITECTURE.md` (Scheduler) y `tests/audit/test_due_jobs.py`.
+
 ### 2. ⏱🧠 Los jobs `async def` ejecutan código **bloqueante** en el event loop
 `AsyncIOScheduler` corre las corrutinas en el mismo loop que atiende la API. Dentro hay SQLAlchemy síncrono, llamadas HTTP síncronas a Google y `resend` síncrono, sin `await`/`run_in_executor`.
 Mientras `sync_all_teacher_calendars` recorre **todos** los profesores con Calendar (secuencial, `run_calendar_sync_for_all_teachers`), **toda la API se congela** para los endpoints `async` (chat, Chipi) y los síncronos pueden quedarse sin hilo. Crece linealmente con nº de profesores: con 50 profesores × varias llamadas Google ≈ minutos de bloqueo cada 30 min.
 `send_class_reminders` hace lo mismo con un email síncrono por clase. Esto incrementa latencia, timeouts del healthcheck de Railway y la necesidad de más CPU/instancias.
 Mitigación: `def` normales (APScheduler los lanza en un pool de hilos) o `await asyncio.to_thread(...)`; limitar profesores por pasada y paralelizar con tope.
+
+**Resuelto en la Fase 5:** los jobs son `def` y corren en el pool de hilos.
 
 ### 3. 💰⏱🔌 `NullPool` en el engine principal: una conexión TCP+TLS nueva a Neon por sesión/commit
 `app/db/base.py`: `engine = create_engine(..., poolclass=NullPool)`. Cada petición abre al menos una conexión física; tras cada `commit()` la conexión se cierra y la siguiente consulta abre otra (el propio comentario del `chat_engine` documenta «3-4 reconexiones por envío de mensaje»).
@@ -57,17 +61,25 @@ Mitigación: subida directa del navegador a Cloudinary (firma desde el backend) 
 No hay *eager loading* en todo `app/`; los serializadores recorren relaciones (`class_.teacher`, `.student`, `.enrollment`, `.package`, `user`…) y cada acceso lanza una consulta. Combinado con el punto 3 (cada consulta puede abrir una conexión) una lista de 50 clases puede costar 100–250 consultas. Afecta a: `my-classes`, listados de admin (`admin.py`, `god_mode.py`, `payments.py` con 16 `.all()`), conversaciones de chat (`_serialize_conversation` por conversación), `send_class_reminders` (consulta `User` por clase).
 Mitigación: `selectinload`/`joinedload` en las consultas de listado; serializar con una sola consulta agregada.
 
+**Resuelto en la Fase 5** para 9 listados (vigilados por `tests/audit/test_perf_queries.py`).
+
 ### 9. ⏱🔌 Listados sin paginación
 Solo ~23 usos de `limit/offset` frente a decenas de `.all()`: usuarios, estudiantes, pagos, logs, clases, conversaciones, materiales se devuelven enteros. Crece con los datos (memoria del contenedor, JSON grande, egress de Neon y de Railway, tiempo de render del navegador). `error_logs` además crece sin límite por `POST /logs/frontend` anónimo (SEC-06) y sin política de purga.
 Mitigación: paginación obligatoria con tope (`limit ≤ 100`), índices por filtro, purga de `error_logs`.
+
+**Resuelto en parte (Fases 5 y 9):** `limit`/`offset` + `X-Total-Count` (200 por defecto, 500 máximo) en los listados principales y job diario de purga (`error_logs` 30 d, `email_log` 60 d). Queda `god_mode` y los listados de admin.
 
 ### 10. 💰⏱ Sincronización con Google Calendar
 Cada 30 min y por cada profesor conectado: lectura de busy/eventos (`list_calendar_events`, `get_busy_ranges`), push de clases propias y creación de Meet; reintentos (`_with_retries`). Cuota Google Calendar (peticiones/min/proyecto) y CPU (ver punto 2). Además `GET /availability/slots` puede consultar el busy de Google en cada petición de slots (sin caché persistente: `core/cache.py` es en memoria y por proceso).
 Mitigación: sync por *webhooks* (push notifications) o solo para profesores con actividad/clases próximas; cachear busy 2–5 min.
 
+**Mitigado en la Fase 9:** la sincronización ya no corre cada 30 min siempre: solo con clase en curso o en las próximas 3 h; si no, cada 6 h; y nada si ningún profesor tiene Calendar.
+
 ### 11. 🔌🧠 WebSocket de chat global
 Una conexión persistente por usuario conectado (alumnos y profesores con la app abierta), con *ping* cada ~25 s (`chatStore.ts`) → mantiene sockets y memoria en Railway proporcional a usuarios concurrentes; cada mensaje: 3–4 operaciones en BD (persistir, entrega, no leídos) con el `chat_engine` (hasta 10 conexiones a Neon) y, si el destinatario está desconectado, un email por mensaje (`send_new_chat_message_teacher_email`, sin agrupar). Sin límite de mensajes por segundo por conexión → un cliente puede saturar BD y facturar emails.
 Mitigación: límite por conexión, agrupar notificaciones por email (máx. 1 cada X min), tope de longitud de mensaje.
+
+**Resuelto en la Fase 9 (correos):** el aviso al profesor ya no sale por mensaje sino agrupado: un correo por profesor con todas sus conversaciones pendientes, 10 min después del primer aviso (`core/chat_digest.py`). Falta un límite de mensajes por segundo por conexión.
 
 ### 12. ⏱ Polling del frontend
 `useChat` consulta conversaciones y no leídos cada 30 s (solo con la pestaña visible, bien), `useAdminData`/`useSupport` cada 30 s, `useErrorLogs` cada 30 s. Con 100 usuarios simultáneos ≈ 200–400 peticiones/min constantes → cada una abre conexión a Neon (punto 3) y mantiene la BD despierta en horario de uso.

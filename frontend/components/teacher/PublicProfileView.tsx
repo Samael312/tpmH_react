@@ -5,7 +5,7 @@ import Image from "next/image";
 import { Star, MessageCircle, Globe, Award, BookOpen, PlayCircle } from "lucide-react";
 import { shadeColor, DEFAULT_THEME_COLOR } from "@/lib/color";
 import { getFlagForNationality } from "@/lib/nationalities";
-import { formatSpoken } from "@/lib/spokenLanguages";
+import { formatSpoken, type SpokenLanguage } from "@/lib/spokenLanguages";
 
 // ─── Iconos redes sociales ────────────────────────────────────────────────
 function InstagramIcon() {
@@ -50,7 +50,7 @@ export interface PublicProfileTeacher {
   video_url?: string | null;
   languages?: string[] | null;
   // Fase 8: idiomas que HABLA (distintos de `languages`, los que enseña)
-  spoken_languages?: string[] | null;
+  spoken_languages?: SpokenLanguage[] | null;
   subjects?: string[] | null;
   skills?: string[] | null;
   certificates?: { title: string; year: string }[] | null;

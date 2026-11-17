@@ -1,5 +1,7 @@
 # Análisis de la plataforma TPM (tuprofemaria) — seguridad, lógica, funcionamiento y UX
 
+> **Informe de auditoría original (2026-11-16).** Describe el estado de entonces; lo corregido desde entonces está en `CORRECCIONES.md` y, por tema, en `backend/doc/KNOWN_ISSUES.md`.
+
 Fecha: 2026-11-16 · Rama `master` (commit `848e6f3`) · Backend FastAPI + SQLAlchemy + PostgreSQL · Frontend Next.js 16 / React 19.
 
 ## 1. Resumen ejecutivo

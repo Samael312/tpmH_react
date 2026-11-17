@@ -1,6 +1,15 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 
 const PASSWORD = "Password123";
+const API = "http://localhost:8000/api/v1";
+
+/** Inicia sesión por API (sin navegador) y devuelve las cabeceras para llamadas posteriores. */
+async function apiAuth(request: APIRequestContext, user: string) {
+  const res = await request.post(`${API}/auth/login`, { data: { login: user, password: PASSWORD } });
+  expect(res.ok()).toBeTruthy();
+  const { access_token } = await res.json();
+  return { Authorization: `Bearer ${access_token}` };
+}
 
 async function login(page: Page, user: string, password = PASSWORD) {
   await page.goto("/login");
@@ -46,17 +55,54 @@ test.describe("alumno", () => {
 
     const save = page.getByRole("button", { name: "Guardar idiomas" });
     await expect(save).toBeDisabled(); // sin cambios no se puede guardar
-    await page.getByRole("button", { name: "Español" }).click();
-    await page.getByRole("button", { name: "Inglés" }).click();
+    await page.getByRole("button", { name: "Español", exact: true }).click();
+    await page.getByRole("button", { name: "Inglés", exact: true }).click();
     await expect(page.getByText("2 de 10 seleccionados")).toBeVisible();
+
+    // Fase 10: cada idioma necesita su nivel; sin él no se puede guardar
+    await expect(page.getByText(/elige el nivel de 2 idiomas/)).toBeVisible();
+    await expect(save).toBeDisabled();
+    await page.getByRole("radio", { name: "Español: Nativo" }).click();
+    await expect(save).toBeDisabled(); // falta el de Inglés
+    await page.getByRole("radio", { name: "Inglés: Intermedio" }).click();
+    await expect(save).toBeEnabled();
     await save.click();
     await expect(page.getByText("Idiomas guardados")).toBeVisible();
 
-    // persiste tras recargar y el aviso desaparece
+    // persiste tras recargar (idioma y nivel) y el aviso desaparece
     await page.reload();
-    await expect(page.getByRole("button", { name: "Español" })).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByRole("button", { name: "Francés" })).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByRole("button", { name: "Español", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "Francés", exact: true })).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByRole("radio", { name: "Español: Nativo" })).toHaveAttribute("aria-checked", "true");
+    await expect(page.getByRole("radio", { name: "Inglés: Intermedio" })).toHaveAttribute("aria-checked", "true");
+    await expect(page.getByRole("radio", { name: "Inglés: Nativo" })).toHaveAttribute("aria-checked", "false");
     await expect(page.getByText("Agrega los idiomas que hablas")).toHaveCount(0);
+  });
+});
+
+test.describe("directorio de profesores (Fase 10)", () => {
+  test("el alumno filtra por el idioma que habla el profesor", async ({ page, request }) => {
+    // el profesor declara que habla francés (nativo), por API
+    const teacher = await apiAuth(request, "profe");
+    const saved = await request.patch(`${API}/users/me`, {
+      headers: teacher, data: { spoken_languages: [{ language: "Francés", level: "native" }] },
+    });
+    expect(saved.ok()).toBeTruthy();
+
+    await login(page, "alumno");
+    await expect(page).toHaveURL(/\/dashboard/);
+    await page.goto("/dashboard/teachers");
+    await expect(page.getByText("Habla: francés (nativo)")).toBeVisible();
+
+    const filter = page.getByLabel("Habla", { exact: true });
+    await filter.selectOption("Francés");
+    await expect(page.getByText("Habla: francés (nativo)")).toBeVisible();
+
+    await filter.selectOption("Portugués");
+    await expect(page.getByText(/Ningún profesor disponible habla Portugués/)).toBeVisible();
+
+    await filter.selectOption("");
+    await expect(page.getByText("Habla: francés (nativo)")).toBeVisible();
   });
 });
 

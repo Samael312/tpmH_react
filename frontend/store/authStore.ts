@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useChatStore } from "@/store/chatStore";
+import type { SpokenLanguage } from "@/lib/spokenLanguages";
 
 export interface User {
   id?: number;
@@ -15,7 +16,7 @@ export interface User {
   nationality?: string;
   preferred_payment_methods?: string[];
   onboarding_completed?: boolean;
-  spoken_languages?: string[];
+  spoken_languages?: SpokenLanguage[];
   avatar_url?: string | null;
   is_google_account?: boolean;
 }

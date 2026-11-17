@@ -42,7 +42,10 @@ El generador también escribe `frontend/doc/generated/*`.
 | `app/api/v1/endpoints/cohorts.py` + `app/core/group_cohort_logic.py` | | Clases grupales (cohortes) |
 | `app/api/v1/endpoints/availability.py` | | Slots libres, disponibilidad semanal y excepciones |
 | `app/core/timezone.py` | | Todo el manejo UTC ↔ local |
-| `app/core/scheduler.py` | | Jobs APScheduler en proceso |
+| `app/core/scheduler.py` | | Jobs APScheduler en proceso: por vencimiento (no mantienen despierto Neon) + diarios/semanal |
+| `app/core/chat_digest.py`, `app/core/retention.py`, `app/core/upload_quota.py` | | Aviso de chat agrupado, purga de logs, cuota de materiales |
+| `app/core/email_settings.py` | | Interruptores, contador diario y modo ahorro de correos |
+| `app/core/spoken_languages.py` | | Idiomas que habla el usuario y su nivel |
 | `app/core/email.py` | | ~40 plantillas de email (Resend) |
 
 ## Convenciones del proyecto
@@ -50,5 +53,5 @@ El generador también escribe `frontend/doc/generated/*`.
 - Todo en **UTC** en BD/API; el frontend convierte. `utc_now()` de `app/core/timezone.py`, nunca `datetime.utcnow()`.
 - Roles: `student`, `teacher`, `teacher_admin` (profesor + staff), `superadmin`. Dependencias: `get_current_user`, `get_current_student`, `get_current_teacher`, `get_current_staff`, `get_current_superadmin` (ver `app/auth/`).
 - Comentarios y mensajes de error de la API en **español**.
-- Migraciones: Alembic (`alembic/versions`), un solo head `f8b3c4d5e6a7`.
+- Migraciones: Alembic (`alembic/versions`), un solo head `a9c4d5e6f7a8`.
 - Los `.env` están ignorados por git, usan URLs localhost pero la **BD Neon y las claves reales**: lee `ENVIRONMENT.md` antes de ejecutar nada fuera de `tests/audit`.

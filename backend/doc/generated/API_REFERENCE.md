@@ -3,7 +3,7 @@
 Generado por `backend/doc/generate_docs.py`. Prefijo global: `/api/v1`.
 Auth = dependencia FastAPI de rol detectada. `—` = sin autenticación (pública).
 
-Total de rutas: **219**
+Total de rutas: **220**
 
 
 ## Autenticación
@@ -42,24 +42,24 @@ Total de rutas: **219**
 | GET | `/users/me/student-profile` | get_current_user |  | `get_student_profile` (app/api/v1/endpoints/users.py:414) | Devuelve los datos del perfil de estudiante del usuario autenticado |
 | PATCH | `/users/me/student-profile` | get_current_user |  | `update_student_profile` (app/api/v1/endpoints/users.py:435) | Actualiza datos del perfil de estudiante (timezone, goal, etc.). Si cambia la zona horaria, se recalculan las preferencias de horario (StudentSchedulePreference) para preservar la hora LOCAL configurada por el estudiante — solo se recalcula el UTC equivalente. Ver core/schedule_recalc.py. |
 | GET | `/users/me/teachers` | get_current_student, get_current_user |  | `get_my_teachers` (app/api/v1/endpoints/users.py:607) | Profesores vinculados al estudiante, cada uno con su relación independiente (stage de reserva propio, enrollment activo si existe). En single-tenant siempre devuelve solo al featured teacher, para que el frontend use la misma forma de respuesta en ambos modos. |
-| DELETE | `/users/me/teachers/{teacher_username}` | get_current_student, get_current_user |  | `unlink_teacher` (app/api/v1/endpoints/users.py:721) | Termina la relación con un profesor (solo multi-tenant). Bloqueado si hay un enrollment activo o cualquier solicitud pendiente (renovación o cambio de paquete) con ese profesor. |
-| POST | `/users/me/teachers/{teacher_username}` | get_current_student, get_current_user |  | `link_teacher` (app/api/v1/endpoints/users.py:680) | Vincula al estudiante con un profesor adicional (solo multi-tenant). Idempotente — si el vínculo ya existe, no falla. |
+| DELETE | `/users/me/teachers/{teacher_username}` | get_current_student, get_current_user |  | `unlink_teacher` (app/api/v1/endpoints/users.py:724) | Termina la relación con un profesor (solo multi-tenant). Bloqueado si hay un enrollment activo o cualquier solicitud pendiente (renovación o cambio de paquete) con ese profesor. |
+| POST | `/users/me/teachers/{teacher_username}` | get_current_student, get_current_user |  | `link_teacher` (app/api/v1/endpoints/users.py:683) | Vincula al estudiante con un profesor adicional (solo multi-tenant). Idempotente — si el vínculo ya existe, no falla. |
 
 ## Profesores
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| GET | `/teachers/` | — |  | `list_approved_teachers` (app/api/v1/endpoints/teachers.py:45) | Lista profesores aprobados. Filtrable por materia e idioma. Endpoint público. Excluye cuentas fijas de la suite de tests (is_test_account=True) — no deben aparecer en el marketplace real. |
-| POST | `/teachers/me/appeal` | get_current_teacher, get_current_user |  | `submit_appeal` (app/api/v1/endpoints/teachers.py:432) | El profesor apela un rechazo. Máximo 2 apelaciones por ciclo de rechazo. Al agotar las 2, debe subir un nuevo video (POST /teachers/me/video) para reiniciar el ciclo — no se pueden presentar más apelaciones. |
-| GET | `/teachers/me/appeals` | get_current_teacher, get_current_user |  | `get_my_appeals` (app/api/v1/endpoints/teachers.py:490) |  |
-| PATCH | `/teachers/me/feedback-seen` | get_current_teacher, get_current_user |  | `mark_rejection_feedback_seen` (app/api/v1/endpoints/teachers.py:418) | El profesor marcó como visto el banner de retroalimentación de rechazo. |
-| GET | `/teachers/me/profile` | get_current_teacher, get_current_user |  | `get_my_teacher_profile` (app/api/v1/endpoints/teachers.py:111) | Devuelve el perfil completo del profesor autenticado |
-| PATCH | `/teachers/me/profile` | get_current_teacher, get_current_user |  | `update_my_teacher_profile` (app/api/v1/endpoints/teachers.py:126) | Actualiza el perfil del profesor autenticado. Si cambia la zona horaria, se recalcula la disponibilidad semanal y las excepciones puntuales para que la hora LOCAL configurada por el profesor se preserve (ej. "06:00-08:00" en Sydney sigue siendo "06:00-08:00" al pasar a Bogotá) — lo único que cambia  |
-| GET | `/teachers/me/students` | get_current_teacher, get_current_user |  | `get_my_students` (app/api/v1/endpoints/teachers.py:176) | Lista los estudiantes vinculados al profesor autenticado (teacher_profiles.students). La usan los modales de asignar material/tareas para buscar solo entre sus propios estudiantes. |
-| GET | `/teachers/me/students-full` | get_current_teacher, get_current_user |  | `get_my_students_full` (app/api/v1/endpoints/teachers.py:216) | Devuelve la info completa de los estudiantes vinculados al profesor: datos de contacto, progreso de paquetes (enrollments) y materiales asignados. Pensado para la página de gestión de Estudiantes. |
-| DELETE | `/teachers/me/video` | get_current_teacher, get_current_user |  | `delete_teacher_video` (app/api/v1/endpoints/teachers.py:389) | Elimina el video de presentación del profesor. |
-| POST | `/teachers/me/video` | get_current_teacher, get_current_user |  | `upload_teacher_video` (app/api/v1/endpoints/teachers.py:314) | Sube (o reemplaza) el video de presentación del profesor. Es un requisito obligatorio para que el superadmin pueda aprobar el perfil. |
-| GET | `/teachers/{username}` | — |  | `get_teacher_profile` (app/api/v1/endpoints/teachers.py:86) | Perfil público de un profesor específico. Endpoint público — no requiere autenticación. |
+| GET | `/teachers/` | — |  | `list_approved_teachers` (app/api/v1/endpoints/teachers.py:47) | Lista profesores aprobados. Filtrable por materia e idioma. Endpoint público. Excluye cuentas fijas de la suite de tests (is_test_account=True) — no deben aparecer en el marketplace real. |
+| POST | `/teachers/me/appeal` | get_current_teacher, get_current_user |  | `submit_appeal` (app/api/v1/endpoints/teachers.py:439) | El profesor apela un rechazo. Máximo 2 apelaciones por ciclo de rechazo. Al agotar las 2, debe subir un nuevo video (POST /teachers/me/video) para reiniciar el ciclo — no se pueden presentar más apelaciones. |
+| GET | `/teachers/me/appeals` | get_current_teacher, get_current_user |  | `get_my_appeals` (app/api/v1/endpoints/teachers.py:497) |  |
+| PATCH | `/teachers/me/feedback-seen` | get_current_teacher, get_current_user |  | `mark_rejection_feedback_seen` (app/api/v1/endpoints/teachers.py:425) | El profesor marcó como visto el banner de retroalimentación de rechazo. |
+| GET | `/teachers/me/profile` | get_current_teacher, get_current_user |  | `get_my_teacher_profile` (app/api/v1/endpoints/teachers.py:118) | Devuelve el perfil completo del profesor autenticado |
+| PATCH | `/teachers/me/profile` | get_current_teacher, get_current_user |  | `update_my_teacher_profile` (app/api/v1/endpoints/teachers.py:133) | Actualiza el perfil del profesor autenticado. Si cambia la zona horaria, se recalcula la disponibilidad semanal y las excepciones puntuales para que la hora LOCAL configurada por el profesor se preserve (ej. "06:00-08:00" en Sydney sigue siendo "06:00-08:00" al pasar a Bogotá) — lo único que cambia  |
+| GET | `/teachers/me/students` | get_current_teacher, get_current_user |  | `get_my_students` (app/api/v1/endpoints/teachers.py:183) | Lista los estudiantes vinculados al profesor autenticado (teacher_profiles.students). La usan los modales de asignar material/tareas para buscar solo entre sus propios estudiantes. |
+| GET | `/teachers/me/students-full` | get_current_teacher, get_current_user |  | `get_my_students_full` (app/api/v1/endpoints/teachers.py:223) | Devuelve la info completa de los estudiantes vinculados al profesor: datos de contacto, progreso de paquetes (enrollments) y materiales asignados. Pensado para la página de gestión de Estudiantes. |
+| DELETE | `/teachers/me/video` | get_current_teacher, get_current_user |  | `delete_teacher_video` (app/api/v1/endpoints/teachers.py:396) | Elimina el video de presentación del profesor. |
+| POST | `/teachers/me/video` | get_current_teacher, get_current_user |  | `upload_teacher_video` (app/api/v1/endpoints/teachers.py:321) | Sube (o reemplaza) el video de presentación del profesor. Es un requisito obligatorio para que el superadmin pueda aprobar el perfil. |
+| GET | `/teachers/{username}` | — |  | `get_teacher_profile` (app/api/v1/endpoints/teachers.py:93) | Perfil público de un profesor específico. Endpoint público — no requiere autenticación. |
 
 ## Disponibilidad
 
@@ -95,15 +95,16 @@ Total de rutas: **219**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| POST | `/materials/` | get_current_teacher, get_current_user |  | `create_material` (app/api/v1/endpoints/materials.py:28) | El profesor crea un material. Puede ser un archivo subido o solo metadatos (para sets de vocabulario que se crean por separado). |
-| GET | `/materials/my-materials` | get_current_teacher, get_current_user |  | `get_my_materials_teacher` (app/api/v1/endpoints/materials.py:250) | Devuelve todos los materiales del profesor |
-| GET | `/materials/student/my-materials` | get_current_student, get_current_user |  | `get_my_materials_student` (app/api/v1/endpoints/materials.py:296) | Devuelve los materiales asignados al estudiante |
-| PATCH | `/materials/student/{assignment_id}/progress` | get_current_student, get_current_user |  | `update_material_progress` (app/api/v1/endpoints/materials.py:311) | El estudiante actualiza su progreso en un material |
-| DELETE | `/materials/{material_id}` | get_current_teacher, get_current_user |  | `delete_material` (app/api/v1/endpoints/materials.py:262) | Elimina un material. Borra el archivo de Cloudinary y desactiva el material en BD. |
-| PATCH | `/materials/{material_id}` | get_current_teacher, get_current_user |  | `update_material` (app/api/v1/endpoints/materials.py:88) | Edita los datos de un material existente: título, descripción, categoría y/o nivel. No reemplaza el archivo ni las palabras de vocabulario — eso se maneja desde sus propios endpoints. |
-| POST | `/materials/{material_id}/assign` | get_current_approved_teacher, get_current_user |  | `assign_material` (app/api/v1/endpoints/materials.py:157) | Asigna un material a uno o varios de TUS estudiantes (StudentProfile.id) y/o a todos los integrantes de una de tus cohortes grupales (cohort_id). |
-| GET | `/materials/{material_id}/stream` | get_current_user |  | `stream_material_file` (app/api/v1/endpoints/materials.py:347) | Redirige directamente al archivo en Cloudinary de forma segura |
-| POST | `/materials/{material_id}/vocabulary` | get_current_teacher, get_current_user |  | `set_vocabulary_words` (app/api/v1/endpoints/materials.py:121) | Establece las palabras de un set de vocabulario. Las palabras se capitalizan automáticamente. |
+| POST | `/materials/` | get_current_teacher, get_current_user |  | `create_material` (app/api/v1/endpoints/materials.py:29) | El profesor crea un material. Puede ser un archivo subido o solo metadatos (para sets de vocabulario que se crean por separado). |
+| GET | `/materials/my-materials` | get_current_teacher, get_current_user |  | `get_my_materials_teacher` (app/api/v1/endpoints/materials.py:265) | Devuelve todos los materiales del profesor |
+| GET | `/materials/quota` | get_current_teacher, get_current_user |  | `get_my_materials_quota` (app/api/v1/endpoints/materials.py:256) | Espacio usado y limite de materiales del profesor (bytes). |
+| GET | `/materials/student/my-materials` | get_current_student, get_current_user |  | `get_my_materials_student` (app/api/v1/endpoints/materials.py:311) | Devuelve los materiales asignados al estudiante |
+| PATCH | `/materials/student/{assignment_id}/progress` | get_current_student, get_current_user |  | `update_material_progress` (app/api/v1/endpoints/materials.py:326) | El estudiante actualiza su progreso en un material |
+| DELETE | `/materials/{material_id}` | get_current_teacher, get_current_user |  | `delete_material` (app/api/v1/endpoints/materials.py:277) | Elimina un material. Borra el archivo de Cloudinary y desactiva el material en BD. |
+| PATCH | `/materials/{material_id}` | get_current_teacher, get_current_user |  | `update_material` (app/api/v1/endpoints/materials.py:94) | Edita los datos de un material existente: título, descripción, categoría y/o nivel. No reemplaza el archivo ni las palabras de vocabulario — eso se maneja desde sus propios endpoints. |
+| POST | `/materials/{material_id}/assign` | get_current_approved_teacher, get_current_user |  | `assign_material` (app/api/v1/endpoints/materials.py:163) | Asigna un material a uno o varios de TUS estudiantes (StudentProfile.id) y/o a todos los integrantes de una de tus cohortes grupales (cohort_id). |
+| GET | `/materials/{material_id}/stream` | get_current_user |  | `stream_material_file` (app/api/v1/endpoints/materials.py:362) | Redirige directamente al archivo en Cloudinary de forma segura |
+| POST | `/materials/{material_id}/vocabulary` | get_current_teacher, get_current_user |  | `set_vocabulary_words` (app/api/v1/endpoints/materials.py:127) | Establece las palabras de un set de vocabulario. Las palabras se capitalizan automáticamente. |
 
 ## Tareas
 
@@ -207,7 +208,7 @@ Total de rutas: **219**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| GET | `/payments/admin/withdrawals/pending` | get_current_staff, get_current_user |  | `get_pending_withdrawals` (app/api/v1/endpoints/payments.py:2336) |  |
+| GET | `/payments/admin/withdrawals/pending` | get_current_staff, get_current_user |  | `get_pending_withdrawals` (app/api/v1/endpoints/payments.py:2337) |  |
 | POST | `/payments/admin/withdrawals/{withdrawal_id}/process` | get_current_staff, get_current_user |  | `process_withdrawal_v2` (app/api/v1/endpoints/payments.py:1509) |  |
 | POST | `/payments/book` | get_current_student, get_current_user |  | `book_class` (app/api/v1/endpoints/payments.py:487) |  |
 | GET | `/payments/booking-status` | get_current_student, get_current_user |  | `get_booking_status` (app/api/v1/endpoints/payments.py:1555) |  |
@@ -219,10 +220,10 @@ Total de rutas: **219**
 | GET | `/payments/my-payments` | get_current_student, get_current_user |  | `get_my_payments_student` (app/api/v1/endpoints/payments.py:1386) |  |
 | GET | `/payments/my-wallet` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_wallet` (app/api/v1/endpoints/payments.py:1420) |  |
 | GET | `/payments/my-withdrawals` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_withdrawals` (app/api/v1/endpoints/payments.py:1446) |  |
-| POST | `/payments/notify-payment` | get_current_student, get_current_user |  | `notify_payment` (app/api/v1/endpoints/payments.py:1653) |  |
+| POST | `/payments/notify-payment` | get_current_student, get_current_user |  | `notify_payment` (app/api/v1/endpoints/payments.py:1654) |  |
 | GET | `/payments/pending-review` | get_current_staff_or_teacher, get_current_user |  | `get_payments_pending_review` (app/api/v1/endpoints/payments.py:860) |  |
-| POST | `/payments/request-refund-cohort-cancelled` | get_current_student, get_current_user |  | `request_refund_cohort_cancelled` (app/api/v1/endpoints/payments.py:2256) | Reembolso por una cohorte grupal que el profesor canceló (F3 del roadmap de verificación). A diferencia del reembolso por profesor suspendido, acá siempre es el 100% de lo pagado: el grupo nunca llegó a arrancar (o se abortó), no hay "clases ya tomadas" que descontar. Mientras este reembolso esté pe |
-| POST | `/payments/request-refund-teacher-suspended` | get_current_student, get_current_user |  | `request_refund_teacher_suspended` (app/api/v1/endpoints/payments.py:2132) | Reembolso disparado por la suspensión/rechazo del profesor del estudiante (no por un downgrade de paquete). Reutiliza el mismo mecanismo que el "reembolso completo" de cambio de paquete (Payment payment_type="refund" sin ningún paquete nuevo solicitado): al aprobarse, /payments/validate/{id} cancela |
+| POST | `/payments/request-refund-cohort-cancelled` | get_current_student, get_current_user |  | `request_refund_cohort_cancelled` (app/api/v1/endpoints/payments.py:2257) | Reembolso por una cohorte grupal que el profesor canceló (F3 del roadmap de verificación). A diferencia del reembolso por profesor suspendido, acá siempre es el 100% de lo pagado: el grupo nunca llegó a arrancar (o se abortó), no hay "clases ya tomadas" que descontar. Mientras este reembolso esté pe |
+| POST | `/payments/request-refund-teacher-suspended` | get_current_student, get_current_user |  | `request_refund_teacher_suspended` (app/api/v1/endpoints/payments.py:2133) | Reembolso disparado por la suspensión/rechazo del profesor del estudiante (no por un downgrade de paquete). Reutiliza el mismo mecanismo que el "reembolso completo" de cambio de paquete (Payment payment_type="refund" sin ningún paquete nuevo solicitado): al aprobarse, /payments/validate/{id} cancela |
 | POST | `/payments/request-withdrawal` | get_current_teacher_or_teacher_admin, get_current_user |  | `request_withdrawal_v2` (app/api/v1/endpoints/payments.py:1459) |  |
 | PATCH | `/payments/{payment_id}/validate` | get_current_staff, get_current_user |  | `validate_payment` (app/api/v1/endpoints/payments.py:980) | NEG-01: solo `superadmin` y `teacher_admin` aprueban/rechazan pagos (los profesores normales ven el pago como «pendiente de revisión»). Un `teacher_admin` no valida los pagos de sus propias clases: los resuelve el `superadmin`. |
 
@@ -328,19 +329,19 @@ Total de rutas: **219**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| GET | `/chat/admin/conversations` | get_current_staff, get_current_user |  | `admin_list_conversations` (app/api/v1/endpoints/chat.py:536) |  |
-| GET | `/chat/admin/conversations/{conversation_id}` | get_current_staff, get_current_user |  | `admin_get_conversation` (app/api/v1/endpoints/chat.py:563) |  |
-| GET | `/chat/admin/conversations/{conversation_id}/messages` | get_current_staff, get_current_user |  | `admin_get_conversation_messages` (app/api/v1/endpoints/chat.py:575) |  |
-| GET | `/chat/conversations` | get_current_user |  | `list_conversations` (app/api/v1/endpoints/chat.py:154) |  |
-| GET | `/chat/conversations/direct/{other_username}` | get_current_user |  | `open_direct_conversation` (app/api/v1/endpoints/chat.py:177) |  |
-| GET | `/chat/conversations/group/{cohort_id}` | get_current_user |  | `open_group_conversation` (app/api/v1/endpoints/chat.py:188) |  |
-| GET | `/chat/conversations/unread-count` | get_current_user |  | `unread_count` (app/api/v1/endpoints/chat.py:168) |  |
-| GET | `/chat/conversations/{conversation_id}/messages` | get_current_user |  | `get_messages` (app/api/v1/endpoints/chat.py:199) |  |
-| POST | `/chat/conversations/{conversation_id}/messages` | get_current_user | 30/minute | `post_message` (app/api/v1/endpoints/chat.py:353) | Envío por REST: fallback si el WS global no está conectado o no devolvió el eco a tiempo (ver store/chatStore.ts). Comparte todo el camino con el WS (`_send_and_fanout`) y es idempotente por `client_id`, así que reintentar un mensaje que en realidad sí se guardó no lo duplica. |
-| POST | `/chat/conversations/{conversation_id}/read` | get_current_user |  | `mark_conversation_read` (app/api/v1/endpoints/chat.py:220) |  |
+| GET | `/chat/admin/conversations` | get_current_staff, get_current_user |  | `admin_list_conversations` (app/api/v1/endpoints/chat.py:513) |  |
+| GET | `/chat/admin/conversations/{conversation_id}` | get_current_staff, get_current_user |  | `admin_get_conversation` (app/api/v1/endpoints/chat.py:540) |  |
+| GET | `/chat/admin/conversations/{conversation_id}/messages` | get_current_staff, get_current_user |  | `admin_get_conversation_messages` (app/api/v1/endpoints/chat.py:552) |  |
+| GET | `/chat/conversations` | get_current_user |  | `list_conversations` (app/api/v1/endpoints/chat.py:153) |  |
+| GET | `/chat/conversations/direct/{other_username}` | get_current_user |  | `open_direct_conversation` (app/api/v1/endpoints/chat.py:176) |  |
+| GET | `/chat/conversations/group/{cohort_id}` | get_current_user |  | `open_group_conversation` (app/api/v1/endpoints/chat.py:187) |  |
+| GET | `/chat/conversations/unread-count` | get_current_user |  | `unread_count` (app/api/v1/endpoints/chat.py:167) |  |
+| GET | `/chat/conversations/{conversation_id}/messages` | get_current_user |  | `get_messages` (app/api/v1/endpoints/chat.py:198) |  |
+| POST | `/chat/conversations/{conversation_id}/messages` | get_current_user | 30/minute | `post_message` (app/api/v1/endpoints/chat.py:330) | Envío por REST: fallback si el WS global no está conectado o no devolvió el eco a tiempo (ver store/chatStore.ts). Comparte todo el camino con el WS (`_send_and_fanout`) y es idempotente por `client_id`, así que reintentar un mensaje que en realidad sí se guardó no lo duplica. |
+| POST | `/chat/conversations/{conversation_id}/read` | get_current_user |  | `mark_conversation_read` (app/api/v1/endpoints/chat.py:219) |  |
 
 ## -
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| WS | `/chat/ws` | — |  | `chat_websocket` (app/api/v1/endpoints/chat.py:434) |  |
+| WS | `/chat/ws` | — |  | `chat_websocket` (app/api/v1/endpoints/chat.py:411) |  |

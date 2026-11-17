@@ -16,6 +16,7 @@ import { TIMEZONE_OPTIONS as TIMEZONES, TIMEZONE_TO_COUNTRY, DEFAULT_COUNTRY } f
 import { NATIONALITIES } from "@/lib/nationalities";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import SpokenLanguagesStep from "@/components/SpokenLanguagesStep";
+import type { SpokenLanguage } from "@/lib/spokenLanguages";
 // in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { GOALS as FALLBACK_GOALS, GOAL_CATEGORIES, normalizeGoalsCatalog, flattenGoals } from "@/lib/teacherOptions";
@@ -707,7 +708,7 @@ export default function OnboardingPage() {
   const [phone, setPhone] = useState(""); 
   const [goal, setGoal] = useState("");
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
-  const [spoken, setSpoken] = useState<string[]>([]);
+  const [spoken, setSpoken] = useState<SpokenLanguage[]>([]);
 
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);

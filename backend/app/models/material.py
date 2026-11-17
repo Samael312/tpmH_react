@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, BigInteger, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -26,6 +26,7 @@ class Material(Base):
     file_url = Column(String, nullable=True)
     file_public_id = Column(String, nullable=True)  # Para borrar de Cloudinary
     file_type = Column(String, nullable=True)        # "pdf", "image", "video"
+    file_size = Column(BigInteger, nullable=True)    # bytes; cuota por profesor (nulo en materiales antiguos)
 
     # Para sets de vocabulario
     vocabulary_words = Column(JSONB, nullable=True)

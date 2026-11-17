@@ -29,19 +29,19 @@ Despliegue declarado en `railway.toml` (dos servicios, `healthcheckTimeout = 30`
 
 Rollback: redeploy del despliegue anterior en Railway. Si hubo migración, solo es seguro si era aditiva (columnas nuevas nullable); si no, hay que escribir una migración inversa (`alembic downgrade -1`) **y probarla en una rama**.
 
-## 4. Migraciones (¡no son automáticas!)
+## 4. Migraciones
 
-Ni el `Dockerfile` ni `railway.toml` ejecutan `alembic upgrade head`. Hay que hacerlo manualmente:
+Desde la Fase 9 `railway.toml` declara `preDeployCommand = "alembic upgrade head"` en el servicio del backend: Railway aplica las migraciones **antes** de arrancar la versión nueva y, si fallan, el despliegue no sale. **Sin verificar:** el `railway.toml` del repo usa una estructura multi-servicio que Railway puede no interpretar; confirma en el panel (servicio backend → Settings → Deploy → *Pre-deploy command*) que figura `alembic upgrade head` y, si no, escríbelo ahí. Comprueba también que `DATABASE_URL` admite DDL (en Neon, mejor la conexión directa que la *pooled*). Regla: las migraciones deben ser **retrocompatibles** (añadir, no borrar ni renombrar) porque durante el relevo todavía corre el código viejo. Para hacerlo a mano:
 ```bash
 cd backend
 # .env con la DATABASE_URL del entorno destino (¡comprueba a cuál apunta!)
 alembic current        # debe mostrar la revisión actual
-alembic heads          # debe haber UN solo head (hoy f8b3c4d5e6a7)
+alembic heads          # debe haber UN solo head (hoy a9c4d5e6f7a8)
 alembic upgrade head
 ```
 - Verifica el destino antes: `alembic current` y el host de `DATABASE_URL`. `load_dotenv(override=True)` hace que el `.env` pise tu entorno.
-- Para automatizarlo, añade un *pre-deploy command* en Railway (`alembic upgrade head`) o un paso previo en CI.
-- Estado verificado el 2026-11-16: la BD de Neon estaba en `c9d0e1f2a3b4`. **Desde entonces el repo tiene 5 migraciones más** (`d1e2f3a4b5c6` NEG-02, `a7b8c9d0e1f2` SEC-04, `b8c9d0e1f2a3` SEC-05, `e7a1b2c3d4f5` Fase 7: control de correos, `f8b3c4d5e6a7` Fase 8: idiomas que habla el usuario; esta última también crea el catálogo `spoken_languages`): hay que ejecutar `alembic upgrade head` en cada entorno antes de desplegar el código nuevo (sin ellas fallan el login con refresh y la verificación de email).
+- Si el *pre-deploy* automático no se usa, ejecuta el comando a mano antes de cada despliegue que incluya migraciones.
+- Estado verificado el 2026-11-16: la BD de Neon estaba en `c9d0e1f2a3b4`. **Desde entonces el repo tiene 6 migraciones más** (`d1e2f3a4b5c6` NEG-02, `a7b8c9d0e1f2` SEC-04, `b8c9d0e1f2a3` SEC-05, `e7a1b2c3d4f5` Fase 7: control de correos, `f8b3c4d5e6a7` Fase 8: idiomas que habla el usuario (también crea el catálogo `spoken_languages`) y `a9c4d5e6f7a8` Fase 9: tamaño de los materiales y aviso de chat pendiente). Según el equipo, Neon está aplicada hasta `f8b3c4d5e6a7`: falta `a9c4d5e6f7a8`: hay que ejecutar `alembic upgrade head` en cada entorno antes de desplegar el código nuevo (sin ellas fallan el login con refresh y la verificación de email).
 
 ## 5. Copias de seguridad y recuperación
 
@@ -128,3 +128,10 @@ Tras compartir un `.env` (chat, captura, repositorio) considera comprometidas **
 - Ejecutar `alembic upgrade head` (migración `b8c9d0e1f2a3`: tabla `refresh_tokens`).
 - Orden de despliegue: backend primero (acepta cookie y Bearer), luego frontend. Cuando todos usen el frontend nuevo, bajar `ACCESS_TOKEN_EXPIRE_MINUTES` a 30.
 - Frontend y API deben ser del mismo sitio (`tuprofemaria.com` y `api.tuprofemaria.com`); con dominios `*.up.railway.app` distintos las cookies no se comparten con el proxy de Next.
+
+## 7. Scheduler y Neon (Fase 9)
+
+- Los jobs de clases (Meet, finalizar, recordatorios, resumen de chat, sincronización de Calendar) se programan para la hora en que hay algo que hacer; sin actividad la base de Neon puede suspenderse. Los diarios se ejecutan juntos a las 03:00 UTC (`purge_old_chat_messages`, `purge_old_logs`, `release_stale_enrollments`) y el aviso de pocos créditos los lunes 14:00 UTC.
+- Los jobs viven en memoria del proceso: tras un reinicio o despliegue se recalculan solos a los 5 s. Con **más de un worker** se duplicarían (mantén uno).
+- Si un job no se ejecuta a su hora, revisa los logs de Railway (`logger` de `app.core.scheduler`): un error al calcular el vencimiento lo reintenta a los 10 min y no se pierde.
+- Ajustes: `CHAT_DIGEST_DELAY_MINUTES`, `MATERIALS_QUOTA_MB`, `ERROR_LOG_RETENTION_DAYS`, `EMAIL_LOG_RETENTION_DAYS` (ver `backend/doc/ENVIRONMENT.md`).

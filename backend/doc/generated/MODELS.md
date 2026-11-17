@@ -16,6 +16,7 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | last_message_at | DATETIME | ? |
 | last_message_preview | VARCHAR | ? |
 | teacher_last_notified_at | DATETIME | ? |
+| teacher_notify_pending_at | DATETIME | ? |
 
 ## chat_messages
 
@@ -240,6 +241,7 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | file_url | VARCHAR | ? |
 | file_public_id | VARCHAR | ? |
 | file_type | VARCHAR | ? |
+| file_size | BIGINT | ? |
 | vocabulary_words | JSONB | ? |
 | is_active | BOOLEAN | ? default=True |
 | created_at | DATETIME | ? |

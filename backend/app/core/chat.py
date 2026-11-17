@@ -381,6 +381,9 @@ def send_message(
     convo.last_message_preview = content[:140]
     if should_notify:
         convo.teacher_last_notified_at = now
+        # El correo ya no sale al instante: queda pendiente y un job lo agrupa (core/chat_digest.py).
+        if convo.teacher_notify_pending_at is None:
+            convo.teacher_notify_pending_at = now
 
     try:
         db.commit()
@@ -392,6 +395,9 @@ def send_message(
             return existing, False, True
         raise
     db.refresh(message)
+    if should_notify:
+        from app.core.scheduler import request_reschedule
+        request_reschedule()   # el job del resumen duerme hasta que haya algo pendiente: despertarlo
     return message, should_notify, False
 
 

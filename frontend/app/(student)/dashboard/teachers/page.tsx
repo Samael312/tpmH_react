@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { GraduationCap, Users, Sparkles, Snowflake } from "lucide-react";
 import { useTeacherDirectory, usePlatformConfig, useMyTeachers, MyTeacherInfo } from "@/hooks/useStudentData";
+import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import TeacherCard from "@/components/student/TeacherCard";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import Skeleton from "@/components/ui/Skeleton";
@@ -48,7 +49,9 @@ export default function ChooseTeacherPage() {
   const router = useRouter();
   const toast = useToast();
   const { config, loading: configLoading } = usePlatformConfig();
-  const { teachers: directory, loading: directoryLoading, isFetching: directoryFetching, refetch: refetchDirectory } = useTeacherDirectory();
+  const [speaks, setSpeaks] = useState("");
+  const { catalogs } = useSystemCatalogs();
+  const { teachers: directory, loading: directoryLoading, isFetching: directoryFetching, refetch: refetchDirectory } = useTeacherDirectory(speaks);
   const { teachers: myTeachers, loading: myLoading, isFetching: myFetching, refetch: refetchMine } = useMyTeachers();
   const [refundTarget, setRefundTarget] = useState<MyTeacherInfo | null>(null);
   const [submittingRefund, setSubmittingRefund] = useState(false);
@@ -229,6 +232,20 @@ export default function ChooseTeacherPage() {
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-purple-500" />
             <h2 className="text-xl font-black text-slate-800">Explorar más profesores</h2>
+            {(catalogs.spoken_languages ?? []).length > 0 && (
+              <div className="ml-auto flex items-center gap-2">
+                <label htmlFor="speaks-filter" className="text-xs font-bold text-slate-500">Habla</label>
+                <select
+                  id="speaks-filter"
+                  value={speaks}
+                  onChange={e => setSpeaks(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 px-3 py-2 focus:outline-none focus:border-pink-400"
+                >
+                  <option value="">Todos los idiomas</option>
+                  {(catalogs.spoken_languages ?? []).map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+            )}
           </div>
 
           {loading ? (
@@ -238,7 +255,9 @@ export default function ChooseTeacherPage() {
           ) : marketplaceTeachers.length === 0 ? (
             <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg py-16 text-center">
               <Users className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-              <p className="text-slate-500 font-bold">No hay más profesores disponibles por ahora</p>
+              <p className="text-slate-500 font-bold">
+                {speaks ? `Ningún profesor disponible habla ${speaks} por ahora` : "No hay más profesores disponibles por ahora"}
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

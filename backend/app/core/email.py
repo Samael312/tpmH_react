@@ -1,4 +1,5 @@
 import resend
+from html import escape as _esc
 from app.core.config import settings
 import logging
 
@@ -516,6 +517,43 @@ def send_class_reminder_teacher_email(
     """
     html = _base_template(f"Tu clase es en {hours_before} horas", _badge("Recordatorio", COLOR_BLUE), "Recordatorio de clase 🔔", body)
     return _send(to_email, f"Recordatorio: clase en {hours_before}h — {PLATFORM_NAME}", html, category="class_reminders")
+
+
+def send_class_reminders_teacher_digest_email(
+    to_email: str, teacher_name: str, items: list[tuple[str, str, str]], hours_before: int = 24,
+) -> bool:
+    """
+    Un solo correo con TODAS las clases que el profesor tiene en la ventana de recordatorio, en vez de uno
+    por clase. `items`: (alumno, materia, fecha y hora local).
+    """
+    rows = [_detail_row(f"{_esc(student)} · {_esc(subject)}", _esc(when)) for student, subject, when in items]
+    body = f"""
+      <p>Hola {_esc(teacher_name)}, tienes <strong style="color:{COLOR_PRIMARY};">{len(items)} clases</strong>
+      en aproximadamente {hours_before} horas.</p>
+      {_detail_table(rows)}
+      {_cta_button("Ver mi agenda", f"{settings.FRONTEND_URL}/teacher/dashboard")}
+    """
+    html = _base_template(f"Tienes {len(items)} clases próximas", _badge("Recordatorio", COLOR_BLUE), "Recordatorio de clases 🔔", body)
+    return _send(to_email, f"Recordatorio: {len(items)} clases en {hours_before}h — {PLATFORM_NAME}", html, category="class_reminders")
+
+
+def send_chat_digest_teacher_email(
+    to_email: str, teacher_name: str, items: list[tuple[str, int, str]], conversation_url: str,
+) -> bool:
+    """
+    Un solo correo con los mensajes nuevos de varias conversaciones, en vez de uno por alumno.
+    `items`: (alumno, mensajes sin leer, vista previa del ultimo).
+    """
+    total = sum(n for _s, n, _p in items)
+    rows = [_detail_row(f"{_esc(student)} ({n})", _esc(preview)) for student, n, preview in items]
+    body = f"""
+      <p>Hola {_esc(teacher_name)}, tienes <strong style="color:{COLOR_INK};">{total} mensajes nuevos</strong>
+      de {len(items)} conversaciones en el chat interno.</p>
+      {_detail_table(rows)}
+      {_cta_button("Abrir el chat", conversation_url)}
+    """
+    html = _base_template("Mensajes nuevos", _badge("Chat", COLOR_BLUE), "Mensajes nuevos 💬", body)
+    return _send(to_email, f"{total} mensajes nuevos en tu chat — {PLATFORM_NAME}", html, category="chat_messages")
 
 
 def send_class_cancelled_teacher_email(

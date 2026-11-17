@@ -16,7 +16,7 @@ Petición HTTP → app/main.py (CORS, slowapi, handlers) → api/v1/router.py �
    endpoint: Depends(get_current_*) [auth/dependencies.py] + Depends(get_db) [db/base.py]
    → schemas/*.py (Pydantic valida) → core/*.py (reglas de negocio) → models/*.py (SQLAlchemy) → PostgreSQL
 Efectos secundarios: core/email.py (Resend), core/calendar_sync.py (Google), core/storage.py (Cloudinary)
-Segundo plano: core/scheduler.py (APScheduler, en el mismo proceso)
+Segundo plano: core/scheduler.py (APScheduler, en el mismo proceso; jobs por vencimiento, ver backend/doc/ARCHITECTURE.md)
 ```
 Regla de oro del repo: **los endpoints orquestan, las reglas viven en `app/core/`** (aunque `payments.py` y `classes.py` mezclan bastante: 2130 y ~1000 líneas).
 
@@ -42,7 +42,7 @@ Crea `endpoints/<nombre>.py` con `router = APIRouter()`, impórtalo y regístral
 2. `cd backend && alembic revision --autogenerate -m "descripcion_corta"`.
 3. **Revisa el archivo generado** (JSONB, enums, defaults del servidor; autogenerate falla con algunos cambios).
 4. `alembic upgrade head` contra una **base de desarrollo**, nunca contra la real sin copia.
-5. Comprueba un solo head: `alembic heads` (hoy `f8b3c4d5e6a7`; hay 55 migraciones y dos con el prefijo `a1b2c3d4e5f6_`).
+5. Comprueba un solo head: `alembic heads` (hoy `a9c4d5e6f7a8`; hay 60 migraciones y dos con el prefijo `a1b2c3d4e5f6_`).
 6. Las migraciones **no se ejecutan solas al desplegar** (ver `OPERATIONS.md`).
 Ojo con `Enum` de Postgres: añadir valores exige migración explícita.
 
@@ -92,8 +92,8 @@ Plantilla de test: ver `tests/audit/test_edge_cases.py` (p. ej. `test_cancel_jus
 1. `payments.py:2116` `get_pending_withdrawals` sin decorador (404).
 2. `can_book_slot` no valida disponibilidad del profesor ni bloquea `pending_trial`/`group` (AUD-01/02).
 3. El enrollment se reutiliza al renovar; las clases históricas siguen contando (AUD-03).
-4. `finalize_past_classes` ya no se ejecuta en lecturas: solo el job de 10 min (Fase 5).
-5. `get_student_booking_stage` también escribe en un `GET`.
+4. `finalize_past_classes` ya no se ejecuta en lecturas: solo su job por vencimiento (Fases 5 y 9).
+5. `get_student_booking_stage` escribe por defecto (`heal=True`): en los `GET` usa `heal=False` (Fase 9).
 6. `load_dotenv(override=True)` en `db/base.py`.
 7. `requirements.txt` está en UTF-16 y contiene paquetes ajenos (`opencode-*`).
 8. La app no arranca sin `OPENAI_API_KEY`.

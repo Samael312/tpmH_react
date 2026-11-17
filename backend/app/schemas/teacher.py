@@ -1,6 +1,9 @@
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+from pydantic import field_validator
+from app.core.spoken_languages import read_spoken_languages
+from app.schemas.user import SpokenLanguageItem
 
 
 class TeacherPublicResponse(BaseModel):
@@ -27,7 +30,12 @@ class TeacherPublicResponse(BaseModel):
     video_url: Optional[str] = None
     theme_color: Optional[str] = "#ec4899"
     # Fase 8: idiomas que HABLA (viven en User; distintos de `languages`, los que ensena)
-    spoken_languages: List[str] = []
+    spoken_languages: List[SpokenLanguageItem] = []
+
+    @field_validator("spoken_languages", mode="before")
+    @classmethod
+    def _coerce_spoken(cls, v):
+        return read_spoken_languages(v)
 
     class Config:
         from_attributes = True

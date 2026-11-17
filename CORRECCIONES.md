@@ -74,17 +74,17 @@ Salida: repetir sondas (200 KB y `role: system` en Chipi → rechazados).
 ## Fase 5 — Coste y rendimiento
 
 - [x] (M) pool real en lugar de `NullPool` (`pool_pre_ping`, `pool_recycle`; `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`/`DB_POOL_RECYCLE`) · _pendiente medir en producción:_ objetivo `/users/me` < 400 ms (hoy ≈1,7 s; medir con `latency.py`)
-- [x] (L) eager loading en N+1 (9 listados corregidos y vigilados por `tests/audit/test_perf_queries.py`, que falla si las consultas crecen con las filas) y paginación `limit`/`offset` + `X-Total-Count` en `/payments/history`, `/admin/support-tickets`, `/admin/teachers`, `/packages/teacher/enrollments` (`app/core/pagination.py`) · _pendiente:_ paginar el resto de listados (`students-full`, `my-classes`, chat, god_mode) y purga de `error_logs`
-- [x] (M) sacar `finalize_past_classes` de los GET de agenda (hecho; solo lo hace el job de 10 min) · _no se tocó:_ la escritura de `get_student_booking_stage` (cancela el enrollment sin pago notificado; lo usan varios flujos)
-- [x] (M) jobs `async` bloqueantes → `def` (hecho) · _pendiente, decisión de negocio:_ espaciar jobs para que Neon se suspenda (el de Meet cada 5 min lo mantiene despierto)
-- [x] (M) subidas de 100 MB por streaming a Cloudinary (`upload_file_stream`, endpoints en hilo, vídeo por trozos; `tests/audit/test_uploads_stream.py`) · _pendiente:_ cuota por profesor y subida directa desde el navegador
+- [x] (L) eager loading en N+1 (9 listados corregidos y vigilados por `tests/audit/test_perf_queries.py`, que falla si las consultas crecen con las filas) y paginación `limit`/`offset` + `X-Total-Count` en `/payments/history`, `/admin/support-tickets`, `/admin/teachers`, `/packages/teacher/enrollments` (`app/core/pagination.py`) · _resto de listados paginados y purga de `error_logs`/`email_log` en la Fase 9; queda `god_mode` y los listados de admin_
+- [x] (M) sacar `finalize_past_classes` de los GET de agenda (hecho; solo lo hace su job) · `get_student_booking_stage` ya no escribe en los GET (Fase 9)
+- [x] (M) jobs `async` bloqueantes → `def` (hecho) · jobs «por vencimiento» para que Neon pueda suspenderse (Fase 9)
+- [x] (M) subidas de 100 MB por streaming a Cloudinary (`upload_file_stream`, endpoints en hilo, vídeo por trozos; `tests/audit/test_uploads_stream.py`) · cuota por profesor en la Fase 9 · _no se hizo:_ subida directa desde el navegador a Cloudinary
 - [x] (S) evaluar alternativas a Railway: análisis hecho en `backend/doc/RESOURCE_COSTS.md` (sección «Alternativas gratuitas a Railway»); migrar o no es decisión pendiente
 
 ## Fase 6 — Pruebas y documentación
 
 - [x] Actualizar `tests/flow` obsoletos (regla D7, `payment_method`, cohorte sin pago confirmado, disponibilidad por hora) · ver `backend/doc/TESTING.md`
 - [x] Concurrencia en CI sobre PostgreSQL para PRs de reservas/pagos: `.github/workflows/backend.yml` (audit en SQLite, `alembic upgrade head` en PostgreSQL vacío y `concurrency_live.py`) · _sin ejecutar:_ no hay PostgreSQL ni GitHub Actions en este equipo; se valida en el primer PR
-- [x] Migraciones Alembic en el despliegue: documentado en `docs/OPERATIONS.md` con las 3 migraciones nuevas por aplicar (head `b8c9d0e1f2a3`) · _decisión pendiente:_ automatizarlo (ver «Decisiones pendientes»)
+- [x] Migraciones Alembic en el despliegue: documentado en `docs/OPERATIONS.md` con las 3 migraciones nuevas por aplicar · automatizado en la Fase 9 con `preDeployCommand` en `railway.toml` (por verificar en el panel de Railway)
 - [x] Regenerar docs y cerrar IDs en `KNOWN_ISSUES.md`
 
 ## Fase 7 — Control de correos (cuota gratuita de Resend: 100 emails/día)
@@ -107,8 +107,8 @@ Son **estimaciones a partir del código** (cuántos correos genera cada evento y
 
 | Categoría (interruptor) | Correos que incluye | Prob. de agotar la cuota | Por qué |
 |---|---|---|---|
-| Recordatorios de clase | `send_class_reminder_email`, `send_class_reminder_teacher_email` (scheduler) | 🔴 **Muy alta** | 2 avisos por clase y por persona (alumno + profesor); en grupales, uno por alumno inscrito. Se multiplica con cada clase del día |
-| Mensajes nuevos de chat | `send_new_chat_message_teacher_email` | 🔴 **Muy alta** | Un correo por mensaje; no se observó agrupación por conversación. Una charla activa lo agota sola. Mejora prevista: 1 correo por conversación cada 30 min |
+| Recordatorios de clase | `send_class_reminder_email`, `send_class_reminder_teacher_email` (scheduler) | 🔴 **Muy alta** | 2 avisos por clase y por persona (alumno + profesor); en grupales, uno por alumno inscrito. **Desde la Fase 9 el profesor recibe un solo correo con todas sus clases de la ventana** |
+| Mensajes nuevos de chat | `send_new_chat_message_teacher_email` | 🔴 **Muy alta** | Antes un correo por conversación reactivada; **desde la Fase 9 sale agrupado: un correo por profesor 10 min después del primer aviso** |
 | Reservas y confirmaciones de clase | `send_new_booking_teacher_email`, `send_class_confirmed_email`, `send_class_confirmed_teacher_email`, `send_class_booking_confirmation` | 🟠 **Alta** | 2 correos por reserva (alumno + profesor); las reservas se concentran en pocas horas |
 | Cancelaciones y reprogramaciones | `send_class_cancelled_*`, `send_class_rescheduled_*`, `send_class_no_show_email`, `send_cohort_ended_email` | 🟠 **Alta** | 1–2 correos por evento; las cancelaciones en cohortes avisan a todos los alumnos |
 | Tareas y materiales | `send_homework_submitted_email`, `send_homework_graded_email`, `send_material_assigned_email` | 🟠 **Alta** | Asignar material o tarea a varios alumnos manda un correo por alumno de golpe |
@@ -124,7 +124,7 @@ Son **estimaciones a partir del código** (cuántos correos genera cada evento y
 
 **Orden de implementación sugerido:** primero el interruptor y el control en `_send()` (resuelve el riesgo ya), luego el contador y el modo ahorro, y al final la agrupación del chat y de los recordatorios, que es lo que más reduce el consumo sin apagar nada.
 
-**Fuera de este alcance (decidir después):** preferencias por usuario (que cada alumno o profesor elija qué correos recibir) y un resumen diario único en vez de varios correos.
+**Fuera de este alcance (decidir después):** preferencias por usuario (que cada alumno o profesor elija qué correos recibir) y un resumen diario único en vez de varios correos. _La agrupación del chat y de los recordatorios del profesor se hizo en la Fase 9._
 
 ---
 
@@ -143,8 +143,8 @@ Son **estimaciones a partir del código** (cuántos correos genera cada evento y
 - [x] **Onboarding del profesor** (`(teacher)/teacher/onboarding`): mismo paso, ubicado junto al de idiomas/materias que enseña, con textos distintos para no confundirlos («Idiomas que hablas» frente a «Idiomas que enseñas»). Mínimo 1.
 - [x] **Perfil editable** en ambos roles (`(student)/dashboard/profile` y `(teacher)/teacher/profile`): sección «Idiomas que hablo» con el mismo selector y guardado con aviso.
 - [x] **Usuarios que ya terminaron el onboarding** no lo vuelven a ver: aviso suave en el perfil y en el panel («Agrega los idiomas que hablas») hasta que los completen. No bloquea nada.
-- [x] **Donde se muestra:** perfil público y tarjeta del profesor («Habla: español, inglés»); ficha del alumno que ve su profesor. _El filtro «habla…» en el directorio no se hizo (opcional)._
-- [x] **Privacidad:** texto de `PrivacyContent` actualizado (nuevo dato de perfil y quién lo ve) · _no se cambió la fecha «Última actualización» del documento: decisión del dueño_
+- [x] **Donde se muestra:** perfil público y tarjeta del profesor («Habla: español, inglés»); ficha del alumno que ve su profesor. _El filtro «habla…» del directorio se hizo en la Fase 10._
+- [x] **Privacidad:** texto de `PrivacyContent` actualizado (nuevo dato de perfil y quién lo ve) · fecha «Última actualización» puesta al 17 de noviembre de 2026 en la Fase 10
 - [x] **Tests (42 en backend, 16 de Vitest en `frontend/tests/spokenLanguages.test.ts`):** `tests/audit/test_f8_spoken_languages.py` (límite: 10/11 idiomas, 1/0 en onboarding, longitudes 2/40/41; combinatoria: rol × catálogo/ajeno × duplicados con distinta capitalización; invariantes: guardar dos veces es idempotente, no toca `TeacherProfile.languages`; integración: onboarding -> perfil -> API pública, y un alumno no puede leer los idiomas de otro) y tests de frontend (Vitest) del selector.
 - [x] **Docs:** `API_REFERENCE`, `MODELS`, `BUSINESS_RULES`, `frontend/doc/PAGES_AND_UX.md`.
 
@@ -157,18 +157,49 @@ Son **estimaciones a partir del código** (cuántos correos genera cada evento y
 
 ---
 
-**Orden:** 0 → **1** → **2** → 3 y 4 en paralelo → 5 → 6 (continua) → 7 (correos; puede adelantarse: no depende de las demás) → 8 (idiomas que habla el usuario; independiente, pero toca onboarding y perfil igual que la Fase 7 toca settings).
+## Fase 9 — Jobs por vencimiento, correos agrupados y cuotas
+
+**Objetivo.** Bajar el consumo fijo (Neon despierto 24 h, correos de la cuota de Resend, almacenamiento) sin cambiar lo que ve el usuario.
+
+- [x] **Jobs por vencimiento** (`core/scheduler.py`): finalizar clases, Meet, recordatorios, resumen de chat y sincronización de Calendar calculan cuándo les toca (hora de la clase, de su fin, etc.) y se programan con `DateTrigger`; se recalculan al arrancar y cuando se confirma una escritura de `Class`, `PlatformConfig` o `GoogleCalendarToken` (ganchos de sesión); sin trabajo pendiente duermen hasta 24 h; `min_gap` evita reintentos en bucle; un fallo al calcular reintenta a los 10 min. Calendar: cada 30 min con clase en curso o en las próximas 3 h, si no cada 6 h, y nada si nadie lo tiene conectado. Los jobs diarios pasan a `CronTrigger` a las 03:00 UTC (el semanal, lunes 14:00). Comprobado con el `AsyncIOScheduler` real: llamar a `request_reschedule()` desde un hilo (endpoint síncrono) funciona y fusiona llamadas seguidas. _Tests: `tests/audit/test_due_jobs.py` (31)._
+- [x] **`get_student_booking_stage` sin escribir en GET** (`heal=False` en `GET /payments/booking-status` y `GET /users/me/teachers`; los POST siguen curando) + barrido diario `release_stale_unpaid_enrollments` (24 h de margen; no toca cohortes ni enrollments con pago en revisión). _Tests: `tests/audit/test_f9_stale_enrollments.py` (10)._
+- [x] **Paginación del resto de listados** (`limit`/`offset` + `X-Total-Count`, 200 por defecto): pagos, retiros, tickets propios, alumnos del profesor, conversaciones, clases y cohortes. _Tests: `tests/audit/test_pagination_rest.py` (16)._ Queda `god_mode` y los listados de admin.
+- [x] **Purga de logs** (`core/retention.py`, job 03:05 UTC): `error_logs` 30 días, `email_log` 60 días (`ERROR_LOG_RETENTION_DAYS`, `EMAIL_LOG_RETENTION_DAYS`).
+- [x] **Correos agrupados:** resumen de chat por profesor 10 min después del primer aviso (`core/chat_digest.py`, columna `chat_conversations.teacher_notify_pending_at`) y un correo de recordatorio por profesor con todas sus clases de la ventana. Plantillas nuevas `send_chat_digest_teacher_email` y `send_class_reminders_teacher_digest_email` (escapan HTML y entran en las categorías de la Fase 7). _Tests: `tests/audit/test_f9_email_digests.py` (16)._
+- [x] **Cuota de materiales por profesor** (`core/upload_quota.py`, `MATERIALS_QUOTA_MB` = 500, columna `materials.file_size`, 413 antes de llamar a Cloudinary, `GET /materials/quota`). El vídeo de presentación ya era único por profesor. _Tests: `tests/audit/test_f9_materials_quota.py` (9)._
+- [x] **Migraciones automáticas:** `preDeployCommand = "alembic upgrade head"` en `railway.toml` · _por verificar en el panel de Railway (el archivo usa una estructura multi-servicio)_. Migración nueva `a9c4d5e6f7a8` (head actual).
+- [x] **Playwright** (`npm run test:e2e`): backend semilla en SQLite + frontend; 8 pruebas (ver `frontend/doc/TESTING.md`).
+- [x] **Docs:** ARCHITECTURE (scheduler), OPERATIONS (§4 y §7), ENVIRONMENT, RESOURCE_COSTS, KNOWN_ISSUES, FLOWS, BUSINESS_RULES, DEVELOPER_GUIDE, READMEs, `API_REFERENCE`/`MODELS` regenerados.
+
+## Fase 10 — Idiomas con nivel, filtro del directorio y política de privacidad
+
+- [x] **Nivel por idioma** (`native|fluent|intermediate|basic`, obligatorio al guardar): `users.spoken_languages` pasa a `[{language, level}]`; los textos sueltos de la Fase 8 se leen con `level = null` (sin migración de datos) y la interfaz pide completarlos (aviso suave también para ellos). Selector con nivel en onboarding (alumno y profesor) y perfil; el nivel se ve en tarjeta, perfil público y ficha del alumno («Habla: español (nativo), inglés (intermedio)»). _Tests: `tests/audit/test_f8_spoken_languages.py` (64) y `frontend/tests/spokenLanguages.test.ts` (26)._
+- [x] **Filtro «Habla»** en el directorio de profesores del alumno (`GET /teachers/?speaks=`).
+- [x] **Política de privacidad:** fecha actualizada al 17 de noviembre de 2026, nivel por idioma y bullet en inglés (la Fase 8 solo lo había añadido en español).
+- [x] **Idioma de la interfaz/correos:** **pendiente por ahora** (la plataforma está solo en español); no se deriva de este dato.
 
 ---
 
-## Decisiones pendientes (se deciden al terminar todas las fases)
+**Orden:** 0 → **1** → **2** → 3 y 4 en paralelo → 5 → 6 (continua) → 7 (correos; puede adelantarse: no depende de las demás) → 8 (idiomas que habla el usuario; independiente, pero toca onboarding y perfil igual que la Fase 7 toca settings) → 9 (jobs por vencimiento, correos agrupados y cuotas) → 10 (idiomas con nivel y filtro).
 
-1. **Neon y el scheduler (Fase 5):** el job de Meet cada 5 min mantiene Neon despierto 24/7. Opciones: subir a 15–30 min, comprobar antes con una consulta barata/caché, o limitarlo a horas útiles.
-2. **`get_student_booking_stage` escribe en un GET (Fase 5):** cancela el enrollment sin pago notificado al leer. Moverlo a un job cambia el comportamiento; dejarlo es seguro pero es una escritura en lectura.
-3. **Tope de paginación (Fase 5):** hoy 200 por defecto y 500 máximo. Decidir si basta, y si el frontend debe paginar de verdad (hoy solo recibe las primeras 200 filas).
-4. **Migraciones automáticas en el despliegue (Fase 6):** añadir `preDeployCommand = "alembic upgrade head"` en `railway.toml` o seguir ejecutándolas a mano. Antes de desplegar hay que aplicar a mano las migraciones nuevas (`d1e2f3a4b5c6`, `a7b8c9d0e1f2`, `b8c9d0e1f2a3`, `e7a1b2c3d4f5` de la Fase 7 y `f8b3c4d5e6a7` de la Fase 8).
-5. **Migrar fuera de Railway (Fase 5):** análisis hecho en `backend/doc/RESOURCE_COSTS.md`; decidir si se migra.
-6. **Cuota de subidas por profesor y subida directa desde el navegador a Cloudinary (Fase 5).**
-7. **Agrupar correos (Fase 7):** 1 correo de chat por conversación cada X min y recordatorios agrupados es lo que más reduce el consumo sin apagar nada; no se hizo. También preferencias por usuario y resumen diario.
-8. **Idiomas que habla (Fase 8), 3 decisiones con propuesta ya implementada:** (a) solo lista de idiomas, sin **nivel** por idioma (nativo, fluido…); (b) el dato **no** define el idioma de la interfaz ni de los correos; (c) el **filtro «habla…»** del directorio de profesores queda fuera. Además: actualizar o no la fecha de la política de privacidad.
-9. **Fin de la transición de sesión (Fase 3b):** retirar Bearer/`?token=` y bajar el access token a 30 min cuando el frontend nuevo esté en producción.
+---
+
+## Decisiones y tareas pendientes
+
+**Decididas (ya implementadas):** jobs por vencimiento para que Neon se suspenda · `get_student_booking_stage` fuera de los GET · tope de paginación 200 por defecto (500 máximo) · migraciones automáticas con `preDeployCommand` · cuota de materiales de 500 MB por profesor, sin subida directa a Cloudinary por ahora · correos de chat y recordatorios agrupados · idiomas con nivel, filtro «Habla» y fecha de privacidad · Railway se mantiene por ahora.
+
+**Pendiente de hacer tú**
+1. **Aplicar la migración `a9c4d5e6f7a8`** (Fase 9: `materials.file_size` y `chat_conversations.teacher_notify_pending_at`) con `alembic upgrade head`, **antes** de desplegar el código nuevo. Si Railway ejecuta el *pre-deploy* automático, se aplicará sola. Sin ella fallan la subida de materiales y los mensajes de chat.
+2. **Verificar `preDeployCommand` en el panel de Railway** (servicio backend → Settings → Deploy). El `railway.toml` del repo usa una estructura multi-servicio que Railway puede no interpretar; si no aparece, escribe `alembic upgrade head` en ese campo. Comprueba además que la `DATABASE_URL` admite DDL (en Neon, mejor la conexión directa que la *pooled*).
+3. **Primer PR en GitHub:** se ejecuta por primera vez `.github/workflows/backend.yml` (audit, migraciones sobre PostgreSQL vacío y concurrencia). Mira la pestaña *Actions*; nunca se ha ejecutado. Conviene añadir el job de Playwright cuando funcione el resto.
+4. **Medir en producción** (cuando exista): objetivo `/users/me` < 400 ms (hoy ≈ 1,7 s sin pool; medir con `latency.py`).
+5. **Fin de la transición de sesión (Fase 3b), al lanzar a producción:** retirar Bearer y `?token=` del backend y bajar el access token a 30 min (`ACCESS_TOKEN_EXPIRE_MINUTES=30`). Pasos: comprobar en los logs que ningún cliente los usa, quitar la rama Bearer de `get_current_user` y `?token=` del WebSocket y las descargas, desplegar primero el frontend y luego el backend. Solo hace falta al lanzar: antes de eso no hay sesiones reales que se puedan cerrar.
+6. **Opciones de despliegue y migrar fuera de Railway:** se deja para el final de todo (análisis en `backend/doc/RESOURCE_COSTS.md`).
+
+**Deuda técnica conocida (sin fecha)**
+- El frontend no pagina de verdad: recibe como máximo 200 filas por listado. Paginar `god_mode` y los listados de admin.
+- Idioma de la interfaz y de los correos: solo español por ahora; si se añaden más, decidir de dónde sale (preferencia propia, no el dato «idiomas que hablo»).
+- Preferencias de correo por usuario y resumen diario único; agrupar el resto de categorías de correo.
+- Subida directa desde el navegador a Cloudinary (quitaría carga al backend); la cuota de materiales puede superarse por una subida si dos coinciden.
+- Límite de mensajes por segundo por conexión en el chat.
+- Los jobs y el limitador viven en memoria: un solo worker (documentado).

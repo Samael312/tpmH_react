@@ -40,6 +40,7 @@ class MaterialResponse(BaseModel):
     level: Optional[str]
     file_url: Optional[str]
     file_type: Optional[str]
+    file_size: Optional[int] = None
     vocabulary_words: Optional[List[str]]
     is_active: bool
     created_at: datetime

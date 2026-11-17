@@ -73,6 +73,10 @@ class ChatConversation(Base):
     # (PlatformConfig.chat_reactivation_hours).
     teacher_last_notified_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Fase 9: el aviso por email no sale al instante sino agrupado (core/chat_digest.py). Mientras haya
+    # uno pendiente esta columna guarda desde cuando; se pone a NULL al enviarlo o descartarlo.
+    teacher_notify_pending_at = Column(DateTime(timezone=True), nullable=True)
+
     teacher = relationship("TeacherProfile", backref="chat_conversations")
     student = relationship("StudentProfile", backref="chat_conversations")
     cohort = relationship("GroupCohort", backref="chat_conversation", uselist=False)

@@ -18,7 +18,6 @@ from app.auth.jwt import decode_access_token
 from app.auth.session import ACCESS_COOKIE, allowed_origins
 from app.core import chat as chat_core
 from app.core.chat_ws import chat_manager
-from app.core.email import send_new_chat_message_teacher_email
 from app.core.god_mode_audit import log_god_mode_action
 from app.core.rate_limit import limiter
 from app.core.config import settings
@@ -249,7 +248,6 @@ class _Persisted:
     sender_id: int
     participant_ids: set[int]
     duplicate: bool
-    email_args: Optional[dict]
 
 
 _background_tasks: set[asyncio.Task] = set()
@@ -284,21 +282,12 @@ def _persist_message(user_id: int, conversation_id: int, content: str, client_id
             "client_id": message.client_id,
         }
         if duplicate:
-            return _Persisted(payload, message.id, convo.id, user.id, set(), True, None)
+            return _Persisted(payload, message.id, convo.id, user.id, set(), True)
 
-        email_args = None
-        if should_notify and convo.teacher and convo.teacher.user:
-            teacher_user = convo.teacher.user
-            email_args = dict(
-                to_email=teacher_user.email,
-                teacher_name=teacher_user.name,
-                student_name=user.name,
-                message_preview=message.content[:140],
-                conversation_url=f"{settings.FRONTEND_URL}/teacher/chat?conversation={convo.id}",
-            )
+        # Fase 9: el aviso por email al profesor lo envia un job agrupado (core/chat_digest.py).
         return _Persisted(
             payload, message.id, convo.id, user.id,
-            chat_core.conversation_participant_user_ids(db, convo), False, email_args,
+            chat_core.conversation_participant_user_ids(db, convo), False,
         )
     finally:
         db.close()
@@ -310,14 +299,6 @@ def _mark_delivered(message_id: int):
         return chat_core.mark_delivered_by_id(db, message_id)
     finally:
         db.close()
-
-
-def _send_notification_email(args: dict) -> None:
-    try:
-        send_new_chat_message_teacher_email(**args)
-    except Exception:
-        # Nunca romper el envío del mensaje por un fallo de email.
-        logger.exception("No se pudo enviar el email de nuevo mensaje de chat")
 
 
 async def _send_and_fanout(user_id: int, conversation_id: int, content: str, client_id: Optional[str]) -> dict:
@@ -343,10 +324,6 @@ async def _send_and_fanout(user_id: int, conversation_id: int, content: str, cli
                 "delivered_at": delivered_at.isoformat(),
             })
 
-    if sent.email_args:
-        task = asyncio.create_task(run_in_threadpool(_send_notification_email, sent.email_args))
-        _background_tasks.add(task)
-        task.add_done_callback(_background_tasks.discard)
     return payload
 
 

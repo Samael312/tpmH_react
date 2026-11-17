@@ -549,7 +549,7 @@ def update_enrollment_counter(
 
         db.commit()
 
-def get_student_booking_stage(student_id: int, teacher_id: int, db: Session) -> str:
+def get_student_booking_stage(student_id: int, teacher_id: int, db: Session, *, heal: bool = True) -> str:
     """
     Determina la etapa de reserva del estudiante CON UN PROFESOR ESPECÍFICO.
     Cada relación estudiante-profesor es independiente: completar la
@@ -562,6 +562,11 @@ def get_student_booking_stage(student_id: int, teacher_id: int, db: Session) -> 
     - "renewal_pending": ya solicitó renovación, esperando aprobación
     - "ready": tiene paquete activo (incluye "pending_package_change":
       sigue siendo utilizable mientras se aprueba el cambio)
+
+    `heal=True` (por defecto, para los endpoints que escriben): si el paquete activo nunca se pago ni
+    se notifico su pago, lo cancela para liberar al estudiante. Los GET pasan `heal=False`: devuelven la
+    misma etapa pero NO escriben (una lectura no debe mutar la BD); el barrido diario
+    `release_stale_unpaid_enrollments` limpia esos enrollments.
     """
     trial_pending = db.query(Class).filter(
         Class.student_id == student_id,
@@ -605,8 +610,9 @@ def get_student_booking_stage(student_id: int, teacher_id: int, db: Session) -> 
             # Nunca se notificó el pago, o fue rechazado y no se reintentó.
             # No hay nada que confirmar: liberamos este enrollment obsoleto
             # para que el estudiante pueda elegir paquete de nuevo.
-            active_enrollment.status = EnrollmentStatus.cancelled
-            db.commit()
+            if heal:
+                active_enrollment.status = EnrollmentStatus.cancelled
+                db.commit()
             return "needs_package"
         return "ready"
 
@@ -679,6 +685,33 @@ def get_student_booking_stage(student_id: int, teacher_id: int, db: Session) -> 
         return "needs_renewal"
 
     return "needs_package"
+
+STALE_UNPAID_ENROLLMENT_HOURS = 24
+
+
+def release_stale_unpaid_enrollments(db: Session, older_than_hours: int = STALE_UNPAID_ENROLLMENT_HOURS) -> int:
+    """
+    Cancela los enrollments individuales activos que nunca se pagaron ni tienen un pago en revision
+    y tienen mas de `older_than_hours` horas. Es lo que antes hacia, en un GET, `get_student_booking_stage`.
+    Los de cohorte (grupales) no se tocan.
+    """
+    cutoff = utc_now() - timedelta(hours=older_than_hours)
+    has_pending = db.query(Payment.id).filter(
+        Payment.enrollment_id == Enrollment.id, Payment.status == "pending_review"
+    ).exists()
+    stale = db.query(Enrollment).filter(
+        Enrollment.status == EnrollmentStatus.active,
+        Enrollment.payment_status == "unpaid",
+        Enrollment.cohort_id.is_(None),
+        Enrollment.created_at < cutoff,
+        ~has_pending,
+    ).all()
+    for e in stale:
+        e.status = EnrollmentStatus.cancelled
+    if stale:
+        db.commit()
+    return len(stale)
+
 
 # ─── Finalización automática ────────────────────────────────────────────────
 

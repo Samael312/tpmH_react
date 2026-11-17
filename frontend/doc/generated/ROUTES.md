@@ -17,13 +17,13 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/dashboard/classes` | `app/(student)/dashboard/classes/page.tsx` | student | 710 |  |
 | `/dashboard/homework` | `app/(student)/dashboard/homework/page.tsx` | student | 608 |  |
 | `/dashboard/materials` | `app/(student)/dashboard/materials/page.tsx` | student | 490 | app/student/materials/page.tsx |
-| `/dashboard/onboarding` | `app/(student)/dashboard/onboarding/page.tsx` | student | 894 |  |
+| `/dashboard/onboarding` | `app/(student)/dashboard/onboarding/page.tsx` | student | 895 |  |
 | `/dashboard` | `app/(student)/dashboard/page.tsx` | student | 774 |  |
 | `/dashboard/profile` | `app/(student)/dashboard/profile/page.tsx` | student | 975 |  |
 | `/dashboard/schedule` | `app/(student)/dashboard/schedule/page.tsx` | student | 1796 |  |
 | `/dashboard/support` | `app/(student)/dashboard/support/page.tsx` | student | 21 |  |
 | `/dashboard/teachers/[username]` | `app/(student)/dashboard/teachers/[username]/page.tsx` | student | 317 |  |
-| `/dashboard/teachers` | `app/(student)/dashboard/teachers/page.tsx` | student | 277 |  |
+| `/dashboard/teachers` | `app/(student)/dashboard/teachers/page.tsx` | student | 296 |  |
 | `/admin/chat` | `app/(superadmin)/admin/chat/page.tsx` | superadmin, teacher_admin | 252 | app/(superadmin)/admin/chat/page.tsx N5: panel de solo lectura para que superadmin/teacher_admin puedan revisar una conv |
 | `/admin/dashboard` | `app/(superadmin)/admin/dashboard/page.tsx` | superadmin, teacher_admin | 443 | frontend/app/(superadmin)/admin/dashboard/page.tsx |
 | `/admin/flow-tester` | `app/(superadmin)/admin/flow-tester/page.tsx` | superadmin, teacher_admin | 552 |  |
@@ -43,7 +43,7 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/teacher/dashboard` | `app/(teacher)/teacher/dashboard/page.tsx` | teacher, teacher_admin | 954 |  |
 | `/teacher/homework` | `app/(teacher)/teacher/homework/page.tsx` | teacher, teacher_admin | 1241 |  |
 | `/teacher/materials` | `app/(teacher)/teacher/materials/page.tsx` | teacher, teacher_admin | 1566 |  |
-| `/teacher/onboarding` | `app/(teacher)/teacher/onboarding/page.tsx` | teacher, teacher_admin | 1134 |  |
+| `/teacher/onboarding` | `app/(teacher)/teacher/onboarding/page.tsx` | teacher, teacher_admin | 1135 |  |
 | `/teacher/packages` | `app/(teacher)/teacher/packages/page.tsx` | teacher, teacher_admin | 1150 |  |
 | `/teacher/payments` | `app/(teacher)/teacher/payments/page.tsx` | teacher, teacher_admin | 226 |  |
 | `/teacher/profile` | `app/(teacher)/teacher/profile/page.tsx` | teacher, teacher_admin | 1348 |  |

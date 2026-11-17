@@ -2,11 +2,11 @@
 
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import SpokenLanguagesPicker from '@/components/SpokenLanguagesPicker'
-import { canContinue } from '@/lib/spokenLanguages'
+import { canContinue, type SpokenLanguage } from '@/lib/spokenLanguages'
 
 interface Props {
-  value: string[]
-  onChange: (v: string[]) => void
+  value: SpokenLanguage[]
+  onChange: (v: SpokenLanguage[]) => void
   onNext: () => void
   onBack: () => void
   /** Textos distintos por rol: «idiomas que hablas» no es «idiomas que enseñas / quieres aprender». */
@@ -16,11 +16,11 @@ interface Props {
 const COPY = {
   student: {
     title: '¿Qué idiomas hablas?',
-    hint: 'Elige los idiomas que hablas (al menos uno). Ayuda a tu profesor a comunicarse contigo. No es lo que quieres aprender: eso lo eliges en tu objetivo.',
+    hint: 'Elige los idiomas que hablas (al menos uno) y tu nivel en cada uno. Ayuda a tu profesor a comunicarse contigo. No es lo que quieres aprender: eso lo eliges en tu objetivo.',
   },
   teacher: {
     title: 'Idiomas que hablas',
-    hint: 'Elige los idiomas en los que puedes comunicarte con tus alumnos (al menos uno). No es lo que enseñas: los idiomas que enseñas los elegiste en el paso anterior, en «Idiomas que enseñas».',
+    hint: 'Elige los idiomas en los que puedes comunicarte con tus alumnos (al menos uno) y tu nivel en cada uno. No es lo que enseñas: los idiomas que enseñas los elegiste en el paso anterior, en «Idiomas que enseñas».',
   },
 } as const
 

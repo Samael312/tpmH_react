@@ -1,4 +1,4 @@
-import { useQuery, type QueryClient } from "@tanstack/react-query";
+import { useQuery, keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 
 // Prefijo de queryKey compartido por useAvailableSlots. Se expone acá para
@@ -637,11 +637,13 @@ export interface TeacherDirectoryItem {
   nationality?: string | null; 
 }
 
-export function useTeacherDirectory() {
+/** `speaks`: idioma que habla el profesor (Fase 10); vacío = todos. El filtro lo aplica el servidor. */
+export function useTeacherDirectory(speaks: string = "") {
   const query = useQuery({
-    queryKey: ["student", "teacher-directory"],
+    queryKey: ["student", "teacher-directory", speaks],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
-      const res = await api.get("/teachers/");
+      const res = await api.get("/teachers/", { params: speaks ? { speaks } : undefined });
       const list: TeacherDirectoryItem[] = res.data || [];
 
       const withRatings = await Promise.all(

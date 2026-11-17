@@ -16,6 +16,7 @@ import { useAuthStore } from "@/store/authStore";
 import { NATIONALITIES } from "@/lib/nationalities";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import SpokenLanguagesStep from "@/components/SpokenLanguagesStep";
+import type { SpokenLanguage } from "@/lib/spokenLanguages";
 
 // ─── Constantes ─────────────────────────────────────────────────────────────
 import {
@@ -937,7 +938,7 @@ export default function TeacherOnboardingPage() {
   const [subjects, setSubjects]         = useState<string[]>([]);
   const [skills, setSkills]             = useState<string[]>([]);
   // Fase 8: idiomas que HABLA (distinto de `languages`, los que enseña)
-  const [spoken, setSpoken]             = useState<string[]>([]);
+  const [spoken, setSpoken]             = useState<SpokenLanguage[]>([]);
   const [certificates, setCertificates] = useState<{ title: string; year: string }[]>([]);
   // Step 4
   const [blocks, setBlocks]             = useState<ScheduleBlock[]>([]);

@@ -1,4 +1,5 @@
 import api from '@/lib/api'
+import type { SpokenLanguage } from '@/lib/spokenLanguages'
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 
 export interface TeacherClass {
@@ -106,7 +107,7 @@ export interface TeacherStudentFull {
   timezone: string | null
   nationality: string | null
   // Fase 8: idiomas que habla el alumno (solo los ve su profesor)
-  spoken_languages?: string[]
+  spoken_languages?: SpokenLanguage[]
   goal: string | null
   created_at: string
   enrollments: StudentEnrollmentSummary[]

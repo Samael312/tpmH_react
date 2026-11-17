@@ -43,7 +43,7 @@ Severidad: 🔴 crítico · 🟠 alto · 🟡 medio · 🔵 bajo.
 
 ## Lógica sin ID
 doble contabilidad de créditos (`occupied` vs `classes_used`; el aviso de bajo crédito usa la segunda);
-`get_student_booking_stage` escribe en un GET; `finalize_past_classes` ya no corre en los GET (Fase 5; solo el job de 10 min); rama muerta en `finalize_past_classes`;
+`get_student_booking_stage` ya no escribe en los GET (Fase 9: `heal=False`; los POST siguen curando y un barrido diario cancela los enrollments sin pagar); `finalize_past_classes` ya no corre en los GET (Fase 5; solo su job por vencimiento); rama muerta en `finalize_past_classes`;
 `manual-grant` ilimitado = 0 créditos; `cancel_class_admin` no notifica grupales; sin idempotencia fuerte en `validate_payment`/`process_withdrawal_v2`;
 `transaction_reference` no único; DST en disponibilidad recurrente; `default_commission_rate` nunca se aplica.
 
@@ -51,7 +51,20 @@ doble contabilidad de créditos (`occupied` vs `classes_used`; el aviso de bajo 
 - Engine principal con pool (antes `NullPool`); `finalize_past_classes` fuera de los GET de agenda; jobs del scheduler como `def` (ya no bloquean el event loop).
 - N+1 en 9 listados (`/classes/teacher/classes`, `/packages/teacher/enrollments`, `/payments/pending-review`, `/payments/history`, `/admin/support-tickets`, `/admin/teachers`, `/teachers/`): vigilados por `tests/audit/test_perf_queries.py`.
 - Paginación `limit`/`offset` + `X-Total-Count` (`app/core/pagination.py`) en 4 listados y, después, en `my-payments`, `my-income`, `my-withdrawals`, `withdrawals/pending`, `support/tickets/me`, `teachers/me/students(-full)`, `chat/conversations`, `classes/my-classes`, `classes/teacher/classes` y `cohorts/teacher` (en clases y conversaciones los contadores siguen siendo del total). Un job diario (`purge_old_logs`, `app/core/retention.py`) purga `error_logs` (30 días, `ERROR_LOG_RETENTION_DAYS`) y `email_log` (60 días, `EMAIL_LOG_RETENTION_DAYS`); 0 la desactiva. **Pendiente:** `god_mode` y listados de admin; el frontend no pagina de verdad (recibe como máximo 200).
-- Subidas a Cloudinary por streaming y en hilo (`upload_file_stream`). **Pendiente:** cuota por profesor.
+- Subidas a Cloudinary por streaming y en hilo (`upload_file_stream`). La cuota por profesor se hizo en la Fase 9.
+
+## Fase 9 (jobs por vencimiento, correos agrupados, cuotas)
+- Jobs de Meet, finalizar clases, recordatorios, resumen de chat y sincronización de Calendar por vencimiento (`DateTrigger`): Neon puede suspenderse. Ver `ARCHITECTURE.md` y `tests/audit/test_due_jobs.py`.
+- `get_student_booking_stage(..., heal=False)` en `GET /payments/booking-status` y `GET /users/me/teachers`; `release_stale_unpaid_enrollments` (job diario, 24 h de margen, sin tocar cohortes ni enrollments con pago en revisión).
+- Correos agrupados: resumen de chat por profesor (`core/chat_digest.py`) y un recordatorio por profesor con todas sus clases de la ventana. Quedan sin agrupar las demás categorías.
+- Cuota de materiales por profesor (`MATERIALS_QUOTA_MB`, 500 por defecto): 413 antes de tocar Cloudinary; `GET /materials/quota`. Los materiales anteriores no tienen `file_size` y cuentan 0. El vídeo de presentación es único (al subir otro se borra el anterior).
+- `preDeployCommand = "alembic upgrade head"` en `railway.toml` (sin verificar en Railway: ver `docs/OPERATIONS.md`).
+- **Pendiente:** carrera de dos subidas simultáneas que sumen más que la cuota (puede pasarse por una subida); el resumen de chat y los jobs solo funcionan con un worker.
+
+## Fase 10 (idiomas con nivel, filtro, Playwright)
+- `users.spoken_languages` pasa a `[{language, level}]` (`native|fluent|intermediate|basic`); al guardar el nivel es obligatorio; los textos sueltos de la Fase 8 se leen con `level = null` (sin migración de datos) y la interfaz pide completarlos.
+- Filtro `GET /teachers/?speaks=<idioma>` (en Python, sin tildes ni mayúsculas, solo profesores aprobados) y selector «Habla» en el directorio del alumno.
+- Playwright (`npm run test:e2e`, 8 pruebas contra el backend semilla en SQLite).
 
 ## Código muerto / deuda
 Endpoints heredados `/packages/request-renewal`, `/request-package-change`, `/cancel-package-change`; docstring que cita `/cohorts/migrate-to-individual` (no existe);

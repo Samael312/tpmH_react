@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Star, Globe, ArrowRight } from "lucide-react";
 import { getFlagForNationality } from "@/lib/nationalities";
-import { formatSpoken } from "@/lib/spokenLanguages";
+import { formatSpoken, type SpokenLanguage } from "@/lib/spokenLanguages";
 
 export interface TeacherSummary {
   user_username: string;
@@ -16,7 +16,7 @@ export interface TeacherSummary {
   nationality?: string | null;
   languages: string[];
   // Fase 8: idiomas que HABLA (no los que enseña)
-  spoken_languages?: string[];
+  spoken_languages?: SpokenLanguage[];
   subjects: string[];
   average_rating?: number;
   total_reviews?: number;

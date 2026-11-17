@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
+import { parseSpoken, type SpokenLanguage } from '@/lib/spokenLanguages'
 
 export const MY_SPOKEN_LANGUAGES_KEY = ['users', 'me', 'spoken-languages'] as const
 
 interface MeSpoken {
-  spoken_languages: string[]
+  spoken_languages: SpokenLanguage[]
   onboarding_completed: boolean
 }
 
@@ -21,15 +22,15 @@ export function useMySpokenLanguages(enabled = true) {
     queryFn: async (): Promise<MeSpoken> => {
       const res = await api.get('/users/me')
       return {
-        spoken_languages: Array.isArray(res.data?.spoken_languages) ? res.data.spoken_languages : [],
+        spoken_languages: parseSpoken(res.data?.spoken_languages),
         onboarding_completed: !!res.data?.onboarding_completed,
       }
     },
   })
 
-  const save = async (languages: string[]): Promise<string[]> => {
+  const save = async (languages: SpokenLanguage[]): Promise<SpokenLanguage[]> => {
     const res = await api.patch('/users/me', { spoken_languages: languages })
-    const saved: string[] = res.data?.spoken_languages ?? languages
+    const saved: SpokenLanguage[] = parseSpoken(res.data?.spoken_languages ?? languages)
     qc.setQueryData<MeSpoken>(MY_SPOKEN_LANGUAGES_KEY, prev => ({
       onboarding_completed: prev?.onboarding_completed ?? true,
       spoken_languages: saved,

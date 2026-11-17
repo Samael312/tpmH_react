@@ -18,8 +18,8 @@ Registro `teacher` -> onboarding (`/teacher/onboarding`: perfil, vídeo, zona ho
 2. **Comprar**: `POST /payments/notify-payment` `{type:"package", package_id, payment_method, [installment_index], [credits_requested]}` crea `Enrollment` (`unpaid`) + `Payment` (`pending_review`) con `amount_total`. Email al staff.
 3. **Aprobar**: `PATCH /payments/{id}/validate` `{action:"approve"}` (staff o profesor del alumno) -> `_apply_commission` (comisión), acredita `TeacherWallet`, `Enrollment.unlocked_credits`/`status=active`/`payment_status`, email recibo. Rechazar: `{action:"reject", rejection_reason}` -> email de fallo.
 4. **Agendar**: `POST /payments/book` (`payments.py` `book_class`) -> `can_book_slot` -> `Class(regular, confirmed)`; email al alumno y al profesor; evento Calendar si el profesor lo conectó (`calendar_sync.sync_class_created`).
-5. **Meet**: job `generate_upcoming_meet_links` crea el link unos 30 min antes (`meet_link_autogen_minutes`).
-6. **Después de la clase**: job `finalize_expired_classes` -> `finalized`; el profesor la marca `completed`/`no_show` con `PATCH /classes/{id}/status`; `update_enrollment_counter` actualiza `classes_used` y puede pasar el enrollment a `completed`.
+5. **Meet**: el job `generate_meet_links` (por vencimiento) crea el link `meet_link_autogen_minutes` antes de la clase (30 por defecto); se programa para esa hora exacta, sin sondeo.
+6. **Después de la clase**: el job `finalize_expired_classes` (se despierta al terminar la clase) -> `finalized`; el profesor la marca `completed`/`no_show` con `PATCH /classes/{id}/status`; `update_enrollment_counter` actualiza `classes_used` y puede pasar el enrollment a `completed`.
 
 ## 4. Cancelar / reagendar
 - Alumno cancela: `DELETE /classes/{id}` -> `can_cancel_class` (≥12 h) -> `cancel_class_and_refund` (devuelve crédito).

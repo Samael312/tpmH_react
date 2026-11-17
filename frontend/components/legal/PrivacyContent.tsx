@@ -77,7 +77,7 @@ function getSectionsEs(platformName: string): LegalSection[] {
         <p>Recopilamos los siguientes tipos de datos, según tu rol y uso de la Plataforma:</p>
         <ul className="list-disc pl-5 space-y-1">
           <li><strong>Datos de cuenta:</strong> nombre, apellido, correo electrónico, nombre de usuario, contraseña (almacenada siempre cifrada, nunca en texto plano), teléfono, nacionalidad, zona horaria y foto de perfil.</li>
-          <li><strong>Idiomas que hablás:</strong> la lista de idiomas que indicás en tu perfil (hasta 10, elegidos de una lista). Si sos profesor, tus alumnos y los visitantes la ven en tu perfil público; si sos alumno, solo la ve tu profesor. Podés cambiarla o vaciarla desde tu perfil en cualquier momento.</li>
+          <li><strong>Idiomas que hablás:</strong> la lista de idiomas que indicás en tu perfil (hasta 10, elegidos de una lista) y tu nivel en cada uno (nativo, fluido, intermedio o básico). Si sos profesor, tus alumnos y los visitantes la ven en tu perfil público; si sos alumno, solo la ve tu profesor. Podés cambiarla o vaciarla desde tu perfil en cualquier momento.</li>
           <li><strong>Inicio de sesión con Google:</strong> si elegís registrarte o iniciar sesión con tu cuenta de Google, recibimos tu identificador de cuenta de Google, nombre, correo y foto de perfil pública.</li>
           <li><strong>Sincronización de Google Calendar (solo profesores):</strong> si un profesor conecta voluntariamente su Google Calendar, accedemos a su disponibilidad (eventos, horarios ocupados) y creamos eventos correspondientes a las clases agendadas en la Plataforma. Esta conexión es opcional y puede desactivarse en cualquier momento desde tu perfil.</li>
           <li><strong>Datos de pago:</strong> como los pagos se validan de forma manual, no procesamos ni almacenamos números de tarjeta. Sí almacenamos el comprobante de pago que subís (imagen), el método de pago declarado, un identificador de transacción si aplica, y el historial de pagos/cuotas asociado a tu cuenta.</li>
@@ -260,6 +260,7 @@ function getSectionsEn(platformName: string): LegalSection[] {
         <p>We collect the following types of data, depending on your role and use of the Platform:</p>
         <ul className="list-disc pl-5 space-y-1">
           <li><strong>Account data:</strong> first name, last name, email address, username, password (always stored encrypted, never in plain text), phone number, nationality, timezone, and profile photo.</li>
+          <li><strong>Languages you speak:</strong> the list of languages you enter in your profile (up to 10, chosen from a list) and your level in each one (native, fluent, intermediate or basic). If you are a teacher, your students and visitors can see it on your public profile; if you are a student, only your teacher can see it. You can change or clear it from your profile at any time.</li>
           <li><strong>Google Sign-In:</strong> if you choose to register or log in with your Google account, we receive your Google account identifier, name, email, and public profile photo.</li>
           <li><strong>Google Calendar sync (teachers only):</strong> if a teacher voluntarily connects their Google Calendar, we access their availability (events, busy times) and create events for classes booked on the Platform. This connection is optional and can be turned off anytime from your profile.</li>
           <li><strong>Payment data:</strong> since payments are validated manually, we do not process or store card numbers directly. We do store the payment receipt you upload (image), the declared payment method, a transaction ID when applicable, and your payment/installment history.</li>
@@ -415,8 +416,8 @@ export default function PrivacyContent() {
   const sections = lang === "es" ? getSectionsEs(platformName) : getSectionsEn(platformName);
   const lastUpdated =
     lang === "es"
-      ? "Última actualización: 4 de septiembre de 2026"
-      : "Last updated: September 4, 2026";
+      ? "Última actualización: 17 de noviembre de 2026"
+      : "Last updated: November 17, 2026";
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col relative overflow-hidden font-sans">
