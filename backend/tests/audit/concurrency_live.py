@@ -81,7 +81,24 @@ def post(c, path, user, **kw):
     return c.post(BASE + path, headers=tok(user), **kw)
 
 
+def ensure_platform_config(db):
+    """
+    En una BD vacia (CI) no hay PlatformConfig ni PaymentConfig: sin ellos la plataforma cuenta como
+    single-tenant sin profesor destacado y no hay metodo de pago. Se crean solo si FALTAN (no se tocan los existentes).
+    """
+    from app.models.payment_config import PaymentConfig, PlatformConfig
+    if db.query(PlatformConfig).first() is None:
+        db.add(PlatformConfig(is_single_tenant=False))
+    if db.query(PaymentConfig).first() is None:
+        db.add(PaymentConfig(bank_transfer_enabled=True, paypal_enabled=False, binance_enabled=False,
+                             mobile_payment_enabled=False))
+    db.commit()
+    cfg = db.query(PlatformConfig).first()
+    assert not cfg.is_single_tenant, "PlatformConfig es single-tenant: las reservas por teacher_username no aplican"
+
+
 def setup_world(db):
+    ensure_platform_config(db)
     admin = mk_user(db, "superadmin", f"{TAG}admin")
     tu = mk_user(db, "teacher", f"{TAG}prof")
     tp = TeacherProfile(user_id=tu.id, user_username=tu.username, status=TeacherStatus.approved, timezone="UTC",
