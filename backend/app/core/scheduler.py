@@ -65,6 +65,12 @@ def send_class_reminders():
         # Fase 9: el profesor recibe UN correo con todas sus clases de la ventana, no uno por clase.
         teacher_items: dict[int, dict] = {}
 
+        def _skip_reminder(class_):
+            # Sin destinatario no hay correo, pero se marca como tratada: si no, el job la volvia a
+            # encontrar y reintentaba cada 10 min (despertando Neon) mientras siguiera en la ventana.
+            class_.reminder_sent_at = now
+            db.commit()
+
         def _queue_for_teacher(teacher_user, who: str, subject: str, when: str):
             entry = teacher_items.setdefault(teacher_user.id, {"user": teacher_user, "items": []})
             entry["items"].append((who, subject, when))
@@ -76,6 +82,7 @@ def send_class_reminders():
                     User.id == teacher_profile.user_id
                 ).first()
                 if not teacher_user:
+                    _skip_reminder(class_)
                     continue
 
                 if class_.class_type == "group":
@@ -97,6 +104,7 @@ def send_class_reminders():
                     )
 
                     if not participants:
+                        _skip_reminder(class_)
                         continue
 
                     for _participant, student_profile, student_user in participants:
@@ -123,6 +131,7 @@ def send_class_reminders():
                 ).first()
 
                 if not student_profile:
+                    _skip_reminder(class_)
                     continue
 
                 student_user = db.query(User).filter(
@@ -130,6 +139,7 @@ def send_class_reminders():
                 ).first()
 
                 if not student_user:
+                    _skip_reminder(class_)
                     continue
 
                 send_class_reminder_email(
@@ -421,7 +431,9 @@ def _due_finalize(job: DueJob, db: Session, now: datetime) -> Optional[datetime]
     first_end = db.query(func.min(Class.end_time_utc)).filter(
         Class.status.in_(["confirmed", "pending_trial"])
     ).scalar()
-    first_final = db.query(func.min(Class.end_time_utc)).filter(Class.status == "finalized").scalar()
+    first_final = db.query(func.min(Class.end_time_utc)).filter(
+        Class.status == "finalized", Class.class_type != ClassType.external,  # las externas se quedan finalized
+    ).scalar()
     cands = []
     if first_end is not None:
         cands.append(first_end + timedelta(seconds=1))
@@ -431,8 +443,17 @@ def _due_finalize(job: DueJob, db: Session, now: datetime) -> Optional[datetime]
 
 
 def _due_meet_links(job: DueJob, db: Session, now: datetime) -> Optional[datetime]:
-    """Hora en que la proxima clase sin link entra en la ventana de autogeneracion."""
-    first = db.query(func.min(Class.start_time_utc)).filter(
+    """
+    Hora en que la proxima clase sin link entra en la ventana de autogeneracion. Solo cuentan los profesores con
+    Google Calendar conectado: sin el, no se puede generar el link y el job reintentaba cada 5 min (despertando
+    Neon) durante toda la ventana previa a cada clase.
+    """
+    from app.models.google_calendar import GoogleCalendarToken
+    first = db.query(func.min(Class.start_time_utc)).join(
+        GoogleCalendarToken, GoogleCalendarToken.teacher_id == Class.teacher_id,
+    ).filter(
+        GoogleCalendarToken.is_active == True,  # noqa: E712
+        GoogleCalendarToken.needs_reauth == False,  # noqa: E712
         Class.status == "confirmed",
         Class.meet_link.is_(None),
         Class.start_time_utc > now,

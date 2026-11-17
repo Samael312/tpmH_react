@@ -467,11 +467,12 @@ def can_reschedule_class(
     now = utc_now()
     rules = get_business_rules(db)
 
-    # BUG-02 fix (ampliado): una clase que quedó 'finalized' (limbo transitorio
-    # post-clase, aún no resuelta a completed/no_show) puede reagendarse tanto
-    # por el profesor como por el estudiante, sin restricción de antelación
-    # (la clase ya pasó, así que exigir horas de anticipación no aplica).
-    reschedulable_statuses = ["pending", "pending_trial", "confirmed", "finalized"]
+    # BUG-02 fix: una clase que quedó 'finalized' (limbo transitorio post-clase,
+    # aún no resuelta a completed/no_show) solo la puede reagendar el PROFESOR
+    # (p. ej. si la clase no llegó a darse). El alumno no: reagendaba una clase
+    # que ya había recibido, volvía a 'confirmed' sin gastar crédito y la
+    # recibía gratis una segunda vez (revisión 2026-11-17).
+    reschedulable_statuses = ["pending", "pending_trial", "confirmed"]
 
     # 'no_show' (el alumno faltó) NO es reagendable por el propio alumno —
     # solo el profesor puede decidir darle una nueva oportunidad como
@@ -479,12 +480,14 @@ def can_reschedule_class(
     # para nadie); ahora se habilita explícitamente solo para role="teacher"
     # (el endpoint de admin ya bypasea esta función por completo).
     if role == "teacher":
-        reschedulable_statuses = reschedulable_statuses + ["no_show"]
+        reschedulable_statuses = reschedulable_statuses + ["finalized", "no_show"]
 
     if class_.status not in reschedulable_statuses:
+        if role == "student" and class_.status == "finalized":
+            return False, "Esta clase ya pasó. Si no llegó a darse, pide a tu profesor que la reagende."
         return False, f"No se puede reagendar una clase con estado '{class_.status}'"
 
-    if role == "student" and class_.status != "finalized":
+    if role == "student":
         time_until_class = class_.start_time_utc - now
         if time_until_class < timedelta(hours=rules["min_reschedule_hours_student"]):
             hours_left = int(time_until_class.total_seconds() / 3600)
@@ -555,8 +558,8 @@ def get_student_booking_stage(student_id: int, teacher_id: int, db: Session, *, 
     Cada relación estudiante-profesor es independiente: completar la
     prueba con un profesor no exime de la prueba con otro.
 
-    - "needs_trial": no tiene prueba activa ni completada con este profesor
-    - "trial_in_progress": prueba agendada/confirmada pero no realizada
+    - "needs_trial": no tiene prueba activa ni realizada con este profesor
+    - "trial_in_progress": prueba agendada/confirmada, o ya dada pero sin marcar (`finalized`)
     - "needs_package": completó la prueba pero nunca tuvo paquete con él
     - "needs_renewal": agotó un paquete anterior y no tiene uno activo
     - "renewal_pending": ya solicitó renovación, esperando aprobación
@@ -572,16 +575,20 @@ def get_student_booking_stage(student_id: int, teacher_id: int, db: Session, *, 
         Class.student_id == student_id,
         Class.teacher_id == teacher_id,
         Class.class_type == ClassType.trial,
-        Class.status.in_(["pending", "pending_trial", "pending_payment", "confirmed"])
+        # `finalized`: la prueba ya paso pero el profesor aun no la marco. Sigue en curso: antes caia en
+        # "needs_trial" y el alumno podia reservar otra prueba gratis mientras tanto.
+        Class.status.in_(["pending", "pending_trial", "pending_payment", "confirmed", "finalized"])
     ).first()
     if trial_pending:
         return "trial_in_progress"
 
+    # Una prueba `no_show` (el alumno falto, o pasaron 72 h sin marcarla) cuenta como prueba usada:
+    # no da derecho a otra prueba gratis (decision del dueno, 2026-11-17).
     trial_completed = db.query(Class).filter(
         Class.student_id == student_id,
         Class.teacher_id == teacher_id,
         Class.class_type == ClassType.trial,
-        Class.status == "completed"
+        Class.status.in_(["completed", "no_show"])
     ).first()
     if not trial_completed:
         return "needs_trial"
@@ -744,12 +751,18 @@ def finalize_past_classes(db: Session) -> int:
     # Misma pasada: si el job estuvo caido, confirmed -> finalized -> no_show
     # se resuelve de una vez.
     auto_cutoff = now - timedelta(hours=CLASS_STATUS_WINDOW_HOURS)
+    # Las clases `external` (Preply, importadas de Calendar) no tienen alumno ni credito y el profesor no
+    # puede marcarlas: se quedan en `finalized`. Antes acababan todas como «No asistio».
     unresolved = db.query(Class).filter(
         Class.status == "finalized",
         Class.end_time_utc < auto_cutoff,
+        Class.class_type != ClassType.external,
     ).all()
     # La sesion puede no hacer autoflush: sumar a mano las que se acaban de finalizar.
-    unresolved += [c for c in expired_confirmed if c.end_time_utc < auto_cutoff and c not in unresolved]
+    unresolved += [
+        c for c in expired_confirmed
+        if c.end_time_utc < auto_cutoff and c.class_type != ClassType.external and c not in unresolved
+    ]
     for c in unresolved:
         sync_student_lifetime_class_counter(c, "finalized", "no_show", db=db)
         c.status = "no_show"

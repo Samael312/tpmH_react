@@ -315,14 +315,16 @@ def get_my_classes_student(
     if not include_history:
         query = query.filter(
             Class.status.in_(UPCOMING_STATUSES),
-            Class.start_time_utc >= now
+            # Por el FIN, no por el inicio: una clase en curso sigue en "proximas" (con su enlace de Meet)
+            # hasta que termina. Antes desaparecia del dashboard justo al empezar.
+            Class.end_time_utc > now
         )
 
     all_classes = query.order_by(Class.start_time_utc).all()
 
     upcoming = sum(
         1 for c in all_classes
-        if c.status in UPCOMING_STATUSES and c.start_time_utc >= now
+        if c.status in UPCOMING_STATUSES and c.end_time_utc > now
     )
     completed = sum(1 for c in all_classes if c.status in ("completed", "finalized"))
 
@@ -617,13 +619,15 @@ def get_my_classes_teacher(
     if not include_history:
         query = query.filter(
             Class.status.in_(UPCOMING_STATUSES),
-            Class.start_time_utc >= now
+            # Por el FIN, no por el inicio: una clase en curso sigue en "proximas" (con su enlace de Meet)
+            # hasta que termina. Antes desaparecia del dashboard justo al empezar.
+            Class.end_time_utc > now
         )
 
     all_classes = query.order_by(Class.start_time_utc).all()
     upcoming = sum(
         1 for c in all_classes
-        if c.status in UPCOMING_STATUSES and c.start_time_utc >= now
+        if c.status in UPCOMING_STATUSES and c.end_time_utc > now
     )
     completed = sum(1 for c in all_classes if c.status == "completed")
 

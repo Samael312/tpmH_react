@@ -37,12 +37,18 @@ export default function TeacherLayout({
     userRef.current = user
   }, [user])
 
+  // El onboarding se verifica contra la API UNA vez por sesión del layout. Antes se repetía en cada cambio de
+  // ruta (2 peticiones, /users/me y el perfil, por cada clic del menú).
+  const verifiedRef = useRef(false)
+  const hasUser = !!user
+
   useEffect(() => {
     if (!hasHydrated) return
 
     const currentUser = userRef.current
 
     if (!currentUser) {
+      verifiedRef.current = false
       // SEC-05 / UX-01: sesión por cookie HttpOnly pero sin `user` en localStorage -> se recupera de /users/me.
       api.get('/users/me').then((r) => setUser({ ...r.data })).catch(() => router.push('/login'))
       return
@@ -57,6 +63,9 @@ export default function TeacherLayout({
     if (pathname.startsWith('/teacher/onboarding')) {
       return
     }
+
+    // Ya verificado en esta sesión: `ready` sigue en true (el layout no se desmonta al navegar).
+    if (verifiedRef.current) return
 
     Promise.all([
     api.get('/users/me'),
@@ -78,6 +87,7 @@ export default function TeacherLayout({
     if (!done) {
       router.replace('/teacher/onboarding');
     } else {
+      verifiedRef.current = true;
       setReady(true);
     }
   }).catch(() => {
@@ -88,7 +98,7 @@ export default function TeacherLayout({
       setReady(true);
     }
   });
-}, [pathname, hasHydrated, !!user, router, setUser]);
+}, [pathname, hasHydrated, hasUser, router, setUser]);
 
   // Si el store ya no tiene user/token (p.ej. logout en curso), no renderizar
   // el dashboard con datos nulos: mostrar spinner mientras se redirige.

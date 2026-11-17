@@ -641,6 +641,9 @@ export default function TeacherProfilePage() {
         nationality: nationality || null,
       });
       await Promise.all([refetch(), refetchCurrentUser()]);
+      // El layout ya no relee el perfil en cada cambio de ruta: la zona horaria del store se actualiza aquí.
+      const current = useAuthStore.getState().user;
+      if (current && timezone && current.timezone !== timezone) useAuthStore.getState().setUser({ ...current, timezone });
       setInfoFeedback({ msg: "Perfil actualizado correctamente", type: "success" });
       setIsEditing(false);
     } catch (e) {

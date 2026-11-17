@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   MAX_SPOKEN_LANGUAGES, SPOKEN_LEVELS, LEVEL_LABELS, languageKey, parseSpoken, toggleLanguage, setLevel, isSelected,
-  levelOf, allHaveLevel, canContinue, atLimit, formatSpoken, needsSpokenLanguages, sameLanguages,
+  levelOf, allHaveLevel, canContinue, atLimit, formatSpoken, needsSpokenLanguages, sameLanguages, outsideCatalog,
   type SpokenLanguage,
 } from '@/lib/spokenLanguages'
 
@@ -141,5 +141,16 @@ describe('sameLanguages', () => {
     expect(sameLanguages([sl('Inglés')], [sl('Francés')])).toBe(false)
     expect(sameLanguages([sl('Inglés', 'basic')], [sl('Inglés', 'native')])).toBe(false)
     expect(sameLanguages([sl('Inglés', null)], [sl('Inglés', 'native')])).toBe(false)
+  })
+})
+
+describe('outsideCatalog', () => {
+  it('devuelve los elegidos que ya no están en el catálogo (sin tildes ni mayúsculas)', () => {
+    const picked = [sl('Inglés'), sl('klingon'), sl('frances')]
+    expect(outsideCatalog(picked, ['Ingles', 'Francés'])).toEqual([sl('klingon')])
+  })
+  it('vacío si todo está en el catálogo o no hay nada elegido', () => {
+    expect(outsideCatalog([sl('Inglés')], ['Inglés'])).toEqual([])
+    expect(outsideCatalog([], ['Inglés'])).toEqual([])
   })
 })

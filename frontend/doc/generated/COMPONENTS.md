@@ -5,7 +5,7 @@
 
 - `components/ErrorBoundary.tsx` (64 líneas, referenciado en 3 archivos) — exports: ErrorBoundary
 - `components/SpokenLanguagesNotice.tsx` (23 líneas, referenciado en 3 archivos) — exports: SpokenLanguagesNotice
-- `components/SpokenLanguagesPicker.tsx` (102 líneas, referenciado en 2 archivos) — exports: SpokenLanguagesPicker
+- `components/SpokenLanguagesPicker.tsx` (116 líneas, referenciado en 2 archivos) — exports: SpokenLanguagesPicker
 - `components/SpokenLanguagesSection.tsx` (77 líneas, referenciado en 2 archivos) — exports: SpokenLanguagesSection
 - `components/SpokenLanguagesStep.tsx` (48 líneas, referenciado en 2 archivos) — exports: SpokenLanguagesStep
 - `components/admin/EmailQuotaBanner.tsx` (23 líneas, referenciado en 1 archivos) — exports: EmailQuotaBanner
@@ -16,7 +16,7 @@
 - `components/chat/ChatWidget.tsx` (100 líneas, referenciado en 6 archivos) — exports: ChatWidget
 - `components/chat/ConversationList.tsx` (87 líneas, referenciado en 3 archivos) — exports: ConversationList
 - `components/chipi/ChipiWidget.tsx` (542 líneas, referenciado en 47 archivos) — exports: ChipiWidget
-- `components/classes/ClassCard.tsx` (867 líneas, referenciado en 6 archivos) — exports: ClassCardData, ClassCard
+- `components/classes/ClassCard.tsx` (864 líneas, referenciado en 6 archivos) — exports: ClassCardData, ClassCard
 - `components/classes/GroupWaitingPanel.tsx` (180 líneas, referenciado en 2 archivos) — exports: GroupWaitingPanel — frontend/components/classes/GroupWaitingPanel.tsx
 - `components/classes/MeetLinkModal.tsx` (194 líneas, referenciado en 1 archivos) — exports: MeetLinkModalClassItem, MeetLinkModal
 - `components/classes/RescheduleModal.tsx` (498 líneas, referenciado en 5 archivos) — exports: RescheduleCalendar, RescheduleModalClassItem, RescheduleModal
@@ -110,7 +110,7 @@
 - `lib/pagination.ts` (61 líneas, referenciado en 10 archivos) — exports: PAGE_SIZE, MAX_ITEMS, AllPages, fetchAllPages
 - `lib/platformTenantMode.ts` (34 líneas, referenciado en 2 archivos) — exports: usePlatformTenantMode
 - `lib/scheduleUtc.ts` (29 líneas, referenciado en 2 archivos) — exports: getNextWeekdayDate, utcTimeToLocal — Utilidades para convertir horarios semanales recurrentes (guardados como "HH:MM" UTC + day_of_week) a la hora local del navegador, de forma consistente con la l
-- `lib/spokenLanguages.ts` (114 líneas, referenciado en 13 archivos) — exports: MAX_SPOKEN_LANGUAGES, SpokenLevel, SPOKEN_LEVELS, LEVEL_LABELS, SpokenLanguage, languageKey, parseSpoken, toggleLanguage, setLevel, isSelected, levelOf, allHaveLevel — Fases 8 y 10: idiomas que HABLA el usuario y su nivel. Lógica pura (sin React) para poder testearla con Vitest. No confundir con `TeacherProfile.languages` (los
+- `lib/spokenLanguages.ts` (123 líneas, referenciado en 13 archivos) — exports: MAX_SPOKEN_LANGUAGES, SpokenLevel, SPOKEN_LEVELS, LEVEL_LABELS, SpokenLanguage, languageKey, parseSpoken, outsideCatalog, toggleLanguage, setLevel, isSelected, levelOf — Fases 8 y 10: idiomas que HABLA el usuario y su nivel. Lógica pura (sin React) para poder testearla con Vitest. No confundir con `TeacherProfile.languages` (los
 - `lib/teacherOptions.ts` (86 líneas, referenciado en 8 archivos) — exports: SUBJECTS, LANGUAGES, SKILL_SUGGESTIONS, GOAL_CATEGORIES, GoalCategoryKey, GOALS, normalizeGoalsCatalog, flattenGoals, PAYMENT_METHODS, TOPICS, LEVELS — Opciones compartidas de perfil de profesor. Fuente única de verdad — se usa en onboarding, edición de perfil y creación de paquetes, para no duplicar estas list
 - `lib/textFormat.ts` (10 líneas, referenciado en 1 archivos) — exports: capitalizeWords — Capitaliza la primera letra de cada palabra a medida que el usuario escribe, sin tocar el resto de los caracteres ya tipeados (para no pelear con el cursor ni f
 - `lib/timezones.ts` (78 líneas, referenciado en 6 archivos) — exports: TIMEZONE_OPTIONS, TIMEZONE_TO_COUNTRY, DEFAULT_COUNTRY, CountryInfo, COUNTRY_OPTIONS, parsePhoneNumber — frontend/lib/timezones.ts

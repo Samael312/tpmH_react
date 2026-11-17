@@ -3,7 +3,7 @@
 import { Check } from 'lucide-react'
 import { useSystemCatalogs } from '@/hooks/useSystemCatalogs'
 import {
-  LEVEL_LABELS, MAX_SPOKEN_LANGUAGES, SPOKEN_LEVELS, atLimit, isSelected, setLevel, toggleLanguage,
+  LEVEL_LABELS, MAX_SPOKEN_LANGUAGES, SPOKEN_LEVELS, atLimit, isSelected, outsideCatalog, setLevel, toggleLanguage,
   type SpokenLanguage,
 } from '@/lib/spokenLanguages'
 
@@ -25,6 +25,7 @@ export default function SpokenLanguagesPicker({ value, onChange, max = MAX_SPOKE
   const options = catalogs.spoken_languages ?? []
   const full = atLimit(value, max)
   const missing = value.filter(v => v.level === null).length
+  const retired = outsideCatalog(value, options)
 
   if (loading) return <p className="text-sm font-semibold text-slate-400">Cargando idiomas…</p>
   if (isError || !options.length) {
@@ -58,6 +59,19 @@ export default function SpokenLanguagesPicker({ value, onChange, max = MAX_SPOKE
             </button>
           )
         })}
+        {retired.map(item => (
+          <button
+            key={`retired-${item.language}`}
+            type="button"
+            aria-pressed
+            disabled={disabled}
+            title="Este idioma ya no está en la lista. Quítalo para poder guardar."
+            onClick={() => onChange(toggleLanguage(value, item.language, max))}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-40"
+          >
+            {item.language} · ya no disponible, quitar ✕
+          </button>
+        ))}
       </div>
 
       {value.length > 0 && (

@@ -45,6 +45,15 @@ export function parseSpoken(raw: unknown): SpokenLanguage[] {
   return out
 }
 
+/**
+ * Idiomas elegidos que ya no están en el catálogo (el superadmin los quitó). El servidor rechaza guardarlos,
+ * así que el selector los muestra aparte para que el usuario pueda quitarlos.
+ */
+export function outsideCatalog(selected: SpokenLanguage[], catalog: string[]): SpokenLanguage[] {
+  const keys = new Set(catalog.map(languageKey))
+  return selected.filter(s => !keys.has(languageKey(s.language)))
+}
+
 /** Marca o desmarca un idioma respetando el máximo. Un idioma nuevo entra SIN nivel (el usuario lo elige). */
 export function toggleLanguage(selected: SpokenLanguage[], language: string, max: number = MAX_SPOKEN_LANGUAGES): SpokenLanguage[] {
   const key = languageKey(language)

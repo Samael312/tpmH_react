@@ -18,6 +18,7 @@ Un usuario `is_active=False` o `is_banned` recibe 403 (login y con token existen
 
 `needs_trial` -> `trial_in_progress` -> `needs_package` -> `package_pending_payment` -> `ready`;
 más `needs_renewal`, `renewal_pending`, `needs_group_refund`. Cada profesor exige su propia prueba.
+**Una sola prueba por profesor:** una prueba `finalized` (ya pasó, sin marcar) sigue en `trial_in_progress`; una prueba `no_show` (el alumno faltó, o pasaron 72 h sin marcarla) cuenta como prueba usada y lleva a `needs_package`, igual que `completed` (decisión del dueño, 2026-11-17).
 Endpoint: `GET /payments/booking-status?teacher_username=`. **Efecto lateral:** cancela enrollments `unpaid` sin pago pendiente (escribe en un GET).
 
 ## Clases
@@ -30,6 +31,8 @@ Estados vivos: `pending_trial`, `confirmed`; terminales: `completed`, `cancelled
 - Opciones globales `[25, 50, 80, 110]`; regular/paquete por defecto `[50, 80, 110]`; prueba 25 min.
 - **Buffer** (descuenta del final real, ocupa agenda): prueba 5 min, regular 10, grupal 10. Verificado: clase 10:00–10:50 bloquea hasta 11:00; 10:55 da 409, 11:00 OK.
 - Antelación mínima para reservar: 1 h. Cancelar el alumno: ≥12 h. Reagendar el alumno: ≥12 h; staff: 0.
+- Una clase ya pasada (`finalized`, `no_show`) solo la reagenda el **profesor** (o el staff); el alumno no (reagendar una `finalized` la devolvía a `confirmed` sin gastar crédito).
+- «Próximas» (`GET /classes/my-classes` y `/classes/teacher/classes` sin historial) incluye la clase **en curso** hasta su fin (`end_time_utc > ahora`), para que el enlace de Meet siga a mano durante la clase.
 - Duración reservada se valida contra el catálogo global, **no** contra el paquete (AUD-07). Schema exige 15–240 min (0, negativo, 14, 241 -> 422).
 - Fecha pasada -> rechazada. Fecha sin zona horaria -> 500 (AUD-08).
 

@@ -79,10 +79,10 @@ const MANUAL_STATUS_WINDOW_HOURS = 72;
 const TEACHER_CANCELABLE_STATUSES = ["pending_trial", "confirmed", "finalized"];
 
 const STUDENT_CANCELABLE = ["pending", "pending_trial", "pending_payment", "confirmed"];
-// BUG-02 fix (ampliado): el estudiante también puede reagendar una clase
-// 'finalized', igual que el profesor, sin restricción de antelación (ver
+// El estudiante NO reagenda una clase 'finalized' (ya pasó): volvía a
+// 'confirmed' sin gastar crédito. Solo el profesor puede (ver
 // can_reschedule_class en el backend).
-const STUDENT_RESCHEDULABLE = ["pending", "pending_trial", "confirmed", "finalized"];
+const STUDENT_RESCHEDULABLE = ["pending", "pending_trial", "confirmed"];
 
 function PersonAvatar({ name, url, className }: { name?: string | null; url?: string | null; className?: string }) {
   if (url) {
@@ -423,11 +423,8 @@ export default function ClassCard({
   // los botones de Completar/No asistió justo cuando más se necesitan (después
   // de que la clase terminó). Ahora se basan en la ventana de 72h.
   const showTeacherActions = role === "teacher" && withinManualStatusWindow && !readOnly && !isExternal;
-  // Una clase 'finalized' ya pasó por definición, pero tanto profesor como
-  // estudiante pueden reagendarla sin restricción de antelación (BUG-02
-  // ampliado), así que el estado 'finalized' siempre puede ignorar el
-  // bloqueo por isPast a la hora de mostrar el botón de reagendar.
-  const canBypassPastForReschedule = role === "teacher" || class_.status === "finalized";
+  // Solo el profesor reagenda clases ya pasadas ('finalized'/'no_show').
+  const canBypassPastForReschedule = role === "teacher";
   const hasAnyAction = !readOnly && ((canReschedule && (!isPast || canBypassPastForReschedule)) || (canCancel && (!isPast || role === "teacher")) || showTeacherActions || canManageMeetLink)
     || canJoinMeetLink;
 

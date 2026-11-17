@@ -73,6 +73,7 @@ def test_finalize_ignores_terminal_states(db, world):
 # ─── meet links ────────────────────────────────────────────────────────────────
 
 def test_meet_due_is_start_minus_window(db, world):
+    _token(db, world, is_active=True, needs_reauth=False)
     c = _cls(db, world, future(5))
     minutes = sch.get_business_rules(db)["meet_link_autogen_minutes"]
     assert abs(_due("generate_meet_links", db) - (c.start_time_utc - timedelta(minutes=minutes))) < timedelta(seconds=2)
@@ -86,12 +87,21 @@ def test_meet_skips_classes_with_link_external_and_past(db, world):
 
 
 def test_meet_follows_platform_window_setting(db, world):
+    _token(db, world, is_active=True, needs_reauth=False)
     c = _cls(db, world, future(5))
     cfg = db.query(PlatformConfig).first() or PlatformConfig(is_single_tenant=False)
     cfg.meet_link_autogen_minutes = 120
     db.add(cfg)
     db.commit()
     assert abs(_due("generate_meet_links", db) - (c.start_time_utc - timedelta(minutes=120))) < timedelta(seconds=2)
+
+
+def test_meet_ignores_teachers_without_calendar(db, world):
+    # Sin Calendar no se puede generar el link: no debe despertar el job cada 5 min antes de la clase.
+    _cls(db, world, future(5))
+    assert _due("generate_meet_links", db) is None
+    _token(db, world, is_active=True, needs_reauth=True)
+    assert _due("generate_meet_links", db) is None
 
 
 # ─── recordatorios ─────────────────────────────────────────────────────────────
@@ -195,6 +205,7 @@ def fake_sched(monkeypatch):
 
 
 def test_reschedule_job_sets_date_trigger_at_due_time(db, world, fake_sched):
+    _token(db, world, is_active=True, needs_reauth=False)
     c = _cls(db, world, future(6))
     sch.reschedule_job(_job("generate_meet_links"))
     func, trig, args = fake_sched.jobs["generate_meet_links"]
@@ -307,3 +318,29 @@ def test_hook_install_is_idempotent(db, world, monkeypatch):
     monkeypatch.setattr(sch, "request_reschedule", lambda *a, **k: n.append(1))
     _cls(db, world, future(5))
     assert len(n) == 1
+
+
+# ─── revision de flujos (2026-11-17) ───────────────────────────────────────────
+
+def test_finalize_due_ignores_finalized_external(db, world):
+    _cls(db, world, future(-10), status="finalized", class_type="external")
+    assert _due("finalize_expired_classes", db) is None
+
+
+def test_external_class_stays_finalized_after_72h(db, world):
+    from app.core.class_logic import finalize_past_classes
+    c = _cls(db, world, future(-100), class_type="external")
+    finalize_past_classes(db)
+    db.refresh(c)
+    assert c.status == "finalized"
+
+
+def test_reminder_without_recipient_is_marked_and_not_retried(db, world):
+    from app.models.student import StudentProfile
+    c = _cls(db, world, future(24))
+    db.query(StudentProfile).filter(StudentProfile.id == world["sp"].id).delete()
+    db.commit()
+    sch.send_class_reminders()
+    db.expire_all()
+    assert db.get(Class, c.id).reminder_sent_at is not None
+    assert _due("class_reminders", db) is None

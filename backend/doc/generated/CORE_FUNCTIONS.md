@@ -69,15 +69,15 @@ Las que empiezan por `_` son privadas del módulo.
 - `can_join_group_class(class_: Class, db: Session)` — L414: Chequeo de cupo para una sesión grupal ya creada (Class con class_type == "group"): ¿hay lugar para un alumno más? Complementa a can_book_slot, que ya valida antelación mínima y que ni el alumno ni el profesor tengan otro compromiso en ese horario.
 - `can_cancel_class(class_: Class, requesting_user_id: int, db: Session)` — L440
 - `can_reschedule_class(class_: Class, role: str, db: Session)` — L462
-- `resolve_status_after_reschedule(class_: Class)` — L499: Determina el status que debe quedar una clase tras reagendarla.
-- `update_enrollment_counter(enrollment_id: int, delta: int, db: Session)` — L523: Actualiza el contador de clases usadas en un enrollment. delta=1 cuando se completa una clase delta=-1 cuando se cancela una clase completada
-- `get_student_booking_stage(student_id: int, teacher_id: int, db: Session, *, heal: bool=True)` — L552: Determina la etapa de reserva del estudiante CON UN PROFESOR ESPECÍFICO. Cada relación estudiante-profesor es independiente: completar la prueba con un profesor no exime de la prueba con otro.
-- `release_stale_unpaid_enrollments(db: Session, older_than_hours: int=STALE_UNPAID_ENROLLMENT_HOURS)` — L692: Cancela los enrollments individuales activos que nunca se pagaron ni tienen un pago en revision y tienen mas de `older_than_hours` horas. Es lo que antes hacia, en un GET, `get_student_booking_stage`. Los de cohorte (grupales) no se tocan.
-- `finalize_past_classes(db: Session)` — L723: Marca como 'finalized' las clases confirmadas cuyo horario ya terminó, y como 'no_show' las que nunca se confirmaron/pagaron y ya pasó su hora. Actualiza también el contador de clases usadas del paquete, ya que estos estados cuentan contra el cupo del estudiante.
-- `class_counts_towards_package(class_status: str, start_time_utc: datetime, reference_time: datetime | None=None, apply_late_cancel_penalty: bool=True, min_cancel_hours: i)` — L784: Determina si una clase en este estado debe contarse contra el paquete del estudiante (classes_used).
-- `sync_student_lifetime_class_counter(class_: 'Class', old_status: str, new_status: str, db: Session)` — L827: Mantiene StudentProfile.total_completed_classes al día cada vez que el status de una Class entra o sale de LIFETIME_COUNTING_STATUSES.
-- `count_completed_classes_with_teacher(db: Session, teacher_id: int, student_id: int)` — L875: Cuántas clases completó un alumno con un profesor puntual (individuales + grupales, status 'completed'). A diferencia del contador de por vida de StudentProfile, este número es específico del par profesor-alumno y no incluye 'no_show' — usa el mismo criterio que la elegibilidad para dejar una reseña
-- `cancel_class_and_refund(class_: 'Class', db: Session, apply_late_cancel_penalty: bool)` — L902: Marca la clase como cancelada y devuelve el crédito al estudiante si corresponde. Centraliza la lógica que antes estaba duplicada en los 3 endpoints de cancelación (estudiante, profesor, admin).
+- `resolve_status_after_reschedule(class_: Class)` — L502: Determina el status que debe quedar una clase tras reagendarla.
+- `update_enrollment_counter(enrollment_id: int, delta: int, db: Session)` — L526: Actualiza el contador de clases usadas en un enrollment. delta=1 cuando se completa una clase delta=-1 cuando se cancela una clase completada
+- `get_student_booking_stage(student_id: int, teacher_id: int, db: Session, *, heal: bool=True)` — L555: Determina la etapa de reserva del estudiante CON UN PROFESOR ESPECÍFICO. Cada relación estudiante-profesor es independiente: completar la prueba con un profesor no exime de la prueba con otro.
+- `release_stale_unpaid_enrollments(db: Session, older_than_hours: int=STALE_UNPAID_ENROLLMENT_HOURS)` — L699: Cancela los enrollments individuales activos que nunca se pagaron ni tienen un pago en revision y tienen mas de `older_than_hours` horas. Es lo que antes hacia, en un GET, `get_student_booking_stage`. Los de cohorte (grupales) no se tocan.
+- `finalize_past_classes(db: Session)` — L730: Marca como 'finalized' las clases confirmadas cuyo horario ya terminó, y como 'no_show' las que nunca se confirmaron/pagaron y ya pasó su hora. Actualiza también el contador de clases usadas del paquete, ya que estos estados cuentan contra el cupo del estudiante.
+- `class_counts_towards_package(class_status: str, start_time_utc: datetime, reference_time: datetime | None=None, apply_late_cancel_penalty: bool=True, min_cancel_hours: i)` — L797: Determina si una clase en este estado debe contarse contra el paquete del estudiante (classes_used).
+- `sync_student_lifetime_class_counter(class_: 'Class', old_status: str, new_status: str, db: Session)` — L840: Mantiene StudentProfile.total_completed_classes al día cada vez que el status de una Class entra o sale de LIFETIME_COUNTING_STATUSES.
+- `count_completed_classes_with_teacher(db: Session, teacher_id: int, student_id: int)` — L888: Cuántas clases completó un alumno con un profesor puntual (individuales + grupales, status 'completed'). A diferencia del contador de por vida de StudentProfile, este número es específico del par profesor-alumno y no incluye 'no_show' — usa el mismo criterio que la elegibilidad para dejar una reseña
+- `cancel_class_and_refund(class_: 'Class', db: Session, apply_late_cancel_penalty: bool)` — L915: Marca la clase como cancelada y devuelve el crédito al estudiante si corresponde. Centraliza la lógica que antes estaba duplicada en los 3 endpoints de cancelación (estudiante, profesor, admin).
 
 ## app/core/config.py
 
@@ -230,31 +230,31 @@ Las que empiezan por `_` son privadas del módulo.
 
 - `finalize_expired_classes()` — L27: Job que se ejecuta cada 10 minutos. Marca como 'finalized' las clases confirmadas cuyo horario ya pasó.
 - `send_class_reminders()` — L42: Job que se ejecuta cada hora. Busca clases confirmadas que empiezan en ~24h y envía el recordatorio si aún no se envió.
-- `send_chat_digests()` — L178: Job por vencimiento: un correo por profesor con sus conversaciones de chat pendientes (core/chat_digest.py).
-- `generate_upcoming_meet_links()` — L193: Job que se ejecuta cada 5 minutos. Genera automáticamente el link de videollamada (Google Meet, vía el Calendar del profesor) para las clases confirmadas que empiezan dentro de la ventana configurada por el superadmin (meet_link_autogen_minutes en PlatformConfig, default 30 min) y todavía NO tienen 
-- `sync_all_teacher_calendars()` — L256: Job que se ejecuta cada 30 minutos, en segundo plano, sin depender de que algún profesor tenga el panel abierto.
-- `notify_low_credit_packages()` — L278: Job semanal. Revisa enrollments activos con pocas clases restantes (finitos o ilimitados con crédito prepagado) y avisa al estudiante si no se le avisó ya dentro de la ventana configurada por el superadmin (low_credit_renotify_days en PlatformConfig).
-- `purge_old_chat_messages()` — L333: Job diario. Borra mensajes de chat interno más viejos que PlatformConfig.chat_retention_days (0 = sin límite, no borra nada).
-- `release_stale_enrollments()` — L353: Job diario. Cancela los enrollments sin pagar de mas de 24 h (antes lo hacia un GET).
-- `purge_old_logs()` — L368: Job diario. Purga `error_logs` y `email_log` por antiguedad (core/retention.py).
-- `class DueJob()` — L411
-- `_due_finalize(job: DueJob, db: Session, now: datetime)` — L419: Primera clase que hay que cerrar: confirmed/pending_trial al terminar, finalized a las 72 h de terminar.
-- `_due_meet_links(job: DueJob, db: Session, now: datetime)` — L433: Hora en que la proxima clase sin link entra en la ventana de autogeneracion.
-- `_due_chat_digest(job: DueJob, db: Session, now: datetime)` — L446
-- `_due_reminders(job: DueJob, db: Session, now: datetime)` — L451: Recordatorio 24 h antes: se envia en la ventana [23 h, 25 h] antes del inicio.
-- `_due_calendar_sync(job: DueJob, db: Session, now: datetime)` — L463: Sin profesores con Calendar conectado no hay nada que sincronizar. Con clase en curso o en las proximas 3 h: cada 30 min. Si no: cada 6 h, y siempre antes de que la proxima clase entre en esa ventana.
-- `compute_run_at(job: DueJob, due: Optional[datetime], now: datetime)` — L502: Cuando programar la proxima ejecucion: `due` acotado a [ahora+1s, ahora+MAX_SLEEP] y respetando `min_gap`.
-- `reschedule_job(job: DueJob)` — L511: Recalcula (con una consulta corta) cuando le toca al job y lo programa. Nunca lanza.
-- `_run_due_job(job_id: str)` — L530
-- `reschedule_all_due_jobs()` — L539
-- `request_reschedule(delay_seconds: int=3)` — L544: Pide recalcular los vencimientos (con un pequeño retraso: varias escrituras seguidas cuentan una vez).
-- `_watched_models()` — L560
-- `_after_flush(session, flush_context)` — L566
-- `_after_commit(session)` — L571
-- `_after_soft_rollback(session, previous_transaction)` — L576
-- `install_session_hooks()` — L580
-- `start_scheduler()` — L591
-- `stop_scheduler()` — L605: Para el scheduler al apagar la aplicación
+- `send_chat_digests()` — L188: Job por vencimiento: un correo por profesor con sus conversaciones de chat pendientes (core/chat_digest.py).
+- `generate_upcoming_meet_links()` — L203: Job que se ejecuta cada 5 minutos. Genera automáticamente el link de videollamada (Google Meet, vía el Calendar del profesor) para las clases confirmadas que empiezan dentro de la ventana configurada por el superadmin (meet_link_autogen_minutes en PlatformConfig, default 30 min) y todavía NO tienen 
+- `sync_all_teacher_calendars()` — L266: Job que se ejecuta cada 30 minutos, en segundo plano, sin depender de que algún profesor tenga el panel abierto.
+- `notify_low_credit_packages()` — L288: Job semanal. Revisa enrollments activos con pocas clases restantes (finitos o ilimitados con crédito prepagado) y avisa al estudiante si no se le avisó ya dentro de la ventana configurada por el superadmin (low_credit_renotify_days en PlatformConfig).
+- `purge_old_chat_messages()` — L343: Job diario. Borra mensajes de chat interno más viejos que PlatformConfig.chat_retention_days (0 = sin límite, no borra nada).
+- `release_stale_enrollments()` — L363: Job diario. Cancela los enrollments sin pagar de mas de 24 h (antes lo hacia un GET).
+- `purge_old_logs()` — L378: Job diario. Purga `error_logs` y `email_log` por antiguedad (core/retention.py).
+- `class DueJob()` — L421
+- `_due_finalize(job: DueJob, db: Session, now: datetime)` — L429: Primera clase que hay que cerrar: confirmed/pending_trial al terminar, finalized a las 72 h de terminar.
+- `_due_meet_links(job: DueJob, db: Session, now: datetime)` — L445: Hora en que la proxima clase sin link entra en la ventana de autogeneracion. Solo cuentan los profesores con Google Calendar conectado: sin el, no se puede generar el link y el job reintentaba cada 5 min (despertando Neon) durante toda la ventana previa a cada clase.
+- `_due_chat_digest(job: DueJob, db: Session, now: datetime)` — L467
+- `_due_reminders(job: DueJob, db: Session, now: datetime)` — L472: Recordatorio 24 h antes: se envia en la ventana [23 h, 25 h] antes del inicio.
+- `_due_calendar_sync(job: DueJob, db: Session, now: datetime)` — L484: Sin profesores con Calendar conectado no hay nada que sincronizar. Con clase en curso o en las proximas 3 h: cada 30 min. Si no: cada 6 h, y siempre antes de que la proxima clase entre en esa ventana.
+- `compute_run_at(job: DueJob, due: Optional[datetime], now: datetime)` — L523: Cuando programar la proxima ejecucion: `due` acotado a [ahora+1s, ahora+MAX_SLEEP] y respetando `min_gap`.
+- `reschedule_job(job: DueJob)` — L532: Recalcula (con una consulta corta) cuando le toca al job y lo programa. Nunca lanza.
+- `_run_due_job(job_id: str)` — L551
+- `reschedule_all_due_jobs()` — L560
+- `request_reschedule(delay_seconds: int=3)` — L565: Pide recalcular los vencimientos (con un pequeño retraso: varias escrituras seguidas cuentan una vez).
+- `_watched_models()` — L581
+- `_after_flush(session, flush_context)` — L587
+- `_after_commit(session)` — L592
+- `_after_soft_rollback(session, previous_transaction)` — L597
+- `install_session_hooks()` — L601
+- `start_scheduler()` — L612
+- `stop_scheduler()` — L626: Para el scheduler al apagar la aplicación
 
 ## app/core/spoken_languages.py
 

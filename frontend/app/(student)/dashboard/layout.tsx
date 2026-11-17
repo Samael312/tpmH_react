@@ -37,10 +37,16 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     userRef.current = user;
   }, [user]);
 
+  // El onboarding se verifica contra la API UNA vez por sesión del layout. Antes se repetía en cada cambio de
+  // ruta (2 peticiones, /users/me y el perfil, por cada clic del menú).
+  const verifiedRef = useRef(false);
+  const hasUser = !!user;
+
   useEffect(() => {
     if (!hasHydrated) return;
     const currentUser = userRef.current;
     if (!currentUser) {
+      verifiedRef.current = false;
       // SEC-05 / UX-01: sesión por cookie HttpOnly pero sin `user` en localStorage -> se recupera de /users/me.
       // Si la sesión no es válida, el interceptor de api.ts intenta el refresh y, si falla, redirige al login.
       api.get("/users/me").then((r) => setUser({ ...r.data })).catch(() => router.replace("/login"));
@@ -56,6 +62,9 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     if (pathname.startsWith("/dashboard/onboarding")) {
       return;
     }
+
+    // Ya verificado en esta sesión: `checked` sigue en true (el layout no se desmonta al navegar).
+    if (verifiedRef.current) return;
 
     Promise.all([
       api.get("/users/me"),
@@ -79,6 +88,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       if (!onboardingCompleted) {
         router.replace("/dashboard/onboarding");
       } else {
+        verifiedRef.current = true;
         setChecked(true);
       }
     }).catch(() => {
@@ -89,7 +99,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         setChecked(true);
       }
     });
-  }, [pathname, hasHydrated, !!user, router, setUser]);
+  }, [pathname, hasHydrated, hasUser, router, setUser]);
 
   // Si el store ya no tiene user/token (p.ej. logout en curso), no renderizar
   // el dashboard con datos nulos: mostrar spinner mientras se redirige.
