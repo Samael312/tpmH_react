@@ -25,7 +25,7 @@ Plataforma web para que **alumnos** reserven clases con **profesores** (prueba g
 .
 ├── backend/                FastAPI
 │   ├── app/                main.py, api/v1/endpoints, core (lógica), models, schemas, auth, db
-│   ├── alembic/            migraciones (55; un solo head b8c9d0e1f2a3)
+│   ├── alembic/            migraciones (55; un solo head e7a1b2c3d4f5)
 │   ├── tests/audit/        suite sin .env (SQLite) + servidor de pruebas con datos semilla
 │   ├── tests/flow/         suite de integración contra PostgreSQL real (¡cuidado!)
 │   ├── doc/                documentación del backend

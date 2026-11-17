@@ -76,6 +76,17 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | used_prepaid_credit | BOOLEAN | ? default=False |
 | reminder_sent_at | DATETIME | ? |
 
+## email_log
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| id | INTEGER | PK |
+| day | DATE |  |
+| category | VARCHAR |  |
+| outcome | VARCHAR |  |
+| reason | VARCHAR | ? |
+| created_at | DATETIME | ? |
+
 ## email_verification_tokens
 
 | Columna | Tipo | Notas |
@@ -360,6 +371,10 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | chat_enabled | BOOLEAN | ? default=True |
 | chat_retention_days | INTEGER | ? default=90 |
 | chat_reactivation_hours | INTEGER | ? default=24 |
+| email_notifications | JSONB | ? |
+| email_daily_limit | INTEGER | ? default=100 |
+| email_auto_saver_enabled | BOOLEAN | ? default=False |
+| email_auto_saver_percent | INTEGER | ? default=80 |
 
 ## refresh_tokens
 

@@ -14,6 +14,7 @@ import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
 import { usePageTopBar } from '@/lib/mobileTopBar'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
+import EmailQuotaBanner from '@/components/admin/EmailQuotaBanner'
 import { useToast } from '@/hooks/useToast'
 import { getErrorMessage } from '@/lib/errorMessage'
 import {
@@ -277,6 +278,8 @@ export default function AdminDashboard() {
   return (
     <>
       <div className="space-y-8 animate-fade-up bg-white min-h-screen p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+
+        <EmailQuotaBanner />
 
         {/* ─── Header ─── */}
         <div className="flex items-start justify-between">

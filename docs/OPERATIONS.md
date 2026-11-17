@@ -36,12 +36,12 @@ Ni el `Dockerfile` ni `railway.toml` ejecutan `alembic upgrade head`. Hay que ha
 cd backend
 # .env con la DATABASE_URL del entorno destino (¡comprueba a cuál apunta!)
 alembic current        # debe mostrar la revisión actual
-alembic heads          # debe haber UN solo head (hoy b8c9d0e1f2a3)
+alembic heads          # debe haber UN solo head (hoy e7a1b2c3d4f5)
 alembic upgrade head
 ```
 - Verifica el destino antes: `alembic current` y el host de `DATABASE_URL`. `load_dotenv(override=True)` hace que el `.env` pise tu entorno.
 - Para automatizarlo, añade un *pre-deploy command* en Railway (`alembic upgrade head`) o un paso previo en CI.
-- Estado verificado el 2026-11-16: la BD de Neon estaba en `c9d0e1f2a3b4`. **Desde entonces el repo tiene 3 migraciones más** (`d1e2f3a4b5c6` NEG-02, `a7b8c9d0e1f2` SEC-04, `b8c9d0e1f2a3` SEC-05): hay que ejecutar `alembic upgrade head` en cada entorno antes de desplegar el código nuevo (sin ellas fallan el login con refresh y la verificación de email).
+- Estado verificado el 2026-11-16: la BD de Neon estaba en `c9d0e1f2a3b4`. **Desde entonces el repo tiene 4 migraciones más** (`d1e2f3a4b5c6` NEG-02, `a7b8c9d0e1f2` SEC-04, `b8c9d0e1f2a3` SEC-05, `e7a1b2c3d4f5` Fase 7: control de correos): hay que ejecutar `alembic upgrade head` en cada entorno antes de desplegar el código nuevo (sin ellas fallan el login con refresh y la verificación de email).
 
 ## 5. Copias de seguridad y recuperación
 

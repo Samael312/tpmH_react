@@ -3,7 +3,7 @@
 Generado por `backend/doc/generate_docs.py`. Prefijo global: `/api/v1`.
 Auth = dependencia FastAPI de rol detectada. `—` = sin autenticación (pública).
 
-Total de rutas: **217**
+Total de rutas: **219**
 
 
 ## Autenticación
@@ -124,6 +124,8 @@ Total de rutas: **217**
 |---|---|---|---|---|---|
 | GET | `/admin/appeals` | get_current_staff, get_current_user |  | `list_appeals` (app/api/v1/endpoints/admin.py:489) | Bandeja global de apelaciones — usada en Visión Global y en la pestaña Rechazados de Profesores. Por defecto muestra todas; filtrable por status. |
 | PATCH | `/admin/appeals/{appeal_id}/resolve` | get_current_staff, get_current_user |  | `resolve_appeal` (app/api/v1/endpoints/admin.py:530) | Resuelve una apelación pendiente. - approve: el profesor vuelve a "approved" (perfil público). - reject: incrementa el conteo de apelaciones agotadas. Al llegar a 2,   el perfil permanece "rejected" pero se marca appeal_exhausted=True,   lo que habilita en el dashboard del profesor la opción de subi |
+| GET | `/admin/email-settings` | get_current_user |  | `get_email_settings` (app/api/v1/endpoints/admin.py:1274) | Interruptores por categoria, uso de hoy contra la cuota y estado del modo ahorro. Solo superadmin. |
+| PUT | `/admin/email-settings` | get_current_user |  | `update_email_settings` (app/api/v1/endpoints/admin.py:1283) | Actualiza interruptores, limite diario y modo ahorro. Solo superadmin. Las categorias esenciales no se pueden apagar (422); una categoria desconocida tambien es 422. |
 | GET | `/admin/notifications` | get_current_staff, get_current_user |  | `list_notifications` (app/api/v1/endpoints/admin.py:739) |  |
 | POST | `/admin/notifications/mark-all-read` | get_current_staff, get_current_user |  | `mark_all_notifications_read` (app/api/v1/endpoints/admin.py:774) |  |
 | GET | `/admin/notifications/unread-count` | get_current_staff, get_current_user |  | `unread_notification_count` (app/api/v1/endpoints/admin.py:752) |  |

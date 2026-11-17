@@ -56,6 +56,7 @@ Llamadas `api.<verbo>(...)` por archivo (regex; las URLs construidas dinámicame
 - `hooks/useBusinessRules.ts`: GET /system-catalogs/business-rules
 - `hooks/useChat.ts`: GET /chat/conversations, GET /chat/conversations/direct/{x}, GET /chat/conversations/group/{x}, GET /chat/conversations/unread-count, POST /chat/conversations/{x}/read
 - `hooks/useChatAdmin.ts`: GET /chat/admin/conversations, GET /chat/admin/conversations/{x}/messages
+- `hooks/useEmailSettings.ts`: GET /admin/email-settings, PUT /admin/email-settings
 - `hooks/useErrorLogs.ts`: GET /logs, GET /logs/stats, GET /logs/users
 - `hooks/useGodMode.ts`: GET /god-mode/audit-log, GET /god-mode/audit-log/{x}/{x}, GET /god-mode/lookup/class-durations, GET /god-mode/lookup/students/{x}/enrollments, GET /god-mode/lookup/teachers, GET /god-mode/lookup/teachers/{x}/cohorts, GET /god-mode/lookup/teachers/{x}/packages, GET /god-mode/lookup/teachers/{x}/reviews, GET /god-mode/lookup/teachers/{x}/students, GET /god-mode/lookup/teachers/{x}/students/reviewable, GET /god-mode/lookup/teachers/{x}/students/{x}/classes, GET /god-mode/lookup/teachers/{x}/students/{x}/payments
 - `hooks/useLandingData.ts`: GET /public/landing

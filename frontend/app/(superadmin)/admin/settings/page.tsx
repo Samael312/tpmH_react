@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { Card, Button } from '@/components/ui'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
+import EmailSettingsPanel from '@/components/admin/EmailSettingsPanel'
+import { useAuthStore } from '@/store/authStore'
 
 import {
   useAdminPaymentConfig, useAdminPlatformConfig, useAdminBusinessRules, useTeachers,
@@ -413,6 +415,7 @@ function LandingTitleField({ label, value, onChange, gradientId, onGradientChang
 const TABS = [
   { key: 'platform', label: 'Plataforma', icon: '🏳️', dot: 'bg-pink-500' },
   { key: 'chat', label: 'Chats', icon: '💬', dot: 'bg-blue-400' },
+  { key: 'email', label: 'Correos', icon: '✉️', dot: 'bg-sky-400' },
   { key: 'payments', label: 'Pagos', icon: '💳', dot: 'bg-emerald-400' },
   { key: 'catalogs', label: 'Catálogos', icon: '📚', dot: 'bg-purple-400' },
   { key: 'rules', label: 'Reglas', icon: '⚙️', dot: 'bg-amber-400' },
@@ -422,6 +425,7 @@ type TabKey = typeof TABS[number]['key']
 
 export default function SettingsPage() {
   const toast = useToast()
+  const isSuperadmin = useAuthStore(s => s.user?.role) === 'superadmin'
   const { paymentConfig: remotePaymentConfig, isFetching: pcFetching, isError: pcError, refetch: refetchPaymentConfig } = useAdminPaymentConfig()
   const { platformConfig: remotePlatformConfig, isFetching: plFetching, isError: plError, refetch: refetchPlatformConfig } = useAdminPlatformConfig()
     const { catalogs, loading: catLoading, isFetching: catFetching, isError: catError, refetch: refetchCatalogs } = useSystemCatalogs()
@@ -1367,6 +1371,13 @@ export default function SettingsPage() {
           </div>
         ) : (
           <Skeleton className="h-32 w-full rounded-2xl" />
+        )
+      )}
+
+      {/* ─── Correos (solo superadmin) ───────────────────────────────── */}
+      {activeTab === 'email' && (
+        isSuperadmin ? <EmailSettingsPanel /> : (
+          <p className="text-sm font-semibold text-slate-500">Solo el superadmin puede configurar los correos.</p>
         )
       )}
 

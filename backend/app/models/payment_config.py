@@ -83,6 +83,13 @@ class PlatformConfig(Base):
     # estudiante vuelve a disparar el email de aviso al profesor.
     chat_reactivation_hours = Column(Integer, default=24, server_default="24")
 
+    # Fase 7: control de correos (core/email_settings.py). `email_notifications` es
+    # {categoria: bool}; una categoria ausente cuenta como encendida.
+    email_notifications = Column(JSONB, nullable=True)
+    email_daily_limit = Column(Integer, default=100, server_default="100")
+    email_auto_saver_enabled = Column(Boolean, default=False, server_default="false")
+    email_auto_saver_percent = Column(Integer, default=80, server_default="80")
+
 # backend/app/models/payment_config.py
 class PaymentConfig(Base):
     __tablename__ = "payment_config"

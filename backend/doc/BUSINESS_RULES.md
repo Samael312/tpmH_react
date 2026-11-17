@@ -132,3 +132,13 @@ Semanal: filas `TeacherAvailability` (`day_of_week`, `start_time_utc`, `end_time
 - Cambiar o restablecer la contraseña, o borrar la cuenta, revoca todas las sesiones (al cambiarla, la actual recibe cookies nuevas).
 - Peticiones que mutan y traen cookies con un `Origin` ajeno -> 403. Las que usan `Authorization: Bearer` no están sujetas.
 - Transición: el backend sigue aceptando `Authorization: Bearer` y `?token=` en el WS, y devuelve `access_token` en el JSON; el frontend nuevo ya no los usa.
+
+## Control de correos (Fase 7)
+- Todo correo sale por `core/email.py::_send(..., category)`, que consulta `core/email_settings.py`. 32 plantillas, 14 categorías (13 apagables y la de **esenciales**).
+- **Esenciales** (verificar email, restablecer contraseña, recuperar usuario): nunca se apagan (422 si se intenta) ni se pausan, ni siquiera al llegar al límite diario.
+- Solo el `superadmin` ve y cambia la configuración (`GET/PUT /admin/email-settings`); `teacher_admin` recibe 403. Por defecto todo está encendido y el límite diario es 100 (cuota gratuita de Resend).
+- Contador diario en `email_log` (día UTC): solo los `sent` cuentan para la cuota. Los `skipped` (categoría apagada, `modo_ahorro`, `limite_diario`) y los `failed` se anotan aparte y disparan el banner del panel.
+- Al llegar a `daily_limit` solo salen las esenciales. **Modo ahorro** (apagado por defecto): al llegar a `auto_saver_percent` % del límite se pausan las categorías de probabilidad *muy alta* y *alta* hasta las 00:00 UTC.
+- Si el control o el contador fallan, el correo **sale igual** (nunca se pierde un correo por un fallo de conteo).
+- La probabilidad de agotar la cuota por categoría es una **estimación** a partir del código, no una medición.
+

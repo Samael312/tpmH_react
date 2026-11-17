@@ -1220,3 +1220,100 @@ def admin_update_user(
             
     db.commit()
     return {"ok": True}
+
+# ─── CONTROL DE CORREOS (Fase 7) ─────────────────────────────────────────────
+
+class EmailSettingsUpdate(BaseModel):
+    notifications: Optional[dict[str, bool]] = None
+    daily_limit: Optional[int] = None
+    auto_saver_enabled: Optional[bool] = None
+    auto_saver_percent: Optional[int] = None
+
+
+def _serialize_email_settings(db: Session) -> dict:
+    from app.core import email_settings as es
+
+    cfg = get_or_create_platform_config(db)
+    usage = es.usage_today(db)
+    sent = sum(u.get("sent", 0) for u in usage.values())
+    limit = es.get_limit(cfg)
+    emails_by_category: dict[str, list[str]] = {}
+    for fn, cat in es.EMAIL_CATEGORY.items():
+        emails_by_category.setdefault(cat, []).append(fn)
+
+    categories = []
+    for key, meta in es.CATEGORIES.items():
+        u = usage.get(key, {})
+        categories.append({
+            "key": key,
+            "label": meta["label"],
+            "probability": meta["probability"],
+            "essential": meta["essential"],
+            "enabled": es.is_category_enabled(cfg, key),
+            "sent_today": u.get("sent", 0),
+            "skipped_today": u.get("skipped", 0),
+            "failed_today": u.get("failed", 0),
+            "emails": sorted(emails_by_category.get(key, [])),
+        })
+    skipped = sum(u.get("skipped", 0) for u in usage.values())
+    failed = sum(u.get("failed", 0) for u in usage.values())
+    return {
+        "categories": categories,
+        "sent_today": sent,
+        "daily_limit": limit,
+        "auto_saver_enabled": bool(cfg.email_auto_saver_enabled),
+        "auto_saver_percent": es.get_saver_percent(cfg),
+        "auto_saver_active": es.saver_active(cfg, sent),
+        "skipped_today": skipped,
+        "failed_today": failed,
+        # Banner del panel: hoy se omitieron o fallaron correos
+        "alert": bool(skipped or failed),
+    }
+
+
+@router.get("/email-settings")
+def get_email_settings(
+    current_user: User = Depends(require_superadmin),
+    db: Session = Depends(get_db),
+):
+    """Interruptores por categoria, uso de hoy contra la cuota y estado del modo ahorro. Solo superadmin."""
+    return _serialize_email_settings(db)
+
+
+@router.put("/email-settings")
+def update_email_settings(
+    data: EmailSettingsUpdate,
+    current_user: User = Depends(require_superadmin),
+    db: Session = Depends(get_db),
+):
+    """
+    Actualiza interruptores, limite diario y modo ahorro. Solo superadmin.
+    Las categorias esenciales no se pueden apagar (422); una categoria desconocida tambien es 422.
+    """
+    from app.core import email_settings as es
+
+    if data.notifications is not None:
+        for key, enabled in data.notifications.items():
+            meta = es.CATEGORIES.get(key)
+            if meta is None:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Categoría desconocida: {key}")
+            if meta["essential"] and enabled is False:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Los correos esenciales no se pueden apagar")
+    if data.daily_limit is not None and not (1 <= data.daily_limit <= 1_000_000):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "El límite diario debe estar entre 1 y 1.000.000")
+    if data.auto_saver_percent is not None and not (1 <= data.auto_saver_percent <= 100):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "El porcentaje del modo ahorro debe estar entre 1 y 100")
+
+    cfg = get_or_create_platform_config(db)
+    if data.notifications is not None:
+        merged = dict(cfg.email_notifications or {})
+        merged.update({k: v for k, v in data.notifications.items() if not es.CATEGORIES[k]["essential"]})
+        cfg.email_notifications = merged  # reasignar: JSONB no detecta mutaciones in situ
+    if data.daily_limit is not None:
+        cfg.email_daily_limit = data.daily_limit
+    if data.auto_saver_enabled is not None:
+        cfg.email_auto_saver_enabled = data.auto_saver_enabled
+    if data.auto_saver_percent is not None:
+        cfg.email_auto_saver_percent = data.auto_saver_percent
+    db.commit()
+    return _serialize_email_settings(db)

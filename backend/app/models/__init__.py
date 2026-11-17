@@ -23,4 +23,5 @@ from app.models.support_ticket import SupportTicket, SupportCategory, SupportTic
 from app.models.system_catalog import SystemCatalog
 from app.models.god_mode_audit import GodModeAuditLog
 from app.models.error_log import ErrorLog
+from app.models.email_log import EmailLog
 from app.models.chat import ChatConversation, ChatConversationType, ChatMessage, ChatReadState

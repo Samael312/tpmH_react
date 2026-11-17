@@ -92,14 +92,14 @@ Salida: repetir sondas (200 KB y `role: system` en Chipi → rechazados).
 **Problema.** Todo correo sale por `app/core/email.py::_send()` (32 tipos distintos, ~50 puntos de envío) sin límite, sin contador y sin forma de apagarlos. Con el plan gratuito de Resend (100/día), un día con muchas clases puede agotarla y dejar sin correo a lo esencial (restablecer contraseña, verificar email). Resend responde con error y hoy solo se escribe en el log: el correo se pierde en silencio.
 
 **Qué se hace**
-- [ ] **Interruptores en Settings** (superadmin, `/admin/settings`, pestaña «Notificaciones por email»): un interruptor por categoría, con el badge de **probabilidad de agotar la cuota** al lado y el uso de hoy («37 / 100»).
-- [ ] **Un solo punto de control:** `_send(..., category)` consulta la configuración antes de enviar. Categoría apagada -> no se envía y se anota como «omitido» (no cuenta para la cuota). Por defecto **todo encendido** (mismo comportamiento de hoy).
-- [ ] **Contador diario** (tabla `email_log`: fecha, categoría, enviado/omitido/fallido) para mostrar el uso y para el modo automático.
-- [ ] **Modo ahorro automático** (opcional, apagado por defecto): al llegar al X % de la cuota (por defecto 80 %) se pausan solas las categorías de probabilidad **Muy alta** y **Alta** hasta el día siguiente (UTC). Las **esenciales nunca se pausan**.
-- [ ] **Límite diario configurable** (`email_daily_limit`, por defecto 100) para cuando se pase a un plan de pago.
-- [ ] **Columnas nuevas** en `platform_config`: `email_notifications` (JSON `{categoría: bool}`), `email_daily_limit`, `email_auto_saver_enabled`, `email_auto_saver_percent`. Migración Alembic (la ejecuta el usuario). Endpoints: `GET/PUT /admin/email-settings` (solo superadmin; las esenciales no se pueden apagar).
-- [ ] **Aviso visible:** si hoy se omitieron o fallaron correos por cuota, banner en el panel del superadmin.
-- [ ] **Tests** (`tests/audit/test_f7_email_settings.py`, con `_send` capturado): por defecto todo se envía · categoría apagada no envía · esencial no se puede apagar (422) · el contador suma solo los enviados · modo ahorro pausa Muy alta/Alta al 80 % y no toca esenciales · cambio de día reinicia · solo superadmin · límite exacto 100/101.
+- [x] **Interruptores en Settings** (superadmin, `/admin/settings`, pestaña «Notificaciones por email»): un interruptor por categoría, con el badge de **probabilidad de agotar la cuota** al lado y el uso de hoy («37 / 100»).
+- [x] **Un solo punto de control:** `_send(..., category)` consulta la configuración antes de enviar. Categoría apagada -> no se envía y se anota como «omitido» (no cuenta para la cuota). Por defecto **todo encendido** (mismo comportamiento de hoy).
+- [x] **Contador diario** (tabla `email_log`: fecha, categoría, enviado/omitido/fallido) para mostrar el uso y para el modo automático.
+- [x] **Modo ahorro automático** (opcional, apagado por defecto): al llegar al X % de la cuota (por defecto 80 %) se pausan solas las categorías de probabilidad **Muy alta** y **Alta** hasta el día siguiente (UTC). Las **esenciales nunca se pausan**.
+- [x] **Límite diario configurable** (`email_daily_limit`, por defecto 100) para cuando se pase a un plan de pago.
+- [x] **Columnas nuevas** en `platform_config`: `email_notifications` (JSON `{categoría: bool}`), `email_daily_limit`, `email_auto_saver_enabled`, `email_auto_saver_percent`. Migración Alembic (la ejecuta el usuario). Endpoints: `GET/PUT /admin/email-settings` (solo superadmin; las esenciales no se pueden apagar).
+- [x] **Aviso visible:** si hoy se omitieron o fallaron correos por cuota, banner en el panel del superadmin.
+- [x] **Tests** (13 en `tests/audit/test_f7_email_settings.py` y 9 de Vitest en `frontend/tests/emailSettings.test.ts`; `tests/audit/test_f7_email_settings.py`, con `_send` capturado): por defecto todo se envía · categoría apagada no envía · esencial no se puede apagar (422) · el contador suma solo los enviados · modo ahorro pausa Muy alta/Alta al 80 % y no toca esenciales · cambio de día reinicia · solo superadmin · límite exacto 100/101.
 
 **Categorías y probabilidad de agotar la cuota más rápido**
 
@@ -166,7 +166,8 @@ Son **estimaciones a partir del código** (cuántos correos genera cada evento y
 1. **Neon y el scheduler (Fase 5):** el job de Meet cada 5 min mantiene Neon despierto 24/7. Opciones: subir a 15–30 min, comprobar antes con una consulta barata/caché, o limitarlo a horas útiles.
 2. **`get_student_booking_stage` escribe en un GET (Fase 5):** cancela el enrollment sin pago notificado al leer. Moverlo a un job cambia el comportamiento; dejarlo es seguro pero es una escritura en lectura.
 3. **Tope de paginación (Fase 5):** hoy 200 por defecto y 500 máximo. Decidir si basta, y si el frontend debe paginar de verdad (hoy solo recibe las primeras 200 filas).
-4. **Migraciones automáticas en el despliegue (Fase 6):** añadir `preDeployCommand = "alembic upgrade head"` en `railway.toml` o seguir ejecutándolas a mano. Antes de desplegar hay que aplicar a mano las 3 migraciones nuevas (`d1e2f3a4b5c6`, `a7b8c9d0e1f2`, `b8c9d0e1f2a3`).
+4. **Migraciones automáticas en el despliegue (Fase 6):** añadir `preDeployCommand = "alembic upgrade head"` en `railway.toml` o seguir ejecutándolas a mano. Antes de desplegar hay que aplicar a mano las migraciones nuevas (`d1e2f3a4b5c6`, `a7b8c9d0e1f2`, `b8c9d0e1f2a3` y, de la Fase 7, `e7a1b2c3d4f5`).
 5. **Migrar fuera de Railway (Fase 5):** análisis hecho en `backend/doc/RESOURCE_COSTS.md`; decidir si se migra.
 6. **Cuota de subidas por profesor y subida directa desde el navegador a Cloudinary (Fase 5).**
-7. **Fin de la transición de sesión (Fase 3b):** retirar Bearer/`?token=` y bajar el access token a 30 min cuando el frontend nuevo esté en producción.
+7. **Agrupar correos (Fase 7):** 1 correo de chat por conversación cada X min y recordatorios agrupados es lo que más reduce el consumo sin apagar nada; no se hizo. También preferencias por usuario y resumen diario.
+8. **Fin de la transición de sesión (Fase 3b):** retirar Bearer/`?token=` y bajar el access token a 30 min cuando el frontend nuevo esté en producción.

@@ -115,7 +115,30 @@ def _base_template(preheader: str, badge_html: str, heading: str, body_html: str
 </html>"""
 
 
-def _send(to_email: str, subject: str, html: str) -> bool:
+def _send(to_email: str, subject: str, html: str, category: str = "essential") -> bool:
+    """
+    Unico punto de salida de correos. Antes de enviar consulta el control de la Fase 7
+    (core/email_settings.py): categoria apagada, limite diario o modo ahorro -> se omite y se anota.
+    Si el control o el contador fallan, el correo SALE igual (nunca se pierde un correo por un fallo de conteo).
+    """
+    from app.core import email_settings
+    from app.db.base import SessionLocal
+
+    db = None
+    try:
+        db = SessionLocal()
+        send, reason = email_settings.decide(db, category)
+        if not send:
+            email_settings.record(db, category, "skipped", reason)
+            db.close()
+            logger.info(f"Email omitido ({category}: {reason}) a {to_email}: {subject}")
+            return False
+    except Exception as e:
+        logger.warning(f"Control de correos no disponible, se envia igual: {e}")
+        if db is not None:
+            db.rollback()
+
+    ok = False
     try:
         resend.Emails.send({
             "from": settings.EMAIL_FROM,
@@ -123,10 +146,19 @@ def _send(to_email: str, subject: str, html: str) -> bool:
             "subject": subject,
             "html": html,
         })
-        return True
+        ok = True
     except Exception as e:
         logger.error(f"Error enviando email a {to_email} ({subject}): {e}")
-        return False
+
+    try:
+        if db is not None:
+            email_settings.record(db, category, "sent" if ok else "failed", None if ok else "error_resend")
+    except Exception as e:
+        logger.warning(f"No se pudo anotar el correo en email_log: {e}")
+    finally:
+        if db is not None:
+            db.close()
+    return ok
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -142,7 +174,7 @@ def send_password_reset_email(to_email: str, user_name: str, reset_token: str) -
       {_cta_button("Restablecer contraseña", reset_url)}
     """
     html = _base_template("Restablece tu contraseña", _badge("Seguridad", COLOR_BLUE), "Recuperar contraseña", body)
-    return _send(to_email, f"Restablecer contraseña — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Restablecer contraseña — {PLATFORM_NAME}", html, category="essential")
 
 
 def send_verification_email(to_email: str, user_name: str, verify_token: str) -> bool:
@@ -154,7 +186,7 @@ def send_verification_email(to_email: str, user_name: str, verify_token: str) ->
       {_cta_button("Verificar mi email", verify_url)}
     """
     html = _base_template("Verifica tu email", _badge("Seguridad", COLOR_BLUE), "Verifica tu email", body)
-    return _send(to_email, f"Verifica tu email — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Verifica tu email — {PLATFORM_NAME}", html, category="essential")
 
 
 def send_username_recovery_email(to_email: str, user_name: str, username: str) -> bool:
@@ -168,7 +200,7 @@ def send_username_recovery_email(to_email: str, user_name: str, username: str) -
       <p>Si no fuiste tú, puedes ignorar este correo con total tranquilidad.</p>
     """
     html = _base_template("Recuperación de nombre de usuario", _badge("Seguridad", COLOR_BLUE), "Tu nombre de usuario 👤", body)
-    return _send(to_email, f"Recuperación de usuario — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Recuperación de usuario — {PLATFORM_NAME}", html, category="essential")
 
 
 def send_welcome_email(to_email: str, user_name: str, role: str) -> bool:
@@ -187,7 +219,7 @@ def send_welcome_email(to_email: str, user_name: str, role: str) -> bool:
       {_cta_button("Ir a la plataforma", settings.FRONTEND_URL)}
     """
     html = _base_template("¡Bienvenido!", _badge("Bienvenida", COLOR_GREEN), f"¡Bienvenido, {user_name}! 🎉", body)
-    return _send(to_email, f"¡Bienvenido a {PLATFORM_NAME}!", html)
+    return _send(to_email, f"¡Bienvenido a {PLATFORM_NAME}!", html, category="welcome")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -223,7 +255,7 @@ def send_class_booking_confirmation(
       {_cta_button("Ver mis clases", f"{settings.FRONTEND_URL}/dashboard/classes")}
     """
     html = _base_template("Tu reserva fue registrada", _badge("Reserva recibida", COLOR_AMBER), "Reserva recibida 📅", body)
-    return _send(to_email, f"Reserva recibida — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Reserva recibida — {PLATFORM_NAME}", html, category="bookings")
 
 
 def send_class_rescheduled_student_email(
@@ -240,7 +272,7 @@ def send_class_rescheduled_student_email(
       {_cta_button("Ver mis clases", f"{settings.FRONTEND_URL}/dashboard/classes")}
     """
     html = _base_template("Tu clase fue reagendada", _badge("Reagendada", COLOR_BLUE), "Clase reagendada 🔄", body)
-    return _send(to_email, f"Clase reagendada — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Clase reagendada — {PLATFORM_NAME}", html, category="cancellations")
 
 
 def send_class_reminder_email(
@@ -259,7 +291,7 @@ def send_class_reminder_email(
       {_cta_button("Ver mis clases", f"{settings.FRONTEND_URL}/dashboard/classes")}
     """
     html = _base_template(f"Tu clase es en {hours_before} horas", _badge("Recordatorio", COLOR_BLUE), "Recordatorio de clase 🔔", body)
-    return _send(to_email, f"Recordatorio: clase en {hours_before}h — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Recordatorio: clase en {hours_before}h — {PLATFORM_NAME}", html, category="class_reminders")
 
 
 def send_cohort_ended_email(
@@ -289,7 +321,7 @@ def send_cohort_ended_email(
       {_cta_button("Elegir nuevo paquete", f"{settings.FRONTEND_URL}/dashboard/schedule")}
     """
     html = _base_template("Tu grupo terminó", _badge("Grupo finalizado", COLOR_AMBER), "Tu grupo terminó 👥", body)
-    return _send(to_email, f"Tu grupo de {package_name} terminó — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Tu grupo de {package_name} terminó — {PLATFORM_NAME}", html, category="cancellations")
 
 
 def send_class_cancelled_email(
@@ -310,7 +342,7 @@ def send_class_cancelled_email(
       {_cta_button("Ir a la plataforma", settings.FRONTEND_URL)}
     """
     html = _base_template("Tu clase fue cancelada", _badge("Cancelada", COLOR_RED), "Clase cancelada ❌", body)
-    return _send(to_email, f"Clase cancelada — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Clase cancelada — {PLATFORM_NAME}", html, category="cancellations")
 
 
 def send_class_no_show_email(to_email: str, student_name: str, class_start_local: str) -> bool:
@@ -321,7 +353,7 @@ def send_class_no_show_email(to_email: str, student_name: str, class_start_local
       {_cta_button("Contactar soporte", settings.FRONTEND_URL)}
     """
     html = _base_template("Inasistencia registrada", _badge("No-show", COLOR_AMBER), "Inasistencia registrada ⚠️", body)
-    return _send(to_email, f"Inasistencia registrada — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Inasistencia registrada — {PLATFORM_NAME}", html, category="cancellations")
 
 
 def send_homework_graded_email(
@@ -337,7 +369,7 @@ def send_homework_graded_email(
       {_cta_button("Ver mis tareas", f"{settings.FRONTEND_URL}/dashboard/homework")}
     """
     html = _base_template("Tu tarea fue calificada", _badge("Tarea calificada", COLOR_GREEN), "¡Tienes una nueva calificación! ⭐", body)
-    return _send(to_email, f"Tarea calificada — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Tarea calificada — {PLATFORM_NAME}", html, category="homework_materials")
 
 
 def send_material_assigned_email(
@@ -352,7 +384,7 @@ def send_material_assigned_email(
       {_cta_button("Ver mis materiales", f"{settings.FRONTEND_URL}/dashboard/materials")}
     """
     html = _base_template("Nuevo material asignado", _badge("Nuevo material", COLOR_BLUE), "Nuevo material asignado 📚", body)
-    return _send(to_email, f"Nuevo material asignado — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Nuevo material asignado — {PLATFORM_NAME}", html, category="homework_materials")
 
 
 def send_payment_receipt_email(
@@ -371,7 +403,7 @@ def send_payment_receipt_email(
       {_detail_table(rows)}
     """
     html = _base_template("Confirmación de pago", _badge("Pago aprobado", COLOR_GREEN), "Pago confirmado ✅", body)
-    return _send(to_email, f"Pago confirmado — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Pago confirmado — {PLATFORM_NAME}", html, category="receipts")
 
 
 def send_payment_failed_email(
@@ -387,7 +419,7 @@ def send_payment_failed_email(
       {_cta_button("Reintentar pago", settings.FRONTEND_URL)}
     """
     html = _base_template("Tu pago no fue validado", _badge("Pago rechazado", COLOR_RED), "Pago rechazado", body)
-    return _send(to_email, f"Pago rechazado — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Pago rechazado — {PLATFORM_NAME}", html, category="receipts")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -412,7 +444,7 @@ def send_teacher_status_update_email(
       {_cta_button("Ir a mi perfil", f"{settings.FRONTEND_URL}/teacher/profile")}
     """
     html = _base_template("Actualización de tu perfil", _badge(label, color), "Estado de tu perfil actualizado", body)
-    return _send(to_email, f"Estado de tu perfil: {label} — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Estado de tu perfil: {label} — {PLATFORM_NAME}", html, category="teacher_status_support")
 
 
 def send_support_ticket_response_email(
@@ -425,7 +457,7 @@ def send_support_ticket_response_email(
       {_cta_button("Ver mi ticket", f"{settings.FRONTEND_URL}{portal_path}")}
     """
     html = _base_template("Respondimos tu ticket de soporte", _badge("Respondido", COLOR_GREEN), "Tu ticket de soporte fue respondido 💬", body)
-    return _send(to_email, f"Respondimos tu ticket: {subject} — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Respondimos tu ticket: {subject} — {PLATFORM_NAME}", html, category="teacher_status_support")
 
 
 def send_new_booking_teacher_email(
@@ -448,7 +480,7 @@ def send_new_booking_teacher_email(
       {_cta_button("Ver mi agenda", f"{settings.FRONTEND_URL}/teacher/dashboard")}
     """
     html = _base_template("Nueva clase reservada", _badge("Prueba" if is_trial else "Nueva reserva", COLOR_BLUE if is_trial else COLOR_AMBER), "Nueva clase reservada 📥", body)
-    return _send(to_email, f"Nueva reserva — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Nueva reserva — {PLATFORM_NAME}", html, category="bookings")
 
 
 def send_class_rescheduled_teacher_email(
@@ -465,7 +497,7 @@ def send_class_rescheduled_teacher_email(
       {_cta_button("Ver mi agenda", f"{settings.FRONTEND_URL}/teacher/dashboard")}
     """
     html = _base_template("Una clase fue reagendada", _badge("Reagendada", COLOR_BLUE), "Clase reagendada 🔄", body)
-    return _send(to_email, f"Clase reagendada — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Clase reagendada — {PLATFORM_NAME}", html, category="cancellations")
 
 
 def send_class_reminder_teacher_email(
@@ -483,7 +515,7 @@ def send_class_reminder_teacher_email(
       {_cta_button("Ver mi agenda", f"{settings.FRONTEND_URL}/teacher/dashboard")}
     """
     html = _base_template(f"Tu clase es en {hours_before} horas", _badge("Recordatorio", COLOR_BLUE), "Recordatorio de clase 🔔", body)
-    return _send(to_email, f"Recordatorio: clase en {hours_before}h — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Recordatorio: clase en {hours_before}h — {PLATFORM_NAME}", html, category="class_reminders")
 
 
 def send_class_cancelled_teacher_email(
@@ -501,7 +533,7 @@ def send_class_cancelled_teacher_email(
       {_cta_button("Ver mi agenda", f"{settings.FRONTEND_URL}/teacher/dashboard")}
     """
     html = _base_template("Una clase fue cancelada", _badge("Cancelada", COLOR_RED), "Clase cancelada ❌", body)
-    return _send(to_email, f"Clase cancelada — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Clase cancelada — {PLATFORM_NAME}", html, category="cancellations")
 
 
 def send_homework_submitted_email(
@@ -516,7 +548,7 @@ def send_homework_submitted_email(
       {_cta_button("Ir a calificar", f"{settings.FRONTEND_URL}/teacher/homework")}
     """
     html = _base_template("Nueva entrega de tarea", _badge("Nueva entrega", COLOR_BLUE), "Nueva entrega para revisar 📝", body)
-    return _send(to_email, f"Nueva entrega de tarea — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Nueva entrega de tarea — {PLATFORM_NAME}", html, category="homework_materials")
 
 
 def send_new_review_received_email(
@@ -530,7 +562,7 @@ def send_new_review_received_email(
       {_cta_button("Ver mi perfil público", f"{settings.FRONTEND_URL}/teacher/profile/preview")}
     """
     html = _base_template("Nueva reseña recibida", _badge("Nueva reseña", COLOR_PURPLE), "Nueva reseña recibida ⭐", body)
-    return _send(to_email, f"Nueva reseña recibida — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Nueva reseña recibida — {PLATFORM_NAME}", html, category="reviews")
 
 
 def send_withdrawal_requested_teacher_email(
@@ -546,7 +578,7 @@ def send_withdrawal_requested_teacher_email(
       {_cta_button("Ver mis ganancias", f"{settings.FRONTEND_URL}/teacher/wallet")}
     """
     html = _base_template("Solicitud de retiro recibida", _badge("Retiro solicitado", COLOR_BLUE), "Solicitud de retiro recibida 💸", body)
-    return _send(to_email, f"Solicitud de retiro recibida — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Solicitud de retiro recibida — {PLATFORM_NAME}", html, category="withdrawals")
 
 
 def send_withdrawal_processed_email(
@@ -566,7 +598,7 @@ def send_withdrawal_processed_email(
       {_cta_button("Ver mis ganancias", f"{settings.FRONTEND_URL}/teacher/wallet")}
     """
     html = _base_template("Retiro procesado", _badge(label, color), f"Retiro {label.lower()}", body)
-    return _send(to_email, f"Retiro {label.lower()} — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Retiro {label.lower()} — {PLATFORM_NAME}", html, category="withdrawals")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -586,7 +618,7 @@ def send_admin_new_support_ticket_email(
       {_cta_button("Ver bandeja de soporte", f"{settings.FRONTEND_URL}/admin/support")}
     """
     html = _base_template("Nuevo ticket de soporte", _badge("Pendiente", COLOR_AMBER), "Nuevo ticket de soporte 🎫", body)
-    return _send(to_email, f"Nuevo ticket de soporte: {subject} — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Nuevo ticket de soporte: {subject} — {PLATFORM_NAME}", html, category="admin_support_teachers")
 
 
 def send_admin_new_teacher_pending_email(
@@ -602,7 +634,7 @@ def send_admin_new_teacher_pending_email(
       {_cta_button("Revisar profesor", f"{settings.FRONTEND_URL}/admin/teachers")}
     """
     html = _base_template("Nuevo profesor pendiente", _badge("Pendiente de revisión", COLOR_AMBER), "Nuevo profesor pendiente 👩‍🏫", body)
-    return _send(to_email, f"Nuevo profesor pendiente — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Nuevo profesor pendiente — {PLATFORM_NAME}", html, category="admin_support_teachers")
 
 
 def send_admin_payment_pending_email(
@@ -623,7 +655,7 @@ def send_admin_payment_pending_email(
       {_cta_button("Revisar pago", f"{settings.FRONTEND_URL}/admin/payments")}
     """
     html = _base_template("Pago pendiente de revisión", _badge("Pendiente", COLOR_AMBER), "Pago pendiente de revisión 💳", body)
-    return _send(to_email, f"Pago pendiente de revisión — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Pago pendiente de revisión — {PLATFORM_NAME}", html, category="admin_payments")
 
 
 def send_admin_withdrawal_requested_email(
@@ -639,7 +671,7 @@ def send_admin_withdrawal_requested_email(
       {_cta_button("Procesar retiro", f"{settings.FRONTEND_URL}/admin/payments")}
     """
     html = _base_template("Nueva solicitud de retiro", _badge("Retiro pendiente", COLOR_AMBER), "Nueva solicitud de retiro 💸", body)
-    return _send(to_email, f"Nueva solicitud de retiro — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Nueva solicitud de retiro — {PLATFORM_NAME}", html, category="withdrawals")
 
 def send_package_expiring_email(
     to_email: str, student_name: str, package_name: str, classes_remaining: int,
@@ -656,7 +688,7 @@ def send_package_expiring_email(
       {_cta_button("Renovar paquete", f"{settings.FRONTEND_URL}/dashboard/schedule")}
     """
     html = _base_template("Tu paquete está por agotarse", _badge("Por vencer", COLOR_AMBER), "Tu paquete se está agotando ⏳", body)
-    return _send(to_email, f"Tu paquete está por agotarse — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Tu paquete está por agotarse — {PLATFORM_NAME}", html, category="package_expiring")
 
 def send_new_chat_message_teacher_email(
     to_email: str, teacher_name: str, student_name: str, message_preview: str, conversation_url: str,
@@ -669,7 +701,7 @@ def send_new_chat_message_teacher_email(
       {_cta_button("Responder", conversation_url)}
     """
     html = _base_template("Nuevo mensaje", _badge("Chat", COLOR_BLUE), "Nuevo mensaje 💬", body)
-    return _send(to_email, f"Nuevo mensaje de {student_name} — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Nuevo mensaje de {student_name} — {PLATFORM_NAME}", html, category="chat_messages")
 
 
 def send_class_confirmed_email(
@@ -686,7 +718,7 @@ def send_class_confirmed_email(
       {_cta_button("Ver mis clases", f"{settings.FRONTEND_URL}/dashboard/classes")}
     """
     html = _base_template("Tu clase fue confirmada", _badge("Confirmada", COLOR_GREEN), "Clase confirmada ✅", body)
-    return _send(to_email, f"Clase confirmada — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Clase confirmada — {PLATFORM_NAME}", html, category="bookings")
 
 
 def send_class_confirmed_teacher_email(
@@ -703,4 +735,4 @@ def send_class_confirmed_teacher_email(
       {_cta_button("Ver mi agenda", f"{settings.FRONTEND_URL}/teacher/dashboard")}
     """
     html = _base_template("Una clase fue confirmada", _badge("Confirmada", COLOR_GREEN), "Clase confirmada ✅", body)
-    return _send(to_email, f"Clase confirmada — {PLATFORM_NAME}", html)
+    return _send(to_email, f"Clase confirmada — {PLATFORM_NAME}", html, category="bookings")
