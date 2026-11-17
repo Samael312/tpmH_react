@@ -7,7 +7,8 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect, status
+from app.core.pagination import Pagination
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
@@ -152,12 +153,16 @@ def _serialize_conversation_admin(db: Session, convo: ChatConversation) -> ChatC
 
 @router.get("/conversations", response_model=list[ChatConversationResponse])
 def list_conversations(
+    response: Response,
+    page: Pagination = Depends(),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     chat_core.assert_chat_enabled(db)
     convos = chat_core.list_conversations_for_user(db, current_user)
-    return [_serialize_conversation(db, c, current_user) for c in convos]
+    response.headers["X-Total-Count"] = str(len(convos))
+    # Se serializa solo la pagina pedida (cada conversacion cuesta consultas).
+    return [_serialize_conversation(db, c, current_user) for c in convos[page.offset:page.offset + page.limit]]
 
 
 @router.get("/conversations/unread-count", response_model=UnreadCountResponse)

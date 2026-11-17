@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, logger, status, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, logger, Response, status, Query, UploadFile, File
+from app.core.pagination import Pagination, paginate
 from sqlalchemy.orm import Session, contains_eager
 from typing import List, Optional 
 from app.db.base import get_db
@@ -174,6 +175,8 @@ def update_my_teacher_profile(
 
 @router.get("/me/students")
 def get_my_students(
+    response: Response,
+    page: Pagination = Depends(),
     current_user: User = Depends(get_current_teacher),
     db: Session = Depends(get_db)
 ):
@@ -190,7 +193,10 @@ def get_my_students(
     if not student_ids:
         return []
 
-    students = db.query(StudentProfile).filter(StudentProfile.id.in_(student_ids)).all()
+    students = paginate(
+        db.query(StudentProfile).filter(StudentProfile.id.in_(student_ids)).order_by(StudentProfile.id),
+        page, response,
+    ).all()
 
     result = []
     for sp in students:
@@ -209,6 +215,8 @@ def get_my_students(
 
 @router.get("/me/students-full")
 def get_my_students_full(
+    response: Response,
+    page: Pagination = Depends(),
     current_user: User = Depends(get_current_teacher),
     db: Session = Depends(get_db),
 ):
@@ -225,7 +233,10 @@ def get_my_students_full(
     if not student_ids:
         return []
 
-    students = db.query(StudentProfile).filter(StudentProfile.id.in_(student_ids)).all()
+    students = paginate(
+        db.query(StudentProfile).filter(StudentProfile.id.in_(student_ids)).order_by(StudentProfile.id),
+        page, response,
+    ).all()
 
     result = []
     for sp in students:

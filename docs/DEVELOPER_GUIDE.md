@@ -75,7 +75,7 @@ Una función `send_*` por plantilla en `app/core/email.py` usando `_send()` + `_
 | Lógica y API sin infraestructura | `backend/tests/audit/` | SQLite; fixtures `client`, `world` (admin, profe, alumno, paquete), `db`; helpers `book`, `approve`, `ready_student`, `complete_trial`, `set_status` |
 | Bug confirmado | `@pytest.mark.xfail(strict=True, reason="AUD-xx …")` | al corregirlo pasa a XPASS → quita el marcador |
 | Integración con PostgreSQL | `backend/tests/flow/` | crea/borra datos reales; solo con rama de desarrollo |
-| Frontend | no hay | recomendado: Vitest + Testing Library, y Playwright para E2E |
+| Frontend | `npm test` (Vitest, lógica pura) y `npm run test:e2e` (Playwright, Chromium) | E2E: levanta solo el backend semilla (SQLite, `tests/audit/run_server.py`) y el frontend; en Windows exporta `E2E_PYTHON=..\venv\Scripts\python.exe`; primera vez `npx playwright install chromium` |
 
 Plantilla de test: ver `tests/audit/test_edge_cases.py` (p. ej. `test_cancel_just_outside_and_inside_12h_boundary`). Una suite completa tarda 3–6 min (bcrypt).
 

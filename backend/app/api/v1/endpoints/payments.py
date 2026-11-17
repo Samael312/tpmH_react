@@ -1385,23 +1385,28 @@ def manual_grant_payment(
 
 @router.get("/my-payments", response_model=List[PaymentResponse])
 def get_my_payments_student(
+    response: Response,
+    page: Pagination = Depends(),
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
 ):
-    return db.query(Payment).filter(
+    query = db.query(Payment).filter(
         Payment.student_id == current_user.student_profile.id
-    ).order_by(Payment.created_at.desc()).all()
+    ).order_by(Payment.created_at.desc(), Payment.id.desc())
+    return paginate(query, page, response).all()
 
 
 @router.get("/my-income")
 def get_my_income(
+    response: Response,
+    page: Pagination = Depends(),
     current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db),
 ):
-    payments = db.query(Payment).filter(
+    payments = paginate(db.query(Payment).filter(
         Payment.teacher_id == current_user.teacher_profile.id,
         Payment.status.in_(["approved", "pending_review", "rejected"]),
-    ).order_by(Payment.created_at.desc()).all()
+    ).order_by(Payment.created_at.desc(), Payment.id.desc()), page, response).all()
     return [
         {
             "id": p.id, "amount_teacher": p.amount_teacher,
@@ -1440,12 +1445,15 @@ def get_my_wallet(
 
 @router.get("/my-withdrawals", response_model=List[WithdrawalResponse])
 def get_my_withdrawals(
+    response: Response,
+    page: Pagination = Depends(),
     current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db),
 ):
-    return db.query(Withdrawal).filter(
+    query = db.query(Withdrawal).filter(
         Withdrawal.teacher_id == current_user.teacher_profile.id
-    ).order_by(Withdrawal.created_at.desc()).all()
+    ).order_by(Withdrawal.created_at.desc(), Withdrawal.id.desc())
+    return paginate(query, page, response).all()
 
 
 @router.post("/request-withdrawal", response_model=WithdrawalResponse, status_code=status.HTTP_201_CREATED)
@@ -2327,10 +2335,15 @@ def request_refund_cohort_cancelled(
 
 @router.get("/admin/withdrawals/pending")
 def get_pending_withdrawals(
+    response: Response,
+    page: Pagination = Depends(),
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db),
 ):
-    withdrawals = db.query(Withdrawal).filter(Withdrawal.status == "pending").order_by(Withdrawal.created_at.asc()).all()
+    withdrawals = paginate(
+        db.query(Withdrawal).filter(Withdrawal.status == "pending").order_by(Withdrawal.created_at.asc(), Withdrawal.id.asc()),
+        page, response,
+    ).all()
     result = []
     for w in withdrawals:
         teacher = db.query(TeacherProfile).filter(TeacherProfile.id == w.teacher_id).first()

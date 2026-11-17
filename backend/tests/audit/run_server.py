@@ -77,7 +77,10 @@ def seed():
                               password_hash=hash_password("Password123"), role=UserRole(role),
                               is_active=True, onboarding_completed=True, is_verified=True)
     admin, tu, su = mk("superadmin", "admin"), mk("teacher", "profe"), mk("student", "alumno")
-    db.add_all([admin, tu, su]); db.flush()
+    nuevo = mk("student", "nuevo")          # alumno que aun no termino el onboarding (pruebas E2E)
+    nuevo.onboarding_completed = False
+    db.add_all([admin, tu, su, nuevo]); db.flush()
+    db.add(StudentProfile(user_id=nuevo.id, user_username="nuevo", timezone="UTC"))
     tp = TeacherProfile(user_id=tu.id, user_username="profe", status=TeacherStatus.approved, timezone="UTC",
                         languages=["English"], subjects=["English"], video_url="http://v", title="Profe de prueba")
     sp = StudentProfile(user_id=su.id, user_username="alumno", timezone="UTC")
@@ -90,6 +93,11 @@ def seed():
     db.add(PaymentConfig(bank_transfer_enabled=True, paypal_enabled=False, binance_enabled=False,
                          mobile_payment_enabled=False, bank_transfer_details="Banco AUDIT 000-123"))
     db.add(PlatformConfig(is_single_tenant=False))
+    # Catalogos minimos (en produccion los crea la migracion): sin ellos los selectores del onboarding/perfil no cargan.
+    from app.models.system_catalog import SystemCatalog
+    db.add(SystemCatalog(key="spoken_languages", label="Idiomas que habla el usuario",
+                         value=["Español", "Inglés", "Portugués", "Francés"]))
+    db.add(SystemCatalog(key="languages", label="Idiomas", value=["Ingles", "Frances"]))
     db.commit(); db.close()
 
 

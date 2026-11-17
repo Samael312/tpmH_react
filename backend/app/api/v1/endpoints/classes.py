@@ -4,7 +4,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from app.core.pagination import Pagination
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 from app.core.email import (
@@ -284,6 +285,8 @@ def _send_reschedule_emails_helper(class_: Class, old_start: datetime, changed_b
 
 @router.get("/my-classes", response_model=ClassListResponse)
 def get_my_classes_student(
+    response: Response,
+    page: Pagination = Depends(),
     include_history: bool = Query(False),
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db)
@@ -323,8 +326,10 @@ def get_my_classes_student(
     )
     completed = sum(1 for c in all_classes if c.status in ("completed", "finalized"))
 
+    response.headers["X-Total-Count"] = str(len(all_classes))
     return ClassListResponse(
-        classes=_build_class_responses(all_classes, db),
+        # Los contadores son de TODAS las clases; solo se serializa la pagina pedida.
+        classes=_build_class_responses(all_classes[page.offset:page.offset + page.limit], db),
         total=len(all_classes),
         upcoming=upcoming,
         completed=completed
@@ -571,6 +576,8 @@ def book_trial_class(
 
 @router.get("/teacher/classes", response_model=ClassListResponse)
 def get_my_classes_teacher(
+    response: Response,
+    page: Pagination = Depends(),
     date: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None),
     class_type: Optional[str] = Query(None),
@@ -620,8 +627,9 @@ def get_my_classes_teacher(
     )
     completed = sum(1 for c in all_classes if c.status == "completed")
 
+    response.headers["X-Total-Count"] = str(len(all_classes))
     return ClassListResponse(
-        classes=_build_class_responses(all_classes, db),
+        classes=_build_class_responses(all_classes[page.offset:page.offset + page.limit], db),
         total=len(all_classes),
         upcoming=upcoming,
         completed=completed

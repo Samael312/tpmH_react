@@ -90,7 +90,7 @@
 
 ## lib/
 
-- `lib/api.ts` (107 líneas, referenciado en 76 archivos) — exports: —
+- `lib/api.ts` (107 líneas, referenciado en 77 archivos) — exports: —
 - `lib/auth.ts` (25 líneas, referenciado en 15 archivos) — exports: decodeToken, isTokenExpired
 - `lib/color.ts` (36 líneas, referenciado en 19 archivos) — exports: hexToRgb, shadeColor, DEFAULT_THEME_COLOR, THEME_PRESETS
 - `lib/csp.ts` (49 líneas, referenciado en 5 archivos) — exports: buildCsp — Content-Security-Policy con nonce por petición (SEC-05, paso final). La construye proxy.ts en cada respuesta de página (ver node_modules/next/dist/docs/01-app/0

@@ -3,7 +3,8 @@
 from datetime import timedelta
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from app.core.pagination import Pagination, paginate
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_teacher_or_teacher_admin, get_current_user
@@ -164,18 +165,20 @@ def create_class_correction_ticket(
 
 @router.get("/tickets/me", response_model=List[SupportTicketResponse])
 def get_my_support_tickets(
+    response: Response,
+    page: Pagination = Depends(),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Bandeja 'Mi soporte' del usuario — sus propios tickets, más recientes primero."""
     _require_student_or_teacher(current_user)
 
-    return (
+    query = (
         db.query(SupportTicket)
         .filter(SupportTicket.user_id == current_user.id)
-        .order_by(SupportTicket.created_at.desc())
-        .all()
+        .order_by(SupportTicket.created_at.desc(), SupportTicket.id.desc())
     )
+    return paginate(query, page, response).all()
 
 
 @router.get("/tickets/me/unread-count", response_model=UnreadSupportCountResponse)

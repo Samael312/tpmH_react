@@ -200,6 +200,11 @@ Las que empiezan por `_` son privadas del módulo.
 
 - `user_or_ip_key(request)` — L27: Clave de rate-limit: el usuario autenticado (claim `sub` del JWT) o, si es anonimo / el token no es valido, la IP. Asi un usuario no comparte cupo con otros detras de la misma IP (NAT, proxy) y un anonimo no puede agotar el cupo de los demas. Un token invalido o vencido cae a la IP (no se puede fals
 
+## app/core/retention.py
+
+- `purge_error_logs(db: Session, days: int=ERROR_LOG_RETENTION_DAYS)` — L19: Borra los registros de error mas viejos que `days` dias. Devuelve cuantos borro.
+- `purge_email_log(db: Session, days: int=EMAIL_LOG_RETENTION_DAYS)` — L29: Borra las filas de `email_log` mas viejas que `days` dias (el contador diario solo usa las de hoy).
+
 ## app/core/schedule_recalc.py
 
 - `_recalc_weekly_rows(rows, old_tz: str, new_tz: str)` — L40: Recalcula filas con day_of_week + start_time_utc/end_time_utc ("HH:MM"), preservando la hora local y recalculando el UTC para la nueva zona horaria. Devuelve un resumen de los cambios para notificar al usuario.
@@ -215,8 +220,9 @@ Las que empiezan por `_` son privadas del módulo.
 - `sync_all_teacher_calendars()` — L224: Job que se ejecuta cada 30 minutos, en segundo plano, sin depender de que algún profesor tenga el panel abierto.
 - `notify_low_credit_packages()` — L246: Job semanal. Revisa enrollments activos con pocas clases restantes (finitos o ilimitados con crédito prepagado) y avisa al estudiante si no se le avisó ya dentro de la ventana configurada por el superadmin (low_credit_renotify_days en PlatformConfig).
 - `purge_old_chat_messages()` — L301: Job diario. Borra mensajes de chat interno más viejos que PlatformConfig.chat_retention_days (0 = sin límite, no borra nada).
-- `start_scheduler()` — L321
-- `stop_scheduler()` — L330: Para el scheduler al apagar la aplicación
+- `purge_old_logs()` — L321: Job diario. Purga `error_logs` y `email_log` por antiguedad (core/retention.py).
+- `start_scheduler()` — L337
+- `stop_scheduler()` — L347: Para el scheduler al apagar la aplicación
 
 ## app/core/spoken_languages.py
 

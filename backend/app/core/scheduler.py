@@ -318,6 +318,22 @@ def purge_old_chat_messages():
         db.close()
 
 
+def purge_old_logs():
+    """Job diario. Purga `error_logs` y `email_log` por antiguedad (core/retention.py)."""
+    from app.core.retention import purge_error_logs, purge_email_log
+
+    db: Session = SessionLocal()
+    try:
+        errors = purge_error_logs(db)
+        emails = purge_email_log(db)
+        if errors or emails:
+            logger.info(f"Retención: {errors} error_logs y {emails} email_log purgados")
+    except Exception as e:
+        logger.error(f"Error en job de purga de logs: {e}")
+    finally:
+        db.close()
+
+
 def start_scheduler():
     scheduler.add_job(send_class_reminders, trigger=IntervalTrigger(hours=1), id="class_reminders", replace_existing=True)
     scheduler.add_job(finalize_expired_classes, trigger=IntervalTrigger(minutes=10), id="finalize_expired_classes", replace_existing=True)
@@ -325,6 +341,7 @@ def start_scheduler():
     scheduler.add_job(generate_upcoming_meet_links, trigger=IntervalTrigger(minutes=5), id="generate_meet_links", replace_existing=True)
     scheduler.add_job(notify_low_credit_packages, trigger=IntervalTrigger(days=7), id="notify_low_credit_packages", replace_existing=True)
     scheduler.add_job(purge_old_chat_messages, trigger=IntervalTrigger(hours=24), id="purge_old_chat_messages", replace_existing=True)
+    scheduler.add_job(purge_old_logs, trigger=IntervalTrigger(hours=24), id="purge_old_logs", replace_existing=True)
     scheduler.start()
 
 def stop_scheduler():

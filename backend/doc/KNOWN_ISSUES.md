@@ -50,7 +50,7 @@ doble contabilidad de créditos (`occupied` vs `classes_used`; el aviso de bajo 
 ## Corregidos en la Fase 5 (coste y rendimiento)
 - Engine principal con pool (antes `NullPool`); `finalize_past_classes` fuera de los GET de agenda; jobs del scheduler como `def` (ya no bloquean el event loop).
 - N+1 en 9 listados (`/classes/teacher/classes`, `/packages/teacher/enrollments`, `/payments/pending-review`, `/payments/history`, `/admin/support-tickets`, `/admin/teachers`, `/teachers/`): vigilados por `tests/audit/test_perf_queries.py`.
-- Paginación `limit`/`offset` + `X-Total-Count` (`app/core/pagination.py`) en 4 listados. **Pendiente:** el resto de listados y purga de `error_logs`.
+- Paginación `limit`/`offset` + `X-Total-Count` (`app/core/pagination.py`) en 4 listados y, después, en `my-payments`, `my-income`, `my-withdrawals`, `withdrawals/pending`, `support/tickets/me`, `teachers/me/students(-full)`, `chat/conversations`, `classes/my-classes`, `classes/teacher/classes` y `cohorts/teacher` (en clases y conversaciones los contadores siguen siendo del total). Un job diario (`purge_old_logs`, `app/core/retention.py`) purga `error_logs` (30 días, `ERROR_LOG_RETENTION_DAYS`) y `email_log` (60 días, `EMAIL_LOG_RETENTION_DAYS`); 0 la desactiva. **Pendiente:** `god_mode` y listados de admin; el frontend no pagina de verdad (recibe como máximo 200).
 - Subidas a Cloudinary por streaming y en hilo (`upload_file_stream`). **Pendiente:** cuota por profesor.
 
 ## Código muerto / deuda

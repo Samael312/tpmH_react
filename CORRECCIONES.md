@@ -69,7 +69,7 @@ Salida: repetir sondas (200 KB y `role: system` en Chipi → rechazados).
 - [x] **F5** (M) reglas del servidor (mínimo retiro, duraciones) leídas de la configuración (mínimo de retiro desde `/system-catalogs/business-rules`)
 - [x] **F6** (S) texto de borrar cuenta alineado con el comportamiento real
 - [x] **F9** (S) quitar `"mar12"` hardcodeado
-- [x] **F10** (L) tests de frontend (Vitest + Playwright mínimo) y script `test` (Vitest, 22 tests; falta Playwright)
+- [x] **F10** (L) tests de frontend (Vitest + Playwright mínimo) y script `test` (Vitest, 47 tests, y Playwright mínimo: `npm run test:e2e`, 7 pruebas contra el backend semilla en SQLite)
 
 ## Fase 5 — Coste y rendimiento
 
