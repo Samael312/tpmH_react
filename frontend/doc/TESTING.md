@@ -20,5 +20,8 @@ E2E en navegador (la extensión de Chrome no conectó en la auditoría): registr
 
 ## E2E con Playwright (`npm run test:e2e`)
 - `e2e/smoke.spec.ts` (8 pruebas, Chromium): portada, login (bueno y malo), ruta privada sin sesión, dashboard del alumno, idiomas con nivel (aviso, nivel obligatorio, guardado y persistencia), filtro «Habla» del directorio, onboarding de alumno nuevo y pestaña «Correos» del superadmin.
-- `playwright.config.ts` levanta el **backend semilla** (`backend/tests/audit/run_server.py`: SQLite temporal, nunca una BD real; cuentas `admin`, `profe`, `alumno`, `nuevo` con contraseña `Password123`) y el frontend (`next dev`; en CI `build` + `start`). En Windows: `E2E_PYTHON=..\venv\Scripts\python.exe`; la primera vez `npx playwright install chromium`.
-- Vitest: 68 pruebas (incluye `tests/spokenLanguages.test.ts`, `tests/emailSettings.test.ts` y `tests/pagination.test.ts`).
+- `playwright.config.ts` levanta el **backend semilla** (`backend/tests/audit/run_server.py`: SQLite temporal, nunca una BD real; cuentas `admin`, `profe`, `alumno`, `nuevo` con contraseña `Password123`) y el frontend (`next dev`; en CI `build` + `start`). En Windows: `E2E_PYTHON=venv\Scripts\python.exe` (el comando corre dentro de `backend/`); la primera vez `npx playwright install chromium`.
+- Vitest: 79 pruebas (incluye `tests/spokenLanguages.test.ts`, `tests/emailSettings.test.ts` y `tests/pagination.test.ts`).
+
+## CI (`.github/workflows/frontend.yml`)
+En cada PR que toque `frontend/`: `npm ci`, `npm run lint`, `npx tsc --noEmit`, `npm test` (Vitest) y `npm run build`. Playwright no corre en CI (necesita el backend con Python).

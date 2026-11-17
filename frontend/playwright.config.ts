@@ -9,7 +9,7 @@ import { defineConfig, devices } from "@playwright/test";
  *   npm run test:e2e
  *
  * Variables: E2E_PYTHON = interprete con las dependencias del backend (por defecto `python`;
- * en Windows suele ser `..\venv\Scripts\python.exe`).
+ * el comando corre dentro de `backend/`, asi que en Windows suele ser `venv\Scripts\python.exe`).
  */
 const python = process.env.E2E_PYTHON ?? "python";
 

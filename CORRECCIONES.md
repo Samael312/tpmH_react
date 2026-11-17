@@ -206,7 +206,20 @@ Son **estimaciones a partir del código** (cuántos correos genera cada evento y
 
 ---
 
-**Orden:** 0 → **1** → **2** → 3 y 4 en paralelo → 5 → 6 (continua) → 7 (correos; puede adelantarse: no depende de las demás) → 8 (idiomas que habla el usuario; independiente, pero toca onboarding y perfil igual que la Fase 7 toca settings) → 9 (jobs por vencimiento, correos agrupados y cuotas) → 10 (idiomas con nivel y filtro) → 11 (rendimiento sin coste).
+## Fase 12 — Revisión de flujos y mejora por tandas (sin cambios de infraestructura)
+
+**Objetivo.** Subir cada aspecto (robustez, profesionalidad, seguridad, escalabilidad, UX) con cambios pequeños. Fuera de alcance: scheduler en otro servicio, Redis y cambios de proveedor.
+
+- [x] **Bugs graves de la revisión** (`tests/audit/test_flow_review_fixes.py`): prueba gratis repetida (`finalized`/`no_show`), el alumno reagendaba clases ya pasadas sin gastar crédito, la clase en curso desaparecía de «próximas».
+- [x] **Tanda 1 — robustez:** clases `external` se quedan en `finalized`; layouts verifican el onboarding una vez por sesión; idiomas retirados del catálogo se pueden quitar; el job de Meet solo cuenta profesores con Calendar; recordatorio sin destinatario no se reintenta.
+- [x] **Tanda 2 — profesionalidad/modernidad:** `FLOWS.md` y `PAGES_AND_UX.md` al día; fuera `postcss.config.mjs` y `@tailwindcss/postcss` (config muerta de Tailwind 4: Next usa `postcss.config.js`); CI del frontend (`.github/workflows/frontend.yml`: lint, tipos, Vitest y build); ruta de `E2E_PYTHON` corregida.
+- [ ] **Tanda 3 — seguridad** (cambios que no dependan del despliegue).
+- [ ] **Tanda 4 — escalabilidad sin infraestructura** (filtros y paginación en el servidor donde hoy se carga todo).
+- [ ] **Tanda 5 — UX** (avisos de `no_show` automático y de `finalized`).
+
+---
+
+**Orden:** 0 → **1** → **2** → 3 y 4 en paralelo → 5 → 6 (continua) → 7 (correos; puede adelantarse: no depende de las demás) → 8 (idiomas que habla el usuario; independiente, pero toca onboarding y perfil igual que la Fase 7 toca settings) → 9 (jobs por vencimiento, correos agrupados y cuotas) → 10 (idiomas con nivel y filtro) → 11 (rendimiento sin coste) → 12 (revisión de flujos y tandas).
 
 ---
 
