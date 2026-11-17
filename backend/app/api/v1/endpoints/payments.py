@@ -4,9 +4,10 @@ import logging
 from datetime import timedelta, timezone
 from typing import List, Optional
 from app.core.timezone import format_local_datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from app.core.pagination import Pagination, paginate
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 import math
 from app.auth.dependencies import (
     require_verified_email,
@@ -829,6 +830,33 @@ def book_class(
 
 # ─── VALIDACIÓN POR STAFF O PROFESOR ─────────────────────────────────────────
 
+def _load_payments_with_refs(query, db: Session):
+    """
+    Ejecuta la consulta de pagos con alumno/profesor/usuarios en un JOIN y precarga en lote
+    las clases, matriculas y paquetes que el serializador consulta por fila (evita N+1).
+    Devuelve (pagos, clases_por_id, matriculas_por_id, paquetes_por_id).
+    """
+    from app.models.student import StudentProfile
+    payments = query.options(
+        joinedload(Payment.student).joinedload(StudentProfile.user),
+        joinedload(Payment.teacher).joinedload(TeacherProfile.user),
+    ).all()
+
+    class_ids = {p.class_id for p in payments if p.payment_type == "single_class" and p.class_id}
+    enr_ids = {
+        p.enrollment_id for p in payments
+        if p.enrollment_id and not (p.payment_type == "single_class" and p.class_id)
+    }
+    classes = {c.id: c for c in db.query(Class).filter(Class.id.in_(class_ids)).all()} if class_ids else {}
+    enrollments = {e.id: e for e in db.query(Enrollment).filter(Enrollment.id.in_(enr_ids)).all()} if enr_ids else {}
+    pkg_ids = {
+        pid for e in enrollments.values()
+        for pid in [e.renewal_requested_package_id or e.change_requested_package_id or e.package_id] if pid
+    }
+    packages = {pk.id: pk for pk in db.query(Package).filter(Package.id.in_(pkg_ids)).all()} if pkg_ids else {}
+    return payments, classes, enrollments, packages
+
+
 @router.get("/pending-review")
 def get_payments_pending_review(
     current_user: User = Depends(get_current_staff_or_teacher),
@@ -838,7 +866,9 @@ def get_payments_pending_review(
     if current_user.role == "teacher":
         query = query.filter(Payment.teacher_id == current_user.teacher_profile.id)
 
-    payments = query.order_by(Payment.created_at.asc()).all()
+    payments, classes_map, enrollments_map, packages_map = _load_payments_with_refs(
+        query.order_by(Payment.created_at.asc()), db
+    )
 
     result = []
     for p in payments:
@@ -866,13 +896,13 @@ def get_payments_pending_review(
         # preserva el branch por compatibilidad con filas históricas previas
         # a este cambio.
         if p.payment_type == "single_class" and p.class_id:
-            class_ = db.query(Class).filter(Class.id == p.class_id).first()
+            class_ = classes_map.get(p.class_id)
             entry["class_start_utc"] = class_.start_time_utc if class_ else None
             entry["payment_expires_at"] = class_.payment_expires_at if class_ else None
         elif p.enrollment_id:
-            enrollment = db.query(Enrollment).filter(Enrollment.id == p.enrollment_id).first()
+            enrollment = enrollments_map.get(p.enrollment_id)
             pkg_id = (enrollment.renewal_requested_package_id or enrollment.change_requested_package_id or enrollment.package_id) if enrollment else None
-            pkg = db.query(Package).filter(Package.id == pkg_id).first() if pkg_id else None
+            pkg = packages_map.get(pkg_id) if pkg_id else None
             entry["package_name"] = pkg.name if pkg else None
             entry["installment_total"] = pkg.installment_count if pkg else None
         if p.payment_type == "refund":
@@ -885,6 +915,8 @@ def get_payments_pending_review(
 
 @router.get("/history")
 def get_payments_history(
+    response: Response,
+    page: Pagination = Depends(),
     current_user: User = Depends(get_current_staff_or_teacher),
     db: Session = Depends(get_db),
 ):
@@ -896,9 +928,10 @@ def get_payments_history(
     if current_user.role == "teacher":
         query = query.filter(Payment.teacher_id == current_user.teacher_profile.id)
 
-    payments = query.order_by(
-        Payment.validated_at.desc().nullslast(), Payment.created_at.desc()
-    ).all()
+    ordered = query.order_by(Payment.validated_at.desc().nullslast(), Payment.created_at.desc())
+    payments, classes_map, enrollments_map, packages_map = _load_payments_with_refs(
+        paginate(ordered, page, response), db
+    )
 
     result = []
     for p in payments:
@@ -926,16 +959,16 @@ def get_payments_history(
             ),
         }
         if p.payment_type == "single_class" and p.class_id:
-            class_ = db.query(Class).filter(Class.id == p.class_id).first()
+            class_ = classes_map.get(p.class_id)
             entry["class_start_utc"] = class_.start_time_utc if class_ else None
         elif p.enrollment_id:
-            enrollment = db.query(Enrollment).filter(Enrollment.id == p.enrollment_id).first()
+            enrollment = enrollments_map.get(p.enrollment_id)
             pkg_id = (
                 enrollment.renewal_requested_package_id
                 or enrollment.change_requested_package_id
                 or enrollment.package_id
             ) if enrollment else None
-            pkg = db.query(Package).filter(Package.id == pkg_id).first() if pkg_id else None
+            pkg = packages_map.get(pkg_id) if pkg_id else None
             entry["package_name"] = pkg.name if pkg else None
             entry["installment_total"] = pkg.installment_count if pkg else None
         if p.payment_type == "refund":

@@ -74,7 +74,7 @@ Salida: repetir sondas (200 KB y `role: system` en Chipi → rechazados).
 ## Fase 5 — Coste y rendimiento
 
 - [x] (M) pool real en lugar de `NullPool` (`pool_pre_ping`, `pool_recycle`; `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`/`DB_POOL_RECYCLE`) · _pendiente medir en producción:_ objetivo `/users/me` < 400 ms (hoy ≈1,7 s; medir con `latency.py`)
-- [ ] (L) eager loading en N+1 y paginación en listados
+- [x] (L) eager loading en N+1 (9 listados corregidos y vigilados por `tests/audit/test_perf_queries.py`, que falla si las consultas crecen con las filas) y paginación `limit`/`offset` + `X-Total-Count` en `/payments/history`, `/admin/support-tickets`, `/admin/teachers`, `/packages/teacher/enrollments` (`app/core/pagination.py`) · _pendiente:_ paginar el resto de listados (`students-full`, `my-classes`, chat, god_mode) y purga de `error_logs`
 - [x] (M) sacar `finalize_past_classes` de los GET de agenda (hecho; solo lo hace el job de 10 min) · _no se tocó:_ la escritura de `get_student_booking_stage` (cancela el enrollment sin pago notificado; lo usan varios flujos)
 - [x] (M) jobs `async` bloqueantes → `def` (hecho) · _pendiente, decisión de negocio:_ espaciar jobs para que Neon se suspenda (el de Meet cada 5 min lo mantiene despierto)
 - [ ] (M) subidas de 100 MB por streaming a Cloudinary

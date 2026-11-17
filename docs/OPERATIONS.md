@@ -80,7 +80,7 @@ Alertas recomendadas: gasto OpenAI, compute-hours de Neon, 5xx en Railway, `need
 | Retiros pendientes no aparecen | bug AUD-12 | corregir decorador; mientras, consultar la tabla `withdrawals` |
 | Un profesor no puede agendar/cobrar | `status` ≠ `approved` | aprobar en `/admin/teachers` |
 | «Sin créditos» tras renovar | AUD-03 | ajustar `unlocked_credits`/`status` con God Mode (con motivo) |
-| Neon con muchas conexiones/latencia | `NullPool` abre una conexión por sesión | usar endpoint *pooled* y pool de SQLAlchemy |
+| Neon con muchas conexiones/latencia | el engine usa pool (`DB_POOL_SIZE`=5, `DB_MAX_OVERFLOW`=5, `DB_POOL_RECYCLE`=240) | con el endpoint *pooled* de Neon bajar `DB_POOL_SIZE`; vigilar el total de conexiones (engine principal + `chat_engine`) |
 
 ## 8. Rotación de claves
 

@@ -45,6 +45,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Total-Count"],  # paginacion: total real de los listados
 )
 
 # SEC-05 (CSRF): con sesion por cookie, una peticion que MUTA datos y trae un Origin ajeno se rechaza. SameSite=Lax ya

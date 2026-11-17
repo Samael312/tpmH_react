@@ -46,6 +46,7 @@ Cuenta de prueba sin tocar la BD real: `python -m tests.audit.run_server` (SQLit
 | `COOKIE_DOMAIN` | vacío | prod | dominio de las cookies de sesión | `.tuprofemaria.com` en producción |
 | `COOKIE_SAMESITE` | `lax` | no | SameSite de las cookies | `none` solo si front y API son de sitios distintos |
 | `ENVIRONMENT` | `development` | no | `production` oculta `/docs` y bloquea `flow_tests` | ver ⚠4 |
+| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` / `DB_POOL_RECYCLE` | no definidas (5 / 5 / 240) | no | `db/base.py`: pool del engine principal | bajar `DB_POOL_SIZE` con el endpoint *pooled* de Neon |
 | `FRONTEND_URL` | `http://localhost:3000` (antes `https://tuprofemaria.com`) | no | CORS (`main.py`), enlaces en emails | CORS permite además `http://localhost:3000` |
 | `BACKEND_URL` | `http://localhost:8000` (antes `https://api.tuprofemaria.com`) | no | enlaces absolutos | |
 | `OPENAI_API_KEY` | definida | **sí de facto** | Chipi (`gpt-4o-mini`) y TTS; sin ella la app no arranca | facturación por uso |

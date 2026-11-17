@@ -43,7 +43,7 @@ Severidad: 🔴 crítico · 🟠 alto · 🟡 medio · 🔵 bajo.
 
 ## Lógica sin ID
 doble contabilidad de créditos (`occupied` vs `classes_used`; el aviso de bajo crédito usa la segunda);
-`get_student_booking_stage` escribe en un GET; `finalize_past_classes` en cada `GET my-classes`; rama muerta en `finalize_past_classes`;
+`get_student_booking_stage` escribe en un GET; `finalize_past_classes` ya no corre en los GET (Fase 5; solo el job de 10 min); rama muerta en `finalize_past_classes`;
 `manual-grant` ilimitado = 0 créditos; `cancel_class_admin` no notifica grupales; sin idempotencia fuerte en `validate_payment`/`process_withdrawal_v2`;
 `transaction_reference` no único; DST en disponibilidad recurrente; `default_commission_rate` nunca se aplica.
 

@@ -92,7 +92,7 @@ Plantilla de test: ver `tests/audit/test_edge_cases.py` (p. ej. `test_cancel_jus
 1. `payments.py:2116` `get_pending_withdrawals` sin decorador (404).
 2. `can_book_slot` no valida disponibilidad del profesor ni bloquea `pending_trial`/`group` (AUD-01/02).
 3. El enrollment se reutiliza al renovar; las clases históricas siguen contando (AUD-03).
-4. `finalize_past_classes` se ejecuta en lecturas (`GET my-classes`) y escribe en BD.
+4. `finalize_past_classes` ya no se ejecuta en lecturas: solo el job de 10 min (Fase 5).
 5. `get_student_booking_stage` también escribe en un `GET`.
 6. `load_dotenv(override=True)` en `db/base.py`.
 7. `requirements.txt` está en UTF-16 y contiene paquetes ajenos (`opencode-*`).

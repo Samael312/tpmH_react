@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Response, status, Query
+from app.core.pagination import Pagination, paginate
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.core.phone import normalize_phone
 from sqlalchemy import func
 from typing import List, Optional
@@ -206,6 +207,8 @@ def get_platform_stats(
     response_model=List[TeacherAdminResponse]
 )
 def list_all_teachers(
+    response: Response,
+    page: Pagination = Depends(),
     status_filter: Optional[str] = Query(None),
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db)
@@ -226,7 +229,26 @@ def list_all_teachers(
                 detail=f"Estado inválido: {status_filter}"
             )
 
-    teachers = query.all()
+    teachers = paginate(query.order_by(TeacherProfile.id), page, response).options(joinedload(TeacherProfile.user)).all()
+
+    # Metricas en lote (antes: 3 consultas por profesor).
+    teacher_ids = [t.id for t in teachers]
+    classes_by_teacher: dict[int, int] = {}
+    students_by_teacher: dict[int, int] = {}
+    wallet_by_teacher: dict[int, float] = {}
+    if teacher_ids:
+        classes_by_teacher = dict(
+            db.query(Class.teacher_id, func.count(Class.id))
+            .filter(Class.teacher_id.in_(teacher_ids)).group_by(Class.teacher_id).all()
+        )
+        students_by_teacher = dict(
+            db.query(Enrollment.teacher_id, func.count(func.distinct(Enrollment.student_id)))
+            .filter(Enrollment.teacher_id.in_(teacher_ids)).group_by(Enrollment.teacher_id).all()
+        )
+        wallet_by_teacher = dict(
+            db.query(TeacherWallet.teacher_id, TeacherWallet.available_balance)
+            .filter(TeacherWallet.teacher_id.in_(teacher_ids)).all()
+        )
 
     # Profesores con al menos una apelación "pending" — para el indicador
     # en la pestaña "Rechazados" del admin.
@@ -239,13 +261,8 @@ def list_all_teachers(
     result = []
 
     for teacher in teachers:
-        total_classes = db.query(Class).filter(
-            Class.teacher_id == teacher.id
-        ).count()
-
-        total_students = db.query(Enrollment).filter(
-            Enrollment.teacher_id == teacher.id
-        ).distinct(Enrollment.student_id).count()
+        total_classes = classes_by_teacher.get(teacher.id, 0)
+        total_students = students_by_teacher.get(teacher.id, 0)
 
         result.append(TeacherAdminResponse(
             id=teacher.id,
@@ -256,7 +273,7 @@ def list_all_teachers(
             email=teacher.user.email,
             status=teacher.status,
             commission_rate=teacher.commission_rate,
-            balance=_get_teacher_wallet_balance(teacher.id, db),
+            balance=wallet_by_teacher.get(teacher.id, 0.0),
             total_classes=total_classes,
             total_students=total_students,
             created_at=teacher.created_at,
@@ -580,19 +597,21 @@ def resolve_appeal(
     response_model=List[SupportTicketWithUserResponse],
 )
 def list_support_tickets(
+    response: Response,
+    page: Pagination = Depends(),
     status_filter: Optional[str] = Query(None, description="pending | answered"),
     category_filter: Optional[str] = Query(None, description="bug | error | question | other"),
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db),
 ):
     """Bandeja global de tickets de soporte, filtrable por estado y categoría."""
-    query = db.query(SupportTicket)
+    query = db.query(SupportTicket).options(joinedload(SupportTicket.user))
     if status_filter:
         query = query.filter(SupportTicket.status == status_filter)
     if category_filter:
         query = query.filter(SupportTicket.category == category_filter)
 
-    tickets = query.order_by(SupportTicket.created_at.desc()).all()
+    tickets = paginate(query.order_by(SupportTicket.created_at.desc()), page, response).all()
 
     result = []
     for t in tickets:

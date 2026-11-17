@@ -1,7 +1,8 @@
 # app/routers/packages.py
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Response, status, Query
+from app.core.pagination import Pagination, paginate
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import timedelta
 
@@ -19,6 +20,7 @@ from app.api.v1.endpoints.public import invalidate_landing_cache
 from app.models.user import User
 from app.models.package import Package, Enrollment, EnrollmentStatus
 from app.models.teacher import TeacherProfile
+from app.models.student import StudentProfile
 from app.models.payment import Payment
 from app.schemas.packages import (
     PackageCreate,
@@ -197,6 +199,8 @@ def deactivate_package(
 
 @router.get("/teacher/enrollments", response_model=List[EnrollmentComplianceResponse])
 def get_teacher_enrollments_overview(
+    response: Response,
+    page: Pagination = Depends(),
     current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db)
 ):
@@ -208,13 +212,31 @@ def get_teacher_enrollments_overview(
     teacher_id = current_user.teacher_profile.id
     min_cancel_hours = get_business_rules(db)["min_cancel_hours"]
 
-    enrollments = db.query(Enrollment).filter(
+    enrollments = db.query(Enrollment).options(
+        joinedload(Enrollment.package),
+        joinedload(Enrollment.student).joinedload(StudentProfile.user),
+    ).filter(
         Enrollment.teacher_id == teacher_id
-    ).order_by(Enrollment.created_at.desc()).all()
+    ).order_by(Enrollment.created_at.desc())
+    enrollments = paginate(enrollments, page, response).all()
+
+    # Precarga en lote (evita N+1): clases por matricula y paquetes de renovacion/cambio.
+    classes_by_enrollment: dict[int, list] = {}
+    if enrollments:
+        for c in db.query(Class).filter(Class.enrollment_id.in_([e.id for e in enrollments])).all():
+            classes_by_enrollment.setdefault(c.enrollment_id, []).append(c)
+    requested_ids = {
+        pid for e in enrollments
+        for pid in (e.renewal_requested_package_id, e.change_requested_package_id) if pid
+    }
+    requested_pkgs = (
+        {pk.id: pk for pk in db.query(Package).filter(Package.id.in_(requested_ids)).all()}
+        if requested_ids else {}
+    )
 
     result = []
     for e in enrollments:
-        classes = db.query(Class).filter(Class.enrollment_id == e.id).all()
+        classes = classes_by_enrollment.get(e.id, [])
 
         # BUG-02 fix: "finalized" es un estado transitorio (le da margen al
         # profesor para resolver la clase) y no debe contar como completada.
@@ -240,12 +262,12 @@ def get_teacher_enrollments_overview(
 
         requested_pkg_name = None
         if e.renewal_requested_package_id:
-            rp = db.query(Package).filter(Package.id == e.renewal_requested_package_id).first()
+            rp = requested_pkgs.get(e.renewal_requested_package_id)
             requested_pkg_name = rp.name if rp else None
 
         change_pkg_name = None
         if e.change_requested_package_id:
-            cp = db.query(Package).filter(Package.id == e.change_requested_package_id).first()
+            cp = requested_pkgs.get(e.change_requested_package_id)
             change_pkg_name = cp.name if cp else None
 
         result.append(EnrollmentComplianceResponse(

@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.core.email import (
     send_class_cancelled_email, 
     send_class_cancelled_teacher_email,
@@ -120,8 +120,12 @@ def _build_class_responses(classes: list[Class], db: Session) -> list[ClassRespo
     student_ids = {c.student_id for c in classes if c.student_id is not None}
     group_class_ids = [c.id for c in classes if c.class_type == "group"]
 
-    teachers = db.query(TeacherProfile).filter(TeacherProfile.id.in_(teacher_ids)).all()
-    students = db.query(StudentProfile).filter(StudentProfile.id.in_(student_ids)).all()
+    teachers = db.query(TeacherProfile).options(joinedload(TeacherProfile.user)).filter(
+        TeacherProfile.id.in_(teacher_ids)
+    ).all()
+    students = db.query(StudentProfile).options(joinedload(StudentProfile.user)).filter(
+        StudentProfile.id.in_(student_ids)
+    ).all()
     teacher_map = {t.id: t for t in teachers}
     student_map = {s.id: s for s in students}
 

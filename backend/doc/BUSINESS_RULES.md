@@ -50,7 +50,7 @@ Un slot cancelado se puede volver a reservar. Reagendar al mismo horario se perm
 - `classes_used` (Enrollment) sube con `completed` y `no_show`; pasar de `completed` a `confirmed` lo baja.
 - **Créditos disponibles = `unlocked_credits` − clases no canceladas del enrollment** (`occupied`); se "ocupa" al **agendar**, no al completar. Agendar la 5ª de 4 -> 400.
 - Completar: permitido hasta 72 h después del fin; **también clases futuras** (AUD-04).
-- `finalize_past_classes`: `confirmed` pasada -> `finalized` (no cuenta como completada hasta que el profesor la marque); no confirmada pasada -> `no_show`. Corre por job cada 10 min y en cada `GET my-classes`.
+- `finalize_past_classes`: `confirmed` pasada -> `finalized` (no cuenta como completada hasta que el profesor la marque); no confirmada pasada -> `no_show`. Corre solo por el job cada 10 min (Fase 5: ya no en `GET my-classes`; una clase terminada puede tardar hasta 10 min en reflejarse).
 - `StudentProfile.total_completed_classes` (contador de por vida) se sincroniza con `sync_student_lifetime_class_counter`.
 
 ## Paquetes y créditos

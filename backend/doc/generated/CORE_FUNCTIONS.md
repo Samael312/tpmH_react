@@ -168,6 +168,11 @@ Las que empiezan por `_` son privadas del módulo.
 - `create_notification(db: Session, type: str, title: str, message: Optional[str]=None, related_teacher_id: Optional[int]=None, related_support_ticket_id: Optional)` — L6: Crea una notificación persistente para el panel de staff. No hace commit — el caller decide cuándo confirmar la transacción (normalmente junto con el resto de cambios de la operación).
 - `get_unread_count(db: Session, recipient_role: str='staff')` — L32
 
+## app/core/pagination.py
+
+- `class Pagination()` — L12
+- `paginate(query, page: Pagination, response: Response)` — L22: Aplica offset/limit a una consulta ya ordenada y anota el total en `X-Total-Count`.
+
 ## app/core/phone.py
 
 - `normalize_phone(raw: str | None)` — L4: Normaliza un número de teléfono al formato canónico "+<código> <número>", ej. "+34 642185633".
@@ -191,12 +196,12 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/scheduler.py
 
-- `async finalize_expired_classes()` — L25: Job que se ejecuta cada 10 minutos. Marca como 'finalized' las clases confirmadas cuyo horario ya pasó.
-- `async send_class_reminders()` — L40: Job que se ejecuta cada hora. Busca clases confirmadas que empiezan en ~24h y envía el recordatorio si aún no se envió.
-- `async generate_upcoming_meet_links()` — L161: Job que se ejecuta cada 5 minutos. Genera automáticamente el link de videollamada (Google Meet, vía el Calendar del profesor) para las clases confirmadas que empiezan dentro de la ventana configurada por el superadmin (meet_link_autogen_minutes en PlatformConfig, default 30 min) y todavía NO tienen 
-- `async sync_all_teacher_calendars()` — L224: Job que se ejecuta cada 30 minutos, en segundo plano, sin depender de que algún profesor tenga el panel abierto.
-- `async notify_low_credit_packages()` — L246: Job semanal. Revisa enrollments activos con pocas clases restantes (finitos o ilimitados con crédito prepagado) y avisa al estudiante si no se le avisó ya dentro de la ventana configurada por el superadmin (low_credit_renotify_days en PlatformConfig).
-- `async purge_old_chat_messages()` — L301: Job diario. Borra mensajes de chat interno más viejos que PlatformConfig.chat_retention_days (0 = sin límite, no borra nada).
+- `finalize_expired_classes()` — L25: Job que se ejecuta cada 10 minutos. Marca como 'finalized' las clases confirmadas cuyo horario ya pasó.
+- `send_class_reminders()` — L40: Job que se ejecuta cada hora. Busca clases confirmadas que empiezan en ~24h y envía el recordatorio si aún no se envió.
+- `generate_upcoming_meet_links()` — L161: Job que se ejecuta cada 5 minutos. Genera automáticamente el link de videollamada (Google Meet, vía el Calendar del profesor) para las clases confirmadas que empiezan dentro de la ventana configurada por el superadmin (meet_link_autogen_minutes en PlatformConfig, default 30 min) y todavía NO tienen 
+- `sync_all_teacher_calendars()` — L224: Job que se ejecuta cada 30 minutos, en segundo plano, sin depender de que algún profesor tenga el panel abierto.
+- `notify_low_credit_packages()` — L246: Job semanal. Revisa enrollments activos con pocas clases restantes (finitos o ilimitados con crédito prepagado) y avisa al estudiante si no se le avisó ya dentro de la ventana configurada por el superadmin (low_credit_renotify_days en PlatformConfig).
+- `purge_old_chat_messages()` — L301: Job diario. Borra mensajes de chat interno más viejos que PlatformConfig.chat_retention_days (0 = sin límite, no borra nada).
 - `start_scheduler()` — L321
 - `stop_scheduler()` — L330: Para el scheduler al apagar la aplicación
 
@@ -306,5 +311,5 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/db/base.py
 
-- `class Base()` — L43
-- `get_db()` — L47
+- `class Base()` — L49
+- `get_db()` — L53

@@ -50,16 +50,16 @@ Total de rutas: **217**
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
 | GET | `/teachers/` | — |  | `list_approved_teachers` (app/api/v1/endpoints/teachers.py:43) | Lista profesores aprobados. Filtrable por materia e idioma. Endpoint público. Excluye cuentas fijas de la suite de tests (is_test_account=True) — no deben aparecer en el marketplace real. |
-| POST | `/teachers/me/appeal` | get_current_teacher, get_current_user |  | `submit_appeal` (app/api/v1/endpoints/teachers.py:417) | El profesor apela un rechazo. Máximo 2 apelaciones por ciclo de rechazo. Al agotar las 2, debe subir un nuevo video (POST /teachers/me/video) para reiniciar el ciclo — no se pueden presentar más apelaciones. |
-| GET | `/teachers/me/appeals` | get_current_teacher, get_current_user |  | `get_my_appeals` (app/api/v1/endpoints/teachers.py:475) |  |
-| PATCH | `/teachers/me/feedback-seen` | get_current_teacher, get_current_user |  | `mark_rejection_feedback_seen` (app/api/v1/endpoints/teachers.py:403) | El profesor marcó como visto el banner de retroalimentación de rechazo. |
-| GET | `/teachers/me/profile` | get_current_teacher, get_current_user |  | `get_my_teacher_profile` (app/api/v1/endpoints/teachers.py:106) | Devuelve el perfil completo del profesor autenticado |
-| PATCH | `/teachers/me/profile` | get_current_teacher, get_current_user |  | `update_my_teacher_profile` (app/api/v1/endpoints/teachers.py:121) | Actualiza el perfil del profesor autenticado. Si cambia la zona horaria, se recalcula la disponibilidad semanal y las excepciones puntuales para que la hora LOCAL configurada por el profesor se preserve (ej. "06:00-08:00" en Sydney sigue siendo "06:00-08:00" al pasar a Bogotá) — lo único que cambia  |
-| GET | `/teachers/me/students` | get_current_teacher, get_current_user |  | `get_my_students` (app/api/v1/endpoints/teachers.py:171) | Lista los estudiantes vinculados al profesor autenticado (teacher_profiles.students). La usan los modales de asignar material/tareas para buscar solo entre sus propios estudiantes. |
-| GET | `/teachers/me/students-full` | get_current_teacher, get_current_user |  | `get_my_students_full` (app/api/v1/endpoints/teachers.py:206) | Devuelve la info completa de los estudiantes vinculados al profesor: datos de contacto, progreso de paquetes (enrollments) y materiales asignados. Pensado para la página de gestión de Estudiantes. |
-| DELETE | `/teachers/me/video` | get_current_teacher, get_current_user |  | `delete_teacher_video` (app/api/v1/endpoints/teachers.py:374) | Elimina el video de presentación del profesor. |
-| POST | `/teachers/me/video` | get_current_teacher, get_current_user |  | `upload_teacher_video` (app/api/v1/endpoints/teachers.py:298) | Sube (o reemplaza) el video de presentación del profesor. Es un requisito obligatorio para que el superadmin pueda aprobar el perfil. |
-| GET | `/teachers/{username}` | — |  | `get_teacher_profile` (app/api/v1/endpoints/teachers.py:81) | Perfil público de un profesor específico. Endpoint público — no requiere autenticación. |
+| POST | `/teachers/me/appeal` | get_current_teacher, get_current_user |  | `submit_appeal` (app/api/v1/endpoints/teachers.py:420) | El profesor apela un rechazo. Máximo 2 apelaciones por ciclo de rechazo. Al agotar las 2, debe subir un nuevo video (POST /teachers/me/video) para reiniciar el ciclo — no se pueden presentar más apelaciones. |
+| GET | `/teachers/me/appeals` | get_current_teacher, get_current_user |  | `get_my_appeals` (app/api/v1/endpoints/teachers.py:478) |  |
+| PATCH | `/teachers/me/feedback-seen` | get_current_teacher, get_current_user |  | `mark_rejection_feedback_seen` (app/api/v1/endpoints/teachers.py:406) | El profesor marcó como visto el banner de retroalimentación de rechazo. |
+| GET | `/teachers/me/profile` | get_current_teacher, get_current_user |  | `get_my_teacher_profile` (app/api/v1/endpoints/teachers.py:109) | Devuelve el perfil completo del profesor autenticado |
+| PATCH | `/teachers/me/profile` | get_current_teacher, get_current_user |  | `update_my_teacher_profile` (app/api/v1/endpoints/teachers.py:124) | Actualiza el perfil del profesor autenticado. Si cambia la zona horaria, se recalcula la disponibilidad semanal y las excepciones puntuales para que la hora LOCAL configurada por el profesor se preserve (ej. "06:00-08:00" en Sydney sigue siendo "06:00-08:00" al pasar a Bogotá) — lo único que cambia  |
+| GET | `/teachers/me/students` | get_current_teacher, get_current_user |  | `get_my_students` (app/api/v1/endpoints/teachers.py:174) | Lista los estudiantes vinculados al profesor autenticado (teacher_profiles.students). La usan los modales de asignar material/tareas para buscar solo entre sus propios estudiantes. |
+| GET | `/teachers/me/students-full` | get_current_teacher, get_current_user |  | `get_my_students_full` (app/api/v1/endpoints/teachers.py:209) | Devuelve la info completa de los estudiantes vinculados al profesor: datos de contacto, progreso de paquetes (enrollments) y materiales asignados. Pensado para la página de gestión de Estudiantes. |
+| DELETE | `/teachers/me/video` | get_current_teacher, get_current_user |  | `delete_teacher_video` (app/api/v1/endpoints/teachers.py:377) | Elimina el video de presentación del profesor. |
+| POST | `/teachers/me/video` | get_current_teacher, get_current_user |  | `upload_teacher_video` (app/api/v1/endpoints/teachers.py:301) | Sube (o reemplaza) el video de presentación del profesor. Es un requisito obligatorio para que el superadmin pueda aprobar el perfil. |
+| GET | `/teachers/{username}` | — |  | `get_teacher_profile` (app/api/v1/endpoints/teachers.py:84) | Perfil público de un profesor específico. Endpoint público — no requiere autenticación. |
 
 ## Disponibilidad
 
@@ -78,18 +78,18 @@ Total de rutas: **217**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| DELETE | `/classes/admin/{class_id}` | get_current_staff, get_current_user |  | `cancel_class_admin` (app/api/v1/endpoints/classes.py:900) | El staff/admin cancela una clase. El crédito SIEMPRE se reembolsa, igual que en la cancelación del profesor. |
-| PATCH | `/classes/admin/{class_id}/reschedule` | get_current_staff, get_current_user |  | `reschedule_class_admin` (app/api/v1/endpoints/classes.py:852) |  |
-| GET | `/classes/my-classes` | get_current_student, get_current_user |  | `get_my_classes_student` (app/api/v1/endpoints/classes.py:282) |  |
-| GET | `/classes/teacher/classes` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_classes_teacher` (app/api/v1/endpoints/classes.py:570) |  |
-| DELETE | `/classes/teacher/{class_id}` | get_current_teacher_or_teacher_admin, get_current_user |  | `cancel_class_teacher` (app/api/v1/endpoints/classes.py:741) | El profesor cancela una clase. El crédito SIEMPRE se le reembolsa al estudiante, sin importar la antelación — la penalización de 12h es exclusivamente para cancelaciones hechas por el propio estudiante. |
-| PATCH | `/classes/teacher/{class_id}/reschedule` | get_current_teacher_or_teacher_admin, get_current_user |  | `reschedule_class_teacher` (app/api/v1/endpoints/classes.py:798) |  |
-| POST | `/classes/trial` | get_current_staff, get_current_user |  | `book_trial_class` (app/api/v1/endpoints/classes.py:487) |  |
-| DELETE | `/classes/{class_id}` | get_current_student, get_current_user |  | `cancel_class_student` (app/api/v1/endpoints/classes.py:388) |  |
-| DELETE | `/classes/{class_id}/leave` | get_current_student, get_current_user |  | `leave_group_class` (app/api/v1/endpoints/classes.py:332) | El estudiante cancela SU participación en una sesión grupal puntual (Class con class_type='group'). No cancela la clase para los demás inscritos — solo libera su propio cupo (vía ClassParticipant), igual que hace release_cohort_seat al migrar de grupal a individual. |
-| PATCH | `/classes/{class_id}/meet-link` | get_current_teacher_or_teacher_admin, get_current_user |  | `update_meet_link` (app/api/v1/endpoints/classes.py:710) | El profesor carga/edita manualmente el link de la videollamada. Campo 100% opcional: no bloquea ninguna otra acción sobre la clase. Solo se permite mientras la clase está 'confirmed' (mismo estado en el que ClassResponse se lo muestra al estudiante). |
-| PATCH | `/classes/{class_id}/reschedule` | get_current_student, get_current_user |  | `reschedule_class_student` (app/api/v1/endpoints/classes.py:421) |  |
-| PATCH | `/classes/{class_id}/status` | get_current_teacher_or_teacher_admin, get_current_user |  | `update_class_status` (app/api/v1/endpoints/classes.py:630) |  |
+| DELETE | `/classes/admin/{class_id}` | get_current_staff, get_current_user |  | `cancel_class_admin` (app/api/v1/endpoints/classes.py:901) | El staff/admin cancela una clase. El crédito SIEMPRE se reembolsa, igual que en la cancelación del profesor. |
+| PATCH | `/classes/admin/{class_id}/reschedule` | get_current_staff, get_current_user |  | `reschedule_class_admin` (app/api/v1/endpoints/classes.py:853) |  |
+| GET | `/classes/my-classes` | get_current_student, get_current_user |  | `get_my_classes_student` (app/api/v1/endpoints/classes.py:285) |  |
+| GET | `/classes/teacher/classes` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_classes_teacher` (app/api/v1/endpoints/classes.py:572) |  |
+| DELETE | `/classes/teacher/{class_id}` | get_current_teacher_or_teacher_admin, get_current_user |  | `cancel_class_teacher` (app/api/v1/endpoints/classes.py:742) | El profesor cancela una clase. El crédito SIEMPRE se le reembolsa al estudiante, sin importar la antelación — la penalización de 12h es exclusivamente para cancelaciones hechas por el propio estudiante. |
+| PATCH | `/classes/teacher/{class_id}/reschedule` | get_current_teacher_or_teacher_admin, get_current_user |  | `reschedule_class_teacher` (app/api/v1/endpoints/classes.py:799) |  |
+| POST | `/classes/trial` | get_current_staff, get_current_user |  | `book_trial_class` (app/api/v1/endpoints/classes.py:489) |  |
+| DELETE | `/classes/{class_id}` | get_current_student, get_current_user |  | `cancel_class_student` (app/api/v1/endpoints/classes.py:390) |  |
+| DELETE | `/classes/{class_id}/leave` | get_current_student, get_current_user |  | `leave_group_class` (app/api/v1/endpoints/classes.py:334) | El estudiante cancela SU participación en una sesión grupal puntual (Class con class_type='group'). No cancela la clase para los demás inscritos — solo libera su propio cupo (vía ClassParticipant), igual que hace release_cohort_seat al migrar de grupal a individual. |
+| PATCH | `/classes/{class_id}/meet-link` | get_current_teacher_or_teacher_admin, get_current_user |  | `update_meet_link` (app/api/v1/endpoints/classes.py:711) | El profesor carga/edita manualmente el link de la videollamada. Campo 100% opcional: no bloquea ninguna otra acción sobre la clase. Solo se permite mientras la clase está 'confirmed' (mismo estado en el que ClassResponse se lo muestra al estudiante). |
+| PATCH | `/classes/{class_id}/reschedule` | get_current_student, get_current_user |  | `reschedule_class_student` (app/api/v1/endpoints/classes.py:423) |  |
+| PATCH | `/classes/{class_id}/status` | get_current_teacher_or_teacher_admin, get_current_user |  | `update_class_status` (app/api/v1/endpoints/classes.py:631) |  |
 
 ## Materiales
 
@@ -122,28 +122,28 @@ Total de rutas: **217**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| GET | `/admin/appeals` | get_current_staff, get_current_user |  | `list_appeals` (app/api/v1/endpoints/admin.py:472) | Bandeja global de apelaciones — usada en Visión Global y en la pestaña Rechazados de Profesores. Por defecto muestra todas; filtrable por status. |
-| PATCH | `/admin/appeals/{appeal_id}/resolve` | get_current_staff, get_current_user |  | `resolve_appeal` (app/api/v1/endpoints/admin.py:513) | Resuelve una apelación pendiente. - approve: el profesor vuelve a "approved" (perfil público). - reject: incrementa el conteo de apelaciones agotadas. Al llegar a 2,   el perfil permanece "rejected" pero se marca appeal_exhausted=True,   lo que habilita en el dashboard del profesor la opción de subi |
-| GET | `/admin/notifications` | get_current_staff, get_current_user |  | `list_notifications` (app/api/v1/endpoints/admin.py:720) |  |
-| POST | `/admin/notifications/mark-all-read` | get_current_staff, get_current_user |  | `mark_all_notifications_read` (app/api/v1/endpoints/admin.py:755) |  |
-| GET | `/admin/notifications/unread-count` | get_current_staff, get_current_user |  | `unread_notification_count` (app/api/v1/endpoints/admin.py:733) |  |
-| PATCH | `/admin/notifications/{notification_id}/read` | get_current_staff, get_current_user |  | `mark_notification_read` (app/api/v1/endpoints/admin.py:741) |  |
-| GET | `/admin/platform-config` | — |  | `get_platform_config` (app/api/v1/endpoints/admin.py:1027) | Configuración pública de la plataforma. Endpoint público — el frontend lo consulta al cargar. |
-| PATCH | `/admin/platform-config` | get_current_staff, get_current_user |  | `update_platform_config` (app/api/v1/endpoints/admin.py:1037) | El superadmin (o teacher_admin, como staff) configura el modo de la plataforma |
-| GET | `/admin/stats` | get_current_staff, get_current_user |  | `get_platform_stats` (app/api/v1/endpoints/admin.py:99) | KPIs globales de la plataforma. Todas las métricas en una sola llamada para el dashboard. |
-| POST | `/admin/students/{user_id}/ban` | get_current_staff, get_current_user |  | `ban_student` (app/api/v1/endpoints/admin.py:876) | Banea a un estudiante: lo desactiva, cancela sus enrollments activos y sus clases futuras/pendientes, y deja registrado el motivo. El email queda "quemado" por el unique constraint existente en users.email, así que no puede volver a registrarse con el mismo correo. |
-| GET | `/admin/students/{user_id}/detail` | get_current_staff, get_current_user |  | `get_student_detail` (app/api/v1/endpoints/admin.py:949) | Detalle completo de un estudiante para el desplegable en /admin/students: enrollments (paquetes) y materiales asignados, con nombre del profesor y del recurso. Usado bajo demanda al expandir la card. |
-| POST | `/admin/students/{user_id}/unban` | get_current_staff, get_current_user |  | `unban_student` (app/api/v1/endpoints/admin.py:926) | Revierte el baneo. No reactiva enrollments/clases canceladas automáticamente. |
-| GET | `/admin/support-tickets` | get_current_staff, get_current_user |  | `list_support_tickets` (app/api/v1/endpoints/admin.py:578) | Bandeja global de tickets de soporte, filtrable por estado y categoría. |
-| PATCH | `/admin/support-tickets/{ticket_id}/resolve` | get_current_staff, get_current_user |  | `resolve_support_ticket` (app/api/v1/endpoints/admin.py:645) | Responde y cierra un ticket pendiente. Notifica al usuario por email y reactiva el aviso in-app (user_notified_seen=False) en su bandeja. |
-| GET | `/admin/teachers` | get_current_staff, get_current_user |  | `list_all_teachers` (app/api/v1/endpoints/admin.py:204) | Lista todos los profesores con sus métricas. Filtrable por estado: pending, approved, rejected, suspended. |
-| GET | `/admin/teachers/{teacher_id}` | get_current_staff, get_current_user |  | `get_teacher_detail` (app/api/v1/endpoints/admin.py:277) | Detalle de un profesor para el modal de revisión: incluye video, motivo de rechazo y estado de apelaciones. Usado por /admin/teachers al abrir el modal de detalle. |
-| GET | `/admin/teachers/{teacher_id}/appeals` | get_current_staff, get_current_user |  | `get_teacher_appeals` (app/api/v1/endpoints/admin.py:327) | Historial de apelaciones de un profesor, para el modal de detalle. |
-| PATCH | `/admin/teachers/{teacher_id}/commission` | get_current_staff, get_current_user |  | `update_teacher_commission` (app/api/v1/endpoints/admin.py:420) | Actualiza la comisión de un profesor específico. Permite personalizar la comisión por profesor. |
-| PATCH | `/admin/teachers/{teacher_id}/status` | get_current_staff, get_current_user |  | `update_teacher_status` (app/api/v1/endpoints/admin.py:342) | Aprueba, rechaza o suspende un profesor. Es el flujo principal de onboarding de nuevos profesores. |
-| GET | `/admin/users` | get_current_staff, get_current_user |  | `list_all_users` (app/api/v1/endpoints/admin.py:770) | Lista todos los usuarios con filtros y paginación. Por defecto NO incluye baneados en /admin/students — ese listado usa is_banned=False explícitamente desde el frontend; este endpoint general deja el filtro abierto para la vista separada de baneados. |
-| PATCH | `/admin/users/{user_id}` | get_current_user |  | `admin_update_user` (app/api/v1/endpoints/admin.py:1151) |  |
-| PATCH | `/admin/users/{user_id}/status` | get_current_staff, get_current_user |  | `update_user_status` (app/api/v1/endpoints/admin.py:829) | Activa o desactiva un usuario (distinto de banear). No se puede desactivar a sí mismo ni a otro superadmin. |
+| GET | `/admin/appeals` | get_current_staff, get_current_user |  | `list_appeals` (app/api/v1/endpoints/admin.py:489) | Bandeja global de apelaciones — usada en Visión Global y en la pestaña Rechazados de Profesores. Por defecto muestra todas; filtrable por status. |
+| PATCH | `/admin/appeals/{appeal_id}/resolve` | get_current_staff, get_current_user |  | `resolve_appeal` (app/api/v1/endpoints/admin.py:530) | Resuelve una apelación pendiente. - approve: el profesor vuelve a "approved" (perfil público). - reject: incrementa el conteo de apelaciones agotadas. Al llegar a 2,   el perfil permanece "rejected" pero se marca appeal_exhausted=True,   lo que habilita en el dashboard del profesor la opción de subi |
+| GET | `/admin/notifications` | get_current_staff, get_current_user |  | `list_notifications` (app/api/v1/endpoints/admin.py:739) |  |
+| POST | `/admin/notifications/mark-all-read` | get_current_staff, get_current_user |  | `mark_all_notifications_read` (app/api/v1/endpoints/admin.py:774) |  |
+| GET | `/admin/notifications/unread-count` | get_current_staff, get_current_user |  | `unread_notification_count` (app/api/v1/endpoints/admin.py:752) |  |
+| PATCH | `/admin/notifications/{notification_id}/read` | get_current_staff, get_current_user |  | `mark_notification_read` (app/api/v1/endpoints/admin.py:760) |  |
+| GET | `/admin/platform-config` | — |  | `get_platform_config` (app/api/v1/endpoints/admin.py:1046) | Configuración pública de la plataforma. Endpoint público — el frontend lo consulta al cargar. |
+| PATCH | `/admin/platform-config` | get_current_staff, get_current_user |  | `update_platform_config` (app/api/v1/endpoints/admin.py:1056) | El superadmin (o teacher_admin, como staff) configura el modo de la plataforma |
+| GET | `/admin/stats` | get_current_staff, get_current_user |  | `get_platform_stats` (app/api/v1/endpoints/admin.py:100) | KPIs globales de la plataforma. Todas las métricas en una sola llamada para el dashboard. |
+| POST | `/admin/students/{user_id}/ban` | get_current_staff, get_current_user |  | `ban_student` (app/api/v1/endpoints/admin.py:895) | Banea a un estudiante: lo desactiva, cancela sus enrollments activos y sus clases futuras/pendientes, y deja registrado el motivo. El email queda "quemado" por el unique constraint existente en users.email, así que no puede volver a registrarse con el mismo correo. |
+| GET | `/admin/students/{user_id}/detail` | get_current_staff, get_current_user |  | `get_student_detail` (app/api/v1/endpoints/admin.py:968) | Detalle completo de un estudiante para el desplegable en /admin/students: enrollments (paquetes) y materiales asignados, con nombre del profesor y del recurso. Usado bajo demanda al expandir la card. |
+| POST | `/admin/students/{user_id}/unban` | get_current_staff, get_current_user |  | `unban_student` (app/api/v1/endpoints/admin.py:945) | Revierte el baneo. No reactiva enrollments/clases canceladas automáticamente. |
+| GET | `/admin/support-tickets` | get_current_staff, get_current_user |  | `list_support_tickets` (app/api/v1/endpoints/admin.py:595) | Bandeja global de tickets de soporte, filtrable por estado y categoría. |
+| PATCH | `/admin/support-tickets/{ticket_id}/resolve` | get_current_staff, get_current_user |  | `resolve_support_ticket` (app/api/v1/endpoints/admin.py:664) | Responde y cierra un ticket pendiente. Notifica al usuario por email y reactiva el aviso in-app (user_notified_seen=False) en su bandeja. |
+| GET | `/admin/teachers` | get_current_staff, get_current_user |  | `list_all_teachers` (app/api/v1/endpoints/admin.py:205) | Lista todos los profesores con sus métricas. Filtrable por estado: pending, approved, rejected, suspended. |
+| GET | `/admin/teachers/{teacher_id}` | get_current_staff, get_current_user |  | `get_teacher_detail` (app/api/v1/endpoints/admin.py:294) | Detalle de un profesor para el modal de revisión: incluye video, motivo de rechazo y estado de apelaciones. Usado por /admin/teachers al abrir el modal de detalle. |
+| GET | `/admin/teachers/{teacher_id}/appeals` | get_current_staff, get_current_user |  | `get_teacher_appeals` (app/api/v1/endpoints/admin.py:344) | Historial de apelaciones de un profesor, para el modal de detalle. |
+| PATCH | `/admin/teachers/{teacher_id}/commission` | get_current_staff, get_current_user |  | `update_teacher_commission` (app/api/v1/endpoints/admin.py:437) | Actualiza la comisión de un profesor específico. Permite personalizar la comisión por profesor. |
+| PATCH | `/admin/teachers/{teacher_id}/status` | get_current_staff, get_current_user |  | `update_teacher_status` (app/api/v1/endpoints/admin.py:359) | Aprueba, rechaza o suspende un profesor. Es el flujo principal de onboarding de nuevos profesores. |
+| GET | `/admin/users` | get_current_staff, get_current_user |  | `list_all_users` (app/api/v1/endpoints/admin.py:789) | Lista todos los usuarios con filtros y paginación. Por defecto NO incluye baneados en /admin/students — ese listado usa is_banned=False explícitamente desde el frontend; este endpoint general deja el filtro abierto para la vista separada de baneados. |
+| PATCH | `/admin/users/{user_id}` | get_current_user |  | `admin_update_user` (app/api/v1/endpoints/admin.py:1170) |  |
+| PATCH | `/admin/users/{user_id}/status` | get_current_staff, get_current_user |  | `update_user_status` (app/api/v1/endpoints/admin.py:848) | Activa o desactiva un usuario (distinto de banear). No se puede desactivar a sí mismo ni a otro superadmin. |
 
 ## Reseñas
 
@@ -172,17 +172,17 @@ Total de rutas: **217**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| POST | `/packages/` | get_current_teacher_or_teacher_admin, get_current_user |  | `create_package` (app/api/v1/endpoints/packages.py:73) | El profesor crea un paquete de clases |
-| GET | `/packages/enrollment/{enrollment_id}` | get_current_student, get_current_user |  | `get_enrollment_package` (app/api/v1/endpoints/packages.py:593) | Obtiene los detalles del paquete asignado a un enrollment. |
-| GET | `/packages/my-enrollments` | get_current_student, get_current_user |  | `get_my_enrollments` (app/api/v1/endpoints/packages.py:312) | Enrollments del estudiante. Incluye activos, completados y en renovación, junto con el nombre del profesor para mostrarlo en el dashboard. |
-| GET | `/packages/my-packages` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_packages` (app/api/v1/endpoints/packages.py:107) | Paquetes del profesor |
-| POST | `/packages/request-package-change` | get_current_student, get_current_user |  | `request_package_change` (app/api/v1/endpoints/packages.py:467) | El estudiante solicita cambiar de paquete manteniendo la relación activa. |
-| POST | `/packages/request-renewal` | get_current_student, get_current_user |  | `request_renewal` (app/api/v1/endpoints/packages.py:397) | El estudiante solicita renovar su paquete (mismo u otro del mismo profesor). El enrollment pasa a 'pending_renewal' y se guarda cuál paquete pidió. |
-| GET | `/packages/teacher/enrollments` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_teacher_enrollments_overview` (app/api/v1/endpoints/packages.py:198) | Lista todos los enrollments (activos, agotados y pendientes de renovación) de los estudiantes del profesor, con el desglose de cumplimiento: completadas, no-show y canceladas tarde. |
-| GET | `/packages/teacher/{teacher_username}` | — |  | `get_teacher_packages` (app/api/v1/endpoints/packages.py:275) | Paquetes disponibles de un profesor. Filtrable por materia. Endpoint público. |
-| POST | `/packages/{enrollment_id}/cancel-package-change` | get_current_student, get_current_user |  | `cancel_package_change` (app/api/v1/endpoints/packages.py:565) | El estudiante cancela su solicitud de cambio de paquete. |
-| DELETE | `/packages/{package_id}` | get_current_teacher_or_teacher_admin, get_current_user |  | `deactivate_package` (app/api/v1/endpoints/packages.py:172) | Desactivar un paquete — no se borra para conservar enrollments |
-| PATCH | `/packages/{package_id}` | get_current_teacher_or_teacher_admin, get_current_user |  | `update_package` (app/api/v1/endpoints/packages.py:119) | Actualizar un paquete |
+| POST | `/packages/` | get_current_teacher_or_teacher_admin, get_current_user |  | `create_package` (app/api/v1/endpoints/packages.py:75) | El profesor crea un paquete de clases |
+| GET | `/packages/enrollment/{enrollment_id}` | get_current_student, get_current_user |  | `get_enrollment_package` (app/api/v1/endpoints/packages.py:615) | Obtiene los detalles del paquete asignado a un enrollment. |
+| GET | `/packages/my-enrollments` | get_current_student, get_current_user |  | `get_my_enrollments` (app/api/v1/endpoints/packages.py:334) | Enrollments del estudiante. Incluye activos, completados y en renovación, junto con el nombre del profesor para mostrarlo en el dashboard. |
+| GET | `/packages/my-packages` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_packages` (app/api/v1/endpoints/packages.py:109) | Paquetes del profesor |
+| POST | `/packages/request-package-change` | get_current_student, get_current_user |  | `request_package_change` (app/api/v1/endpoints/packages.py:489) | El estudiante solicita cambiar de paquete manteniendo la relación activa. |
+| POST | `/packages/request-renewal` | get_current_student, get_current_user |  | `request_renewal` (app/api/v1/endpoints/packages.py:419) | El estudiante solicita renovar su paquete (mismo u otro del mismo profesor). El enrollment pasa a 'pending_renewal' y se guarda cuál paquete pidió. |
+| GET | `/packages/teacher/enrollments` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_teacher_enrollments_overview` (app/api/v1/endpoints/packages.py:200) | Lista todos los enrollments (activos, agotados y pendientes de renovación) de los estudiantes del profesor, con el desglose de cumplimiento: completadas, no-show y canceladas tarde. |
+| GET | `/packages/teacher/{teacher_username}` | — |  | `get_teacher_packages` (app/api/v1/endpoints/packages.py:297) | Paquetes disponibles de un profesor. Filtrable por materia. Endpoint público. |
+| POST | `/packages/{enrollment_id}/cancel-package-change` | get_current_student, get_current_user |  | `cancel_package_change` (app/api/v1/endpoints/packages.py:587) | El estudiante cancela su solicitud de cambio de paquete. |
+| DELETE | `/packages/{package_id}` | get_current_teacher_or_teacher_admin, get_current_user |  | `deactivate_package` (app/api/v1/endpoints/packages.py:174) | Desactivar un paquete — no se borra para conservar enrollments |
+| PATCH | `/packages/{package_id}` | get_current_teacher_or_teacher_admin, get_current_user |  | `update_package` (app/api/v1/endpoints/packages.py:121) | Actualizar un paquete |
 
 ## Google Calendar
 
@@ -205,24 +205,24 @@ Total de rutas: **217**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| GET | `/payments/admin/withdrawals/pending` | get_current_staff, get_current_user |  | `get_pending_withdrawals` (app/api/v1/endpoints/payments.py:2295) |  |
-| POST | `/payments/admin/withdrawals/{withdrawal_id}/process` | get_current_staff, get_current_user |  | `process_withdrawal_v2` (app/api/v1/endpoints/payments.py:1468) |  |
-| POST | `/payments/book` | get_current_student, get_current_user |  | `book_class` (app/api/v1/endpoints/payments.py:486) |  |
-| GET | `/payments/booking-status` | get_current_student, get_current_user |  | `get_booking_status` (app/api/v1/endpoints/payments.py:1514) |  |
-| GET | `/payments/config` | — |  | `get_payment_config` (app/api/v1/endpoints/payments.py:424) |  |
-| PATCH | `/payments/config` | get_current_staff, get_current_user |  | `update_payment_config` (app/api/v1/endpoints/payments.py:456) |  |
-| GET | `/payments/history` | get_current_staff_or_teacher, get_current_user |  | `get_payments_history` (app/api/v1/endpoints/payments.py:886) | Historial de pagos ya resueltos (aprobados o rechazados). Teacher solo ve los suyos; staff ve todos. |
-| POST | `/payments/manual-grant` | get_current_staff_or_teacher, get_current_user |  | `manual_grant_payment` (app/api/v1/endpoints/payments.py:1291) |  |
-| GET | `/payments/my-income` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_income` (app/api/v1/endpoints/payments.py:1363) |  |
-| GET | `/payments/my-payments` | get_current_student, get_current_user |  | `get_my_payments_student` (app/api/v1/endpoints/payments.py:1353) |  |
-| GET | `/payments/my-wallet` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_wallet` (app/api/v1/endpoints/payments.py:1382) |  |
-| GET | `/payments/my-withdrawals` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_withdrawals` (app/api/v1/endpoints/payments.py:1408) |  |
-| POST | `/payments/notify-payment` | get_current_student, get_current_user |  | `notify_payment` (app/api/v1/endpoints/payments.py:1612) |  |
-| GET | `/payments/pending-review` | get_current_staff_or_teacher, get_current_user |  | `get_payments_pending_review` (app/api/v1/endpoints/payments.py:832) |  |
-| POST | `/payments/request-refund-cohort-cancelled` | get_current_student, get_current_user |  | `request_refund_cohort_cancelled` (app/api/v1/endpoints/payments.py:2215) | Reembolso por una cohorte grupal que el profesor canceló (F3 del roadmap de verificación). A diferencia del reembolso por profesor suspendido, acá siempre es el 100% de lo pagado: el grupo nunca llegó a arrancar (o se abortó), no hay "clases ya tomadas" que descontar. Mientras este reembolso esté pe |
-| POST | `/payments/request-refund-teacher-suspended` | get_current_student, get_current_user |  | `request_refund_teacher_suspended` (app/api/v1/endpoints/payments.py:2091) | Reembolso disparado por la suspensión/rechazo del profesor del estudiante (no por un downgrade de paquete). Reutiliza el mismo mecanismo que el "reembolso completo" de cambio de paquete (Payment payment_type="refund" sin ningún paquete nuevo solicitado): al aprobarse, /payments/validate/{id} cancela |
-| POST | `/payments/request-withdrawal` | get_current_teacher_or_teacher_admin, get_current_user |  | `request_withdrawal_v2` (app/api/v1/endpoints/payments.py:1418) |  |
-| PATCH | `/payments/{payment_id}/validate` | get_current_staff, get_current_user |  | `validate_payment` (app/api/v1/endpoints/payments.py:947) | NEG-01: solo `superadmin` y `teacher_admin` aprueban/rechazan pagos (los profesores normales ven el pago como «pendiente de revisión»). Un `teacher_admin` no valida los pagos de sus propias clases: los resuelve el `superadmin`. |
+| GET | `/payments/admin/withdrawals/pending` | get_current_staff, get_current_user |  | `get_pending_withdrawals` (app/api/v1/endpoints/payments.py:2328) |  |
+| POST | `/payments/admin/withdrawals/{withdrawal_id}/process` | get_current_staff, get_current_user |  | `process_withdrawal_v2` (app/api/v1/endpoints/payments.py:1501) |  |
+| POST | `/payments/book` | get_current_student, get_current_user |  | `book_class` (app/api/v1/endpoints/payments.py:487) |  |
+| GET | `/payments/booking-status` | get_current_student, get_current_user |  | `get_booking_status` (app/api/v1/endpoints/payments.py:1547) |  |
+| GET | `/payments/config` | — |  | `get_payment_config` (app/api/v1/endpoints/payments.py:425) |  |
+| PATCH | `/payments/config` | get_current_staff, get_current_user |  | `update_payment_config` (app/api/v1/endpoints/payments.py:457) |  |
+| GET | `/payments/history` | get_current_staff_or_teacher, get_current_user |  | `get_payments_history` (app/api/v1/endpoints/payments.py:916) | Historial de pagos ya resueltos (aprobados o rechazados). Teacher solo ve los suyos; staff ve todos. |
+| POST | `/payments/manual-grant` | get_current_staff_or_teacher, get_current_user |  | `manual_grant_payment` (app/api/v1/endpoints/payments.py:1324) |  |
+| GET | `/payments/my-income` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_income` (app/api/v1/endpoints/payments.py:1396) |  |
+| GET | `/payments/my-payments` | get_current_student, get_current_user |  | `get_my_payments_student` (app/api/v1/endpoints/payments.py:1386) |  |
+| GET | `/payments/my-wallet` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_wallet` (app/api/v1/endpoints/payments.py:1415) |  |
+| GET | `/payments/my-withdrawals` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_withdrawals` (app/api/v1/endpoints/payments.py:1441) |  |
+| POST | `/payments/notify-payment` | get_current_student, get_current_user |  | `notify_payment` (app/api/v1/endpoints/payments.py:1645) |  |
+| GET | `/payments/pending-review` | get_current_staff_or_teacher, get_current_user |  | `get_payments_pending_review` (app/api/v1/endpoints/payments.py:860) |  |
+| POST | `/payments/request-refund-cohort-cancelled` | get_current_student, get_current_user |  | `request_refund_cohort_cancelled` (app/api/v1/endpoints/payments.py:2248) | Reembolso por una cohorte grupal que el profesor canceló (F3 del roadmap de verificación). A diferencia del reembolso por profesor suspendido, acá siempre es el 100% de lo pagado: el grupo nunca llegó a arrancar (o se abortó), no hay "clases ya tomadas" que descontar. Mientras este reembolso esté pe |
+| POST | `/payments/request-refund-teacher-suspended` | get_current_student, get_current_user |  | `request_refund_teacher_suspended` (app/api/v1/endpoints/payments.py:2124) | Reembolso disparado por la suspensión/rechazo del profesor del estudiante (no por un downgrade de paquete). Reutiliza el mismo mecanismo que el "reembolso completo" de cambio de paquete (Payment payment_type="refund" sin ningún paquete nuevo solicitado): al aprobarse, /payments/validate/{id} cancela |
+| POST | `/payments/request-withdrawal` | get_current_teacher_or_teacher_admin, get_current_user |  | `request_withdrawal_v2` (app/api/v1/endpoints/payments.py:1451) |  |
+| PATCH | `/payments/{payment_id}/validate` | get_current_staff, get_current_user |  | `validate_payment` (app/api/v1/endpoints/payments.py:980) | NEG-01: solo `superadmin` y `teacher_admin` aprueban/rechazan pagos (los profesores normales ven el pago como «pendiente de revisión»). Un `teacher_admin` no valida los pagos de sus propias clases: los resuelve el `superadmin`. |
 
 ## Clases grupales
 

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, logger, status, Query, UploadFile, File
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager
 from typing import List, Optional 
 from app.db.base import get_db
 from app.auth.dependencies import get_current_user, get_current_teacher
@@ -52,7 +52,9 @@ def list_approved_teachers(
     Endpoint público. Excluye cuentas fijas de la suite de tests
     (is_test_account=True) — no deben aparecer en el marketplace real.
     """
-    teachers = db.query(TeacherProfile).join(User, TeacherProfile.user_id == User.id).filter(
+    teachers = db.query(TeacherProfile).join(User, TeacherProfile.user_id == User.id).options(
+        contains_eager(TeacherProfile.user)
+    ).filter(
         TeacherProfile.status == TeacherStatus.approved,
         User.is_test_account.is_(False),
     ).all()
@@ -75,7 +77,8 @@ def list_approved_teachers(
             ]
         ]
 
-    return [_to_public(t, hide_whatsapp=not get_or_create_platform_config(db).show_teacher_whatsapp) for t in teachers]
+    hide_whatsapp = not get_or_create_platform_config(db).show_teacher_whatsapp  # una sola consulta, no una por profesor
+    return [_to_public(t, hide_whatsapp=hide_whatsapp) for t in teachers]
 
 
 @router.get("/{username}", response_model=TeacherPublicResponse)
