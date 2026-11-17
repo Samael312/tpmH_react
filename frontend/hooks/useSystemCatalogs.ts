@@ -16,6 +16,8 @@ export type StudentGoalsCatalog = Record<GoalCategoryKey, StudentGoal[]>;
 export interface SystemCatalogs {
   subjects: string[];
   languages: string[];
+  // Fase 8: idiomas que HABLA el usuario (distinto de `languages`, los que se enseñan)
+  spoken_languages: string[];
   skill_suggestions: string[];
   student_goals: StudentGoalsCatalog;
   student_payment_methods: PaymentMethodOption[];
@@ -28,7 +30,7 @@ export interface SystemCatalogs {
 }
 
 const FALLBACK: SystemCatalogs = {
-  subjects: [], languages: [], skill_suggestions: [], student_goals: {},
+  subjects: [], languages: [], spoken_languages: [], skill_suggestions: [], student_goals: {},
   student_payment_methods: [], withdrawal_methods: [], material_categories: [],
   material_levels: [], theme_presets: [], package_icon_options: [], subject_theme_map: {},
 };

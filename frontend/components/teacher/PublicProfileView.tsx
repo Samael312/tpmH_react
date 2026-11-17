@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Star, MessageCircle, Globe, Award, BookOpen, PlayCircle } from "lucide-react";
 import { shadeColor, DEFAULT_THEME_COLOR } from "@/lib/color";
 import { getFlagForNationality } from "@/lib/nationalities";
+import { formatSpoken } from "@/lib/spokenLanguages";
 
 // ─── Iconos redes sociales ────────────────────────────────────────────────
 function InstagramIcon() {
@@ -48,6 +49,8 @@ export interface PublicProfileTeacher {
   profile_photo_url?: string | null;
   video_url?: string | null;
   languages?: string[] | null;
+  // Fase 8: idiomas que HABLA (distintos de `languages`, los que enseña)
+  spoken_languages?: string[] | null;
   subjects?: string[] | null;
   skills?: string[] | null;
   certificates?: { title: string; year: string }[] | null;
@@ -230,6 +233,12 @@ export default function PublicProfileView({
                       {l}
                     </span>
                   ))}
+
+                  {formatSpoken(teacher.spoken_languages) && (
+                    <span className="bg-white/15 backdrop-blur-md px-3.5 py-1.5 rounded-full text-xs font-bold text-white shadow-inner">
+                      {formatSpoken(teacher.spoken_languages)}
+                    </span>
+                  )}
 
                   {/* Redes sociales trasladadas al banner principal */}
                   {socialButtons

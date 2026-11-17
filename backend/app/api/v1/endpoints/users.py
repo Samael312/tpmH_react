@@ -26,6 +26,9 @@ from app.models.payment_config import PlatformConfig
 from app.models.student_teacher_link import StudentTeacherLink
 from app.models.payment import Payment
 from app.core.class_logic import get_student_booking_stage
+from app.core.spoken_languages import (
+    SpokenLanguagesError, get_catalog as get_spoken_catalog, normalize_spoken_languages,
+)
 from app.models.package import Enrollment, EnrollmentStatus
 
 logger = logging.getLogger(__name__)
@@ -155,6 +158,20 @@ def update_profile(
             )
 
     update_data = data.model_dump(exclude_unset=True)
+
+    # Fase 8: idiomas que habla. Validacion y normalizacion en el servidor (catalogo, max 10, sin repetidos).
+    if "spoken_languages" in update_data:
+        try:
+            update_data["spoken_languages"] = normalize_spoken_languages(
+                update_data["spoken_languages"], get_spoken_catalog(db)
+            )
+        except SpokenLanguagesError as e:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
+    # Terminar el onboarding exige al menos un idioma (usuarios que ya lo terminaron no se ven afectados).
+    if update_data.get("onboarding_completed") is True and not current_user.onboarding_completed:
+        resulting = update_data.get("spoken_languages", current_user.spoken_languages or [])
+        if not resulting:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Indica al menos un idioma que hablas")
 
     if "phone_number" in update_data:
         normalized_phone = normalize_phone(update_data["phone_number"])

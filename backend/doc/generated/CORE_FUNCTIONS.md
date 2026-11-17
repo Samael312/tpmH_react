@@ -218,6 +218,13 @@ Las que empiezan por `_` son privadas del módulo.
 - `start_scheduler()` — L321
 - `stop_scheduler()` — L330: Para el scheduler al apagar la aplicación
 
+## app/core/spoken_languages.py
+
+- `class SpokenLanguagesError()` — L29: Entrada invalida; el mensaje es apto para mostrar al usuario (HTTP 422).
+- `_key(text: str)` — L33: Clave de comparacion: sin tildes, sin mayusculas, sin espacios sobrantes.
+- `get_catalog(db: Session)` — L39
+- `normalize_spoken_languages(raw, catalog: list[str])` — L45: Valida y normaliza. Devuelve la lista con la ortografia del catalogo; lanza SpokenLanguagesError si no es valida.
+
 ## app/core/storage.py
 
 - `_slugify(text: str)` — L67

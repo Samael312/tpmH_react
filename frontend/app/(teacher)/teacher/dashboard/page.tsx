@@ -30,6 +30,7 @@ import {
   Users,
 } from 'lucide-react'
 import api from '@/lib/api'
+import SpokenLanguagesNotice from '@/components/SpokenLanguagesNotice'
 
 const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
@@ -649,6 +650,7 @@ export default function TeacherDashboard() {
   return (
     <>
       <div className="space-y-8 animate-fade-up bg-white min-h-screen p-6 rounded-3xl">
+        <SpokenLanguagesNotice profileHref="/teacher/profile" />
         <ProfileStatusBanner profile={profile} />
 
         {profile?.status === 'rejected' && (

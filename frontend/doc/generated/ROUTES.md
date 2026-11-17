@@ -17,9 +17,9 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/dashboard/classes` | `app/(student)/dashboard/classes/page.tsx` | student | 710 |  |
 | `/dashboard/homework` | `app/(student)/dashboard/homework/page.tsx` | student | 608 |  |
 | `/dashboard/materials` | `app/(student)/dashboard/materials/page.tsx` | student | 490 | app/student/materials/page.tsx |
-| `/dashboard/onboarding` | `app/(student)/dashboard/onboarding/page.tsx` | student | 888 |  |
-| `/dashboard` | `app/(student)/dashboard/page.tsx` | student | 772 |  |
-| `/dashboard/profile` | `app/(student)/dashboard/profile/page.tsx` | student | 971 |  |
+| `/dashboard/onboarding` | `app/(student)/dashboard/onboarding/page.tsx` | student | 894 |  |
+| `/dashboard` | `app/(student)/dashboard/page.tsx` | student | 774 |  |
+| `/dashboard/profile` | `app/(student)/dashboard/profile/page.tsx` | student | 975 |  |
 | `/dashboard/schedule` | `app/(student)/dashboard/schedule/page.tsx` | student | 1796 |  |
 | `/dashboard/support` | `app/(student)/dashboard/support/page.tsx` | student | 21 |  |
 | `/dashboard/teachers/[username]` | `app/(student)/dashboard/teachers/[username]/page.tsx` | student | 317 |  |
@@ -40,15 +40,15 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/teacher/calendar/callback` | `app/(teacher)/teacher/calendar/callback/page.tsx` | teacher, teacher_admin | 137 |  |
 | `/teacher/chat` | `app/(teacher)/teacher/chat/page.tsx` | teacher, teacher_admin | 138 |  |
 | `/teacher/cohorts` | `app/(teacher)/teacher/cohorts/page.tsx` | teacher, teacher_admin | 1325 |  |
-| `/teacher/dashboard` | `app/(teacher)/teacher/dashboard/page.tsx` | teacher, teacher_admin | 952 |  |
+| `/teacher/dashboard` | `app/(teacher)/teacher/dashboard/page.tsx` | teacher, teacher_admin | 954 |  |
 | `/teacher/homework` | `app/(teacher)/teacher/homework/page.tsx` | teacher, teacher_admin | 1241 |  |
 | `/teacher/materials` | `app/(teacher)/teacher/materials/page.tsx` | teacher, teacher_admin | 1566 |  |
-| `/teacher/onboarding` | `app/(teacher)/teacher/onboarding/page.tsx` | teacher, teacher_admin | 1129 |  |
+| `/teacher/onboarding` | `app/(teacher)/teacher/onboarding/page.tsx` | teacher, teacher_admin | 1134 |  |
 | `/teacher/packages` | `app/(teacher)/teacher/packages/page.tsx` | teacher, teacher_admin | 1150 |  |
 | `/teacher/payments` | `app/(teacher)/teacher/payments/page.tsx` | teacher, teacher_admin | 226 |  |
-| `/teacher/profile` | `app/(teacher)/teacher/profile/page.tsx` | teacher, teacher_admin | 1344 |  |
+| `/teacher/profile` | `app/(teacher)/teacher/profile/page.tsx` | teacher, teacher_admin | 1348 |  |
 | `/teacher/profile/preview` | `app/(teacher)/teacher/profile/preview/page.tsx` | teacher, teacher_admin | 86 |  |
-| `/teacher/students` | `app/(teacher)/teacher/students/page.tsx` | teacher, teacher_admin | 499 |  |
+| `/teacher/students` | `app/(teacher)/teacher/students/page.tsx` | teacher, teacher_admin | 503 |  |
 | `/teacher/support` | `app/(teacher)/teacher/support/page.tsx` | teacher, teacher_admin | 21 |  |
 | `/teacher/wallet` | `app/(teacher)/teacher/wallet/page.tsx` | teacher, teacher_admin | 399 |  |
 | `/` | `app/page.tsx` | pública | 52 |  |

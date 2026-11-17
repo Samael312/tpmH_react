@@ -46,6 +46,7 @@ import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 import api from "@/lib/api";
+import SpokenLanguagesNotice from "@/components/SpokenLanguagesNotice";
 
 function Skeleton({ className }: { className?: string }) {
   return <div className={`animate-pulse bg-slate-200/80 rounded-2xl ${className}`} />;
@@ -241,6 +242,7 @@ export default function StudentDashboard() {
       <div className="fixed bottom-[-80px] left-[-80px] w-[400px] h-[400px] bg-purple-300/15 rounded-full blur-[100px] pointer-events-none" />
 
       <div className="relative space-y-8 p-6 md:p-8">
+        <SpokenLanguagesNotice profileHref="/dashboard/profile" />
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black text-slate-800 tracking-tight">

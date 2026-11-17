@@ -26,6 +26,7 @@ import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
+import SpokenLanguagesSection from "@/components/SpokenLanguagesSection";
 
 // ─── Helpers & Formateadores de Errores ──────────────────────────────────────
 function formatErrorMessage(error: unknown, fallbackMessage: string): string {
@@ -813,6 +814,9 @@ export default function StudentProfilePage() {
           {/* Columna Derecha: Seguridad y Zona de peligro */}
           <div className="lg:col-span-5 space-y-6">
             
+            {/* ─── Idiomas que hablo (Fase 8) ─── */}
+            <SpokenLanguagesSection audience="student" profileHref="/dashboard/profile" />
+
             {/* ─── Seguridad ─── */}
             <Section title="Seguridad" subtitle="Actualiza tu contraseña de acceso">
               {isGoogleAccount ? (

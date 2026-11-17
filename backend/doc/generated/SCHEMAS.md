@@ -196,7 +196,7 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 
 ## schemas/teacher.py
 
-- **TeacherPublicResponse** — id: int; user_username: str; name: Optional[str] = None; surname: Optional[str] = None; nationality: Optional[str] = None; bio: Optional[str]; title: Optional[str]; timezone: Optional[str]; languages: Optional[List[str]]; subjects: Optional[List[str]]; skills: Optional[List[str]]; certificates: Optional[List[Dict[str, Any]]]; gallery: Optional[List[str]]; social_links: Optional[Dict[str, str]]; status: str; profile_photo_url: Optional[str] = None; video_url: Optional[str] = None; theme_color: Optional[str] = '#ec4899'
+- **TeacherPublicResponse** — id: int; user_username: str; name: Optional[str] = None; surname: Optional[str] = None; nationality: Optional[str] = None; bio: Optional[str]; title: Optional[str]; timezone: Optional[str]; languages: Optional[List[str]]; subjects: Optional[List[str]]; skills: Optional[List[str]]; certificates: Optional[List[Dict[str, Any]]]; gallery: Optional[List[str]]; social_links: Optional[Dict[str, str]]; status: str; profile_photo_url: Optional[str] = None; video_url: Optional[str] = None; theme_color: Optional[str] = '#ec4899'; spoken_languages: List[str] = []
 - **TeacherProfileResponse** — commission_rate: float; balance: float; stripe_account_id: Optional[str]; created_at: datetime; video_public_id: Optional[str] = None; rejection_reason: Optional[str] = None; rejection_feedback_seen: bool = True; appeal_count: int = 0; appeal_exhausted: bool = False
 - **UpdateTeacherProfileRequest** — bio: Optional[str] = None; title: Optional[str] = None; timezone: Optional[str] = None; subjects: Optional[List[str]] = None; languages: Optional[List[str]] = None; skills: Optional[List[str]] = None; certificates: Optional[List[Dict[str, Any]]] = None; gallery: Optional[List[str]] = None; social_links: Optional[Dict[str, str]] = None; theme_color: Optional[str] = None
 
@@ -210,10 +210,10 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 ## schemas/user.py
 
 - **UserBase** — username: str; name: str; surname: str; phone_number: str; email: EmailStr; role: str
-- **UserResponse** — id: int; avatar: Optional[str] = None; is_active: bool; is_verified: bool; created_at: datetime; phone_number: Optional[str] = None; nationality: Optional[str] = None; onboarding_completed: bool = False; google_id: Optional[str] = Field(default=None, exclude=True)
+- **UserResponse** — id: int; avatar: Optional[str] = None; is_active: bool; is_verified: bool; created_at: datetime; phone_number: Optional[str] = None; nationality: Optional[str] = None; onboarding_completed: bool = False; spoken_languages: List[str] = []; google_id: Optional[str] = Field(default=None, exclude=True)
 - **StudentProfileResponse** — id: int; user_id: int; timezone: Optional[str] = None; goal: Optional[str] = None; phone_number: Optional[str] = None; preferred_payment_methods: Optional[List[str]] = []; teacher_username: Optional[str] = None; created_at: datetime
 - **UserUpdate** — name: Optional[str] = None; surname: Optional[str] = None; phone_number: Optional[str] = None; email: Optional[EmailStr] = None; nationality: Optional[str] = None; onboarding_completed: Optional[bool] = None
 - **StudentProfileUpdate** — timezone: Optional[str] = None; goal: Optional[str] = None; phone_number: Optional[str] = None; preferred_payment_methods: Optional[List[str]] = None; nationality: Optional[str] = None
-- **UpdateProfileRequest** — username: Optional[str] = None; email: Optional[EmailStr] = None; name: Optional[str] = None; surname: Optional[str] = None; avatar: Optional[str] = None; phone_number: Optional[str] = None; timezone: Optional[str] = None; nationality: Optional[str] = None; onboarding_completed: Optional[bool] = None
+- **UpdateProfileRequest** — username: Optional[str] = None; email: Optional[EmailStr] = None; name: Optional[str] = None; surname: Optional[str] = None; avatar: Optional[str] = None; phone_number: Optional[str] = None; timezone: Optional[str] = None; nationality: Optional[str] = None; onboarding_completed: Optional[bool] = None; spoken_languages: Optional[List[str]] = None
 - **DeleteAccountRequest** — password: Optional[str] = None; confirm_username: str
 - **ChangePasswordRequest** — current_password: str; new_password: str  _(validadores: validate_password)_

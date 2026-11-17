@@ -15,6 +15,7 @@ import { useAuthStore } from "@/store/authStore";
 import { TIMEZONE_OPTIONS as TIMEZONES, TIMEZONE_TO_COUNTRY, DEFAULT_COUNTRY } from "@/lib/timezones";
 import { NATIONALITIES } from "@/lib/nationalities";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import SpokenLanguagesStep from "@/components/SpokenLanguagesStep";
 // in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { GOALS as FALLBACK_GOALS, GOAL_CATEGORIES, normalizeGoalsCatalog, flattenGoals } from "@/lib/teacherOptions";
@@ -69,7 +70,8 @@ function SidebarProgress({ step, name }: { step: number; name: string }) {
   const steps = [
     { num: 1, title: "Bienvenida", desc: "Conociéndonos" },
     { num: 2, title: "Preferencias", desc: "Tus objetivos" },
-    { num: 3, title: "Disponibilidad", desc: "Tus horarios" },
+    { num: 3, title: "Idiomas", desc: "Los que hablas" },
+    { num: 4, title: "Disponibilidad", desc: "Tus horarios" },
   ];
 
   return (
@@ -447,7 +449,7 @@ function StepPreferences({
   );
 }
 
-// ─── Paso 3: Horario preferencial (Selección visual por bloques) ────────────
+// ─── Paso 4: Horario preferencial (Selección visual por bloques) ────────────
 interface StepScheduleProps {
   blocks: ScheduleBlock[];
   setBlocks: (blocks: ScheduleBlock[]) => void;
@@ -690,8 +692,9 @@ export default function OnboardingPage() {
   // del onboarding de student -- el onboarding de teacher nunca lo tuvo,
   // y el estudiante igual puede configurar esta preferencia después desde
   // su perfil (dashboard/profile). TOTAL_STEPS pasa de 5 a 4 (3 pasos de
-  // formulario + la pantalla de éxito).
-  const TOTAL_STEPS = 4;
+  // formulario + la pantalla de éxito). Fase 8: paso nuevo «Idiomas que hablas»
+  // (4 pasos de formulario + éxito = 5).
+  const TOTAL_STEPS = 5;
 
   const [timezone, setTimezone] = useState(
     typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC"
@@ -704,6 +707,7 @@ export default function OnboardingPage() {
   const [phone, setPhone] = useState(""); 
   const [goal, setGoal] = useState("");
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
+  const [spoken, setSpoken] = useState<string[]>([]);
 
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -773,7 +777,7 @@ export default function OnboardingPage() {
       }
 
       // 5. Marcar onboarding completado
-      await api.patch("/users/me", { onboarding_completed: true });
+      await api.patch("/users/me", { onboarding_completed: true, spoken_languages: spoken });
 
       // 6. Actualizar store local
       if (user) {
@@ -782,6 +786,7 @@ export default function OnboardingPage() {
           timezone,
           goal,
           preferred_payment_methods: [],
+          spoken_languages: spoken,
           onboarding_completed: true, 
         });
       }
@@ -848,9 +853,10 @@ export default function OnboardingPage() {
                 onBack={back}
               />
             )}
-            {step === 3 && <StepSchedule blocks={blocks} setBlocks={setBlocks} onNext={finish} onBack={back} saving={saving} />}
+            {step === 3 && <SpokenLanguagesStep audience="student" value={spoken} onChange={setSpoken} onNext={next} onBack={back} />}
+            {step === 4 && <StepSchedule blocks={blocks} setBlocks={setBlocks} onNext={finish} onBack={back} saving={saving} />}
 
-            {step === 4 && (
+            {step === 5 && (
               <div className="w-full">
                 <StepSuccess name={name} />
                 <div className="max-w-md mx-auto mt-8">
@@ -866,13 +872,13 @@ export default function OnboardingPage() {
             )}
           </div>
 
-          {step < 4 && (
+          {step < 5 && (
             <div className="lg:hidden mt-12 text-center">
               <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
-                {step === 1 ? "Paso 1 de 3" : `Paso ${step} de 3`}
+                {`Paso ${step} de 4`}
               </p>
               <div className="flex justify-center gap-2 mt-3">
-                {[1, 2, 3].map((s) => (
+                {[1, 2, 3, 4].map((s) => (
                   <div key={s} className={`h-1.5 rounded-full transition-all duration-300 ${step >= s ? "w-8 bg-pink-500" : "w-4 bg-slate-200"}`} />
                 ))}
               </div>

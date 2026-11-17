@@ -135,20 +135,20 @@ Son **estimaciones a partir del código** (cuántos correos genera cada evento y
 **Punto de partida (verificado en el código).** `TeacherProfile.languages` ya existe, pero son los idiomas que el profesor **enseña** (se usa en la búsqueda de profesores, junto con `subjects`, y en las notificaciones de profesor pendiente). No sirve para esto: mezclar «lo que enseña» con «lo que habla» rompería la búsqueda. Los alumnos no tienen ningún campo de idiomas. Por eso es un dato **nuevo y separado**.
 
 **Qué se hace**
-- [ ] **Modelo:** columna `users.spoken_languages` (JSONB, lista de códigos o nombres, por defecto `[]`) en `users`, porque es común a alumno y profesor y así hay un solo lugar de lectura y edición. Migración Alembic (la ejecuta el usuario); sin relleno de datos: los usuarios actuales quedan en `[]`.
-- [ ] **Validación en el servidor** (`schemas/user.py`): hasta 10 idiomas, sin duplicados (sin distinguir mayúsculas), cada uno de 2 a 40 caracteres y elegido del catálogo; el servidor rechaza basura (422) y normaliza el texto. El frontend nunca es la única barrera.
-- [ ] **Catálogo:** nuevo catálogo editable por el superadmin `spoken_languages` en `system_catalogs` (el existente `languages` es el de idiomas que se enseñan y no se toca). Valores iniciales: español, inglés, portugués, francés, italiano, alemán, etc.
-- [ ] **API:** `GET /users/me` devuelve `spoken_languages`; `PATCH /users/me` lo acepta (mismos permisos y límites que el resto del perfil). El perfil público del profesor lo expone; el del alumno solo lo ve su profesor.
-- [ ] **Onboarding del alumno** (`(student)/dashboard/onboarding`): paso nuevo «¿Qué idiomas hablas?» (selector múltiple, mínimo 1).
-- [ ] **Onboarding del profesor** (`(teacher)/teacher/onboarding`): mismo paso, ubicado junto al de idiomas/materias que enseña, con textos distintos para no confundirlos («Idiomas que hablas» frente a «Idiomas que enseñas»). Mínimo 1.
-- [ ] **Perfil editable** en ambos roles (`(student)/dashboard/profile` y `(teacher)/teacher/profile`): sección «Idiomas que hablo» con el mismo selector y guardado con aviso.
-- [ ] **Usuarios que ya terminaron el onboarding** no lo vuelven a ver: aviso suave en el perfil y en el panel («Agrega los idiomas que hablas») hasta que los completen. No bloquea nada.
-- [ ] **Donde se muestra:** perfil público y tarjeta del profesor («Habla: español, inglés»); ficha del alumno que ve su profesor. Opcional: filtro «habla…» en el directorio de profesores.
-- [ ] **Privacidad:** actualizar el texto de `PrivacyContent` (nuevo dato de perfil) y decir quién lo ve.
-- [ ] **Tests:** `tests/audit/test_f8_spoken_languages.py` (límite: 10/11 idiomas, 1/0 en onboarding, longitudes 2/40/41; combinatoria: rol × catálogo/ajeno × duplicados con distinta capitalización; invariantes: guardar dos veces es idempotente, no toca `TeacherProfile.languages`; integración: onboarding -> perfil -> API pública, y un alumno no puede leer los idiomas de otro) y tests de frontend (Vitest) del selector.
-- [ ] **Docs:** `API_REFERENCE`, `MODELS`, `BUSINESS_RULES`, `frontend/doc/PAGES_AND_UX.md`.
+- [x] **Modelo:** columna `users.spoken_languages` (JSONB, lista de códigos o nombres, por defecto `[]`) en `users`, porque es común a alumno y profesor y así hay un solo lugar de lectura y edición. Migración Alembic (la ejecuta el usuario); sin relleno de datos: los usuarios actuales quedan en `[]`.
+- [x] **Validación en el servidor** (`schemas/user.py`): hasta 10 idiomas, sin duplicados (sin distinguir mayúsculas), cada uno de 2 a 40 caracteres y elegido del catálogo; el servidor rechaza basura (422) y normaliza el texto. El frontend nunca es la única barrera.
+- [x] **Catálogo:** nuevo catálogo editable por el superadmin `spoken_languages` en `system_catalogs` (el existente `languages` es el de idiomas que se enseñan y no se toca). Valores iniciales: español, inglés, portugués, francés, italiano, alemán, etc.
+- [x] **API:** `GET /users/me` devuelve `spoken_languages`; `PATCH /users/me` lo acepta (mismos permisos y límites que el resto del perfil). El perfil público del profesor lo expone; el del alumno solo lo ve su profesor.
+- [x] **Onboarding del alumno** (`(student)/dashboard/onboarding`): paso nuevo «¿Qué idiomas hablas?» (selector múltiple, mínimo 1).
+- [x] **Onboarding del profesor** (`(teacher)/teacher/onboarding`): mismo paso, ubicado junto al de idiomas/materias que enseña, con textos distintos para no confundirlos («Idiomas que hablas» frente a «Idiomas que enseñas»). Mínimo 1.
+- [x] **Perfil editable** en ambos roles (`(student)/dashboard/profile` y `(teacher)/teacher/profile`): sección «Idiomas que hablo» con el mismo selector y guardado con aviso.
+- [x] **Usuarios que ya terminaron el onboarding** no lo vuelven a ver: aviso suave en el perfil y en el panel («Agrega los idiomas que hablas») hasta que los completen. No bloquea nada.
+- [x] **Donde se muestra:** perfil público y tarjeta del profesor («Habla: español, inglés»); ficha del alumno que ve su profesor. _El filtro «habla…» en el directorio no se hizo (opcional)._
+- [x] **Privacidad:** texto de `PrivacyContent` actualizado (nuevo dato de perfil y quién lo ve) · _no se cambió la fecha «Última actualización» del documento: decisión del dueño_
+- [x] **Tests (42 en backend, 16 de Vitest en `frontend/tests/spokenLanguages.test.ts`):** `tests/audit/test_f8_spoken_languages.py` (límite: 10/11 idiomas, 1/0 en onboarding, longitudes 2/40/41; combinatoria: rol × catálogo/ajeno × duplicados con distinta capitalización; invariantes: guardar dos veces es idempotente, no toca `TeacherProfile.languages`; integración: onboarding -> perfil -> API pública, y un alumno no puede leer los idiomas de otro) y tests de frontend (Vitest) del selector.
+- [x] **Docs:** `API_REFERENCE`, `MODELS`, `BUSINESS_RULES`, `frontend/doc/PAGES_AND_UX.md`.
 
-**Decisiones que quedan abiertas (preguntar antes de implementar)**
+**Decisiones que estaban abiertas (se implementó la propuesta inicial; quedan apuntadas en «Decisiones pendientes» al final)**
 - ¿Solo la lista de idiomas, o también un **nivel** por idioma (nativo, fluido, intermedio, básico)? Con nivel el dato es más útil para emparejar alumno y profesor, pero el onboarding se alarga. Propuesta inicial: solo lista, y el nivel como mejora posterior.
 - ¿El **idioma de la interfaz o de los correos** debe salir de este dato? Propuesta: no; sería otra preferencia distinta.
 - ¿El **filtro por idioma hablado** en el directorio entra en esta fase o después?
@@ -166,8 +166,9 @@ Son **estimaciones a partir del código** (cuántos correos genera cada evento y
 1. **Neon y el scheduler (Fase 5):** el job de Meet cada 5 min mantiene Neon despierto 24/7. Opciones: subir a 15–30 min, comprobar antes con una consulta barata/caché, o limitarlo a horas útiles.
 2. **`get_student_booking_stage` escribe en un GET (Fase 5):** cancela el enrollment sin pago notificado al leer. Moverlo a un job cambia el comportamiento; dejarlo es seguro pero es una escritura en lectura.
 3. **Tope de paginación (Fase 5):** hoy 200 por defecto y 500 máximo. Decidir si basta, y si el frontend debe paginar de verdad (hoy solo recibe las primeras 200 filas).
-4. **Migraciones automáticas en el despliegue (Fase 6):** añadir `preDeployCommand = "alembic upgrade head"` en `railway.toml` o seguir ejecutándolas a mano. Antes de desplegar hay que aplicar a mano las migraciones nuevas (`d1e2f3a4b5c6`, `a7b8c9d0e1f2`, `b8c9d0e1f2a3` y, de la Fase 7, `e7a1b2c3d4f5`).
+4. **Migraciones automáticas en el despliegue (Fase 6):** añadir `preDeployCommand = "alembic upgrade head"` en `railway.toml` o seguir ejecutándolas a mano. Antes de desplegar hay que aplicar a mano las migraciones nuevas (`d1e2f3a4b5c6`, `a7b8c9d0e1f2`, `b8c9d0e1f2a3`, `e7a1b2c3d4f5` de la Fase 7 y `f8b3c4d5e6a7` de la Fase 8).
 5. **Migrar fuera de Railway (Fase 5):** análisis hecho en `backend/doc/RESOURCE_COSTS.md`; decidir si se migra.
 6. **Cuota de subidas por profesor y subida directa desde el navegador a Cloudinary (Fase 5).**
 7. **Agrupar correos (Fase 7):** 1 correo de chat por conversación cada X min y recordatorios agrupados es lo que más reduce el consumo sin apagar nada; no se hizo. También preferencias por usuario y resumen diario.
-8. **Fin de la transición de sesión (Fase 3b):** retirar Bearer/`?token=` y bajar el access token a 30 min cuando el frontend nuevo esté en producción.
+8. **Idiomas que habla (Fase 8), 3 decisiones con propuesta ya implementada:** (a) solo lista de idiomas, sin **nivel** por idioma (nativo, fluido…); (b) el dato **no** define el idioma de la interfaz ni de los correos; (c) el **filtro «habla…»** del directorio de profesores queda fuera. Además: actualizar o no la fecha de la política de privacidad.
+9. **Fin de la transición de sesión (Fase 3b):** retirar Bearer/`?token=` y bajar el access token a 30 min cuando el frontend nuevo esté en producción.

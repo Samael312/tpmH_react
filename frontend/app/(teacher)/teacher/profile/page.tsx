@@ -25,6 +25,7 @@ import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
 import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_SUGGESTIONS as FALLBACK_SKILLS } from "@/lib/teacherOptions";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
+import SpokenLanguagesSection from "@/components/SpokenLanguagesSection";
 
 const MAX_VIDEO_SIZE_MB = 100;
 const ALLOWED_VIDEO_MIME_TYPES = ["video/mp4", "video/quicktime"];
@@ -1165,6 +1166,9 @@ export default function TeacherProfilePage() {
 
             {/* Columna derecha: Seguridad + Sincronización + Zona de peligro */}
             <div className="lg:col-span-5 space-y-6">
+
+              {/* ─── Idiomas que hablo (Fase 8) ─── */}
+              <SpokenLanguagesSection audience="teacher" profileHref="/teacher/profile" />
 
               <Section title="Seguridad" subtitle="Actualiza tu contraseña de acceso" icon={<Lock className="w-5 h-5" />}>
                 {isGoogleAccount ? (

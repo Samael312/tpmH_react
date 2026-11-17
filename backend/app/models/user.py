@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -29,6 +30,8 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     onboarding_completed = Column(Boolean, default=False)
+    # Fase 8: idiomas que HABLA el usuario (alumno y profesor). Distinto de TeacherProfile.languages (los que ensena).
+    spoken_languages = Column(JSONB, nullable=False, default=list, server_default="[]")
 
     # ─── Baneo (distinto de la desactivación simple is_active) ───
     # Un usuario baneado también queda con is_active=False, pero el baneo

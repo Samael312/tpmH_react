@@ -26,6 +26,8 @@ class TeacherPublicResponse(BaseModel):
     profile_photo_url: Optional[str] = None
     video_url: Optional[str] = None
     theme_color: Optional[str] = "#ec4899"
+    # Fase 8: idiomas que HABLA (viven en User; distintos de `languages`, los que ensena)
+    spoken_languages: List[str] = []
 
     class Config:
         from_attributes = True

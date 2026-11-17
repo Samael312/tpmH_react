@@ -105,6 +105,8 @@ export interface TeacherStudentFull {
   avatar: string | null
   timezone: string | null
   nationality: string | null
+  // Fase 8: idiomas que habla el alumno (solo los ve su profesor)
+  spoken_languages?: string[]
   goal: string | null
   created_at: string
   enrollments: StudentEnrollmentSummary[]

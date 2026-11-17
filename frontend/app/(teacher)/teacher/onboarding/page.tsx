@@ -15,6 +15,7 @@ import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { NATIONALITIES } from "@/lib/nationalities";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
+import SpokenLanguagesStep from "@/components/SpokenLanguagesStep";
 
 // ─── Constantes ─────────────────────────────────────────────────────────────
 import {
@@ -76,9 +77,10 @@ function SidebarProgress({ step, name }: { step: number; name: string }) {
     { num: 1, title: "Bienvenida",     desc: "Empecemos" },
     { num: 2, title: "Tu perfil",      desc: "Foto, bio y WhatsApp" },
     { num: 3, title: "Especialidades", desc: "Qué enseñas" },
-    { num: 4, title: "Disponibilidad", desc: "Tus horarios" },
-    { num: 5, title: "Redes sociales", desc: "Contacto" },
-    { num: 6, title: "Video", desc: "Opcional" },
+    { num: 4, title: "Idiomas", desc: "Los que hablas" },
+    { num: 5, title: "Disponibilidad", desc: "Tus horarios" },
+    { num: 6, title: "Redes sociales", desc: "Contacto" },
+    { num: 7, title: "Video", desc: "Opcional" },
   ];
 
   return (
@@ -906,7 +908,7 @@ export default function TeacherOnboardingPage() {
   const { user, setUser, logout } = useAuthStore();
   const [nationality, setNationality] = useState("");
   const [step, setStep] = useState(1);
-  const TOTAL_STEPS = 7;
+  const TOTAL_STEPS = 8; // Fase 8: paso nuevo «Idiomas que hablas» (7 pasos de formulario + éxito)
 
   // Step 2
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -934,6 +936,8 @@ export default function TeacherOnboardingPage() {
   const [languages, setLanguages]       = useState<string[]>([]);
   const [subjects, setSubjects]         = useState<string[]>([]);
   const [skills, setSkills]             = useState<string[]>([]);
+  // Fase 8: idiomas que HABLA (distinto de `languages`, los que enseña)
+  const [spoken, setSpoken]             = useState<string[]>([]);
   const [certificates, setCertificates] = useState<{ title: string; year: string }[]>([]);
   // Step 4
   const [blocks, setBlocks]             = useState<ScheduleBlock[]>([]);
@@ -1014,11 +1018,11 @@ export default function TeacherOnboardingPage() {
       }
 
       // 4. Marcar onboarding completado
-      await api.patch("/users/me", { onboarding_completed: true });
+      await api.patch("/users/me", { onboarding_completed: true, spoken_languages: spoken });
 
       // 5. Actualizar store
       if (user) {
-        setUser({ ...user, onboarding_completed: true, phone_number: fullPhone });
+        setUser({ ...user, onboarding_completed: true, phone_number: fullPhone, spoken_languages: spoken });
       }
 
       // 6. Ir a paso de éxito
@@ -1083,21 +1087,22 @@ export default function TeacherOnboardingPage() {
               onNext={next} onBack={back}
             />
           )}
-          {step === 4 && <StepAvailability blocks={blocks} setBlocks={setBlocks} onNext={next} onBack={back} />}
-          {step === 5 && (
+          {step === 4 && <SpokenLanguagesStep audience="teacher" value={spoken} onChange={setSpoken} onNext={next} onBack={back} />}
+          {step === 5 && <StepAvailability blocks={blocks} setBlocks={setBlocks} onNext={next} onBack={back} />}
+          {step === 6 && (
             <StepSocial
               socialLinks={socialLinks} setSocialLinks={setSocialLinks}
               onNext={next} onBack={back} saving={saving}
             />
           )}
-          {step === 6 && (
+          {step === 7 && (
             <StepVideo
               videoFile={videoFile} setVideoFile={setVideoFile}
               videoPreview={videoPreview} setVideoPreview={setVideoPreview}
               onFinish={finish} onBack={back} saving={saving} savingStage={savingStage}
             />
           )}
-          {step === 7 && (
+          {step === 8 && (
             <div className="w-full">
               <StepSuccess name={name} />
               <div className="max-w-md mx-auto mt-8">
@@ -1111,11 +1116,11 @@ export default function TeacherOnboardingPage() {
         </div>
 
         {/* Indicador mobile */}
-        {step < 7 && (
+        {step < 8 && (
           <div className="lg:hidden mt-10 text-center">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Paso {step} de 6</p>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Paso {step} de 7</p>
             <div className="flex justify-center gap-2 mt-3">
-              {[1,2,3,4,5,6].map(s => (
+              {[1,2,3,4,5,6,7].map(s => (
                 <div key={s} className={`h-1.5 rounded-full transition-all duration-300 ${step >= s ? "w-8 bg-pink-500" : "w-4 bg-slate-200"}`} />
               ))}
             </div>

@@ -32,6 +32,7 @@ def _to_public(t: TeacherProfile, hide_whatsapp: bool = False) -> TeacherPublicR
     if t.user:
         resp.name = t.user.name
         resp.surname = t.user.surname
+        resp.spoken_languages = list(t.user.spoken_languages or [])
     # Interruptor global de admin (platform_config.show_teacher_whatsapp):
     # oculta el WhatsApp de TODOS los profesores sin tocar lo que cada uno
     # cargó en su propio perfil.
@@ -284,6 +285,7 @@ def get_my_students_full(
             "email": u.email,
             "nationality": u.nationality,
             "phone_number": u.phone_number,
+            "spoken_languages": list(u.spoken_languages or []),
             "avatar": u.avatar or sp.profile_photo_url,
             "timezone": sp.timezone,
             "goal": sp.goal,

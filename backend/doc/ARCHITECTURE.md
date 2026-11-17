@@ -30,7 +30,7 @@ backend/
     models/                 SQLAlchemy (generated/MODELS.md)
     schemas/                Pydantic (generated/SCHEMAS.md)
     db/base.py              engine, SessionLocal, Base, get_db
-  alembic/versions/         migraciones (un solo head e7a1b2c3d4f5)
+  alembic/versions/         migraciones (un solo head f8b3c4d5e6a7)
   tests/flow/               suite de integración (necesita PostgreSQL + .env)
   tests/audit/              suite de auditoría sin .env (SQLite) + run_server.py
   doc/                      esta documentación

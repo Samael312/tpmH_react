@@ -21,7 +21,7 @@ router = APIRouter()
 # Estas keys son las únicas editables — cualquier otra queda bloqueada
 # aunque alguien intente hacer PATCH directo por la API.
 EDITABLE_KEYS = {
-    "subjects", "languages", "skill_suggestions", "student_goals",
+    "subjects", "languages", "spoken_languages", "skill_suggestions", "student_goals",
     "student_payment_methods", "withdrawal_methods",
     "material_categories", "material_levels",
     "theme_presets", "package_icon_options", "subject_theme_map",

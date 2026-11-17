@@ -142,3 +142,10 @@ Semanal: filas `TeacherAvailability` (`day_of_week`, `start_time_utc`, `end_time
 - Si el control o el contador fallan, el correo **sale igual** (nunca se pierde un correo por un fallo de conteo).
 - La probabilidad de agotar la cuota por categoría es una **estimación** a partir del código, no una medición.
 
+## Idiomas que habla el usuario (Fase 8)
+- Dato nuevo `users.spoken_languages` (JSONB, por defecto `[]`), común a alumno y profesor. **No** es `TeacherProfile.languages` (los idiomas que el profesor *enseña*, base de la búsqueda de profesores); guardar uno nunca toca el otro.
+- Se edita con `PATCH /users/me` (`spoken_languages`); `GET /users/me` lo devuelve. Validación solo en el servidor (`core/spoken_languages.py`): máximo 10, cada uno de 2 a 40 caracteres, elegido del catálogo `spoken_languages` (editable por el superadmin en `system_catalogs`, distinto del catálogo `languages`), sin repetidos ni distinguiendo mayúsculas o tildes (422). Se guarda con la ortografía del catálogo. Lista vacía válida.
+- **Terminar el onboarding** (`onboarding_completed` de falso a verdadero) exige al menos un idioma (422 si no hay). Quien ya lo había terminado antes de la Fase 8 no se ve afectado: solo recibe un aviso suave en su panel y en su perfil.
+- Quién lo ve: el perfil público del profesor (`GET /teachers/`, `/teachers/{username}`, landing) y el propio usuario; el de un alumno solo lo ve su profesor (`GET /teachers/me/students-full`). Ningún otro endpoint lo expone.
+- Si la fila del catálogo no existe todavía (migración sin aplicar) se usa una lista por defecto en el código.
+

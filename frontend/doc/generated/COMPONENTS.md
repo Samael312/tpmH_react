@@ -4,6 +4,10 @@
 ## components/
 
 - `components/ErrorBoundary.tsx` (64 líneas, referenciado en 3 archivos) — exports: ErrorBoundary
+- `components/SpokenLanguagesNotice.tsx` (23 líneas, referenciado en 3 archivos) — exports: SpokenLanguagesNotice
+- `components/SpokenLanguagesPicker.tsx` (62 líneas, referenciado en 2 archivos) — exports: SpokenLanguagesPicker
+- `components/SpokenLanguagesSection.tsx` (76 líneas, referenciado en 2 archivos) — exports: SpokenLanguagesSection
+- `components/SpokenLanguagesStep.tsx` (48 líneas, referenciado en 2 archivos) — exports: SpokenLanguagesStep
 - `components/admin/EmailQuotaBanner.tsx` (23 líneas, referenciado en 1 archivos) — exports: EmailQuotaBanner
 - `components/admin/EmailSettingsPanel.tsx` (185 líneas, referenciado en 1 archivos) — exports: EmailSettingsPanel
 - `components/admin/ErrorLogsViewer.tsx` (217 líneas, referenciado en 1 archivos) — exports: ErrorLogsViewer
@@ -30,7 +34,7 @@
 - `components/layout/DashboardTopbar.tsx` (100 líneas, referenciado en 3 archivos) — exports: DashboardTopbarVariant, DashboardTopbar
 - `components/layout/NavBar.tsx` (453 líneas, referenciado en 6 archivos) — exports: DashboardSidebar
 - `components/layout/VerifyEmailBanner.tsx` (61 líneas, referenciado en 2 archivos) — exports: VerifyEmailBanner
-- `components/legal/PrivacyContent.tsx` (481 líneas, referenciado en 1 archivos) — exports: PrivacyContent
+- `components/legal/PrivacyContent.tsx` (482 líneas, referenciado en 1 archivos) — exports: PrivacyContent
 - `components/legal/TermsContent.tsx` (418 líneas, referenciado en 1 archivos) — exports: TermsContent
 - `components/payments/BuyCreditsModal.tsx` (170 líneas, referenciado en 2 archivos) — exports: BuyCreditsModal
 - `components/payments/ChangePackageModal.tsx` (186 líneas, referenciado en 2 archivos) — exports: — — frontend/components/payments/ChangePackageModal.tsx Extraído de app/(student)/dashboard/page.tsx para poder reutilizarlo también en la migración grupal -> indiv
@@ -39,10 +43,10 @@
 - `components/payments/PaymentMethodsInfo.tsx` (192 líneas, referenciado en 4 archivos) — exports: PaymentMethodsInfo
 - `components/payments/RefundDestinationFields.tsx` (113 líneas, referenciado en 2 archivos) — exports: RefundDestinationForm, emptyRefundDestinationForm, refundFormToPayload, hasAtLeastOneRefundField, RefundDestinationFields — frontend/components/payments/RefundDestinationFields.tsx Campos del modal de "a dónde enviar el reembolso" — reutilizado en: - Solicitar reembolso por profesor 
 - `components/payments/RejectedPaymentNotice.tsx` (87 líneas, referenciado en 2 archivos) — exports: RejectedPaymentNotice
-- `components/student/TeacherCard.tsx` (130 líneas, referenciado en 1 archivos) — exports: TeacherSummary, TeacherCard
+- `components/student/TeacherCard.tsx` (137 líneas, referenciado en 1 archivos) — exports: TeacherSummary, TeacherCard
 - `components/support/SupportTicketModal.tsx` (187 líneas, referenciado en 2 archivos) — exports: SupportTicketModal
 - `components/support/SupportTicketsView.tsx` (147 líneas, referenciado en 2 archivos) — exports: SupportTicketsView
-- `components/teacher/PublicProfileView.tsx` (471 líneas, referenciado en 2 archivos) — exports: PublicProfileTeacher, PublicProfileReview, displayTeacherName, PublicProfileView
+- `components/teacher/PublicProfileView.tsx` (480 líneas, referenciado en 2 archivos) — exports: PublicProfileTeacher, PublicProfileReview, displayTeacherName, PublicProfileView
 - `components/ui/Badge.tsx` (29 líneas, referenciado en 16 archivos) — exports: Badge
 - `components/ui/BottomSheet.tsx` (50 líneas, referenciado en 2 archivos) — exports: BottomSheet
 - `components/ui/Button.tsx` (52 líneas, referenciado en 16 archivos) — exports: Button
@@ -70,28 +74,29 @@
 - `hooks/useGodMode.ts` (304 líneas, referenciado en 4 archivos) — exports: GodModeAuditLogEntry, useGodModeAuditLog, useGodModeEntityHistory, GodModeLookupTeacher, GodModeLookupStudent, GodModeLookupEnrollment, GodModeLookupClass, useGodModeTeachers, useGodModeTeacherStudents, useGodModeStudentEnrollments, useGodModePairClasses, GodModeLookupPackage
 - `hooks/useLandingData.ts` (215 líneas, referenciado en 14 archivos) — exports: LandingTeacher, LandingReview, LandingPackage, LandingGroupStep, TitleGradientMap, LandingContent, LANDING_CONTENT_DEFAULTS, useLandingData
 - `hooks/useRevealOnScroll.ts` (45 líneas, referenciado en 1 archivos) — exports: useRevealOnScroll
+- `hooks/useSpokenLanguages.ts` (51 líneas, referenciado en 2 archivos) — exports: MY_SPOKEN_LANGUAGES_KEY, useMySpokenLanguages
 - `hooks/useStudentData.ts` (706 líneas, referenciado en 25 archivos) — exports: AVAILABLE_SLOTS_QUERY_PREFIX, invalidateAvailableSlots, BookingStage, RejectedPaymentInfo, PendingRechargeInfo, StudentClass, AvailableSlot, PackageInfo, StudentEnrollment, StudentMaterial, StudentHomework, TeacherResolution
 - `hooks/useSupport.ts` (95 líneas, referenciado en 3 archivos) — exports: SupportCategory, SupportTicketStatus, SupportTicket, useMySupportTickets, createSupportTicket, markSupportTicketSeen, useUnreadSupportCount, useSupportQueryInvalidation
-- `hooks/useSystemCatalogs.ts` (54 líneas, referenciado en 7 archivos) — exports: StudentGoal, PaymentMethodOption, ThemePreset, SubjectTheme, GoalCategoryKey, StudentGoalsCatalog, SystemCatalogs, SYSTEM_CATALOGS_QUERY_KEY, useSystemCatalogs
-- `hooks/useTeacherData.ts` (715 líneas, referenciado en 12 archivos) — exports: TeacherClass, TeacherProfile, WeeklySlot, WalletData, CalendarStatus, StudentEnrollmentSummary, StudentMaterialSummary, TeacherStudentFull, WithdrawalHistoryItem, IncomeHistoryItem, TeacherMaterial, TeacherPaymentEntry
-- `hooks/useToast.ts` (16 líneas, referenciado en 39 archivos) — exports: useToast
+- `hooks/useSystemCatalogs.ts` (56 líneas, referenciado en 8 archivos) — exports: StudentGoal, PaymentMethodOption, ThemePreset, SubjectTheme, GoalCategoryKey, StudentGoalsCatalog, SystemCatalogs, SYSTEM_CATALOGS_QUERY_KEY, useSystemCatalogs
+- `hooks/useTeacherData.ts` (717 líneas, referenciado en 12 archivos) — exports: TeacherClass, TeacherProfile, WeeklySlot, WalletData, CalendarStatus, StudentEnrollmentSummary, StudentMaterialSummary, TeacherStudentFull, WithdrawalHistoryItem, IncomeHistoryItem, TeacherMaterial, TeacherPaymentEntry
+- `hooks/useToast.ts` (16 líneas, referenciado en 40 archivos) — exports: useToast
 
 ## store/
 
-- `store/authStore.ts` (86 líneas, referenciado en 30 archivos) — exports: User, useAuthStore
+- `store/authStore.ts` (87 líneas, referenciado en 31 archivos) — exports: User, useAuthStore
 - `store/chatStore.ts` (530 líneas, referenciado en 7 archivos) — exports: ChatMessageStatus, ChatMessage, onChatMessage, useChatStore — store/chatStore.ts N3: reemplaza la conexión WS "por conversación" de hooks/useChat.ts por UNA sola conexión GLOBAL por sesión (ver backend/app/core/chat_ws.py 
 - `store/chatWidgetPresenceStore.ts` (28 líneas, referenciado en 2 archivos) — exports: useChatWidgetPresenceStore — store/chatWidgetPresenceStore.ts N2 (ubicación del ChatWidget): puente mínimo para que ChipiWidget sepa, SIN que cada una de las ~40 páginas que lo montan tenga
 - `store/toastStore.ts` (66 líneas, referenciado en 2 archivos) — exports: ToastVariant, ToastItem, ToastOptions, useToastStore, toast
 
 ## lib/
 
-- `lib/api.ts` (107 líneas, referenciado en 75 archivos) — exports: —
+- `lib/api.ts` (107 líneas, referenciado en 76 archivos) — exports: —
 - `lib/auth.ts` (25 líneas, referenciado en 15 archivos) — exports: decodeToken, isTokenExpired
 - `lib/color.ts` (36 líneas, referenciado en 19 archivos) — exports: hexToRgb, shadeColor, DEFAULT_THEME_COLOR, THEME_PRESETS
 - `lib/csp.ts` (49 líneas, referenciado en 5 archivos) — exports: buildCsp — Content-Security-Policy con nonce por petición (SEC-05, paso final). La construye proxy.ts en cada respuesta de página (ver node_modules/next/dist/docs/01-app/0
 - `lib/displayName.ts` (11 líneas, referenciado en 5 archivos) — exports: displayName
 - `lib/emailSettings.ts` (86 líneas, referenciado en 4 archivos) — exports: EmailProbability, EmailCategory, EmailSettings, PROBABILITY_LABEL, PROBABILITY_STYLE, quotaPercent, usageLabel, alertMessage, buildUpdate — Fase 7: lógica pura del panel de control de correos (sin React, testeable con Vitest).
-- `lib/errorMessage.ts` (41 líneas, referenciado en 47 archivos) — exports: getErrorMessage
+- `lib/errorMessage.ts` (41 líneas, referenciado en 48 archivos) — exports: getErrorMessage
 - `lib/errorReporting.ts` (99 líneas, referenciado en 6 archivos) — exports: FrontendErrorReport, reportFrontendError, installGlobalErrorReporting
 - `lib/godModeActions.ts` (387 líneas, referenciado en 3 archivos) — exports: GodModeFieldType, GodModeField, GodModeAction, GOD_MODE_ACTIONS, GOD_MODE_CATEGORIES — Registro declarativo de todas las acciones del Modo Dios. En vez de construir 13 pantallas separadas (una por endpoint), cada acción se describe acá como datos:
 - `lib/gradientTitle.tsx` (94 líneas, referenciado en 3 archivos) — exports: GradientPreset, GRADIENT_PRESETS, getGradientPreset, renderGradientTitle, stripGradientMarkers — frontend/lib/gradientTitle.tsx Soporte para "títulos con color" en el landing (config del superadmin): el admin escribe el texto normal y envuelve las palabras 
@@ -101,6 +106,7 @@
 - `lib/packageThemes.ts` (47 líneas, referenciado en 4 archivos) — exports: PackageTheme, SUBJECT_THEME_MAP, DEFAULT_PACKAGE_THEME, getSuggestedTheme, ICON_PICKER_OPTIONS, priceLabelSuffix
 - `lib/platformTenantMode.ts` (34 líneas, referenciado en 2 archivos) — exports: usePlatformTenantMode
 - `lib/scheduleUtc.ts` (29 líneas, referenciado en 2 archivos) — exports: getNextWeekdayDate, utcTimeToLocal — Utilidades para convertir horarios semanales recurrentes (guardados como "HH:MM" UTC + day_of_week) a la hora local del navegador, de forma consistente con la l
+- `lib/spokenLanguages.ts` (55 líneas, referenciado en 8 archivos) — exports: MAX_SPOKEN_LANGUAGES, languageKey, toggleLanguage, isSelected, canContinue, atLimit, formatSpoken, needsSpokenLanguages, sameLanguages — Fase 8: idiomas que HABLA el usuario. Lógica pura (sin React) para poder testearla con Vitest. No confundir con `TeacherProfile.languages` (los idiomas que el p
 - `lib/teacherOptions.ts` (86 líneas, referenciado en 8 archivos) — exports: SUBJECTS, LANGUAGES, SKILL_SUGGESTIONS, GOAL_CATEGORIES, GoalCategoryKey, GOALS, normalizeGoalsCatalog, flattenGoals, PAYMENT_METHODS, TOPICS, LEVELS — Opciones compartidas de perfil de profesor. Fuente única de verdad — se usa en onboarding, edición de perfil y creación de paquetes, para no duplicar estas list
 - `lib/textFormat.ts` (10 líneas, referenciado en 1 archivos) — exports: capitalizeWords — Capitaliza la primera letra de cada palabra a medida que el usuario escribe, sin tocar el resto de los caracteres ya tipeados (para no pelear con el cursor ni f
 - `lib/timezones.ts` (78 líneas, referenciado en 6 archivos) — exports: TIMEZONE_OPTIONS, TIMEZONE_TO_COUNTRY, DEFAULT_COUNTRY, CountryInfo, COUNTRY_OPTIONS, parsePhoneNumber — frontend/lib/timezones.ts

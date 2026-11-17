@@ -60,6 +60,7 @@ Llamadas `api.<verbo>(...)` por archivo (regex; las URLs construidas dinámicame
 - `hooks/useErrorLogs.ts`: GET /logs, GET /logs/stats, GET /logs/users
 - `hooks/useGodMode.ts`: GET /god-mode/audit-log, GET /god-mode/audit-log/{x}/{x}, GET /god-mode/lookup/class-durations, GET /god-mode/lookup/students/{x}/enrollments, GET /god-mode/lookup/teachers, GET /god-mode/lookup/teachers/{x}/cohorts, GET /god-mode/lookup/teachers/{x}/packages, GET /god-mode/lookup/teachers/{x}/reviews, GET /god-mode/lookup/teachers/{x}/students, GET /god-mode/lookup/teachers/{x}/students/reviewable, GET /god-mode/lookup/teachers/{x}/students/{x}/classes, GET /god-mode/lookup/teachers/{x}/students/{x}/payments
 - `hooks/useLandingData.ts`: GET /public/landing
+- `hooks/useSpokenLanguages.ts`: GET /users/me, PATCH /users/me
 - `hooks/useStudentData.ts`: GET /admin/platform-config, GET /availability/featured-teacher/username, GET /availability/{x}/slots, GET /classes/my-classes, GET /homework/student/my-homework, GET /materials/student/my-materials, GET /packages/my-enrollments, GET /packages/teacher/{x}, GET /payments/booking-status, GET /payments/booking-status{x}, GET /reviews/{x}, GET /reviews/{x}/summary, GET /teachers, GET /teachers/{x}, GET /users/me, GET /users/me/preferences, GET /users/me/student-profile, GET /users/me/teachers
 - `hooks/useSupport.ts`: GET /support/tickets/me, GET /support/tickets/me/unread-count, PATCH /support/tickets/{x}/seen, POST /support/tickets
 - `hooks/useSystemCatalogs.ts`: GET /system-catalogs

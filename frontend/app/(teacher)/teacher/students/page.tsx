@@ -17,6 +17,7 @@ import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import { usePlatformConfig } from "@/hooks/useStudentData";
+import { formatSpoken } from "@/lib/spokenLanguages";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "Todos los estados" },
@@ -122,6 +123,9 @@ function StudentCard({ student }: { student: TeacherStudentFull }) {
               <span className="flex items-center gap-1">
                 <Phone className="w-3.5 h-3.5 text-slate-400" /> {student.phone_number}
               </span>
+            )}
+            {formatSpoken(student.spoken_languages) && (
+              <span className="flex items-center gap-1">{formatSpoken(student.spoken_languages)}</span>
             )}
           </div>
         </div>

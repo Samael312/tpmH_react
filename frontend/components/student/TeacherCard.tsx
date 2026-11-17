@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Star, Globe, ArrowRight } from "lucide-react";
 import { getFlagForNationality } from "@/lib/nationalities";
+import { formatSpoken } from "@/lib/spokenLanguages";
 
 export interface TeacherSummary {
   user_username: string;
@@ -14,6 +15,8 @@ export interface TeacherSummary {
   profile_photo_url?: string | null;
   nationality?: string | null;
   languages: string[];
+  // Fase 8: idiomas que HABLA (no los que enseña)
+  spoken_languages?: string[];
   subjects: string[];
   average_rating?: number;
   total_reviews?: number;
@@ -118,6 +121,10 @@ export default function TeacherCard({
             <Globe className="w-3.5 h-3.5" />
             {teacher.languages.slice(0, 3).join(" · ")}
           </div>
+        )}
+
+        {formatSpoken(teacher.spoken_languages) && (
+          <p className="text-[11px] text-slate-400 font-bold mb-4">{formatSpoken(teacher.spoken_languages)}</p>
         )}
 
         <span className="mt-auto inline-flex items-center gap-1.5 text-sm font-bold text-pink-600

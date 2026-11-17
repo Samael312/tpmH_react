@@ -23,6 +23,7 @@ class UserResponse(UserBase):
     phone_number: Optional[str] = None
     nationality: Optional[str] = None
     onboarding_completed: bool = False
+    spoken_languages: List[str] = []
 
     # Se usa únicamente para calcular is_google_account (abajo); no se
     # expone el id de Google en sí en la respuesta (exclude=True).
@@ -85,6 +86,8 @@ class UpdateProfileRequest(BaseModel):
     timezone: Optional[str] = None
     nationality: Optional[str] = None
     onboarding_completed: Optional[bool] = None
+    # Fase 8: se valida contra el catalogo `spoken_languages` en el endpoint (core/spoken_languages.py)
+    spoken_languages: Optional[List[str]] = None
 
 class DeleteAccountRequest(BaseModel):
     """
