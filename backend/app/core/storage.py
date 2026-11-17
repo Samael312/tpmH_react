@@ -86,6 +86,7 @@ def _slugify(text: str) -> str:
 # caso más común de "archivo malicioso con content-type falseado" sin
 # agregar una dependencia de sistema (libmagic) al Docker image.
 def _matches_declared_type(file_bytes: bytes, content_type: str) -> bool:
+    # Solo se miran los primeros 16 bytes: basta pasar la cabecera, no el archivo entero.
     head = file_bytes[:16]
 
     if content_type == "application/pdf":
@@ -98,7 +99,7 @@ def _matches_declared_type(file_bytes: bytes, content_type: str) -> bool:
     if content_type == "image/gif":
         return head.startswith(b"GIF87a") or head.startswith(b"GIF89a")
     if content_type == "image/webp":
-        return head[:4] == b"RIFF" and file_bytes[8:12] == b"WEBP"
+        return head[:4] == b"RIFF" and head[8:12] == b"WEBP"
 
     if content_type in ("video/mp4", "video/quicktime"):
         # Contenedor ISO-BMFF (mp4/mov): la caja "ftyp" suele arrancar en
@@ -157,7 +158,13 @@ def upload_file(
     if content_type not in ALL_ALLOWED_TYPES:
         raise ValueError(f"Tipo de archivo no permitido: {content_type}")
 
-    if not _matches_declared_type(file_bytes, content_type):
+    _validate_upload(file_bytes[:16], len(file_bytes), content_type)
+    return _send_to_cloudinary(file_bytes, filename, content_type, folder, display_name)
+
+
+def _validate_upload(head: bytes, size: int, content_type: str) -> None:
+    """Valida tamano y firma (magic bytes) sin necesitar el archivo completo."""
+    if not _matches_declared_type(head, content_type):
         raise ValueError(
             "El contenido del archivo no coincide con su tipo declarado. "
             "Verificá que el archivo no esté corrupto o renombrado."
@@ -166,7 +173,7 @@ def upload_file(
     is_video = content_type in ALLOWED_VIDEO_TYPES
     max_size = MAX_VIDEO_SIZE if is_video else MAX_DOCUMENT_SIZE
 
-    if len(file_bytes) > max_size:
+    if size > max_size:
         if is_video:
             raise ValueError(
                 f"El video supera el tamaño máximo permitido de {MAX_VIDEO_SIZE_MB} MB."
@@ -175,13 +182,48 @@ def upload_file(
             f"El archivo supera el tamaño máximo permitido de {MAX_DOCUMENT_SIZE_MB} MB."
         )
 
+
+def upload_file_stream(
+    fileobj,
+    filename: str,
+    content_type: str,
+    folder: str = "materials",
+    display_name: str | None = None,
+) -> dict:
+    """
+    Igual que upload_file, pero recibe un objeto tipo archivo (p. ej. `UploadFile.file`,
+    que Starlette ya guarda en disco si pasa de 1 MB) en vez de bytes: el archivo nunca se
+    carga entero en RAM. Valida tamano y firma ANTES de enviar nada, y los videos se suben por
+    trozos (`upload_large`).
+    """
+    if content_type not in ALL_ALLOWED_TYPES:
+        raise ValueError(f"Tipo de archivo no permitido: {content_type}")
+
+    fileobj.seek(0, 2)
+    size = fileobj.tell()
+    fileobj.seek(0)
+    head = fileobj.read(16)
+    fileobj.seek(0)
+
+    _validate_upload(head, size, content_type)
+    return _send_to_cloudinary(fileobj, filename, content_type, folder, display_name)
+
+
+def _send_to_cloudinary(data, filename: str, content_type: str, folder: str, display_name: str | None) -> dict:
+    """`data` puede ser bytes o un objeto tipo archivo."""
+    is_video = content_type in ALLOWED_VIDEO_TYPES
     ext = filename.rsplit(".", 1)[-1] if "." in filename else ""
     base_name = _slugify(display_name) if display_name else _slugify(filename.rsplit(".", 1)[0])
     upload_filename = f"{base_name}.{ext}" if ext else base_name
 
     try:
-        result = cloudinary.uploader.upload(
-            file_bytes,
+        uploader = (
+            cloudinary.uploader.upload_large
+            if is_video and hasattr(data, "read")
+            else cloudinary.uploader.upload
+        )
+        result = uploader(
+            data,
             folder=folder,
             resource_type=_resource_type_for(content_type),
             filename=upload_filename,

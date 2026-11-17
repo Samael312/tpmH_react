@@ -77,8 +77,8 @@ Salida: repetir sondas (200 KB y `role: system` en Chipi → rechazados).
 - [x] (L) eager loading en N+1 (9 listados corregidos y vigilados por `tests/audit/test_perf_queries.py`, que falla si las consultas crecen con las filas) y paginación `limit`/`offset` + `X-Total-Count` en `/payments/history`, `/admin/support-tickets`, `/admin/teachers`, `/packages/teacher/enrollments` (`app/core/pagination.py`) · _pendiente:_ paginar el resto de listados (`students-full`, `my-classes`, chat, god_mode) y purga de `error_logs`
 - [x] (M) sacar `finalize_past_classes` de los GET de agenda (hecho; solo lo hace el job de 10 min) · _no se tocó:_ la escritura de `get_student_booking_stage` (cancela el enrollment sin pago notificado; lo usan varios flujos)
 - [x] (M) jobs `async` bloqueantes → `def` (hecho) · _pendiente, decisión de negocio:_ espaciar jobs para que Neon se suspenda (el de Meet cada 5 min lo mantiene despierto)
-- [ ] (M) subidas de 100 MB por streaming a Cloudinary
-- [ ] (S) evaluar alternativas a Railway (`backend/doc/RESOURCE_COSTS.md`)
+- [x] (M) subidas de 100 MB por streaming a Cloudinary (`upload_file_stream`, endpoints en hilo, vídeo por trozos; `tests/audit/test_uploads_stream.py`) · _pendiente:_ cuota por profesor y subida directa desde el navegador
+- [x] (S) evaluar alternativas a Railway: análisis hecho en `backend/doc/RESOURCE_COSTS.md` (sección «Alternativas gratuitas a Railway»); migrar o no es decisión pendiente
 
 ## Fase 6 — Pruebas y documentación
 

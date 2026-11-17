@@ -209,9 +209,12 @@ Las que empiezan por `_` son privadas del módulo.
 
 - `_slugify(text: str)` — L67
 - `_matches_declared_type(file_bytes: bytes, content_type: str)` — L88
-- `_resource_type_for(content_type: str)` — L134: Determina el resource_type correcto de Cloudinary según el content_type. Crítico para video: si se sube con resource_type="auto" (o "raw"), Cloudinary puede aplicarle el límite de tamaño de imagen/raw del plan (mucho más bajo) en vez del límite específico para video.
-- `upload_file(file_bytes: bytes, filename: str, content_type: str, folder: str='materials', display_name: str | None=None)` — L150
-- `delete_file(public_id: str, resource_type: str='image')` — L205
+- `_resource_type_for(content_type: str)` — L135: Determina el resource_type correcto de Cloudinary según el content_type. Crítico para video: si se sube con resource_type="auto" (o "raw"), Cloudinary puede aplicarle el límite de tamaño de imagen/raw del plan (mucho más bajo) en vez del límite específico para video.
+- `upload_file(file_bytes: bytes, filename: str, content_type: str, folder: str='materials', display_name: str | None=None)` — L151
+- `_validate_upload(head: bytes, size: int, content_type: str)` — L165: Valida tamano y firma (magic bytes) sin necesitar el archivo completo.
+- `upload_file_stream(fileobj, filename: str, content_type: str, folder: str='materials', display_name: str | None=None)` — L186: Igual que upload_file, pero recibe un objeto tipo archivo (p. ej. `UploadFile.file`, que Starlette ya guarda en disco si pasa de 1 MB) en vez de bytes: el archivo nunca se carga entero en RAM. Valida tamano y firma ANTES de enviar nada, y los videos se suben por trozos (`upload_large`).
+- `_send_to_cloudinary(data, filename: str, content_type: str, folder: str, display_name: str | None)` — L212: `data` puede ser bytes o un objeto tipo archivo.
+- `delete_file(public_id: str, resource_type: str='image')` — L247
 
 ## app/core/teacher_students.py
 

@@ -48,6 +48,8 @@ Mitigación: exigir login para el chat completo, límite por usuario/día, `max_
 Mitigación: cuota diaria por usuario, catálogo/lista blanca de palabras de materiales, política de limpieza.
 
 ### 7. 💰🧠 Subidas de archivos y vídeo
+> **Corregido en la Fase 5:** las subidas ya no se leen enteras en RAM. Los endpoints son `def` (hilo, no bloquean el event loop) y pasan `UploadFile.file` a `upload_file_stream` (`app/core/storage.py`), que valida tamaño y firma antes de enviar y sube los vídeos por trozos con `upload_large`. Sigue sin haber cuota por profesor ni subida directa desde el navegador. El texto de abajo describe el estado anterior.
+
 Documentos hasta 10 MB y **vídeos hasta 100 MB** (`MAX_VIDEO_UPLOAD_MB`), leídos **completos en RAM** (`file_bytes`, `len(file_bytes) > max_size`) antes de subir a Cloudinary: cada subida simultánea de 100 MB ocupa ~100 MB (más copias durante validación de magic bytes) del contenedor de Railway; unas pocas en paralelo pueden provocar OOM. Cloudinary factura almacenamiento y ancho de banda; `/materials/{id}/stream` redirige a la URL pública, por lo que cada reproducción consume ancho de banda de Cloudinary (no de Railway: bien).
 Mitigación: subida directa del navegador a Cloudinary (firma desde el backend) o streaming con tope, límite de subidas por usuario, cuota de almacenamiento por profesor.
 
@@ -128,7 +130,7 @@ Fuentes: [documentación de Railway](https://docs.railway.com/pricing/plans.md),
 - **Un proceso siempre encendido**: el scheduler (recordatorios, Meet, finalizar clases, sync Calendar) y el **WebSocket del chat** viven en el proceso web. Un servicio que se duerme por inactividad **no ejecuta los jobs ni mantiene el chat** y el primer usuario espera un arranque en frío (~1 min).
 - **Un solo worker** (jobs y rate-limit en memoria).
 - Frontend Next.js 16 (standalone), backend FastAPI con Dockerfile, BD **PostgreSQL en Neon** (ya es externa; no depende de Railway).
-- RAM: las subidas de hasta 100 MB se leen en memoria (punto 7); en planes de 256–512 MB conviene limitar el tamaño.
+- RAM: desde la Fase 5 las subidas van por streaming (punto 7), así que 256–512 MB ya no son un problema por esto.
 
 ## Opciones por componente
 

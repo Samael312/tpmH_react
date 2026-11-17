@@ -19,7 +19,7 @@ from app.models.student_preferences import StudentSchedulePreference
 from app.core.timezone import convert_local_time_to_utc, validate_timezone
 from app.core.schedule_recalc import recalculate_student_preferences_timezone
 from app.schemas.preferences import SetPreferencesRequest, PreferenceSlotResponse
-from app.core.storage import upload_file, delete_file
+from app.core.storage import upload_file_stream, delete_file
 from app.models.teacher import TeacherProfile, TeacherStatus
 from app.core.teacher_students import link_student_to_teacher
 from app.models.payment_config import PlatformConfig
@@ -35,7 +35,7 @@ router = APIRouter()
 
 # ─── HELPER DE AVATAR / FOTO DE PERFIL ───────────────────────────────────────
 
-async def _process_and_update_user_avatar(
+def _process_and_update_user_avatar(
     file: UploadFile,
     current_user: User,
     db: Session
@@ -46,12 +46,9 @@ async def _process_and_update_user_avatar(
     las referencias en el usuario base y en sus perfiles asociados.
     """
     try:
-        # 1. Leer los bytes del archivo cargado
-        file_bytes = await file.read()
-
-        # 2. Subir el archivo a Cloudinary
-        result = upload_file(
-            file_bytes=file_bytes,
+        # 1-2. Subir el archivo a Cloudinary sin cargarlo entero en RAM
+        result = upload_file_stream(
+            file.file,
             filename=file.filename,
             content_type=file.content_type,
             folder="tpm/avatars"
@@ -356,43 +353,43 @@ def get_photo(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/me/avatar")
-async def upload_avatar_post(
+def upload_avatar_post(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Sube o reemplaza la foto de perfil (POST /me/avatar)."""
-    return await _process_and_update_user_avatar(file, current_user, db)
+    return _process_and_update_user_avatar(file, current_user, db)
 
 
 @router.patch("/me/avatar")
-async def upload_avatar_patch(
+def upload_avatar_patch(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Actualiza la foto de perfil (PATCH /me/avatar)."""
-    return await _process_and_update_user_avatar(file, current_user, db)
+    return _process_and_update_user_avatar(file, current_user, db)
 
 
 @router.post("/me/photo")
-async def upload_photo_post(
+def upload_photo_post(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Alias de compatibilidad para subir foto (POST /me/photo)."""
-    return await _process_and_update_user_avatar(file, current_user, db)
+    return _process_and_update_user_avatar(file, current_user, db)
 
 
 @router.patch("/me/photo")
-async def upload_photo_patch(
+def upload_photo_patch(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Alias de compatibilidad para actualizar foto (PATCH /me/photo)."""
-    return await _process_and_update_user_avatar(file, current_user, db)
+    return _process_and_update_user_avatar(file, current_user, db)
 
 
 # ─── ENDPOINTS ESPECÍFICOS DE ESTUDIANTE ──────────────────────────────────────

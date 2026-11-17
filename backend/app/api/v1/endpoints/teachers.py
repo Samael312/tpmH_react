@@ -11,7 +11,7 @@ from app.schemas.teacher import (
     TeacherPublicResponse
 )
 from app.models.student import StudentProfile
-from app.core.storage import upload_file, delete_file
+from app.core.storage import upload_file_stream, delete_file
 from app.models.package import Enrollment
 from app.models.material import Material, MaterialAssignment
 from app.core.email import send_admin_new_teacher_pending_email
@@ -299,7 +299,7 @@ def get_my_students_full(
     return result
 
 @router.post("/me/video")
-async def upload_teacher_video(
+def upload_teacher_video(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_teacher),
     db: Session = Depends(get_db),
@@ -312,10 +312,9 @@ async def upload_teacher_video(
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil no encontrado")
 
-    file_bytes = await file.read()
     try:
-        result = upload_file(
-            file_bytes=file_bytes,
+        result = upload_file_stream(
+            file.file,
             filename=file.filename,
             content_type=file.content_type,
             folder=f"teacher_videos/teacher_{profile.id}",

@@ -17,7 +17,7 @@ from app.schemas.materials import (
     MaterialAssignmentResponse,
     UpdateProgressRequest,
 )
-from app.core.storage import upload_file, delete_file
+from app.core.storage import upload_file_stream, delete_file
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
     response_model=MaterialResponse,
     status_code=status.HTTP_201_CREATED
 )
-async def create_material(
+def create_material(
     title: str = Form(...),
     category: str = Form(...),
     description: Optional[str] = Form(None),
@@ -50,10 +50,9 @@ async def create_material(
 
     # Si hay archivo lo subimos a Cloudinary
     if file:
-        file_bytes = await file.read()
         try:
-            upload_result = upload_file(
-                file_bytes=file_bytes,
+            upload_result = upload_file_stream(
+                file.file,
                 filename=file.filename,
                 content_type=file.content_type,
                 folder=f"materials/teacher_{current_user.teacher_profile.id}",
