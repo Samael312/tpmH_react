@@ -611,7 +611,7 @@ export default function TeacherCohortsPage() {
                       <li key={m.enrollment_id} className="flex items-center gap-2.5 bg-slate-50 rounded-xl px-3 py-2">
                         {m.student_avatar ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={m.student_avatar} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                          <img src={m.student_avatar} alt="" loading="lazy" decoding="async" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
                         ) : (
                           <div className="w-7 h-7 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center text-[11px] font-black flex-shrink-0">
                             {m.student_name.charAt(0).toUpperCase()}

@@ -1,11 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Poppins, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { connection } from "next/server";
 import Providers from "./providers";
 import { getLandingDataServer, buildDefaultSiteTitle } from "@/lib/landingServer";
 
 const inter = Inter({ subsets: ["latin"] });
+// Poppins (titulos) y DM Sans (texto) se descargan en el build y se sirven desde el propio sitio: antes iban por un
+// @import de Google Fonts que bloqueaba el pintado. Solo los pesos que usa la interfaz. Tailwind las lee por variable.
+const poppins = Poppins({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-poppins", display: "swap" });
+const dmSans = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-dm-sans", display: "swap" });
 
 export async function generateMetadata(): Promise<Metadata> {
   const data = await getLandingDataServer();
@@ -30,7 +34,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   await connection();
   return (
     <html lang="es" suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning>
+      <body className={`${inter.className} ${poppins.variable} ${dmSans.variable}`} suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>
     </html>

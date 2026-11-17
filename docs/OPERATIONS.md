@@ -36,12 +36,12 @@ Desde la Fase 9 `railway.toml` declara `preDeployCommand = "alembic upgrade head
 cd backend
 # .env con la DATABASE_URL del entorno destino (¡comprueba a cuál apunta!)
 alembic current        # debe mostrar la revisión actual
-alembic heads          # debe haber UN solo head (hoy a9c4d5e6f7a8)
+alembic heads          # debe haber UN solo head (hoy b1d5e6f7a8c9)
 alembic upgrade head
 ```
 - Verifica el destino antes: `alembic current` y el host de `DATABASE_URL`. `load_dotenv(override=True)` hace que el `.env` pise tu entorno.
 - Si el *pre-deploy* automático no se usa, ejecuta el comando a mano antes de cada despliegue que incluya migraciones.
-- Estado verificado el 2026-11-16: la BD de Neon estaba en `c9d0e1f2a3b4`. **Desde entonces el repo tiene 6 migraciones más** (`d1e2f3a4b5c6` NEG-02, `a7b8c9d0e1f2` SEC-04, `b8c9d0e1f2a3` SEC-05, `e7a1b2c3d4f5` Fase 7: control de correos, `f8b3c4d5e6a7` Fase 8: idiomas que habla el usuario (también crea el catálogo `spoken_languages`) y `a9c4d5e6f7a8` Fase 9: tamaño de los materiales y aviso de chat pendiente). Según el equipo, Neon está aplicada hasta `f8b3c4d5e6a7`: falta `a9c4d5e6f7a8`: hay que ejecutar `alembic upgrade head` en cada entorno antes de desplegar el código nuevo (sin ellas fallan el login con refresh y la verificación de email).
+- Estado verificado el 2026-11-16: la BD de Neon estaba en `c9d0e1f2a3b4`. **Desde entonces el repo tiene 7 migraciones más** (`d1e2f3a4b5c6` NEG-02, `a7b8c9d0e1f2` SEC-04, `b8c9d0e1f2a3` SEC-05, `e7a1b2c3d4f5` Fase 7: control de correos, `f8b3c4d5e6a7` Fase 8: idiomas que habla el usuario (también crea el catálogo `spoken_languages`) `a9c4d5e6f7a8` Fase 9: tamaño de los materiales y aviso de chat pendiente y `b1d5e6f7a8c9` Fase 11: 26 índices de rendimiento, solo añaden índices). Según el equipo, Neon está aplicada hasta `f8b3c4d5e6a7`: faltan `a9c4d5e6f7a8` y `b1d5e6f7a8c9`: hay que ejecutar `alembic upgrade head` en cada entorno antes de desplegar el código nuevo (sin ellas fallan el login con refresh y la verificación de email).
 
 ## 5. Copias de seguridad y recuperación
 
@@ -135,3 +135,10 @@ Tras compartir un `.env` (chat, captura, repositorio) considera comprometidas **
 - Los jobs viven en memoria del proceso: tras un reinicio o despliegue se recalculan solos a los 5 s. Con **más de un worker** se duplicarían (mantén uno).
 - Si un job no se ejecuta a su hora, revisa los logs de Railway (`logger` de `app.core.scheduler`): un error al calcular el vencimiento lo reintenta a los 10 min y no se pierde.
 - Ajustes: `CHAT_DIGEST_DELAY_MINUTES`, `MATERIALS_QUOTA_MB`, `ERROR_LOG_RETENTION_DAYS`, `EMAIL_LOG_RETENTION_DAYS` (ver `backend/doc/ENVIRONMENT.md`).
+
+## 8. CDN y compresión en Railway (Fase 11)
+
+- **Backend:** `GZipMiddleware` (nivel 5, respuestas de 1000 bytes o más; `API_GZIP_MIN_BYTES`). No comprime el streaming de Chipi.
+- **CDN de Railway (sin coste extra según su documentación, https://docs.railway.com/networking/cdn):** está **apagado por defecto** y se activa por servicio: servicio del **frontend** → Settings → Edge → *Enable CDN Caching* (o `railway cdn enable --service <nombre>`). No cambia DNS ni SSL. Solo cachea `GET`/`HEAD` sin `Authorization` ni `Set-Cookie`, así que sirve para los estáticos del frontend (`/_next/static`, `public/`) y no para la API. Según esa documentación, el borde comprime con Brotli/gzip lo que el origen envía sin comprimir (respuestas de 256 bytes o más) y nunca retiene `text/event-stream`. **Sin verificar en producción:** hay que activarlo y comprobar con `curl -I -H "Accept-Encoding: br" <url>`.
+- `public/` (modelo 3D, assets) lleva `Cache-Control` de 7 días (`next.config.ts`); `_next/static` ya es `immutable` por defecto de Next.
+- Tras activar el CDN, si se cambia un archivo de `public/` con el mismo nombre, puede tardar hasta 7 días en verse; cambia el nombre del archivo al sustituirlo.

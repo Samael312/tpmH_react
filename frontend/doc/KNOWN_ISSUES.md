@@ -20,3 +20,8 @@ Backend: `../../backend/doc/KNOWN_ISSUES.md`. Informe completo: `../../ANALISIS.
 | UX-03 | El dashboard del alumno dice «clase de prueba de 30 minutos»; el backend usa `trial_duration_minutes` (25 por defecto) | `student/dashboard` | **corregido** (Fase 4) |
 | UX-04 | `/admin/payments` → pestaña «Retiros (0)» siempre vacía por el 404 de AUD-12 (confirmado en red: `GET /payments/admin/withdrawals/pending` 404) | `admin/payments` | **corregido** (Fase 4) |
 Nota sobre `generated/API_CALLS.md`: de las 4 llamadas «sin ruta», solo `/payments/admin/withdrawals/pending` es un fallo real; las otras 3 son artefactos del regex (URLs con query o plantillas dinámicas).
+
+## Fase 11
+- Los listados cargan **todas** las páginas del servidor (`fetchAllPages`), no una por una: ya no se cortan a 200 filas, pero con miles de filas la carga inicial crece. Si algún listado lo necesita, pasarlo a `useInfiniteQuery` con filtros en el servidor.
+- Buscadores que llaman a la API usan `useDebouncedValue` (400 ms): auditoría de chats y alumnos del admin. El resto filtra en el cliente.
+- Modelo 3D de 22 MB sin comprimir (pendiente, ver `CORRECCIONES.md`).

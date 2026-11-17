@@ -1,4 +1,5 @@
 import api from '@/lib/api'
+import { fetchAllPages } from "@/lib/pagination";
 import type { SpokenLanguage } from '@/lib/spokenLanguages'
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 
@@ -200,8 +201,7 @@ export function useTeacherPaymentsHistory(enabled: boolean = true) {
   const query = useQuery({
     queryKey: ["teacher", "payments", "history"],
     queryFn: async () => {
-      const res = await api.get('/payments/history')
-      return res.data as TeacherPaymentEntry[]
+      return (await fetchAllPages<TeacherPaymentEntry>('/payments/history')).rows
     },
     enabled,
   })
@@ -237,8 +237,7 @@ export function useMyWithdrawals() {
   const query = useQuery({
     queryKey: ["teacher", "wallet", "withdrawals"],
     queryFn: async () => {
-      const res = await api.get('/payments/my-withdrawals')
-      return res.data as WithdrawalHistoryItem[]
+      return (await fetchAllPages<WithdrawalHistoryItem>('/payments/my-withdrawals')).rows
     },
   })
 
@@ -255,8 +254,7 @@ export function useMyIncome() {
   const query = useQuery({
     queryKey: ["teacher", "wallet", "income"],
     queryFn: async () => {
-      const res = await api.get('/payments/my-income')
-      return res.data as IncomeHistoryItem[]
+      return (await fetchAllPages<IncomeHistoryItem>('/payments/my-income')).rows
     },
   })
 
@@ -274,8 +272,7 @@ export function useTeacherStudentsFull() {
   const query = useQuery({
     queryKey: ["teacher", "students"],
     queryFn: async () => {
-      const res = await api.get('/teachers/me/students-full')
-      return res.data as TeacherStudentFull[]
+      return (await fetchAllPages<TeacherStudentFull>('/teachers/me/students-full')).rows
     },
   })
 
@@ -306,17 +303,21 @@ export function useTeacherClasses(filters?: TeacherClassesFilters) {
   const query = useQuery({
     queryKey: ["teacher", "classes", filters ?? {}],
     queryFn: async () => {
-      const params = new URLSearchParams()
-      if (filters?.date) params.append('date', filters.date)
-      if (filters?.status) params.append('status_filter', filters.status)
-      if (filters?.includeHistory) params.append('include_history', 'true')
-
-      const res = await api.get(`/classes/teacher/classes?${params}`)
+      // Los contadores (total, upcoming, completed) son globales: vienen en la primera página; las filas se piden
+      // por páginas hasta completar el total.
+      const { rows, firstBody } = await fetchAllPages<TeacherClass, TeacherClassesResponse>('/classes/teacher/classes', {
+        params: {
+          date: filters?.date || undefined,
+          status_filter: filters?.status || undefined,
+          include_history: filters?.includeHistory ? 'true' : undefined,
+        },
+        rows: (body) => body.classes,
+      })
       return {
-        classes: res.data.classes as TeacherClass[],
-        total: res.data.total as number,
-        upcoming: res.data.upcoming as number,
-        completed: res.data.completed as number,
+        classes: rows,
+        total: firstBody.total as number,
+        upcoming: firstBody.upcoming as number,
+        completed: firstBody.completed as number,
       } satisfies TeacherClassesResponse
     },
   })
@@ -541,8 +542,7 @@ export function useTeacherStudentsBasic() {
   const query = useQuery({
     queryKey: ["teacher", "students", "basic"],
     queryFn: async () => {
-      const res = await api.get('/teachers/me/students')
-      return res.data as TeacherStudentBasic[]
+      return (await fetchAllPages<TeacherStudentBasic>('/teachers/me/students')).rows
     },
   })
 
@@ -621,8 +621,7 @@ export function useTeacherEnrollments() {
   const query = useQuery({
     queryKey: ["teacher", "packages", "enrollments"],
     queryFn: async () => {
-      const res = await api.get('/packages/teacher/enrollments')
-      return res.data as TeacherEnrollmentCompliance[]
+      return (await fetchAllPages<TeacherEnrollmentCompliance>('/packages/teacher/enrollments')).rows
     },
   })
 
@@ -654,8 +653,7 @@ export function useTeacherCohorts() {
   const query = useQuery({
     queryKey: ["teacher", "cohorts"],
     queryFn: async () => {
-      const res = await api.get('/cohorts/teacher')
-      return res.data as TeacherCohortItem[]
+      return (await fetchAllPages<TeacherCohortItem>('/cohorts/teacher')).rows
     },
   })
 

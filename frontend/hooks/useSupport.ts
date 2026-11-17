@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 
+import { fetchAllPages } from "@/lib/pagination";
 export type SupportCategory = "bug" | "error" | "question" | "other" | "class_correction";
 export type SupportTicketStatus = "pending" | "answered";
 
@@ -23,8 +24,7 @@ export function useMySupportTickets() {
   const query = useQuery({
     queryKey: ["support", "my-tickets"],
     queryFn: async () => {
-      const res = await api.get("/support/tickets/me");
-      return res.data as SupportTicket[];
+      return (await fetchAllPages<SupportTicket>("/support/tickets/me")).rows;
     },
     // M15: antes solo se refrescaba al montar/reenfocar (staleTime global de
     // 60s + refetchOnWindowFocus desactivado), así que si el staff respondía

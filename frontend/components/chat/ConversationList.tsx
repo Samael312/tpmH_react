@@ -56,7 +56,7 @@ export default function ConversationList({
               <Users2 size={20} />
             ) : c.avatar ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={c.avatar} alt={c.title} className="w-full h-full object-cover" />
+              <img src={c.avatar} alt={c.title} loading="lazy" decoding="async" className="w-full h-full object-cover" />
             ) : (
               <span className="font-black text-sm">{c.title?.[0]?.toUpperCase() || "?"}</span>
             )}

@@ -42,6 +42,17 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: securityHeaders,
       },
+      // Archivos de public/ (modelo 3D, imágenes): no llevan hash en el nombre, así que no pueden ser `immutable`;
+      // 7 días con revalidación en segundo plano evita volver a bajar 22 MB en cada visita. Si se sustituye un
+      // archivo con el mismo nombre, tarda hasta 7 días en verse: cambia el nombre al sustituirlo.
+      {
+        source: "/models/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=86400" }],
+      },
+      {
+        source: "/assets/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=86400" }],
+      },
     ];
   },
 

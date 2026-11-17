@@ -1,3 +1,5 @@
+import os
+
 from openai import AsyncOpenAI
 from typing import AsyncGenerator, List, Optional
 from app.core.config import settings
@@ -5,7 +7,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+# El valor por defecto del SDK es 600 s y 2 reintentos: una respuesta colgada dejaria la peticion abierta muchos minutos.
+client = AsyncOpenAI(
+    api_key=settings.OPENAI_API_KEY,
+    timeout=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),
+    max_retries=1,
+)
 
 # Máximo de mensajes del historial que enviamos a OpenAI
 # Más mensajes = más contexto pero más costo

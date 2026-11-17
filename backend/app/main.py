@@ -1,9 +1,11 @@
+import os
 import traceback
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from slowapi.errors import RateLimitExceeded
@@ -37,6 +39,15 @@ origins = [
     settings.FRONTEND_URL,
     "http://localhost:3000",
 ]
+
+# Compresion gzip de las respuestas JSON grandes (listados, landing). Se registra PRIMERO (= middleware mas interno):
+# los middlewares `@app.middleware("http")` reenvian el cuerpo en trozos y, desde fuera, el gzip comprimiria hasta
+# respuestas diminutas; asi ve el cuerpo completo y respeta el tamano minimo. Starlette no comprime text/event-stream, asi
+# que el streaming de Chipi sigue fluyendo token a token. nivel 5: casi el mismo tamano que 9 con bastante menos CPU.
+# API_GZIP_MIN_BYTES=0 la desactiva (p. ej. si algun dia un proxy delante ya comprime).
+_GZIP_MIN_BYTES = int(os.getenv("API_GZIP_MIN_BYTES", "1000"))
+if _GZIP_MIN_BYTES > 0:
+    app.add_middleware(GZipMiddleware, minimum_size=_GZIP_MIN_BYTES, compresslevel=5)
 
 # CORS — permite que el frontend en localhost:3000 hable con el backend
 app.add_middleware(

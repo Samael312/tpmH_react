@@ -38,3 +38,9 @@ Pendiente: cookie HttpOnly (ver KNOWN_ISSUES).
 
 ## Build y calidad (verificado 2026-11-16)
 `npx tsc --noEmit` 0 errores · `npx eslint .` limpio · `npx next build` 60 rutas · 0 tests.
+
+## Listados paginados (Fase 11)
+`lib/pagination.ts` → `fetchAllPages(path, { params, rows })`: el backend devuelve como mucho `limit` filas (200 por defecto) y el total en `X-Total-Count`; las pantallas filtran y suman sobre la lista completa, así que los hooks de listados piden página a página hasta completar el total (una sola petición si hay menos de 200 filas; tope de seguridad de 5000). Lo usan los hooks de pagos, retiros, ingresos, tickets, alumnos, clases, cohortes, conversaciones y los listados de admin. Paginación incremental con «Cargar más» solo tendría sentido donde la pantalla no filtre ni sume en el cliente.
+
+## Fuentes y caché (Fase 11)
+Inter, Poppins (600/700/800) y DM Sans (400/500/600) se cargan con `next/font/google` en `app/layout.tsx` (se descargan en el build y se sirven desde el propio sitio; Tailwind las usa por las variables `--font-poppins` y `--font-dm-sans`). `public/` lleva `Cache-Control` de 7 días. El modelo 3D `public/models/Chipi_Waving.glb` pesa 22 MB (13 MB de texturas JPEG y 9 MB de geometría): ver `CORRECCIONES.md` (Fase 11).

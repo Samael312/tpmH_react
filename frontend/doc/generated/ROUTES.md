@@ -24,7 +24,7 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/dashboard/support` | `app/(student)/dashboard/support/page.tsx` | student | 21 |  |
 | `/dashboard/teachers/[username]` | `app/(student)/dashboard/teachers/[username]/page.tsx` | student | 317 |  |
 | `/dashboard/teachers` | `app/(student)/dashboard/teachers/page.tsx` | student | 296 |  |
-| `/admin/chat` | `app/(superadmin)/admin/chat/page.tsx` | superadmin, teacher_admin | 252 | app/(superadmin)/admin/chat/page.tsx N5: panel de solo lectura para que superadmin/teacher_admin puedan revisar una conv |
+| `/admin/chat` | `app/(superadmin)/admin/chat/page.tsx` | superadmin, teacher_admin | 256 | app/(superadmin)/admin/chat/page.tsx N5: panel de solo lectura para que superadmin/teacher_admin puedan revisar una conv |
 | `/admin/dashboard` | `app/(superadmin)/admin/dashboard/page.tsx` | superadmin, teacher_admin | 443 | frontend/app/(superadmin)/admin/dashboard/page.tsx |
 | `/admin/flow-tester` | `app/(superadmin)/admin/flow-tester/page.tsx` | superadmin, teacher_admin | 552 |  |
 | `/admin/god-mode` | `app/(superadmin)/admin/god-mode/page.tsx` | superadmin, teacher_admin | 97 |  |
@@ -41,8 +41,8 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/teacher/chat` | `app/(teacher)/teacher/chat/page.tsx` | teacher, teacher_admin | 138 |  |
 | `/teacher/cohorts` | `app/(teacher)/teacher/cohorts/page.tsx` | teacher, teacher_admin | 1325 |  |
 | `/teacher/dashboard` | `app/(teacher)/teacher/dashboard/page.tsx` | teacher, teacher_admin | 954 |  |
-| `/teacher/homework` | `app/(teacher)/teacher/homework/page.tsx` | teacher, teacher_admin | 1241 |  |
-| `/teacher/materials` | `app/(teacher)/teacher/materials/page.tsx` | teacher, teacher_admin | 1566 |  |
+| `/teacher/homework` | `app/(teacher)/teacher/homework/page.tsx` | teacher, teacher_admin | 1242 |  |
+| `/teacher/materials` | `app/(teacher)/teacher/materials/page.tsx` | teacher, teacher_admin | 1567 |  |
 | `/teacher/onboarding` | `app/(teacher)/teacher/onboarding/page.tsx` | teacher, teacher_admin | 1135 |  |
 | `/teacher/packages` | `app/(teacher)/teacher/packages/page.tsx` | teacher, teacher_admin | 1150 |  |
 | `/teacher/payments` | `app/(teacher)/teacher/payments/page.tsx` | teacher, teacher_admin | 226 |  |

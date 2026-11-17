@@ -10,6 +10,7 @@ import {
   Edit2, AlertTriangle, RefreshCw
 } from "lucide-react";
 import api from "@/lib/api";
+import { fetchAllPages } from "@/lib/pagination";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 // in teacher onboarding StepSpecialties, teacher/profile, teacher/packages, etc.
 import { useSystemCatalogs } from "@/hooks/useSystemCatalogs";
@@ -138,8 +139,8 @@ function AssignModal({
   const toast = useToast();
 
   useEffect(() => {
-    api.get<TeacherCohort[]>("/cohorts/teacher")
-      .then(res => setCohorts(res.data.filter(c => c.status !== "cancelled" && c.status !== "completed")))
+    fetchAllPages<TeacherCohort>("/cohorts/teacher")
+      .then(res => setCohorts(res.rows.filter(c => c.status !== "cancelled" && c.status !== "completed")))
       .catch(() => { /* silencioso: la asignación grupal es opcional */ });
   }, []);
 

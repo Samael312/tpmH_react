@@ -26,13 +26,14 @@ export function buildCsp(nonce: string, isDev: boolean): string {
     `default-src 'self'`,
     // https://accounts.google.com queda como respaldo para navegadores sin soporte de 'strict-dynamic'.
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://accounts.google.com${isDev ? " 'unsafe-eval'" : ""}`,
-    // fonts.googleapis.com: hoja @import de Poppins/DM Sans en globals.css.
-    `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
+    // Las fuentes (next/font) se sirven desde el propio sitio: ya no hace falta fonts.googleapis.com.
+    // accounts.google.com/gsi/style: hoja del boton de Google (Google la exige en style-src).
+    `style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style`,
     // blob:/data: -> avatares generados y previews locales antes de subir
     `img-src 'self' blob: data: https://res.cloudinary.com https://ui-avatars.com https://lh3.googleusercontent.com`,
     // Videos de presentación (Cloudinary) + blob: para la vista previa local antes de subirlos.
     `media-src 'self' https://res.cloudinary.com blob:`,
-    `font-src 'self' data: https://fonts.gstatic.com`,
+    `font-src 'self' data:`,
     // blob: -> Three.js carga texturas de los .glb con fetch() sobre URLs blob: (lo rige connect-src).
     `connect-src 'self' ${backend} ${backendWs} https://accounts.google.com blob:`,
     // El botón de Google se renderiza dentro de un iframe de Google

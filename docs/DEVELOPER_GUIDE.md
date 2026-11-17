@@ -42,7 +42,7 @@ Crea `endpoints/<nombre>.py` con `router = APIRouter()`, impórtalo y regístral
 2. `cd backend && alembic revision --autogenerate -m "descripcion_corta"`.
 3. **Revisa el archivo generado** (JSONB, enums, defaults del servidor; autogenerate falla con algunos cambios).
 4. `alembic upgrade head` contra una **base de desarrollo**, nunca contra la real sin copia.
-5. Comprueba un solo head: `alembic heads` (hoy `a9c4d5e6f7a8`; hay 60 migraciones y dos con el prefijo `a1b2c3d4e5f6_`).
+5. Comprueba un solo head: `alembic heads` (hoy `b1d5e6f7a8c9`; hay 61 migraciones y dos con el prefijo `a1b2c3d4e5f6_`).
 6. Las migraciones **no se ejecutan solas al desplegar** (ver `OPERATIONS.md`).
 Ojo con `Enum` de Postgres: añadir valores exige migración explícita.
 

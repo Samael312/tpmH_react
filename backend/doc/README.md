@@ -53,5 +53,5 @@ El generador también escribe `frontend/doc/generated/*`.
 - Todo en **UTC** en BD/API; el frontend convierte. `utc_now()` de `app/core/timezone.py`, nunca `datetime.utcnow()`.
 - Roles: `student`, `teacher`, `teacher_admin` (profesor + staff), `superadmin`. Dependencias: `get_current_user`, `get_current_student`, `get_current_teacher`, `get_current_staff`, `get_current_superadmin` (ver `app/auth/`).
 - Comentarios y mensajes de error de la API en **español**.
-- Migraciones: Alembic (`alembic/versions`), un solo head `a9c4d5e6f7a8`.
+- Migraciones: Alembic (`alembic/versions`), un solo head `b1d5e6f7a8c9`.
 - Los `.env` están ignorados por git, usan URLs localhost pero la **BD Neon y las claves reales**: lee `ENVIRONMENT.md` antes de ejecutar nada fuera de `tests/audit`.

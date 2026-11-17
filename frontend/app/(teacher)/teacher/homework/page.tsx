@@ -10,6 +10,7 @@ import {
   BarChart3, FileText, Edit2, Trash2, AlertTriangle, RefreshCw,
 } from "lucide-react";
 import api from "@/lib/api";
+import { fetchAllPages } from "@/lib/pagination";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
@@ -582,8 +583,8 @@ export default function HomeworkPage() {
   const hwCohortMemberIds = new Set(hwCohortMembers.map(m => m.student_id));
 
   useEffect(() => {
-    api.get<TeacherCohort[]>("/cohorts/teacher")
-      .then(res => setCohorts(res.data.filter(c => c.status !== "cancelled" && c.status !== "completed")))
+    fetchAllPages<TeacherCohort>("/cohorts/teacher")
+      .then(res => setCohorts(res.rows.filter(c => c.status !== "cancelled" && c.status !== "completed")))
       .catch(() => { /* silencioso: la asignación grupal es opcional */ });
   }, []);
 

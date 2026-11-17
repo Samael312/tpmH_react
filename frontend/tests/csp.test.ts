@@ -17,6 +17,13 @@ describe("lib/csp.ts", () => {
     expect(buildCsp("n", true)).not.toContain("upgrade-insecure-requests");
   });
 
+  it("las fuentes se sirven desde el propio sitio: style-src y font-src no abren Google Fonts", () => {
+    const csp = buildCsp("n", false);
+    expect(directive(csp, "font-src")).not.toContain("gstatic");
+    expect(directive(csp, "style-src")).not.toContain("googleapis");
+    expect(directive(csp, "style-src")).toContain("https://accounts.google.com/gsi/style");
+  });
+
   it("cada nonce distinto produce una política distinta", () => {
     expect(buildCsp("a", false)).not.toBe(buildCsp("b", false));
   });

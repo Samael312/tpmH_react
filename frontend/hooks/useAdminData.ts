@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { fetchAllPages } from "@/lib/pagination";
 import type { BusinessRules } from './useBusinessRules'
 
 interface PlatformStats {
@@ -112,8 +113,7 @@ export function usePaymentsHistory() {
   const query = useQuery({
     queryKey: ["admin", "payments", "history"],
     queryFn: async () => {
-      const res = await api.get('/payments/history')
-      return res.data as PaymentHistoryItem[]
+      return (await fetchAllPages<PaymentHistoryItem>('/payments/history')).rows
     },
   })
 
@@ -170,8 +170,7 @@ export function useWithdrawals() {
   const query = useQuery({
     queryKey: ["admin", "withdrawals", "pending"],
     queryFn: async () => {
-      const res = await api.get('/payments/admin/withdrawals/pending')
-      return res.data as WithdrawalRecord[]
+      return (await fetchAllPages<WithdrawalRecord>('/payments/admin/withdrawals/pending')).rows
     },
   })
 
@@ -224,9 +223,7 @@ export function useTeachers(statusFilter?: string) {
   const query = useQuery({
     queryKey: ["admin", "teachers", statusFilter ?? null],
     queryFn: async () => {
-      const params = statusFilter ? `?status_filter=${statusFilter}` : ''
-      const res = await api.get(`/admin/teachers${params}`)
-      return res.data as Teacher[]
+      return (await fetchAllPages<Teacher>('/admin/teachers', { params: { status_filter: statusFilter } })).rows
     },
   })
 
@@ -354,12 +351,9 @@ export function useSupportTickets(statusFilter?: string, categoryFilter?: string
   const query = useQuery({
     queryKey: ['admin', 'support-tickets', statusFilter, categoryFilter],
     queryFn: async () => {
-      const params = new URLSearchParams()
-      if (statusFilter) params.set('status_filter', statusFilter)
-      if (categoryFilter) params.set('category_filter', categoryFilter)
-      const qs = params.toString()
-      const res = await api.get(`/admin/support-tickets${qs ? `?${qs}` : ''}`)
-      return res.data as SupportTicketWithUser[]
+      return (await fetchAllPages<SupportTicketWithUser>('/admin/support-tickets', {
+        params: { status_filter: statusFilter || undefined, category_filter: categoryFilter || undefined },
+      })).rows
     },
   })
 

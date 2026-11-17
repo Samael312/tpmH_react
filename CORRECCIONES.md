@@ -180,7 +180,27 @@ Son **estimaciones a partir del código** (cuántos correos genera cada evento y
 
 ---
 
-**Orden:** 0 → **1** → **2** → 3 y 4 en paralelo → 5 → 6 (continua) → 7 (correos; puede adelantarse: no depende de las demás) → 8 (idiomas que habla el usuario; independiente, pero toca onboarding y perfil igual que la Fase 7 toca settings) → 9 (jobs por vencimiento, correos agrupados y cuotas) → 10 (idiomas con nivel y filtro).
+## Fase 11 — Rendimiento sin coste extra
+
+**Objetivo.** Mejorar la velocidad y el consumo de la plataforma sin cambiar funcionalidades y sin gasto nuevo. Salió de una revisión de 31 puntos de rendimiento contra el código.
+
+- [x] **Índices** (migración `b1d5e6f7a8c9`, `app/models/indexes.py`): solo había índices en claves primarias, logs, tokens y chat; las claves foráneas de `classes`, `payments`, `enrollments`, `materials`, `homework`, etc. y `teacher_profiles.user_id`/`student_profiles.user_id` no tenían ninguno (PostgreSQL no los crea solo). 26 índices nuevos con `if_not_exists`. _Tests: `tests/audit/test_performance_indexes.py` (5)._
+- [x] **Timeouts a servicios externos:** OpenAI 30 s con 1 reintento (el SDK traía 600 s con 2), Cloudinary (conexión 10 s, lectura 120 s; antes sin límite), revocar token de Google 10 s, intercambio OAuth 15 s. Variables `OPENAI_TIMEOUT_SECONDS` y `CLOUDINARY_READ_TIMEOUT_SECONDS`.
+- [x] **gzip en la API** (`GZipMiddleware`, nivel 5, desde 1000 bytes; no comprime el streaming de Chipi). _Tests: `tests/audit/test_gzip.py` (5)._ Variable `API_GZIP_MIN_BYTES` (0 = desactivado).
+- [x] **Frontend lista todas las páginas** (`lib/pagination.ts` → `fetchAllPages`): los listados ya no se cortan a 200 filas; una sola petición si hay menos. Aplicado a 17 puntos (pagos, retiros, ingresos, tickets, alumnos, clases, cohortes, conversaciones y listados de admin). _Tests: `tests/pagination.test.ts` (10)._
+- [x] **Debounce** (`hooks/useDebouncedValue.ts`) en la auditoría de chats del superadmin (llamaba a la API en cada tecla).
+- [x] **Imágenes:** los 2 `<img>` restantes con `loading="lazy"` y `decoding="async"`.
+- [x] **Fuentes** con `next/font/google` (Poppins 600/700/800 y DM Sans 400/500/600) en lugar del `@import` de Google Fonts; CSP más estricta (`style-src` y `font-src` sin Google) y con la hoja del botón de Google permitida (estaba bloqueada). Comprobado en navegador: sin peticiones a Google Fonts ni violaciones de CSP.
+- [x] **Caché** de 7 días para `/models` y `/assets` (`next.config.ts`).
+- [ ] **Modelo 3D de 22 MB** (`public/models/Chipi_Waving.glb`: 13 MB de texturas JPEG y 9 MB de geometría con 128 000 vértices): pendiente de comprimir. Pasos en «Pendiente de hacer tú».
+- [ ] **Activar el CDN de Railway** en el servicio del frontend (ver `docs/OPERATIONS.md` §8).
+- [x] **Docs:** ENVIRONMENT, OPERATIONS (§4 y §8), KNOWN_ISSUES (backend y frontend), frontend ARCHITECTURE y TESTING.
+
+**Propuestas pendientes de decisión** (todas sin coste): skeletons y `loading.tsx` en las pantallas que faltan (`support`, `onboarding`, `god-mode`, `logs`); interfaz optimista en acciones no críticas; `reactCompiler: true`; `dynamic()` en componentes pesados poco usados; separar `requirements-dev.txt` y quitar paquetes sin uso; middleware de tiempos de petición; web-vitals con muestreo; Cloudinary con `f_auto,q_auto`.
+
+---
+
+**Orden:** 0 → **1** → **2** → 3 y 4 en paralelo → 5 → 6 (continua) → 7 (correos; puede adelantarse: no depende de las demás) → 8 (idiomas que habla el usuario; independiente, pero toca onboarding y perfil igual que la Fase 7 toca settings) → 9 (jobs por vencimiento, correos agrupados y cuotas) → 10 (idiomas con nivel y filtro) → 11 (rendimiento sin coste).
 
 ---
 
@@ -189,15 +209,17 @@ Son **estimaciones a partir del código** (cuántos correos genera cada evento y
 **Decididas (ya implementadas):** jobs por vencimiento para que Neon se suspenda · `get_student_booking_stage` fuera de los GET · tope de paginación 200 por defecto (500 máximo) · migraciones automáticas con `preDeployCommand` · cuota de materiales de 500 MB por profesor, sin subida directa a Cloudinary por ahora · correos de chat y recordatorios agrupados · idiomas con nivel, filtro «Habla» y fecha de privacidad · Railway se mantiene por ahora.
 
 **Pendiente de hacer tú**
-1. **Aplicar la migración `a9c4d5e6f7a8`** (Fase 9: `materials.file_size` y `chat_conversations.teacher_notify_pending_at`) con `alembic upgrade head`, **antes** de desplegar el código nuevo. Si Railway ejecuta el *pre-deploy* automático, se aplicará sola. Sin ella fallan la subida de materiales y los mensajes de chat.
+1. **Aplicar las migraciones `a9c4d5e6f7a8`** (Fase 9: `materials.file_size` y `chat_conversations.teacher_notify_pending_at`) **y `b1d5e6f7a8c9`** (Fase 11: 26 índices) con `alembic upgrade head`, **antes** de desplegar el código nuevo. Si Railway ejecuta el *pre-deploy* automático, se aplicará sola. Sin ella fallan la subida de materiales y los mensajes de chat.
 2. **Verificar `preDeployCommand` en el panel de Railway** (servicio backend → Settings → Deploy). El `railway.toml` del repo usa una estructura multi-servicio que Railway puede no interpretar; si no aparece, escribe `alembic upgrade head` en ese campo. Comprueba además que la `DATABASE_URL` admite DDL (en Neon, mejor la conexión directa que la *pooled*).
 3. **Primer PR en GitHub:** se ejecuta por primera vez `.github/workflows/backend.yml` (audit, migraciones sobre PostgreSQL vacío y concurrencia). Mira la pestaña *Actions*; nunca se ha ejecutado. Conviene añadir el job de Playwright cuando funcione el resto.
 4. **Medir en producción** (cuando exista): objetivo `/users/me` < 400 ms (hoy ≈ 1,7 s sin pool; medir con `latency.py`).
 5. **Fin de la transición de sesión (Fase 3b), al lanzar a producción:** retirar Bearer y `?token=` del backend y bajar el access token a 30 min (`ACCESS_TOKEN_EXPIRE_MINUTES=30`). Pasos: comprobar en los logs que ningún cliente los usa, quitar la rama Bearer de `get_current_user` y `?token=` del WebSocket y las descargas, desplegar primero el frontend y luego el backend. Solo hace falta al lanzar: antes de eso no hay sesiones reales que se puedan cerrar.
-6. **Opciones de despliegue y migrar fuera de Railway:** se deja para el final de todo (análisis en `backend/doc/RESOURCE_COSTS.md`).
+6. **Comprimir el modelo 3D** (22 MB). Se necesita descargar una herramienta externa, así que lo ejecutas tú: desde `frontend/`, `npx @gltf-transform/cli optimize public/models/Chipi_Waving.glb public/models/Chipi_Waving.glb --compress quantize --texture-compress webp --texture-size 1024 --simplify false`. Sin decodificador en el navegador (no hace falta tocar la CSP ni el cargador). Después comprueba a ojo la mascota en la landing (textura y animación del saludo). El original queda en Git.
+7. **Activar el CDN de Railway** en el servicio del frontend (Settings → Edge → *Enable CDN Caching*) y comprobar con `curl -I -H "Accept-Encoding: br" <url>`.
+8. **Opciones de despliegue y migrar fuera de Railway:** se deja para el final de todo (análisis en `backend/doc/RESOURCE_COSTS.md`).
 
 **Deuda técnica conocida (sin fecha)**
-- El frontend no pagina de verdad: recibe como máximo 200 filas por listado. Paginar `god_mode` y los listados de admin.
+- Los listados cargan todas las páginas del servidor (Fase 11); si alguno llega a miles de filas, pasarlo a «Cargar más» con filtros en el servidor. `god_mode` aún no pagina.
 - Idioma de la interfaz y de los correos: solo español por ahora; si se añaden más, decidir de dónde sale (preferencia propia, no el dato «idiomas que hablo»).
 - Preferencias de correo por usuario y resumen diario único; agrupar el resto de categorías de correo.
 - Subida directa desde el navegador a Cloudinary (quitaría carga al backend); la cuota de materiales puede superarse por una subida si dos coinciden.

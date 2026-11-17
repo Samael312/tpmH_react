@@ -156,23 +156,23 @@ Las que empiezan por `_` son privadas del módulo.
 - `get_auth_url(state: Optional[str]=None)` — L74: Genera la URL de autorización de Google. Limpia los parámetros de PKCE para evitar desajustes de 'code_verifier'.
 - `exchange_code_for_tokens(code: str, code_verifier: Optional[str]=None)` — L100: Intercambia el código de autorización por tokens.
 - `revoke_token(token: str)` — L115: Revoca el token de acceso en los servidores de Google
-- `get_calendar_service_for_token(token: GoogleCalendarToken, db: Session)` — L131
-- `_with_retries(fn, *args, **kwargs)` — L172
-- `get_busy_ranges(service, calendar_id: str, time_min: datetime, time_max: datetime)` — L193
-- `get_teacher_busy_ranges(teacher_id: int, time_min: datetime, time_max: datetime, db: Session)` — L231
-- `list_calendar_events(service, calendar_id: str, time_min: datetime, time_max: datetime)` — L257: Trae los eventos "reales" (con título, no solo el rango busy/free) del calendario del profesor en la ventana dada. `singleEvents=True` expande eventos recurrentes en instancias individuales, cada una con su propio id — necesario para poder dedupear/actualizar por Class.google_event_id igual que hace
-- `_is_own_event(event: dict)` — L301: True si el evento lo creó esta plataforma (ver create_calendar_event / create_calendar_event_with_meet, que siempre marcan extendedProperties). Estos nunca deben re-importarse como clase externa.
-- `_match_external_source(event: dict)` — L312: Si el título del evento contiene alguna de las keywords configuradas en EXTERNAL_IMPORT_SOURCES, devuelve el nombre de la fuente (ej. "preply"). None si no matchea ninguna o si el evento no tiene un horario puntual (dateTime) — los eventos de todo el día (solo "date") no se importan porque Class exi
-- `import_external_classes_for_teacher(teacher_id: int, service, calendar_id: str, db: Session, time_min: datetime, time_max: datetime)` — L334: Lee los eventos reales del Google Calendar del profesor (no solo freebusy) y refleja como Class(class_type="external") los que correspondan a una plataforma externa reconocida (ver EXTERNAL_IMPORT_SOURCES, hoy solo Preply, detectado por palabra en el título). Son de solo lectura desde la perspectiva
-- `_build_attendees(attendee_emails: Optional[List[str]])` — L454: Arma la lista de `attendees` para el body del evento. Se usa para que el profesor quede explícitamente como invitado del evento (además de ser el dueño del calendario), de forma que Google Meet lo reconozca como participante autorizado y no le pida "Pedir unirme" al entrar. Siempre se combina con se
-- `create_calendar_event(service, calendar_id: str, title: str, start_utc: datetime, end_utc: datetime, description: str='', meet_link: Optional[str]=None, attendee_)` — L468
-- `_extract_meet_link(event: dict)` — L505: Saca el link de Google Meet de un evento con conferenceData.
-- `create_calendar_event_with_meet(service, calendar_id: str, title: str, start_utc: datetime, end_utc: datetime, description: str='', attendee_emails: Optional[List[str]]=Non)` — L516: Crea un evento en Google Calendar generando de una vez un link de Google Meet real (conferenceData). Devuelve (event_id, meet_link); cualquiera de los dos puede venir None si falló ese paso puntual.
-- `add_meet_conference_to_event(service, calendar_id: str, event_id: str, attendee_emails: Optional[List[str]]=None)` — L560: Agrega un link de Google Meet real a un evento ya existente (conferenceData). Devuelve el link generado, o None si el evento ya no existe (fue borrado externamente) o si la generación falla — en ambos casos el llamador debe manejarlo sin romper el flujo.
-- `update_calendar_event(service, calendar_id: str, event_id: str, start_utc: Optional[datetime]=None, end_utc: Optional[datetime]=None, meet_link: Optional[str]=Non)` — L616
-- `delete_calendar_event(service, calendar_id: str, event_id: str)` — L675
-- `sync_calendar_logic(teacher_id: int, db: Session)` — L693
-- `run_calendar_sync_for_all_teachers(db: Session)` — L843
+- `get_calendar_service_for_token(token: GoogleCalendarToken, db: Session)` — L132
+- `_with_retries(fn, *args, **kwargs)` — L173
+- `get_busy_ranges(service, calendar_id: str, time_min: datetime, time_max: datetime)` — L194
+- `get_teacher_busy_ranges(teacher_id: int, time_min: datetime, time_max: datetime, db: Session)` — L232
+- `list_calendar_events(service, calendar_id: str, time_min: datetime, time_max: datetime)` — L258: Trae los eventos "reales" (con título, no solo el rango busy/free) del calendario del profesor en la ventana dada. `singleEvents=True` expande eventos recurrentes en instancias individuales, cada una con su propio id — necesario para poder dedupear/actualizar por Class.google_event_id igual que hace
+- `_is_own_event(event: dict)` — L302: True si el evento lo creó esta plataforma (ver create_calendar_event / create_calendar_event_with_meet, que siempre marcan extendedProperties). Estos nunca deben re-importarse como clase externa.
+- `_match_external_source(event: dict)` — L313: Si el título del evento contiene alguna de las keywords configuradas en EXTERNAL_IMPORT_SOURCES, devuelve el nombre de la fuente (ej. "preply"). None si no matchea ninguna o si el evento no tiene un horario puntual (dateTime) — los eventos de todo el día (solo "date") no se importan porque Class exi
+- `import_external_classes_for_teacher(teacher_id: int, service, calendar_id: str, db: Session, time_min: datetime, time_max: datetime)` — L335: Lee los eventos reales del Google Calendar del profesor (no solo freebusy) y refleja como Class(class_type="external") los que correspondan a una plataforma externa reconocida (ver EXTERNAL_IMPORT_SOURCES, hoy solo Preply, detectado por palabra en el título). Son de solo lectura desde la perspectiva
+- `_build_attendees(attendee_emails: Optional[List[str]])` — L455: Arma la lista de `attendees` para el body del evento. Se usa para que el profesor quede explícitamente como invitado del evento (además de ser el dueño del calendario), de forma que Google Meet lo reconozca como participante autorizado y no le pida "Pedir unirme" al entrar. Siempre se combina con se
+- `create_calendar_event(service, calendar_id: str, title: str, start_utc: datetime, end_utc: datetime, description: str='', meet_link: Optional[str]=None, attendee_)` — L469
+- `_extract_meet_link(event: dict)` — L506: Saca el link de Google Meet de un evento con conferenceData.
+- `create_calendar_event_with_meet(service, calendar_id: str, title: str, start_utc: datetime, end_utc: datetime, description: str='', attendee_emails: Optional[List[str]]=Non)` — L517: Crea un evento en Google Calendar generando de una vez un link de Google Meet real (conferenceData). Devuelve (event_id, meet_link); cualquiera de los dos puede venir None si falló ese paso puntual.
+- `add_meet_conference_to_event(service, calendar_id: str, event_id: str, attendee_emails: Optional[List[str]]=None)` — L561: Agrega un link de Google Meet real a un evento ya existente (conferenceData). Devuelve el link generado, o None si el evento ya no existe (fue borrado externamente) o si la generación falla — en ambos casos el llamador debe manejarlo sin romper el flujo.
+- `update_calendar_event(service, calendar_id: str, event_id: str, start_utc: Optional[datetime]=None, end_utc: Optional[datetime]=None, meet_link: Optional[str]=Non)` — L617
+- `delete_calendar_event(service, calendar_id: str, event_id: str)` — L676
+- `sync_calendar_logic(teacher_id: int, db: Session)` — L694
+- `run_calendar_sync_for_all_teachers(db: Session)` — L844
 
 ## app/core/group_cohort_logic.py
 
@@ -263,14 +263,14 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/storage.py
 
-- `_slugify(text: str)` — L67
-- `_matches_declared_type(file_bytes: bytes, content_type: str)` — L88
-- `_resource_type_for(content_type: str)` — L135: Determina el resource_type correcto de Cloudinary según el content_type. Crítico para video: si se sube con resource_type="auto" (o "raw"), Cloudinary puede aplicarle el límite de tamaño de imagen/raw del plan (mucho más bajo) en vez del límite específico para video.
-- `upload_file(file_bytes: bytes, filename: str, content_type: str, folder: str='materials', display_name: str | None=None)` — L151
-- `_validate_upload(head: bytes, size: int, content_type: str)` — L165: Valida tamano y firma (magic bytes) sin necesitar el archivo completo.
-- `upload_file_stream(fileobj, filename: str, content_type: str, folder: str='materials', display_name: str | None=None)` — L186: Igual que upload_file, pero recibe un objeto tipo archivo (p. ej. `UploadFile.file`, que Starlette ya guarda en disco si pasa de 1 MB) en vez de bytes: el archivo nunca se carga entero en RAM. Valida tamano y firma ANTES de enviar nada, y los videos se suben por trozos (`upload_large`).
-- `_send_to_cloudinary(data, filename: str, content_type: str, folder: str, display_name: str | None)` — L212: `data` puede ser bytes o un objeto tipo archivo.
-- `delete_file(public_id: str, resource_type: str='image')` — L247
+- `_slugify(text: str)` — L68
+- `_matches_declared_type(file_bytes: bytes, content_type: str)` — L89
+- `_resource_type_for(content_type: str)` — L136: Determina el resource_type correcto de Cloudinary según el content_type. Crítico para video: si se sube con resource_type="auto" (o "raw"), Cloudinary puede aplicarle el límite de tamaño de imagen/raw del plan (mucho más bajo) en vez del límite específico para video.
+- `upload_file(file_bytes: bytes, filename: str, content_type: str, folder: str='materials', display_name: str | None=None)` — L152
+- `_validate_upload(head: bytes, size: int, content_type: str)` — L166: Valida tamano y firma (magic bytes) sin necesitar el archivo completo.
+- `upload_file_stream(fileobj, filename: str, content_type: str, folder: str='materials', display_name: str | None=None)` — L187: Igual que upload_file, pero recibe un objeto tipo archivo (p. ej. `UploadFile.file`, que Starlette ya guarda en disco si pasa de 1 MB) en vez de bytes: el archivo nunca se carga entero en RAM. Valida tamano y firma ANTES de enviar nada, y los videos se suben por trozos (`upload_large`).
+- `_send_to_cloudinary(data, filename: str, content_type: str, folder: str, display_name: str | None)` — L218: `data` puede ser bytes o un objeto tipo archivo.
+- `delete_file(public_id: str, resource_type: str='image')` — L254
 
 ## app/core/teacher_students.py
 
@@ -295,9 +295,9 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/tts_service.py
 
-- `_get_cache_key(word: str, voice: str, speed: float)` — L21: Genera una clave única para cada combinación de palabra + voz + velocidad. Usamos hash para tener claves cortas y consistentes.
-- `async generate_word_audio(word: str, voice: str=DEFAULT_VOICE, speed: float=DEFAULT_SPEED)` — L30: Genera audio de alta calidad para una palabra usando OpenAI TTS. Cachea el resultado en Cloudinary para no regenerar.
-- `async generate_batch_audio(words: list[str], voice: str=DEFAULT_VOICE, speed: float=DEFAULT_SPEED)` — L94: Genera audio para múltiples palabras de forma eficiente. Solo genera las que no están en caché.
+- `_get_cache_key(word: str, voice: str, speed: float)` — L27: Genera una clave única para cada combinación de palabra + voz + velocidad. Usamos hash para tener claves cortas y consistentes.
+- `async generate_word_audio(word: str, voice: str=DEFAULT_VOICE, speed: float=DEFAULT_SPEED)` — L36: Genera audio de alta calidad para una palabra usando OpenAI TTS. Cachea el resultado en Cloudinary para no regenerar.
+- `async generate_batch_audio(words: list[str], voice: str=DEFAULT_VOICE, speed: float=DEFAULT_SPEED)` — L100: Genera audio para múltiples palabras de forma eficiente. Solo genera las que no están en caché.
 
 ## app/core/upload_quota.py
 
@@ -329,8 +329,8 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/chipi/service.py
 
-- `async get_chipi_response(message: str, system_prompt: str, history: List[dict])` — L15: Obtiene respuesta de Chipi sin streaming. Más simple — para cuando no necesitas streaming.
-- `async stream_chipi_response(message: str, system_prompt: str, history: List[dict])` — L46: Obtiene respuesta de Chipi con streaming. El texto aparece letra a letra en el frontend. Mejor experiencia de usuario.
+- `async get_chipi_response(message: str, system_prompt: str, history: List[dict])` — L22: Obtiene respuesta de Chipi sin streaming. Más simple — para cuando no necesitas streaming.
+- `async stream_chipi_response(message: str, system_prompt: str, history: List[dict])` — L53: Obtiene respuesta de Chipi con streaming. El texto aparece letra a letra en el frontend. Mejor experiencia de usuario.
 
 ## app/auth/dependencies.py
 

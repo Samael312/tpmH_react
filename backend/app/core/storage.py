@@ -5,6 +5,7 @@ import os
 from dotenv import load_dotenv
 import logging
 import re
+from urllib3 import Timeout
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -209,6 +210,11 @@ def upload_file_stream(
     return _send_to_cloudinary(fileobj, filename, content_type, folder, display_name)
 
 
+# Sin esto una subida o un borrado colgado bloquea el hilo para siempre (urllib3 no tiene timeout por defecto).
+# `read` es la espera entre bytes recibidos, no la duracion total: no corta subidas grandes que avanzan.
+CLOUDINARY_TIMEOUT = Timeout(connect=10, read=float(os.getenv("CLOUDINARY_READ_TIMEOUT_SECONDS", "120")))
+
+
 def _send_to_cloudinary(data, filename: str, content_type: str, folder: str, display_name: str | None) -> dict:
     """`data` puede ser bytes o un objeto tipo archivo."""
     is_video = content_type in ALLOWED_VIDEO_TYPES
@@ -229,6 +235,7 @@ def _send_to_cloudinary(data, filename: str, content_type: str, folder: str, dis
             filename=upload_filename,
             use_filename=True,
             unique_filename=True,
+            timeout=CLOUDINARY_TIMEOUT,
         )
 
         return {
@@ -248,7 +255,8 @@ def delete_file(public_id: str, resource_type: str = "image") -> bool:
     try:
         result = cloudinary.uploader.destroy(
             public_id,
-            resource_type=resource_type
+            resource_type=resource_type,
+            timeout=CLOUDINARY_TIMEOUT,
         )
         return result.get("result") == "ok"
     except Exception as e:

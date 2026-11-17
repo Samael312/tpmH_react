@@ -2,11 +2,17 @@ from openai import AsyncOpenAI
 from app.core.config import settings
 from app.core.storage import upload_file
 import hashlib
+import os
 import logging
 
 logger = logging.getLogger(__name__)
 
-client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+# El valor por defecto del SDK es 600 s y 2 reintentos: una respuesta colgada dejaria la peticion abierta muchos minutos.
+client = AsyncOpenAI(
+    api_key=settings.OPENAI_API_KEY,
+    timeout=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),
+    max_retries=1,
+)
 
 # Voces disponibles en OpenAI TTS
 # alloy, echo, fable, onyx, nova, shimmer

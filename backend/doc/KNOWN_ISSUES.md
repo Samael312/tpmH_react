@@ -90,3 +90,10 @@ Todas resueltas (ver «Decisiones de negocio acordadas» en `CORRECCIONES.md`): 
 - **Google:** `verify_google_token` valida `iss` y `email_verified`; el email se normaliza a minúsculas; no se puede reclamar una cuenta ya vinculada a otro Google.
 - **Verificación de email suave:** las cuentas existentes quedan verificadas en la migración; las nuevas reciben el enlace al registrarse. Aviso con «Reenviar enlace» en los paneles de alumno y profesor (`VerifyEmailBanner`) y página `/verify-email`.
 - **tests/flow:** 29 -> 0 obsoletos revisados (ver `TESTING.md`).
+
+## Fase 11 (rendimiento)
+- **Índices (migración `b1d5e6f7a8c9`, `app/models/indexes.py`):** hasta ahora solo había índices en las claves primarias y en tablas de logs/tokens/chat; las claves foráneas de `classes`, `payments`, `enrollments`, `materials`, `homework`, etc. y `teacher_profiles.user_id`/`student_profiles.user_id` (se consultan en casi cada petición) no tenían ninguno, y PostgreSQL no los crea solo. 26 índices nuevos; `tests/audit/test_performance_indexes.py` comprueba que modelo y migración coinciden. **Pendiente medir** con `EXPLAIN ANALYZE` en Neon cuando haya volumen.
+- **Timeouts a servicios externos:** OpenAI 30 s con 1 reintento (el SDK traía 600 s), Cloudinary (conexión 10 s, lectura 120 s; antes sin límite), revocar token de Google 10 s, intercambio OAuth 15 s. Resend (30 s), `httpx` (5 s) y la API de Calendar (60 s) ya tenían el suyo. Falta: el refresco del token de Google usa el valor por defecto de `google-auth` (120 s).
+- **gzip en la API** (`GZipMiddleware`, registrado el primero para que vea el cuerpo completo; `tests/audit/test_gzip.py`).
+- **CSP:** `style-src`/`font-src` ya no abren Google Fonts (las fuentes salen del propio sitio con `next/font`); `style-src` permite `https://accounts.google.com/gsi/style`, la hoja del botón de Google, que estaba bloqueada.
+- **Dependencias:** `requirements.txt` está en UTF-16 y lleva herramientas de prueba y paquetes sin uso aparente (`opencode-cli`, `passlib`, `pytest-order`, `pytest-reportlog`, `wsproto`) en la imagen de producción. Pendiente separar `requirements-dev.txt` y confirmar cada uno antes de borrar.

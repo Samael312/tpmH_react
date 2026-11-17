@@ -29,8 +29,8 @@ const config: Config = {
         }
       },
       fontFamily: {
-        sans:    ['DM Sans', 'sans-serif'],
-        display: ['Poppins', 'sans-serif'],
+        sans:    ['var(--font-dm-sans)', 'DM Sans', 'sans-serif'],
+        display: ['var(--font-poppins)', 'Poppins', 'sans-serif'],
       },
       keyframes: {
         'fade-up': {

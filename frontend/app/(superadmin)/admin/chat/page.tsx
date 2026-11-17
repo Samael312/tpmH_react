@@ -16,6 +16,7 @@ import ChipiWidget from "@/components/chipi/ChipiWidget";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useChatAdminConversations, useChatAdminMessages, ChatConversationAdmin } from "@/hooks/useChatAdmin";
 import { useGodModeEntityHistory } from "@/hooks/useGodMode";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "Sin mensajes";
@@ -148,9 +149,12 @@ function ConversationAuditPanel({
 export default function AdminChatAuditPage() {
   const [teacherFilter, setTeacherFilter] = useState("");
   const [studentFilter, setStudentFilter] = useState("");
+  // Debounce: sin esto cada tecla pedia la lista completa al servidor.
+  const debouncedTeacher = useDebouncedValue(teacherFilter);
+  const debouncedStudent = useDebouncedValue(studentFilter);
   const { conversations, loading, isFetching, refetch } = useChatAdminConversations({
-    teacher_username: teacherFilter || undefined,
-    student_username: studentFilter || undefined,
+    teacher_username: debouncedTeacher || undefined,
+    student_username: debouncedStudent || undefined,
   });
   const [selected, setSelected] = useState<ChatConversationAdmin | null>(null);
 

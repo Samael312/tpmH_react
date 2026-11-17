@@ -103,7 +103,7 @@ def exchange_code_for_tokens(code: str, code_verifier: Optional[str] = None) -> 
     if code_verifier:
         flow.code_verifier = code_verifier
 
-    flow.fetch_token(code=code)
+    flow.fetch_token(code=code, timeout=15)
     credentials = flow.credentials
     return {
         "access_token": credentials.token,
@@ -118,7 +118,8 @@ def revoke_token(token: str):
         requests.post(
             'https://oauth2.googleapis.com/revoke',
             params={'token': token},
-            headers={'content-type': 'application/x-www-form-urlencoded'}
+            headers={'content-type': 'application/x-www-form-urlencoded'},
+            timeout=10,
         )
     except Exception as e:
         logger.error(f"Error revocando token en Google: {e}")

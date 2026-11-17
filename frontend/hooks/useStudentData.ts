@@ -1,6 +1,7 @@
 import { useQuery, keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 
+import { fetchAllPages } from "@/lib/pagination";
 // Prefijo de queryKey compartido por useAvailableSlots. Se expone acá para
 // que cualquier mutación que ocupe un horario (reservar clase, reagendar,
 // God Mode) pueda invalidar el cache de slots sin tener que reconstruir el
@@ -206,9 +207,12 @@ export function useStudentClasses(includeHistory = false) {
   const query = useQuery({
     queryKey: ["student", "classes", includeHistory],
     queryFn: async () => {
-      const res = await api.get(`/classes/my-classes?include_history=${includeHistory}`);
-      const rawData = res.data;
-      return (Array.isArray(rawData) ? rawData : (rawData?.classes || rawData?.data || [])) as StudentClass[];
+      // La respuesta puede ser una lista o un objeto con `classes` (con contadores globales): se pide por páginas.
+      const { rows } = await fetchAllPages<StudentClass, StudentClass[] | { classes?: StudentClass[]; data?: StudentClass[] }>("/classes/my-classes", {
+        params: { include_history: includeHistory },
+        rows: (raw) => (Array.isArray(raw) ? raw : (raw?.classes || raw?.data || [])),
+      });
+      return rows;
     },
   });
 

@@ -3,6 +3,7 @@
 import { useCallback, useEffect } from "react";
 import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { fetchAllPages } from "@/lib/pagination";
 import { useAuthStore } from "@/store/authStore";
 import { useChatStore, onChatMessage, ChatMessage as StoreChatMessage } from "@/store/chatStore";
 
@@ -55,8 +56,7 @@ export function useChatConversations(enabled: boolean = true) {
   const query = useQuery({
     queryKey: [...CONVERSATIONS_KEY],
     queryFn: async () => {
-      const res = await api.get("/chat/conversations");
-      return res.data as ChatConversation[];
+      return (await fetchAllPages<ChatConversation>("/chat/conversations")).rows;
     },
     enabled,
     // El WS global (ver store/chatStore.ts + useChatSocketBootstrap acá
