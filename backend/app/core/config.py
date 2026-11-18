@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     LOGIN_MAX_FAILED: int = int(os.getenv("LOGIN_MAX_FAILED", 8))
     LOGIN_LOCK_MINUTES: int = int(os.getenv("LOGIN_LOCK_MINUTES", 15))
 
+    # Correos fuera del camino de la peticion (Fase 14, E1): Resend tarda 200-800 ms por correo y antes bloqueaba
+    # un hilo del servidor hasta responder. EMAIL_ASYNC=false los envia en linea (tests, depuracion).
+    EMAIL_ASYNC: bool = os.getenv("EMAIL_ASYNC", "true").lower() not in ("0", "false", "no")
+    EMAIL_WORKERS: int = int(os.getenv("EMAIL_WORKERS", 2))
+
     # Cookies de sesion (SEC-05). Produccion mismo sitio: COOKIE_DOMAIN=.tuprofemaria.com, SameSite=lax.
     # Si frontend y API estuvieran en sitios distintos habria que usar COOKIE_SAMESITE=none (exige Secure).
     COOKIE_DOMAIN: Optional[str] = os.getenv("COOKIE_DOMAIN") or None

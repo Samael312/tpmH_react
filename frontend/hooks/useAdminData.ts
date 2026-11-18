@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { fetchAllPages } from "@/lib/pagination";
+import { useVisiblePolling } from "@/lib/polling";
 import type { BusinessRules } from './useBusinessRules'
 
 interface PlatformStats {
@@ -262,12 +263,8 @@ export function useUnreadNotificationCount(enabled: boolean = true) {
       .catch(() => {})
   }, [enabled])
 
-  useEffect(() => {
-    if (!enabled) return
-    fetchCount()
-    const interval = setInterval(fetchCount, 30000) // refresco cada 30s
-    return () => clearInterval(interval)
-  }, [enabled, fetchCount])
+  // Cada 60 s solo con la pestaña visible, y al volver a ella (antes cada 30 s aunque estuviera oculta).
+  useVisiblePolling(fetchCount, 60000, enabled)
 
   // Si el hook está deshabilitado, no mostramos un conteo obtenido
   // previamente en vez de resetear el estado dentro del efecto.

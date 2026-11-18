@@ -260,6 +260,22 @@ Propuestas surgidas de la tabla de `ANALISIS.md` (Seguridad 79, Escalabilidad 64
 
 ---
 
+## Fase 14 — Escalabilidad (sin cambiar la estructura base)
+
+Punto de partida: escalabilidad 73 (estimación tras A14, ver `ANALISIS.md`). Lo que limita: una sola instancia, correos síncronos, sondeos periódicos, listados que descargan todas las páginas (22 llamadas a `fetchAllPages`, no 40 como decía el análisis) y nada medido bajo carga.
+
+### A. Se pueden hacer ahora, en desarrollo
+- [x] **E1 · Correos fuera de la petición.** `core/email.py::_send` encola el envío en un pool de 2 hilos (`EMAIL_WORKERS`) y vuelve al instante; antes cada correo bloqueaba un hilo del servidor 200-800 ms esperando a Resend (una reserva manda 2). Al apagar, `main.py` vacía la cola. `EMAIL_ASYNC=false` vuelve al envío en línea (lo usan los tests). Ningún llamador usaba el valor devuelto. Tests: `tests/audit/test_f14_scalability.py`. _Límite:_ la cola vive en memoria; si el proceso muere de golpe se pierden los correos aún no enviados (con `email_log` se ve cuáles salieron).
+- [x] **E2 · Sondeos solo con la pestaña visible.** `lib/polling.ts` (`visiblePoll`, `useVisiblePolling`): avisos del admin y no leídos de soporte pasan de cada 30 s (también con la pestaña oculta) a cada 60 s solo visibles y al volver a la pestaña; mis tickets de 20 s a 60 s; logs de errores de 30 s a 60 s. Tests: `tests/polling.test.ts`.
+- [ ] **E3 · Caché corta de huecos disponibles** (`/availability/.../slots`): se calculan en cada petición (rangos × clases × excepciones × Google). Caché por profesor y ventana de 30-60 s, invalidada al reservar, cancelar o cambiar disponibilidad. Riesgo: mostrar un hueco ya ocupado unos segundos (la reserva lo rechaza igual).
+- [ ] **E4 · Caché HTTP de lo público** (landing, lista y perfil público de profesores): `Cache-Control` con `max-age` corto y `stale-while-revalidate`, para que navegador y CDN (B4) sirvan sin tocar el backend.
+- [ ] **E5 · Prueba de carga reproducible:** script (k6 o Locust) contra una rama de desarrollo de Neon con usuarios simulados (login, dashboard, chat, reservar). Es lo que convierte las estimaciones en medidas.
+- [ ] **E6 · Listados del admin paginados en servidor** (usuarios, pagos, profesores, tickets): hoy descargan todas las páginas para filtrar en el navegador. Mover búsqueda y filtros al backend con «Cargar más». Más cambio de UI que E3-E5.
+
+### B. Necesitan producción o un servicio externo
+- [ ] **E7 · Varias instancias:** Redis pub/sub para el chat (`core/chat_ws.py` ya describe el cambio) y un candado (advisory lock de Postgres) para que el scheduler corra en una sola instancia. Hasta entonces, una instancia.
+- [ ] **E8 · Cola de correos persistente** (tabla o Redis) si se pasa a varias instancias o se quiere reintento tras un reinicio.
+
 ## Decisiones y tareas pendientes
 
 **Decididas (ya implementadas):** jobs por vencimiento para que Neon se suspenda · `get_student_booking_stage` fuera de los GET · tope de paginación 200 por defecto (500 máximo) · migraciones automáticas con `preDeployCommand` · cuota de materiales de 500 MB por profesor, sin subida directa a Cloudinary por ahora · correos de chat y recordatorios agrupados · idiomas con nivel, filtro «Habla» y fecha de privacidad · Railway se mantiene por ahora.

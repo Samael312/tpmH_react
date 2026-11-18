@@ -16,6 +16,7 @@ from app.core.rate_limit import limiter
 from app.core.request_timing import RequestTimingMiddleware
 from app.api.v1.router import api_router
 from app.core.scheduler import start_scheduler, stop_scheduler
+from app.core.email import shutdown_email_queue
 from app.db.base import SessionLocal
 from app.core.error_log import log_error, get_user_from_request, is_reportable_business_error
 
@@ -25,6 +26,7 @@ async def lifespan(app: FastAPI):
     start_scheduler()
     yield
     stop_scheduler()
+    shutdown_email_queue()  # los correos aún en cola salen antes de apagar
 
 app = FastAPI(
     title=settings.APP_NAME,

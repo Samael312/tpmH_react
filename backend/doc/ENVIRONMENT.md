@@ -55,6 +55,7 @@ Cuenta de prueba sin tocar la BD real: `python -m tests.audit.run_server` (SQLit
 | `GEMINI_API_KEY` | definida | no | `ai_debug.py` | se envía en la URL (SEC-06) |
 | `RESEND_API_KEY` | definida | para emails | `core/email.py` | sin ella los envíos fallan en silencio (se capturan) |
 | `EMAIL_FROM` | `soporte@mail.tuprofemaria.com` | no | remitente | el dominio debe estar verificado en Resend |
+| `EMAIL_ASYNC` / `EMAIL_WORKERS` | `true` / `2` | no | envío de correos en segundo plano (Fase 14, E1): la petición no espera a Resend | `false` = envío en línea (tests); la cola vive en memoria |
 | `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | definidas | para archivos | `core/storage.py`, TTS | |
 | `MAX_VIDEO_UPLOAD_MB` | `100` | no | tope de vídeo (`storage.py`) | desde la Fase 5 se sube por streaming (no se carga entero en RAM) |
 | `MATERIALS_QUOTA_MB` | `500` | no | cuota de materiales por profesor (`core/upload_quota.py`); `0` la desactiva | 413 al superarla; borrar un material libera espacio |

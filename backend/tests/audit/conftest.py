@@ -18,6 +18,7 @@ from datetime import timedelta
 _DB_DIR = tempfile.mkdtemp(prefix="tpm_audit_")
 os.environ["DATABASE_URL"] = f"sqlite:///{_DB_DIR}/audit.db"
 os.environ.setdefault("SECRET_KEY", "audit-secret")
+os.environ["EMAIL_ASYNC"] = "false"  # los tests comprueban email_log justo después de la petición
 os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("GOOGLE_CLIENT_ID", "audit-client")
 os.environ.setdefault("OPENAI_API_KEY", "sk-dummy")

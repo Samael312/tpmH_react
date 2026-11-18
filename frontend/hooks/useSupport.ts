@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 
 import { fetchAllPages } from "@/lib/pagination";
+import { useVisiblePolling, visiblePoll } from "@/lib/polling";
 export type SupportCategory = "bug" | "error" | "question" | "other" | "class_correction";
 export type SupportTicketStatus = "pending" | "answered";
 
@@ -31,10 +32,7 @@ export function useMySupportTickets() {
     // mientras el estudiante/profesor ya tenía la vista abierta, no se
     // enteraba hasta recargar la página a mano. Se sondea en segundo plano
     // mientras la pestaña esté visible, igual que useUnreadSupportCount.
-    refetchInterval: () => {
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
-      return 20000;
-    },
+    refetchInterval: visiblePoll(60000), // Fase 14: antes 20 s; el badge de no leídos avisa antes
   });
 
   return {
@@ -73,12 +71,8 @@ export function useUnreadSupportCount(enabled: boolean = true) {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (!enabled) return;
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 30000); // refresco cada 30s
-    return () => clearInterval(interval);
-  }, [enabled, fetchUnread]);
+  // Cada 60 s solo con la pestaña visible, y al volver a ella (antes cada 30 s aunque estuviera oculta).
+  useVisiblePolling(fetchUnread, 60000, enabled);
 
   // Si el hook está deshabilitado (ej. rol sin acceso a soporte), no mostramos
   // un conteo obtenido previamente en vez de resetear el estado dentro del efecto.

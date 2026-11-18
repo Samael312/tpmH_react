@@ -1,4 +1,6 @@
 import resend
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from html import escape as _esc
 from app.core.config import settings
 import logging
@@ -116,7 +118,44 @@ def _base_template(preheader: str, badge_html: str, heading: str, body_html: str
 </html>"""
 
 
+_email_executor = None
+_email_executor_lock = threading.Lock()
+
+
+def _get_email_executor() -> ThreadPoolExecutor:
+    global _email_executor
+    with _email_executor_lock:
+        if _email_executor is None:
+            _email_executor = ThreadPoolExecutor(max_workers=max(1, settings.EMAIL_WORKERS), thread_name_prefix="email")
+        return _email_executor
+
+
+def shutdown_email_queue(wait: bool = True) -> None:
+    """Al apagar el servidor: deja salir los correos que estaban en cola (main.py::lifespan)."""
+    global _email_executor
+    with _email_executor_lock:
+        executor, _email_executor = _email_executor, None
+    if executor is not None:
+        executor.shutdown(wait=wait)
+
+
 def _send(to_email: str, subject: str, html: str, category: str = "essential") -> bool:
+    """
+    Pone el correo en cola y vuelve al instante (Fase 14, E1): la peticion ya no espera a Resend. Devuelve True si
+    quedo en cola; si sale, se omite o falla se anota igual en email_log desde el hilo de envio. Ningun llamador usa
+    el valor devuelto. Con EMAIL_ASYNC=false se envia en linea y devuelve el resultado real.
+    """
+    if not settings.EMAIL_ASYNC:
+        return _send_now(to_email, subject, html, category)
+    try:
+        _get_email_executor().submit(_send_now, to_email, subject, html, category)
+        return True
+    except RuntimeError:
+        # Cola cerrada (apagado en curso): se envia en linea para no perderlo.
+        return _send_now(to_email, subject, html, category)
+
+
+def _send_now(to_email: str, subject: str, html: str, category: str = "essential") -> bool:
     """
     Unico punto de salida de correos. Antes de enviar consulta el control de la Fase 7
     (core/email_settings.py): categoria apagada, limite diario o modo ahorro -> se omite y se anota.

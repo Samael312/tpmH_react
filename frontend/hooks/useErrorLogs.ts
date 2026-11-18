@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { visiblePoll } from "@/lib/polling";
 
 export interface ErrorLogEntry {
   id: number;
@@ -52,7 +53,7 @@ export function useErrorLogs(filters: ErrorLogFilters = {}) {
     // Se refresca solo cada 30s: es una pantalla de monitoreo, no necesita
     // ser instantánea, pero sí conviene que se mantenga al día sin que el
     // staff tenga que refrescar manualmente todo el tiempo.
-    refetchInterval: 30_000,
+    refetchInterval: visiblePoll(60_000),
   });
 
   return {
@@ -74,7 +75,7 @@ export function useErrorLogStats() {
       const res = await api.get("/logs/stats");
       return res.data as ErrorLogStats;
     },
-    refetchInterval: 30_000,
+    refetchInterval: visiblePoll(60_000),
   });
 
   return {
