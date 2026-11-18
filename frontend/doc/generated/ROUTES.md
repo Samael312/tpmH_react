@@ -10,17 +10,17 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/login` | `app/(public)/login/page.tsx` | pública | 332 |  |
 | `/privacy` | `app/(public)/privacy/page.tsx` | pública | 17 |  |
 | `/register/google-complete` | `app/(public)/register/google-complete/page.tsx` | pública | 252 |  |
-| `/register` | `app/(public)/register/page.tsx` | pública | 652 |  |
+| `/register` | `app/(public)/register/page.tsx` | pública | 657 |  |
 | `/terms` | `app/(public)/terms/page.tsx` | pública | 17 |  |
 | `/dashboard/availability` | `app/(student)/dashboard/availability/page.tsx` | student | 448 |  |
 | `/dashboard/chat` | `app/(student)/dashboard/chat/page.tsx` | student | 142 |  |
-| `/dashboard/classes` | `app/(student)/dashboard/classes/page.tsx` | student | 710 |  |
-| `/dashboard/homework` | `app/(student)/dashboard/homework/page.tsx` | student | 608 |  |
-| `/dashboard/materials` | `app/(student)/dashboard/materials/page.tsx` | student | 490 | app/student/materials/page.tsx |
+| `/dashboard/classes` | `app/(student)/dashboard/classes/page.tsx` | student | 713 |  |
+| `/dashboard/homework` | `app/(student)/dashboard/homework/page.tsx` | student | 611 |  |
+| `/dashboard/materials` | `app/(student)/dashboard/materials/page.tsx` | student | 494 | app/student/materials/page.tsx |
 | `/dashboard/onboarding` | `app/(student)/dashboard/onboarding/page.tsx` | student | 895 |  |
 | `/dashboard` | `app/(student)/dashboard/page.tsx` | student | 774 |  |
 | `/dashboard/profile` | `app/(student)/dashboard/profile/page.tsx` | student | 975 |  |
-| `/dashboard/schedule` | `app/(student)/dashboard/schedule/page.tsx` | student | 1796 |  |
+| `/dashboard/schedule` | `app/(student)/dashboard/schedule/page.tsx` | student | 1812 |  |
 | `/dashboard/support` | `app/(student)/dashboard/support/page.tsx` | student | 21 |  |
 | `/dashboard/teachers/[username]` | `app/(student)/dashboard/teachers/[username]/page.tsx` | student | 317 |  |
 | `/dashboard/teachers` | `app/(student)/dashboard/teachers/page.tsx` | student | 296 |  |
@@ -35,7 +35,7 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/admin/students` | `app/(superadmin)/admin/students/page.tsx` | superadmin, teacher_admin | 472 |  |
 | `/admin/support` | `app/(superadmin)/admin/support/page.tsx` | superadmin, teacher_admin | 279 |  |
 | `/admin/teachers` | `app/(superadmin)/admin/teachers/page.tsx` | superadmin, teacher_admin | 649 |  |
-| `/admin/users` | `app/(superadmin)/admin/users/page.tsx` | superadmin, teacher_admin | 1064 | frontend/app/(superadmin)/admin/users/page.tsx |
+| `/admin/users` | `app/(superadmin)/admin/users/page.tsx` | superadmin, teacher_admin | 1065 | frontend/app/(superadmin)/admin/users/page.tsx |
 | `/teacher/availability` | `app/(teacher)/teacher/availability/page.tsx` | teacher, teacher_admin | 420 |  |
 | `/teacher/calendar/callback` | `app/(teacher)/teacher/calendar/callback/page.tsx` | teacher, teacher_admin | 137 |  |
 | `/teacher/chat` | `app/(teacher)/teacher/chat/page.tsx` | teacher, teacher_admin | 138 |  |
@@ -43,8 +43,9 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/teacher/dashboard` | `app/(teacher)/teacher/dashboard/page.tsx` | teacher, teacher_admin | 973 |  |
 | `/teacher/homework` | `app/(teacher)/teacher/homework/page.tsx` | teacher, teacher_admin | 1242 |  |
 | `/teacher/materials` | `app/(teacher)/teacher/materials/page.tsx` | teacher, teacher_admin | 1567 |  |
+| `/teacher/notifications` | `app/(teacher)/teacher/notifications/page.tsx` | teacher, teacher_admin | 86 |  |
 | `/teacher/onboarding` | `app/(teacher)/teacher/onboarding/page.tsx` | teacher, teacher_admin | 1135 |  |
-| `/teacher/packages` | `app/(teacher)/teacher/packages/page.tsx` | teacher, teacher_admin | 1150 |  |
+| `/teacher/packages` | `app/(teacher)/teacher/packages/page.tsx` | teacher, teacher_admin | 1157 |  |
 | `/teacher/payments` | `app/(teacher)/teacher/payments/page.tsx` | teacher, teacher_admin | 231 |  |
 | `/teacher/profile` | `app/(teacher)/teacher/profile/page.tsx` | teacher, teacher_admin | 1351 |  |
 | `/teacher/profile/preview` | `app/(teacher)/teacher/profile/preview/page.tsx` | teacher, teacher_admin | 86 |  |

@@ -11,9 +11,11 @@ from sqlalchemy.orm import Session
 from app.core.timezone import utc_now
 from app.models.email_log import EmailLog
 from app.models.error_log import ErrorLog
+from app.models.notification import Notification
 
 ERROR_LOG_RETENTION_DAYS = int(os.getenv("ERROR_LOG_RETENTION_DAYS", "30"))
 EMAIL_LOG_RETENTION_DAYS = int(os.getenv("EMAIL_LOG_RETENTION_DAYS", "60"))
+USER_NOTIFICATION_RETENTION_DAYS = int(os.getenv("USER_NOTIFICATION_RETENTION_DAYS", "90"))
 
 
 def purge_error_logs(db: Session, days: int = ERROR_LOG_RETENTION_DAYS) -> int:
@@ -32,5 +34,19 @@ def purge_email_log(db: Session, days: int = EMAIL_LOG_RETENTION_DAYS) -> int:
         return 0
     cutoff = utc_now() - timedelta(days=days)
     n = db.query(EmailLog).filter(EmailLog.created_at < cutoff).delete(synchronize_session=False)
+    db.commit()
+    return n
+
+
+def purge_user_notifications(db: Session, days: int = USER_NOTIFICATION_RETENTION_DAYS) -> int:
+    """Borra los avisos dirigidos a un usuario (Fase 13, A9) ya LEIDOS y mas viejos que `days` dias. Los de staff no se tocan."""
+    if days <= 0:
+        return 0
+    cutoff = utc_now() - timedelta(days=days)
+    n = db.query(Notification).filter(
+        Notification.recipient_user_id.isnot(None),
+        Notification.is_read == True,  # noqa: E712
+        Notification.created_at < cutoff,
+    ).delete(synchronize_session=False)
     db.commit()
     return n

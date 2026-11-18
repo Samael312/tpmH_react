@@ -6,8 +6,9 @@
 //
 // script-src: SIN 'unsafe-inline'. Solo corre código con nonce, y `'strict-dynamic'` deja que ese código
 // cargue otros scripts (p. ej. el cliente de Google Identity). Es el vector real de XSS.
-// style-src conserva 'unsafe-inline': el HTML que genera React lleva atributos style="…" que un nonce no cubre
-// y un CSS inyectado no ejecuta código. Es la excepción documentada de la guía de Next.js.
+// style-src (elementos <style>/<link>): en producción SIN 'unsafe-inline', solo nonce. style-src-attr
+// (atributos style="…"): 'unsafe-inline', porque el HTML que genera React los lleva y un nonce no los cubre;
+// un CSS inyectado no ejecuta código. En desarrollo style-src conserva 'unsafe-inline' (HMR).
 
 function backendOrigin(): string {
   const raw = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
@@ -28,7 +29,12 @@ export function buildCsp(nonce: string, isDev: boolean): string {
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://accounts.google.com${isDev ? " 'unsafe-eval'" : ""}`,
     // Las fuentes (next/font) se sirven desde el propio sitio: ya no hace falta fonts.googleapis.com.
     // accounts.google.com/gsi/style: hoja del boton de Google (Google la exige en style-src).
-    `style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style`,
+    // Producción: los <style> y <link> solo cargan con nonce o del propio sitio (style-src, que rige los
+    // ELEMENTOS). En desarrollo se conserva 'unsafe-inline' porque el HMR inyecta <style> sin nonce.
+    `style-src 'self' ${isDev ? "'unsafe-inline'" : `'nonce-${nonce}'`} https://accounts.google.com/gsi/style`,
+    // Los ATRIBUTOS style="…" que React escribe en el HTML no admiten nonce: se permiten aparte. Un CSS inyectado
+    // no ejecuta código; lo que se evita es que un atacante añada <style>/<link> a su gusto.
+    `style-src-attr 'unsafe-inline'`,
     // blob:/data: -> avatares generados y previews locales antes de subir
     `img-src 'self' blob: data: https://res.cloudinary.com https://ui-avatars.com https://lh3.googleusercontent.com`,
     // Videos de presentación (Cloudinary) + blob: para la vista previa local antes de subirlos.

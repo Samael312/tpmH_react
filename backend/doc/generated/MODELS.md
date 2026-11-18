@@ -257,6 +257,7 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | message | VARCHAR | ? |
 | related_teacher_id | INTEGER | FK→teacher_profiles.id ? |
 | related_support_ticket_id | INTEGER | FK→support_tickets.id ? |
+| recipient_user_id | INTEGER | FK→users.id ? |
 | is_read | BOOLEAN | ? default=False |
 | created_at | DATETIME | ? |
 

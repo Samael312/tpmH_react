@@ -37,12 +37,12 @@ Las que empiezan por `_` son privadas del módulo.
 - `_student_cohort_ids(db: Session, student_id: int)` — L260
 - `get_messages(db: Session, convo: ChatConversation, before_id: Optional[int]=None, after_id: Optional[int]=None, limit: int=50)` — L269: - Sin `before_id` ni `after_id`: los últimos `limit` (historial inicial). - `before_id`: página hacia atrás (scroll-up / "cargar más antiguos"). - `after_id`: SOLO los mensajes nuevos desde el último que el cliente   ya tiene cacheado (ver frontend/store/chatStore.ts) — evita   volver a traer los 50
 - `mark_read(db: Session, convo: ChatConversation, user: User)` — L294
-- `get_unread_count_for_user(db: Session, current_user: User)` — L307: Suma de mensajes no leídos en todas las conversaciones del usuario.
-- `find_message_by_client_id(db: Session, conversation_id: int, sender_id: int, client_id: Optional[str])` — L330
-- `send_message(db: Session, config: PlatformConfig, convo: ChatConversation, sender: User, content: str, client_id: Optional[str]=None)` — L342: Persiste el mensaje y determina si corresponde disparar el email de aviso al profesor (solo cuando el remitente es un estudiante y la conversación estaba inactiva por más de chat_reactivation_hours, o es el primer mensaje de la conversación).
-- `mark_delivered_by_id(db: Session, message_id: int)` — L411: UPDATE atómico de una sola query: devuelve el instante si ESTA llamada fue la que marcó el mensaje como entregado, None si ya lo estaba.
-- `catch_up_deliveries(db: Session, user: User)` — L424: Al conectarse (o reconectarse) el socket global de `user`, cualquier mensaje QUE LE HAYAN MANDADO A ÉL en cualquiera de sus conversaciones y que siguiera sin `delivered_at` (porque no estaba online cuando se envió) pasa a estar entregado en este instante.
-- `purge_old_messages(db: Session, retention_days: int)` — L454: Borra mensajes más viejos que `retention_days`. 0 = sin límite (no borra nada).
+- `get_unread_count_for_user(db: Session, current_user: User)` — L319: Suma de mensajes no leídos en todas las conversaciones del usuario.
+- `find_message_by_client_id(db: Session, conversation_id: int, sender_id: int, client_id: Optional[str])` — L342
+- `send_message(db: Session, config: PlatformConfig, convo: ChatConversation, sender: User, content: str, client_id: Optional[str]=None)` — L354: Persiste el mensaje y determina si corresponde disparar el email de aviso al profesor (solo cuando el remitente es un estudiante y la conversación estaba inactiva por más de chat_reactivation_hours, o es el primer mensaje de la conversación).
+- `mark_delivered_by_id(db: Session, message_id: int)` — L423: UPDATE atómico de una sola query: devuelve el instante si ESTA llamada fue la que marcó el mensaje como entregado, None si ya lo estaba.
+- `catch_up_deliveries(db: Session, user: User)` — L436: Al conectarse (o reconectarse) el socket global de `user`, cualquier mensaje QUE LE HAYAN MANDADO A ÉL en cualquiera de sus conversaciones y que siguiera sin `delivered_at` (porque no estaba online cuando se envió) pasa a estar entregado en este instante.
+- `purge_old_messages(db: Session, retention_days: int)` — L466: Borra mensajes más viejos que `retention_days`. 0 = sin límite (no borra nada).
 
 ## app/core/chat_digest.py
 
@@ -73,11 +73,12 @@ Las que empiezan por `_` son privadas del módulo.
 - `update_enrollment_counter(enrollment_id: int, delta: int, db: Session)` — L526: Actualiza el contador de clases usadas en un enrollment. delta=1 cuando se completa una clase delta=-1 cuando se cancela una clase completada
 - `get_student_booking_stage(student_id: int, teacher_id: int, db: Session, *, heal: bool=True)` — L555: Determina la etapa de reserva del estudiante CON UN PROFESOR ESPECÍFICO. Cada relación estudiante-profesor es independiente: completar la prueba con un profesor no exime de la prueba con otro.
 - `release_stale_unpaid_enrollments(db: Session, older_than_hours: int=STALE_UNPAID_ENROLLMENT_HOURS)` — L699: Cancela los enrollments individuales activos que nunca se pagaron ni tienen un pago en revision y tienen mas de `older_than_hours` horas. Es lo que antes hacia, en un GET, `get_student_booking_stage`. Los de cohorte (grupales) no se tocan.
-- `finalize_past_classes(db: Session)` — L730: Marca como 'finalized' las clases confirmadas cuyo horario ya terminó, y como 'no_show' las que nunca se confirmaron/pagaron y ya pasó su hora. Actualiza también el contador de clases usadas del paquete, ya que estos estados cuentan contra el cupo del estudiante.
-- `class_counts_towards_package(class_status: str, start_time_utc: datetime, reference_time: datetime | None=None, apply_late_cancel_penalty: bool=True, min_cancel_hours: i)` — L797: Determina si una clase en este estado debe contarse contra el paquete del estudiante (classes_used).
-- `sync_student_lifetime_class_counter(class_: 'Class', old_status: str, new_status: str, db: Session)` — L840: Mantiene StudentProfile.total_completed_classes al día cada vez que el status de una Class entra o sale de LIFETIME_COUNTING_STATUSES.
-- `count_completed_classes_with_teacher(db: Session, teacher_id: int, student_id: int)` — L888: Cuántas clases completó un alumno con un profesor puntual (individuales + grupales, status 'completed'). A diferencia del contador de por vida de StudentProfile, este número es específico del par profesor-alumno y no incluye 'no_show' — usa el mismo criterio que la elegibilidad para dejar una reseña
-- `cancel_class_and_refund(class_: 'Class', db: Session, apply_late_cancel_penalty: bool)` — L915: Marca la clase como cancelada y devuelve el crédito al estudiante si corresponde. Centraliza la lógica que antes estaba duplicada en los 3 endpoints de cancelación (estudiante, profesor, admin).
+- `notify_teachers_auto_no_show(db: Session, classes: list[Class])` — L735: Fase 13 (A9): avisa a cada profesor (campana «Avisos», sin correo) de las clases que pasaron solas a `no_show` por no marcarlas en 72 h. UNA notificacion por profesor y pasada del job, aunque sean varias clases (si el job estuvo caido no se le inunda). No hace commit: va en la misma transaccion que 
+- `finalize_past_classes(db: Session)` — L775: Marca como 'finalized' las clases confirmadas cuyo horario ya terminó, y como 'no_show' las que nunca se confirmaron/pagaron y ya pasó su hora. Actualiza también el contador de clases usadas del paquete, ya que estos estados cuentan contra el cupo del estudiante.
+- `class_counts_towards_package(class_status: str, start_time_utc: datetime, reference_time: datetime | None=None, apply_late_cancel_penalty: bool=True, min_cancel_hours: i)` — L843: Determina si una clase en este estado debe contarse contra el paquete del estudiante (classes_used).
+- `sync_student_lifetime_class_counter(class_: 'Class', old_status: str, new_status: str, db: Session)` — L886: Mantiene StudentProfile.total_completed_classes al día cada vez que el status de una Class entra o sale de LIFETIME_COUNTING_STATUSES.
+- `count_completed_classes_with_teacher(db: Session, teacher_id: int, student_id: int)` — L934: Cuántas clases completó un alumno con un profesor puntual (individuales + grupales, status 'completed'). A diferencia del contador de por vida de StudentProfile, este número es específico del par profesor-alumno y no incluye 'no_show' — usa el mismo criterio que la elegibilidad para dejar una reseña
+- `cancel_class_and_refund(class_: 'Class', db: Session, apply_late_cancel_penalty: bool)` — L961: Marca la clase como cancelada y devuelve el crédito al estudiante si corresponde. Centraliza la lógica que antes estaba duplicada en los 3 endpoints de cancelación (estudiante, profesor, admin).
 
 ## app/core/config.py
 
@@ -188,7 +189,8 @@ Las que empiezan por `_` son privadas del módulo.
 ## app/core/notifications.py
 
 - `create_notification(db: Session, type: str, title: str, message: Optional[str]=None, related_teacher_id: Optional[int]=None, related_support_ticket_id: Optional)` — L6: Crea una notificación persistente para el panel de staff. No hace commit — el caller decide cuándo confirmar la transacción (normalmente junto con el resto de cambios de la operación).
-- `get_unread_count(db: Session, recipient_role: str='staff')` — L32
+- `get_unread_count(db: Session, recipient_role: str='staff')` — L34
+- `get_user_unread_count(db: Session, user_id: int)` — L41: Avisos sin leer dirigidos a un usuario concreto (Fase 13, A9).
 
 ## app/core/pagination.py
 
@@ -216,8 +218,9 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/retention.py
 
-- `purge_error_logs(db: Session, days: int=ERROR_LOG_RETENTION_DAYS)` — L19: Borra los registros de error mas viejos que `days` dias. Devuelve cuantos borro.
-- `purge_email_log(db: Session, days: int=EMAIL_LOG_RETENTION_DAYS)` — L29: Borra las filas de `email_log` mas viejas que `days` dias (el contador diario solo usa las de hoy).
+- `purge_error_logs(db: Session, days: int=ERROR_LOG_RETENTION_DAYS)` — L21: Borra los registros de error mas viejos que `days` dias. Devuelve cuantos borro.
+- `purge_email_log(db: Session, days: int=EMAIL_LOG_RETENTION_DAYS)` — L31: Borra las filas de `email_log` mas viejas que `days` dias (el contador diario solo usa las de hoy).
+- `purge_user_notifications(db: Session, days: int=USER_NOTIFICATION_RETENTION_DAYS)` — L41: Borra los avisos dirigidos a un usuario (Fase 13, A9) ya LEIDOS y mas viejos que `days` dias. Los de staff no se tocan.
 
 ## app/core/schedule_recalc.py
 
@@ -238,26 +241,26 @@ Las que empiezan por `_` son privadas del módulo.
 - `purge_old_chat_messages()` — L363: Job diario. Borra mensajes de chat interno más viejos que PlatformConfig.chat_retention_days (0 = sin límite, no borra nada).
 - `release_stale_enrollments()` — L383: Job diario. Cancela los enrollments sin pagar de mas de 24 h (antes lo hacia un GET).
 - `purge_old_logs()` — L398: Job diario. Purga `error_logs` y `email_log` por antiguedad (core/retention.py).
-- `class DueJob()` — L443
-- `_due_finalize(job: DueJob, db: Session, now: datetime)` — L452: Primera clase que hay que cerrar: confirmed/pending_trial al terminar, finalized a las 72 h de terminar.
-- `_due_meet_links(job: DueJob, db: Session, now: datetime)` — L468: Hora en que la proxima clase sin link entra en la ventana de autogeneracion. Solo cuentan los profesores con Google Calendar conectado: sin el, no se puede generar el link y el job reintentaba cada 5 min (despertando Neon) durante toda la ventana previa a cada clase.
-- `_due_chat_digest(job: DueJob, db: Session, now: datetime)` — L490
-- `_due_reminders(job: DueJob, db: Session, now: datetime)` — L495: Recordatorio 24 h antes: se envia en la ventana [23 h, 25 h] antes del inicio.
-- `_due_calendar_sync(job: DueJob, db: Session, now: datetime)` — L507: Sin profesores con Calendar conectado no hay nada que sincronizar. Con clase en curso o en las proximas 3 h: cada 30 min. Si no: cada 6 h, y siempre antes de que la proxima clase entre en esa ventana.
-- `retry_delay(job: DueJob)` — L546: Espera antes de reintentar tras `job.failures` fallos seguidos: min_gap x 2^(fallos-1), con tope MAX_BACKOFF.
-- `compute_run_at(job: DueJob, due: Optional[datetime], now: datetime)` — L551: Cuando programar la proxima ejecucion: `due` acotado a [ahora+1s, ahora+MAX_SLEEP] y respetando `min_gap`.
-- `reschedule_job(job: DueJob)` — L564: Recalcula (con una consulta corta) cuando le toca al job y lo programa. Nunca lanza.
-- `report_job_failure(job: DueJob, exc: Exception)` — L583: Deja el fallo en la pantalla de Logs del admin (ErrorLog) con el numero de intento. Nunca lanza.
-- `_run_due_job(job_id: str)` — L600
-- `reschedule_all_due_jobs()` — L613
-- `request_reschedule(delay_seconds: int=3)` — L618: Pide recalcular los vencimientos (con un pequeño retraso: varias escrituras seguidas cuentan una vez).
-- `_watched_models()` — L634
-- `_after_flush(session, flush_context)` — L640
-- `_after_commit(session)` — L645
-- `_after_soft_rollback(session, previous_transaction)` — L650
-- `install_session_hooks()` — L654
-- `start_scheduler()` — L665
-- `stop_scheduler()` — L679: Para el scheduler al apagar la aplicación
+- `class DueJob()` — L444
+- `_due_finalize(job: DueJob, db: Session, now: datetime)` — L453: Primera clase que hay que cerrar: confirmed/pending_trial al terminar, finalized a las 72 h de terminar.
+- `_due_meet_links(job: DueJob, db: Session, now: datetime)` — L469: Hora en que la proxima clase sin link entra en la ventana de autogeneracion. Solo cuentan los profesores con Google Calendar conectado: sin el, no se puede generar el link y el job reintentaba cada 5 min (despertando Neon) durante toda la ventana previa a cada clase.
+- `_due_chat_digest(job: DueJob, db: Session, now: datetime)` — L491
+- `_due_reminders(job: DueJob, db: Session, now: datetime)` — L496: Recordatorio 24 h antes: se envia en la ventana [23 h, 25 h] antes del inicio.
+- `_due_calendar_sync(job: DueJob, db: Session, now: datetime)` — L508: Sin profesores con Calendar conectado no hay nada que sincronizar. Con clase en curso o en las proximas 3 h: cada 30 min. Si no: cada 6 h, y siempre antes de que la proxima clase entre en esa ventana.
+- `retry_delay(job: DueJob)` — L547: Espera antes de reintentar tras `job.failures` fallos seguidos: min_gap x 2^(fallos-1), con tope MAX_BACKOFF.
+- `compute_run_at(job: DueJob, due: Optional[datetime], now: datetime)` — L552: Cuando programar la proxima ejecucion: `due` acotado a [ahora+1s, ahora+MAX_SLEEP] y respetando `min_gap`.
+- `reschedule_job(job: DueJob)` — L565: Recalcula (con una consulta corta) cuando le toca al job y lo programa. Nunca lanza.
+- `report_job_failure(job: DueJob, exc: Exception)` — L584: Deja el fallo en la pantalla de Logs del admin (ErrorLog) con el numero de intento. Nunca lanza.
+- `_run_due_job(job_id: str)` — L601
+- `reschedule_all_due_jobs()` — L614
+- `request_reschedule(delay_seconds: int=3)` — L619: Pide recalcular los vencimientos (con un pequeño retraso: varias escrituras seguidas cuentan una vez).
+- `_watched_models()` — L635
+- `_after_flush(session, flush_context)` — L641
+- `_after_commit(session)` — L646
+- `_after_soft_rollback(session, previous_transaction)` — L651
+- `install_session_hooks()` — L655
+- `start_scheduler()` — L666
+- `stop_scheduler()` — L680: Para el scheduler al apagar la aplicación
 
 ## app/core/spoken_languages.py
 
@@ -358,10 +361,10 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/auth/jwt.py
 
-- `create_access_token(user_id: int, role: str)` — L6: Genera un token JWT con el id y rol del usuario. Expira según ACCESS_TOKEN_EXPIRE_MINUTES del .env
-- `create_oauth_state(teacher_id: int, purpose: str='gcal')` — L26: `state` firmado y de vida corta para el flujo OAuth (SEC-06): ata la autorizacion al profesor que la inicio y evita que un atacante inyecte su propio `code` en la sesion de otro. Usa `tid` y `typ` (no `sub`/`role`) para que NUNCA se pueda usar como token de acceso.
-- `decode_oauth_state(state: str, purpose: str='gcal')` — L42: Devuelve el teacher_id del `state`, o None si es invalido, vencido o de otro tipo.
-- `decode_access_token(token: str)` — L53: Verifica y decodifica un token. Retorna None si el token es inválido o expiró.
+- `create_access_token(user_id: int, role: str)` — L7: Genera un token JWT con el id y rol del usuario. Expira según ACCESS_TOKEN_EXPIRE_MINUTES del .env
+- `create_oauth_state(teacher_id: int, purpose: str='gcal')` — L27: `state` firmado y de vida corta para el flujo OAuth (SEC-06): ata la autorizacion al profesor que la inicio y evita que un atacante inyecte su propio `code` en la sesion de otro. Usa `tid` y `typ` (no `sub`/`role`) para que NUNCA se pueda usar como token de acceso.
+- `decode_oauth_state(state: str, purpose: str='gcal')` — L43: Devuelve el teacher_id del `state`, o None si es invalido, vencido o de otro tipo.
+- `decode_access_token(token: str)` — L54: Verifica y decodifica un token. Retorna None si el token es inválido o expiró.
 
 ## app/auth/passwords.py
 

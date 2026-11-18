@@ -99,7 +99,7 @@ def test_tts_batch_word_length_edges(client, world, monkeypatch):
 
 
 def test_oauth_state_expiry_edges():
-    from jose import jwt as jose_jwt
+    import jwt as jose_jwt
     from app.core.config import settings
     now = utc_now()
 

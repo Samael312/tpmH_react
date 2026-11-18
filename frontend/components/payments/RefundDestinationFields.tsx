@@ -97,7 +97,7 @@ export default function RefundDestinationFields({
 
       <div className="space-y-1.5">
         <p className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-          <StickyNote className="w-3.5 h-3.5" /> ¿No tenés ninguno de estos? Dejanos una nota
+          <StickyNote className="w-3.5 h-3.5" /> ¿No tienes ninguno de estos? Déjanos una nota
         </p>
         <textarea
           placeholder="Ej: solo tengo Binance, mi usuario es..."

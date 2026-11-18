@@ -389,7 +389,7 @@ export default function StudentProfilePage() {
     setDeleting(true);
     try {
       await api.delete("/users/me", { data: { confirm_username: deleteInput, password: deletePassword || undefined } });
-      logout();
+      await logout();
       window.location.href = "/";
     } catch (e) {
       toast.error(getErrorMessage(e, "No se pudo eliminar la cuenta"));
@@ -830,7 +830,7 @@ export default function StudentProfilePage() {
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex items-start gap-3">
                   <Lock className="w-5 h-5 text-slate-300 flex-shrink-0 mt-0.5" />
                   <p className="text-xs text-slate-500 font-bold leading-relaxed">
-                    Iniciás sesión con Google — tu cuenta no tiene una contraseña propia que actualizar acá.
+                    Inicias sesión con Google — tu cuenta no tiene una contraseña propia que actualizar aquí.
                     Para cambiar tu acceso, gestionalo directamente desde tu cuenta de Google.
                   </p>
                 </div>

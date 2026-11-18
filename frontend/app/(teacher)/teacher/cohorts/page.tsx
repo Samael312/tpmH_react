@@ -116,7 +116,7 @@ export default function TeacherCohortsPage() {
   const [closingCohort, setClosingCohort] = useState<Cohort | null>(null);
   // Corrección QA: antes esto era un solo <input type="datetime-local">
   // suelto (closeDate), sin validar contra la disponibilidad real del
-  // profesor — y la fecha elegida acá nunca generaba una Class de verdad,
+  // profesor — y la fecha elegida aquí nunca generaba una Class de verdad,
   // solo quedaba guardada como metadata en la cohorte. Ahora reutiliza el
   // mismo selector de calendario + horarios reales que "Agendar sesión"
   // (ver GroupSessionSlotPicker más abajo), porque esa fecha/hora también
@@ -261,7 +261,7 @@ export default function TeacherCohortsPage() {
     }
     setActionLoading(true);
     try {
-      // La fecha/hora elegida acá ya no es solo metadata: el backend usa
+      // La fecha/hora elegida aquí ya no es solo metadata: el backend usa
       // este mismo start_date + duration_minutes para crear de una vez la
       // primera sesión (Class) real del grupo (ver close_cohort_endpoint).
       // D14: si el paquete es de horario fijo, start_date es la ocurrencia
@@ -785,7 +785,7 @@ export default function TeacherCohortsPage() {
                 <p className="text-xs text-slate-500">
                   Este paquete tiene horario fijo (
                   {(closingPackage?.group_recurring_days_of_week ?? []).map(d => ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"][d]).join(", ")}
-                  {" "}{closingPackage?.group_recurring_time_local}). Elegí en el calendario a partir de cuál día arrancar —
+                  {" "}{closingPackage?.group_recurring_time_local}). Elige en el calendario a partir de cuál día arrancar —
                   se agendarán automáticamente las {closingPackage?.classes_count ?? "N"} sesiones del paquete.
                 </p>
                 {loadingRecurringCandidates ? (
@@ -798,7 +798,7 @@ export default function TeacherCohortsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
                     <div>
                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                        1. Elegí el día de inicio
+                        1. Elige el día de inicio
                       </label>
                       {/* Corrección QA: antes esto era una lista vertical plana
                           con las próximas ~8 coincidencias sueltas -- no se
@@ -864,7 +864,7 @@ export default function TeacherCohortsPage() {
             ) : (
               <>
                 <p className="text-xs text-slate-500">
-                  La fecha y horario que elijas acá quedan como la fecha de inicio del grupo <strong>y</strong>{" "}
+                  La fecha y horario que elijas aquí quedan como la fecha de inicio del grupo <strong>y</strong>{" "}
                   generan de una vez la primera sesión (clase) real de la cohorte.
                 </p>
 
@@ -1043,7 +1043,7 @@ export default function TeacherCohortsPage() {
 // "Agendar sesión" tenían su propio formulario de fecha/hora — el primero
 // era un <input type="datetime-local"> suelto sin validar disponibilidad
 // real, y el segundo ya usaba RescheduleCalendar + useAvailableSlots. Se
-// extrae la UI compartida acá para que ambos flujos generen una sesión
+// extrae la UI compartida aquí para que ambos flujos generen una sesión
 // real (Class) contra un horario que sabemos que existe de verdad.
 function GroupSessionSlotPicker({
   allowedDurations,

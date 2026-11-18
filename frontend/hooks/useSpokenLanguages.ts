@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { fetchMe } from '@/lib/me'
 import { useAuthStore } from '@/store/authStore'
 import { parseSpoken, type SpokenLanguage } from '@/lib/spokenLanguages'
 
@@ -20,10 +21,10 @@ export function useMySpokenLanguages(enabled = true) {
     queryKey: MY_SPOKEN_LANGUAGES_KEY,
     enabled,
     queryFn: async (): Promise<MeSpoken> => {
-      const res = await api.get('/users/me')
+      const me = await fetchMe(qc)
       return {
-        spoken_languages: parseSpoken(res.data?.spoken_languages),
-        onboarding_completed: !!res.data?.onboarding_completed,
+        spoken_languages: parseSpoken(me?.spoken_languages),
+        onboarding_completed: !!me?.onboarding_completed,
       }
     },
   })

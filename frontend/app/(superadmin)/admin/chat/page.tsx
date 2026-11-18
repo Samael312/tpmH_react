@@ -94,7 +94,7 @@ function ConversationAuditPanel({
           <ShieldAlert size={32} className="text-amber-400" />
           <p className="text-sm font-bold text-slate-700">Esta conversación tiene contenido privado</p>
           <p className="text-xs text-slate-400 max-w-xs">
-            Para ver los mensajes tenés que indicar un motivo. Queda registrado
+            Para ver los mensajes tienes que indicar un motivo. Queda registrado
             en el historial de auditoría, visible para todo el staff.
           </p>
           <button
@@ -133,7 +133,7 @@ function ConversationAuditPanel({
       <RejectReasonModal
         open={askingReason}
         title="Motivo de la revisión"
-        description={`Vas a ver los mensajes de "${conversation.title}". Escribí por qué necesitás revisarla — queda auditado.`}
+        description={`Vas a ver los mensajes de "${conversation.title}". Escribe por qué necesitas revisarla — queda auditado.`}
         fieldLabel="Motivo"
         placeholder="Ej: seguimiento de un reclamo del alumno sobre..."
         confirmLabel="Ver mensajes"
@@ -166,7 +166,7 @@ export default function AdminChatAuditPage() {
         <div>
           <h1 className="text-3xl font-black text-slate-800 tracking-tight">Auditoría de chats</h1>
           <p className="text-slate-500 mt-1">
-            Revisá conversaciones del chat interno entre profesores y alumnos. Ver mensajes queda registrado.
+            Revisa conversaciones del chat interno entre profesores y alumnos. Ver mensajes queda registrado.
           </p>
         </div>
         <div className="hidden md:block">
@@ -242,7 +242,7 @@ export default function AdminChatAuditPage() {
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-300">
                 <MessageCircle size={40} />
-                <p className="text-sm font-semibold">Elegí una conversación para auditar</p>
+                <p className="text-sm font-semibold">Elige una conversación para auditar</p>
               </div>
             )}
           </div>

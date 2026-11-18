@@ -77,7 +77,8 @@ api.interceptors.response.use(
 
     // 401 definitivo → logout (no si se está iniciando sesión)
     if (err.response?.status === 401 && !isAuthEndpoint) {
-      useAuthStore.getState().logout();
+      // Se espera el POST /auth/logout: la navegación dura lo abortaría y las cookies sobrevivirían.
+      await useAuthStore.getState().logout();
       if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
         window.location.href = "/login";
       }

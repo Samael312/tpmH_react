@@ -151,9 +151,10 @@ export default function ExceptionsSection() {
       invalidateExceptions();
       setSuccess("Excepción eliminada correctamente");
       toast.success("Excepción eliminada correctamente");
-    } catch {
-      setError("Error eliminando la excepción");
-      toast.error("Error eliminando la excepción");
+    } catch (e: unknown) {
+      const msg = getErrorMessage(e, "Error eliminando la excepción");
+      setError(msg);
+      toast.error(msg);
     } finally {
       setDeletingId(null);
       setTimeout(() => setSuccess(""), 3000);

@@ -91,6 +91,17 @@ export function formatDateHumanTz(utcIso: string, timeZone: string): string {
   });
 }
 
+/** "jueves, 19 de noviembre" para una fecha de calendario "YYYY-MM-DD" ya elegida por la persona. No lleva hora ni
+ *  zona: se formatea al mediodía UTC para que ni la zona del navegador ni la del perfil la muevan de día. */
+export function formatCalendarDateHuman(dateKey: string): string {
+  return new Date(`${dateKey}T12:00:00Z`).toLocaleDateString("es", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  });
+}
+
 /** "2026-01-13" — clave de fecha (año-mes-día) correcta para una zona
  *  horaria específica, para comparar/agrupar por "día calendario" tal como
  *  lo percibe la persona (no el día UTC crudo). Usa "en-CA" porque ese

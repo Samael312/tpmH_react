@@ -59,6 +59,7 @@ Cuenta de prueba sin tocar la BD real: `python -m tests.audit.run_server` (SQLit
 | `MAX_VIDEO_UPLOAD_MB` | `100` | no | tope de vídeo (`storage.py`) | desde la Fase 5 se sube por streaming (no se carga entero en RAM) |
 | `MATERIALS_QUOTA_MB` | `500` | no | cuota de materiales por profesor (`core/upload_quota.py`); `0` la desactiva | 413 al superarla; borrar un material libera espacio |
 | `ERROR_LOG_RETENTION_DAYS` / `EMAIL_LOG_RETENTION_DAYS` | `30` / `60` | no | purga diaria de `error_logs` / `email_log` (`core/retention.py`); `0` la desactiva | |
+| `USER_NOTIFICATION_RETENTION_DAYS` | `90` | no | la misma purga diaria borra los avisos dirigidos a un usuario (campana «Avisos» del profesor) **ya leídos** y más viejos que esto; los de staff no se tocan; `0` la desactiva | Requiere la migración `d3f7a8b9c0e1` |
 | `CHAT_DIGEST_DELAY_MINUTES` | `10` | no | espera antes de enviar el resumen de mensajes de chat al profesor (`core/chat_digest.py`) | |
 | `OPENAI_TIMEOUT_SECONDS` | `30` | no | timeout de las llamadas a OpenAI (chat de Chipi y TTS), con 1 reintento (`core/chipi/service.py`, `core/tts_service.py`) | el valor por defecto del SDK era 600 s |
 | `CLOUDINARY_READ_TIMEOUT_SECONDS` | `120` | no | espera máxima entre bytes recibidos de Cloudinary al subir o borrar (`core/storage.py`); conexión 10 s | sin esto una subida colgada bloqueaba el hilo |

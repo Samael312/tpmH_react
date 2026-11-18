@@ -33,7 +33,7 @@ Backend en UTC. `lib/scheduleUtc.ts` (`getNextWeekdayDate`, `utcTimeToLocal`…)
 Las pantallas pesadas (`student/schedule`, ~1800 líneas) duplican reglas del backend (estado de reserva, duraciones): al cambiar reglas, revisa ambos lados (`hooks/useBusinessRules.ts` trae las configurables).
 
 ## Seguridad
-CSP con nonce y `'strict-dynamic'` en script-src (`'unsafe-eval'` solo en desarrollo; `style-src` mantiene `'unsafe-inline'`); sin `dangerouslySetInnerHTML`; sin `console.log`; React escapa el HTML.
+CSP con nonce y `'strict-dynamic'` en script-src (`'unsafe-eval'` solo en desarrollo; en producción `style-src` (elementos `<style>`/`<link>`) usa nonce sin `'unsafe-inline'` y `style-src-attr 'unsafe-inline'` permite solo los atributos `style="…"` que escribe React; en desarrollo `style-src` conserva `'unsafe-inline'` por el HMR); sin `dangerouslySetInnerHTML`; sin `console.log`; React escapa el HTML.
 Pendiente: cookie HttpOnly (ver KNOWN_ISSUES).
 
 ## Build y calidad (verificado 2026-11-16)

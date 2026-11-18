@@ -19,6 +19,8 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Permite levantar una segunda instancia de desarrollo (pruebas con navegador) sin chocar con el bloqueo de .next.
+  ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   images: {
     // Las imágenes de Cloudinary las optimiza Cloudinary (f_auto,q_auto) y el resto se sirve tal cual: el servidor de
     // Railway deja de recodificar imágenes. Ver lib/imageLoader.ts y lib/cloudinaryImage.ts.

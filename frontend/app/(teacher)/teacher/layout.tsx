@@ -7,6 +7,8 @@ import NavBar from '@/components/layout/NavBar'
 import DashboardTopbar from '@/components/layout/DashboardTopbar'
 import ChatWidget from '@/components/chat/ChatWidget'
 import api from '@/lib/api'
+import { useQueryClient } from '@tanstack/react-query'
+import { fetchMe } from '@/lib/me'
 import { usePlatformConfig } from '@/hooks/useStudentData'
 import { useChatSocketBootstrap } from '@/hooks/useChat'
 import VerifyEmailBanner from '@/components/layout/VerifyEmailBanner'
@@ -19,6 +21,7 @@ export default function TeacherLayout({
   children: React.ReactNode
 }) {
   const router   = useRouter()
+  const qc       = useQueryClient()
   const pathname = usePathname()
   const { user, setUser, hasHydrated } = useAuthStore()
   const { config: platformConfig } = usePlatformConfig()
@@ -50,7 +53,7 @@ export default function TeacherLayout({
     if (!currentUser) {
       verifiedRef.current = false
       // SEC-05 / UX-01: sesión por cookie HttpOnly pero sin `user` en localStorage -> se recupera de /users/me.
-      api.get('/users/me').then((r) => setUser({ ...r.data })).catch(() => router.push('/login'))
+      fetchMe(qc).then((me) => setUser({ ...me })).catch(() => router.push('/login'))
       return
     }
 
@@ -68,7 +71,7 @@ export default function TeacherLayout({
     if (verifiedRef.current) return
 
     Promise.all([
-    api.get('/users/me'),
+    fetchMe(qc).then((data) => ({ data })),
     api.get('/teachers/me/profile').catch(() => ({ data: {} })),
   ]).then(([meRes, tpRes]) => {
     const data = meRes.data;
@@ -98,7 +101,7 @@ export default function TeacherLayout({
       setReady(true);
     }
   });
-}, [pathname, hasHydrated, hasUser, router, setUser]);
+}, [pathname, hasHydrated, hasUser, router, setUser, qc]);
 
   // Si el store ya no tiene user/token (p.ej. logout en curso), no renderizar
   // el dashboard con datos nulos: mostrar spinner mientras se redirige.

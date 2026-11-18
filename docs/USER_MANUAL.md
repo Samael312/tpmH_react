@@ -60,7 +60,7 @@ Opcional: **conectar Google Calendar** (`/teacher/profile` o panel de calendario
 ### Clases del día a día
 `/teacher/dashboard` y la agenda: próximas clases con enlace de Meet.
 - **Confirmar** pruebas pendientes.
-- Tras la clase, márcala **completada** o **no_show** (hasta 72 h después del fin). Las clases «finalizadas» sin marcar quedan en limbo y el alumno no puede reseñar; la tarjeta te avisa de cuánto tiempo queda antes de que pasen solas a «No asistió».
+- Tras la clase, márcala **completada** o **no_show** (hasta 72 h después del fin). Las clases «finalizadas» sin marcar quedan en limbo y el alumno no puede reseñar; la tarjeta te avisa de cuánto tiempo queda antes de que pasen solas a «No asistió». Si una pasa sola, te llega un aviso en **Avisos** (menú lateral) con el detalle; desde la clase puedes pedir la corrección a soporte.
 - **Cancelar** una clase: siempre devuelve el crédito al alumno y le avisa.
 - **Reagendar** acordando con el alumno.
 

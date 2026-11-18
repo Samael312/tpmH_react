@@ -372,7 +372,7 @@ function LandingTextArea({ label, value, onChange }: {
 // Campo de título del landing con soporte de gradiente (punto pedido: poder
 // poner títulos con color, no solo unicolor, y elegir qué palabras del
 // título lo llevan). El admin marca las palabras envolviéndolas con
-// {{dobles llaves}} directamente en el texto, y elige acá el gradiente
+// {{dobles llaves}} directamente en el texto, y elige aquí el gradiente
 // predefinido (o "Sin color") que se les aplica -- se previsualiza en vivo
 // abajo, igual a como se ve en el landing real.
 function LandingTitleField({ label, value, onChange, gradientId, onGradientChange }: {
@@ -1046,7 +1046,7 @@ export default function SettingsPage() {
 
               {!platformConfig.is_single_tenant && approvedTeachers.length === 0 && (
                 <p className="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5 -mt-2">
-                  Aún no hay profesores aprobados. Podés dejar el modo marketplace activo igual — el landing y la sección de profesores quedarán vacíos hasta que apruebes al menos uno.
+                  Aún no hay profesores aprobados. Puedes dejar el modo marketplace activo igual — el landing y la sección de profesores quedarán vacíos hasta que apruebes al menos uno.
                 </p>
               )}
 
@@ -1113,7 +1113,7 @@ export default function SettingsPage() {
                   <p className="text-xs text-slate-500 font-medium mt-1">
                     Textos que se muestran en la página pública. Los campos marcados
                     &quot;individual&quot;/&quot;multi-profesor&quot; varían según el modo de
-                    plataforma de arriba — podés completar ambos aunque el modo activo
+                    plataforma de arriba — puedes completar ambos aunque el modo activo
                     sea solo uno.
                   </p>
                 </div>
@@ -1529,7 +1529,7 @@ export default function SettingsPage() {
               label="Duración de la clase de prueba"
               value={businessRules.trial_duration_minutes ?? 25}
               onChange={v => updateBusinessRules({ ...businessRules, trial_duration_minutes: v })}
-              hint="Duración real de la clase de prueba. Es un único valor, no una lista — hoy 25 min, editable acá si cambia en el futuro."
+              hint="Duración real de la clase de prueba. Es un único valor, no una lista — hoy 25 min, editable aquí si cambia en el futuro."
             />
           </div>
 

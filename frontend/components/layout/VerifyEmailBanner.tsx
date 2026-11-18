@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { MailWarning } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { fetchMe } from "@/lib/me";
 import { useToast } from "@/hooks/useToast";
+import { useAuthStore } from "@/store/authStore";
 import { getErrorMessage } from "@/lib/errorMessage";
 
 /**
@@ -12,21 +15,22 @@ import { getErrorMessage } from "@/lib/errorMessage";
  */
 export default function VerifyEmailBanner() {
   const toast = useToast();
+  const qc = useQueryClient();
+  const role = useAuthStore((s) => s.user?.role);
   const [unverified, setUnverified] = useState(false);
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    api
-      .get("/users/me")
-      .then((res) => {
-        if (alive) setUnverified(res.data?.is_verified === false);
+    fetchMe(qc)
+      .then((me) => {
+        if (alive) setUnverified(me?.is_verified === false);
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, []);
+  }, [qc]);
 
   if (!unverified) return null;
 
@@ -46,7 +50,10 @@ export default function VerifyEmailBanner() {
     <div className="mx-4 mt-3 sm:mx-6 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
       <MailWarning className="h-5 w-5 flex-shrink-0" />
       <p className="flex-1 text-xs font-bold leading-relaxed">
-        Verifica tu email para poder enviar pagos y pedir retiros. Te enviamos un enlace al registrarte.
+        {role === "student"
+          ? "Verifica tu email para poder enviar pagos e inscribirte en grupos."
+          : "Verifica tu email para poder pedir retiros."}{" "}
+        Te enviamos un enlace al registrarte.
       </p>
       <button
         onClick={resend}

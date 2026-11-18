@@ -56,7 +56,7 @@ export default function TeacherChatPage() {
   }, [searchParams, conversations, loading]);
 
   // Deep-link desde el botón "Chat" de /teacher/students: ese botón navega
-  // de inmediato con ?student=<username> (sin esperar al backend), y acá
+  // de inmediato con ?student=<username> (sin esperar al backend), y aquí
   // recién se crea/abre la conversación — mientras tanto se ve el loading
   // de abajo en vez de quedarse la pantalla anterior sin reaccionar al click.
   useEffect(() => {
@@ -94,7 +94,7 @@ export default function TeacherChatPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-800">Chat</h1>
-          <p className="text-slate-400 text-sm font-medium">Hablá directamente con tus estudiantes o tus grupos.</p>
+          <p className="text-slate-400 text-sm font-medium">Habla directamente con tus estudiantes o tus grupos.</p>
         </div>
         <RefreshButton onRefresh={handleRefresh} isFetching={isFetching || threadFetching} />
       </div>
@@ -126,7 +126,7 @@ export default function TeacherChatPage() {
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-300">
                 <MessageCircle size={40} />
-                <p className="text-sm font-semibold">Elegí una conversación</p>
+                <p className="text-sm font-semibold">Elige una conversación</p>
               </div>
             )}
           </div>

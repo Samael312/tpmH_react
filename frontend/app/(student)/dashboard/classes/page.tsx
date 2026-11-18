@@ -10,6 +10,7 @@ import { useStudentClasses, usePlatformConfig, StudentClass } from "@/hooks/useS
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import ClassCard from "@/components/classes/ClassCard";
+import LoadError from "@/components/ui/LoadError";
 import { RescheduleModal } from "@/components/classes/RescheduleModal";
 import { getMyDisplayTimezone, formatDateHumanTz } from "@/lib/tzFormat";
 import Skeleton from "@/components/ui/Skeleton";
@@ -431,7 +432,7 @@ export default function MyClassesPage() {
   // mostraban datos de una caché diferente -y potencialmente desactualizada-
   // porque refetch() sólo refresca la query activa, causando que el conteo
   // de "Próximas" fluctuara al alternar entre tabs.
-  const { classes, loading, isFetching, refetch } = useStudentClasses(true);
+  const { classes, loading, isFetching, isError, refetch } = useStudentClasses(true);
   const { config: platformConfig } = usePlatformConfig();
 
   usePageTopBar({
@@ -648,6 +649,8 @@ export default function MyClassesPage() {
             Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-28 rounded-2xl" />
             ))
+          ) : isError && safeClasses.length === 0 ? (
+            <LoadError what="tus clases" onRetry={() => refetch()} retrying={isFetching} />
           ) : displayed.length === 0 ? (
           <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg py-16 text-center">
             <Calendar className="w-12 h-12 text-slate-200 mx-auto mb-3" />

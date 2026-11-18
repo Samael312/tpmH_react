@@ -3,7 +3,7 @@ from app.core.pagination import Pagination, paginate
 from sqlalchemy.orm import Session, contains_eager
 from typing import List, Optional 
 from app.db.base import get_db
-from app.auth.dependencies import get_current_user, get_current_teacher
+from app.auth.dependencies import get_current_user, get_current_teacher, get_current_teacher_or_teacher_admin
 from app.models.user import User, UserRole
 from app.models.teacher import TeacherProfile, TeacherStatus
 from app.schemas.teacher import (
@@ -17,9 +17,10 @@ from app.models.package import Enrollment
 from app.models.material import Material, MaterialAssignment
 from app.core.email import send_admin_new_teacher_pending_email
 from app.core.phone import normalize_phone
-from app.core.notifications import create_notification
+from app.core.notifications import create_notification, get_user_unread_count
+from app.models.notification import Notification
 from app.models.teacher_appeal import TeacherAppeal
-from app.schemas.notifications import CreateAppealRequest, TeacherAppealResponse
+from app.schemas.notifications import CreateAppealRequest, NotificationResponse, TeacherAppealResponse, UnreadCountResponse
 from app.core.schedule_recalc import recalculate_teacher_schedule_timezone
 from app.core.platform_config import get_or_create_platform_config
 from app.core.spoken_languages import read_spoken_languages, speaks as speaks_language
@@ -505,3 +506,59 @@ def get_my_appeals(
     return db.query(TeacherAppeal).filter(
         TeacherAppeal.teacher_id == profile.id
     ).order_by(TeacherAppeal.created_at.asc()).all()
+
+
+# ─── Avisos del profesor (Fase 13, A9) ───────────────────────────────────────
+# Notificaciones dirigidas a UN usuario (`recipient_user_id`), p. ej. clases que pasaron solas a "no_show".
+# Son distintas de las del staff (`/admin/notifications`): cada profesor solo ve las suyas.
+
+@router.get("/me/notifications", response_model=List[NotificationResponse])
+def list_my_notifications(
+    response: Response,
+    page: Pagination = Depends(),
+    unread_only: bool = Query(False),
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Notification).filter(Notification.recipient_user_id == current_user.id)
+    if unread_only:
+        query = query.filter(Notification.is_read == False)  # noqa: E712
+    return paginate(query.order_by(Notification.created_at.desc(), Notification.id.desc()), page, response).all()
+
+
+@router.get("/me/notifications/unread-count", response_model=UnreadCountResponse)
+def my_unread_notification_count(
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    return UnreadCountResponse(unread_count=get_user_unread_count(db, current_user.id))
+
+
+@router.patch("/me/notifications/{notification_id}/read")
+def mark_my_notification_read(
+    notification_id: int,
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    notif = db.query(Notification).filter(
+        Notification.id == notification_id,
+        Notification.recipient_user_id == current_user.id,  # nunca el aviso de otro usuario
+    ).first()
+    if not notif:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Aviso no encontrado")
+    notif.is_read = True
+    db.commit()
+    return {"message": "Aviso marcado como leído"}
+
+
+@router.post("/me/notifications/mark-all-read")
+def mark_all_my_notifications_read(
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    db.query(Notification).filter(
+        Notification.recipient_user_id == current_user.id,
+        Notification.is_read == False,  # noqa: E712
+    ).update({"is_read": True}, synchronize_session=False)
+    db.commit()
+    return {"message": "Todos los avisos marcados como leídos"}

@@ -31,6 +31,7 @@ import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface StudentRow {
@@ -411,8 +412,8 @@ export default function BulkEditStudentsPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       refetch();
-    } catch {
-      setError("Ocurrió un error al guardar algunos registros.");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Ocurrió un error al guardar algunos registros."));
     } finally {
       setSaving(false);
     }

@@ -57,7 +57,7 @@ export default function StudentChatPage() {
 
   // Deep-link desde ?teacher=<username> (botón "Chat" del perfil público de
   // un profesor — ver teachers/[username]/page.tsx). Ese botón navega de
-  // inmediato sin esperar al backend, y acá recién se crea/abre la
+  // inmediato sin esperar al backend, y aquí recién se crea/abre la
   // conversación (mismo patrón que ?student= en teacher/chat/page.tsx).
   // Funciona tanto si ya está vinculado a ese profesor como si no — ver
   // core/chat.py::get_direct_conversation_or_404.
@@ -96,7 +96,7 @@ export default function StudentChatPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-800">Chat</h1>
-          <p className="text-slate-400 text-sm font-medium">Hablá directamente con tu profesor o tu grupo.</p>
+          <p className="text-slate-400 text-sm font-medium">Habla directamente con tu profesor o tu grupo.</p>
         </div>
         <RefreshButton onRefresh={handleRefresh} isFetching={isFetching || threadFetching} />
       </div>
@@ -130,7 +130,7 @@ export default function StudentChatPage() {
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-300">
                 <MessageCircle size={40} />
-                <p className="text-sm font-semibold">Elegí una conversación</p>
+                <p className="text-sm font-semibold">Elige una conversación</p>
               </div>
             )}
           </div>

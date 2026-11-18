@@ -285,7 +285,7 @@ export default function ChooseTeacherPage() {
         <p className="text-sm text-slate-500">
           Indícanos a dónde quieres que te devolvamos el saldo restante de tu paquete con{" "}
           <span className="font-bold text-slate-700">{refundTarget?.name}</span>. Todos los campos son
-          opcionales: completa el o los medios que tengas, o dejanos una nota si no tenés ninguno de
+          opcionales: completa el o los medios que tengas, o déjanos una nota si no tienes ninguno de
           los que mostramos abajo.
         </p>
         <RefundDestinationFields value={refundForm} onChange={setRefundForm} />

@@ -397,14 +397,15 @@ def release_stale_enrollments():
 
 def purge_old_logs():
     """Job diario. Purga `error_logs` y `email_log` por antiguedad (core/retention.py)."""
-    from app.core.retention import purge_error_logs, purge_email_log
+    from app.core.retention import purge_error_logs, purge_email_log, purge_user_notifications
 
     db: Session = SessionLocal()
     try:
         errors = purge_error_logs(db)
         emails = purge_email_log(db)
-        if errors or emails:
-            logger.info(f"Retención: {errors} error_logs y {emails} email_log purgados")
+        notifs = purge_user_notifications(db)
+        if errors or emails or notifs:
+            logger.info(f"Retención: {errors} error_logs, {emails} email_log y {notifs} avisos leídos purgados")
     except Exception as e:
         logger.error(f"Error en job de purga de logs: {e}")
     finally:

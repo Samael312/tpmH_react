@@ -117,7 +117,7 @@ function ensureInitialized(clientId: string): Promise<void> {
       auto_select: false,
     });
   }).catch((err) => {
-    // Mismo motivo que en loadGsiScript: sin esto, un fallo acá deja el
+    // Mismo motivo que en loadGsiScript: sin esto, un fallo aquí deja el
     // singleton pegado a una promesa rechazada para siempre y ningún
     // mount futuro del componente puede volver a intentarlo.
     initializePromise = null;
@@ -183,7 +183,7 @@ export default function GoogleSignInButton({
   const [buttonWidth, setButtonWidth] = useState<number | null>(null);
 
   // La variable de entorno es estática (no cambia entre renders), así que
-  // se calcula acá como valor derivado en vez de sincronizarla con estado
+  // se calcula aquí como valor derivado en vez de sincronizarla con estado
   // dentro de un efecto (evita el setState síncrono en el cuerpo del efecto).
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   const envErrorMessage = clientId ? null : "Falta configurar NEXT_PUBLIC_GOOGLE_CLIENT_ID";

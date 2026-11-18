@@ -39,7 +39,7 @@ export default function ChatThreadView({
   // /teacher/chat, que refrescan lista + hilo activo en un solo click).
   onRegisterRefetch?: (refetch: () => void) => void;
 }) {
-  // OJO: `useAuthStore().user.id` NO sirve acá — ningún flujo de login
+  // OJO: `useAuthStore().user.id` NO sirve aquí — ningún flujo de login
   // (email/password ni Google, ver app/(public)/login/page.tsx y
   // app/(public)/register/google-complete/page.tsx) lo popula nunca, así
   // que siempre da `undefined` y `isMine` abajo termina siendo `false`
@@ -123,7 +123,7 @@ export default function ChatThreadView({
             ))}
           </div>
         ) : messages.length === 0 ? (
-          <p className="text-center text-xs text-slate-400 py-8">Todavía no hay mensajes. ¡Escribí el primero!</p>
+          <p className="text-center text-xs text-slate-400 py-8">Todavía no hay mensajes. ¡Escribe el primero!</p>
         ) : (
           messages.map((m) => {
             const isMine = !!currentUserId && m.sender_id === currentUserId;
@@ -176,7 +176,7 @@ export default function ChatThreadView({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-          placeholder="Escribí un mensaje..."
+          placeholder="Escribe un mensaje..."
           maxLength={4000}
           className="flex-1 px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-100 text-sm
                      focus:outline-none focus:ring-2 focus:ring-pink-200 focus:border-pink-200"

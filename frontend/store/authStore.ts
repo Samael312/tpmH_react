@@ -27,7 +27,7 @@ interface AuthStore {
   hasHydrated: boolean;
 
   login: (token: string, user: User) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   setLoading: (loading: boolean) => void;
   setUser: (user: User) => void;
   setHasHydrated: (hydrated: boolean) => void;
@@ -48,11 +48,15 @@ export const useAuthStore = create<AuthStore>()(
 
       logout: () => {
         // Revoca la sesión en el servidor y borra las cookies (no se puede desde JS: son HttpOnly).
+        // Devuelve la promesa para que quien navegue con window.location pueda esperarla: si la página se
+        // descarga antes, el navegador aborta el POST, las cookies siguen vivas y proxy.ts devuelve /login al dashboard.
+        let request: Promise<void> = Promise.resolve();
         try {
-          void fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1"}/auth/logout`, {
+          request = fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1"}/auth/logout`, {
             method: "POST",
             credentials: "include",
-          }).catch(() => {});
+            keepalive: true,
+          }).then(() => undefined, () => undefined);
         } catch {}
         set({ user: null, isLoading: false });
         // N3: cierra el WS global del chat y borra el cache de mensajes en
@@ -61,6 +65,7 @@ export const useAuthStore = create<AuthStore>()(
         // dejarlo flotando en memoria si el próximo usuario en esta
         // compu/pestaña inicia sesión con otra cuenta.
         useChatStore.getState().reset();
+        return request;
       },
 
       setLoading: (loading) => set({ isLoading: loading }),

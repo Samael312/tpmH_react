@@ -61,7 +61,7 @@ export default function GodModeActionRunner({ action }: { action: GodModeAction 
   const studentId = values["student_id"] ? Number(values["student_id"]) : undefined;
 
   // Datos compartidos entre los campos en cascada de esta acción — se
-  // piden una sola vez acá arriba en vez de que cada campo los pida por
+  // piden una sola vez aquí arriba en vez de que cada campo los pida por
   // su cuenta, para no duplicar peticiones y para poder autocompletar
   // (materia desde el enrollment, duración desde la clase elegida, etc).
   const { teachers } = useGodModeTeachers();

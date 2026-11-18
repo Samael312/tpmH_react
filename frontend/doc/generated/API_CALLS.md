@@ -63,5 +63,6 @@ Llamadas `api.<verbo>(...)` por archivo (regex; las URLs construidas dinámicame
 - `hooks/useSupport.ts`: GET /support/tickets/me/unread-count, PATCH /support/tickets/{x}/seen, POST /support/tickets
 - `hooks/useSystemCatalogs.ts`: GET /system-catalogs
 - `hooks/useTeacherData.ts`: GET /availability/me/weekly, GET /calendar/status, GET /cohorts/{x}/members, GET /homework/my-homework, GET /homework/{x}/submissions, GET /materials/my-materials, GET /packages/my-packages, GET /payments/my-wallet, GET /payments/pending-review, GET /reviews/{x}, GET /teachers/me/profile, GET /users/me, POST /payments/request-withdrawal
+- `hooks/useTeacherNotifications.ts`: GET /teachers/me/notifications/unread-count, PATCH /teachers/me/notifications/{x}/read, POST /teachers/me/notifications/mark-all-read
 - `lib/platformTenantMode.ts`: GET /admin/platform-config
 - `store/chatStore.ts`: GET /chat/conversations/{x}/messages, POST /chat/conversations/{x}/messages

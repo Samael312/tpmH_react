@@ -10,7 +10,7 @@ import Button from "@/components/ui/Button";
  * Se muestra cuando `proxy.ts` detecta una sesión válida pero con un rol
  * que no tiene acceso a la sección pedida (ej. un estudiante entrando a
  * /admin/algo). A diferencia de una sesión vencida — que manda a
- * /login —, acá el problema no es la autenticación sino el permiso, así
+ * /login —, aquí el problema no es la autenticación sino el permiso, así
  * que no tiene sentido pedirle que inicie sesión de nuevo.
  */
 export default function Unauthorized() {
@@ -43,7 +43,7 @@ export default function Unauthorized() {
         </p>
 
         <h1 className="font-display font-bold text-xl text-ink">
-          No tenés permiso para ver esta página
+          No tienes permiso para ver esta página
         </h1>
 
         <p className="text-sm text-ink-muted max-w-sm">
@@ -74,7 +74,7 @@ export default function Unauthorized() {
             onClick={handleSwitchAccount}
             className="text-xs text-ink-subtle hover:text-primary underline underline-offset-2 mt-1"
           >
-            ¿No sos {user.name}? Cerrar sesión
+            ¿No eres {user.name}? Cerrar sesión
           </button>
         )}
       </div>

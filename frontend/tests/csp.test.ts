@@ -24,6 +24,22 @@ describe("lib/csp.ts", () => {
     expect(directive(csp, "style-src")).toContain("https://accounts.google.com/gsi/style");
   });
 
+  it("producción: style-src (elementos) usa nonce y no unsafe-inline; los atributos style=\"\" se permiten aparte", () => {
+    const csp = buildCsp("abc123", false);
+    const style = directive(csp, "style-src");
+    expect(style).toContain("'nonce-abc123'");
+    expect(style).not.toContain("'unsafe-inline'");
+    expect(directive(csp, "style-src-attr")).toBe("style-src-attr 'unsafe-inline'");
+    // style-src-elem no se define: los elementos siguen a style-src
+    expect(csp).not.toContain("style-src-elem");
+  });
+
+  it("desarrollo: style-src conserva unsafe-inline (el HMR inyecta <style> sin nonce)", () => {
+    const style = directive(buildCsp("n", true), "style-src");
+    expect(style).toContain("'unsafe-inline'");
+    expect(style).not.toContain("'nonce-");
+  });
+
   it("cada nonce distinto produce una política distinta", () => {
     expect(buildCsp("a", false)).not.toBe(buildCsp("b", false));
   });

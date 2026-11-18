@@ -3,63 +3,67 @@
 Generado por `backend/doc/generate_docs.py`. Prefijo global: `/api/v1`.
 Auth = dependencia FastAPI de rol detectada. `—` = sin autenticación (pública).
 
-Total de rutas: **220**
+Total de rutas: **224**
 
 
 ## Autenticación
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| POST | `/auth/forgot-password` | — | 5/hour | `forgot_password` (app/api/v1/endpoints/auth.py:390) | Inicia el flujo de recuperación de contraseña. Siempre devuelve 200 aunque el email no exista para no revelar qué emails están registrados. |
-| POST | `/auth/forgot-username` | — | 5/hour | `forgot_username` (app/api/v1/endpoints/auth.py:480) | Envía el nombre de usuario asociado a un email. Igual que forgot-password: siempre devuelve el mismo mensaje, exista o no el email, para no revelar qué correos están registrados. |
-| POST | `/auth/google` | — | 20/minute | `google_login` (app/api/v1/endpoints/auth.py:238) | Paso 1 del flujo Google (GSI). Verifica el id_token contra Google. - Si el email ya tiene cuenta -> login normal, devuelve token. - Si no existe -> NO crea la cuenta. Devuelve needs_registration=True   junto con los datos de Google para que el frontend pida   username + rol antes de crear la cuenta. |
-| POST | `/auth/google/register` | — | 10/hour | `google_register` (app/api/v1/endpoints/auth.py:307) |  |
-| POST | `/auth/login` | — | 10/minute | `login` (app/api/v1/endpoints/auth.py:162) |  |
-| POST | `/auth/logout` | — | 60/minute | `logout` (app/api/v1/endpoints/auth.py:381) | SEC-05: revoca la familia del refresh token y borra las cookies. No exige estar autenticado. |
-| POST | `/auth/refresh` | — | 60/minute | `refresh_session` (app/api/v1/endpoints/auth.py:363) | SEC-05: renueva la sesion con el refresh token de la cookie HttpOnly (rotacion: el anterior queda revocado). Si el token es desconocido/vencido/reutilizado responde 401 y limpia las cookies. |
-| POST | `/auth/register` | — | 5/hour | `register` (app/api/v1/endpoints/auth.py:109) |  |
-| POST | `/auth/resend-verification` | get_current_user | 3/hour | `resend_verification` (app/api/v1/endpoints/auth.py:99) | SEC-04: reenvia el correo de verificacion al usuario autenticado (no permite enumerar cuentas). |
-| POST | `/auth/reset-password` | — | 10/hour | `reset_password` (app/api/v1/endpoints/auth.py:434) | Establece la nueva contraseña usando el token del email. |
-| POST | `/auth/verify-email` | — | 20/hour | `verify_email` (app/api/v1/endpoints/auth.py:74) | SEC-04: consume el token del correo y marca la cuenta como verificada. Un solo uso, 24 h. |
+| POST | `/auth/forgot-password` | — | 5/hour | `forgot_password` (app/api/v1/endpoints/auth.py:400) | Inicia el flujo de recuperación de contraseña. Siempre devuelve 200 aunque el email no exista para no revelar qué emails están registrados. |
+| POST | `/auth/forgot-username` | — | 5/hour | `forgot_username` (app/api/v1/endpoints/auth.py:490) | Envía el nombre de usuario asociado a un email. Igual que forgot-password: siempre devuelve el mismo mensaje, exista o no el email, para no revelar qué correos están registrados. |
+| POST | `/auth/google` | — | 20/minute | `google_login` (app/api/v1/endpoints/auth.py:248) | Paso 1 del flujo Google (GSI). Verifica el id_token contra Google. - Si el email ya tiene cuenta -> login normal, devuelve token. - Si no existe -> NO crea la cuenta. Devuelve needs_registration=True   junto con los datos de Google para que el frontend pida   username + rol antes de crear la cuenta. |
+| POST | `/auth/google/register` | — | 10/hour | `google_register` (app/api/v1/endpoints/auth.py:317) |  |
+| POST | `/auth/login` | — | 10/minute | `login` (app/api/v1/endpoints/auth.py:172) |  |
+| POST | `/auth/logout` | — | 60/minute | `logout` (app/api/v1/endpoints/auth.py:391) | SEC-05: revoca la familia del refresh token y borra las cookies. No exige estar autenticado. |
+| POST | `/auth/refresh` | — | 60/minute | `refresh_session` (app/api/v1/endpoints/auth.py:373) | SEC-05: renueva la sesion con el refresh token de la cookie HttpOnly (rotacion: el anterior queda revocado). Si el token es desconocido/vencido/reutilizado responde 401 y limpia las cookies. |
+| POST | `/auth/register` | — | 5/hour | `register` (app/api/v1/endpoints/auth.py:110) |  |
+| POST | `/auth/resend-verification` | get_current_user | 3/hour | `resend_verification` (app/api/v1/endpoints/auth.py:100) | SEC-04: reenvia el correo de verificacion al usuario autenticado (no permite enumerar cuentas). |
+| POST | `/auth/reset-password` | — | 10/hour | `reset_password` (app/api/v1/endpoints/auth.py:444) | Establece la nueva contraseña usando el token del email. |
+| POST | `/auth/verify-email` | — | 20/hour | `verify_email` (app/api/v1/endpoints/auth.py:75) | SEC-04: consume el token del correo y marca la cuenta como verificada. Un solo uso, 24 h. |
 
 ## Usuarios
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| DELETE | `/users/me` | get_current_user |  | `delete_account` (app/api/v1/endpoints/users.py:275) | Elimina la cuenta del usuario. |
+| DELETE | `/users/me` | get_current_user |  | `delete_account` (app/api/v1/endpoints/users.py:284) | Elimina la cuenta del usuario. |
 | GET | `/users/me` | get_current_user |  | `get_me` (app/api/v1/endpoints/users.py:115) | Devuelve los datos del usuario autenticado |
 | PATCH | `/users/me` | get_current_user |  | `update_profile` (app/api/v1/endpoints/users.py:121) | Actualiza datos básicos del perfil. Solo actualiza los campos que se envían (PATCH parcial). |
-| GET | `/users/me/avatar` | get_current_user |  | `get_avatar` (app/api/v1/endpoints/users.py:349) | Obtiene la URL del avatar/foto del usuario autenticado. |
-| PATCH | `/users/me/avatar` | get_current_user |  | `upload_avatar_patch` (app/api/v1/endpoints/users.py:382) | Actualiza la foto de perfil (PATCH /me/avatar). |
-| POST | `/users/me/avatar` | get_current_user |  | `upload_avatar_post` (app/api/v1/endpoints/users.py:372) | Sube o reemplaza la foto de perfil (POST /me/avatar). |
-| POST | `/users/me/change-password` | get_current_user | 10/hour | `change_password` (app/api/v1/endpoints/users.py:198) | Cambia la contraseña verificando la actual |
-| GET | `/users/me/photo` | get_current_user |  | `get_photo` (app/api/v1/endpoints/users.py:366) | Alias para obtener la foto de perfil (GET /me/photo). |
-| PATCH | `/users/me/photo` | get_current_user |  | `upload_photo_patch` (app/api/v1/endpoints/users.py:402) | Alias de compatibilidad para actualizar foto (PATCH /me/photo). |
-| POST | `/users/me/photo` | get_current_user |  | `upload_photo_post` (app/api/v1/endpoints/users.py:392) | Alias de compatibilidad para subir foto (POST /me/photo). |
-| GET | `/users/me/preferences` | get_current_student, get_current_user |  | `get_schedule_preferences` (app/api/v1/endpoints/users.py:537) | Devuelve las preferencias de horario del estudiante en UTC para que el frontend las adapte |
-| POST | `/users/me/preferences` | get_current_student, get_current_user |  | `set_schedule_preferences` (app/api/v1/endpoints/users.py:483) | El estudiante configura sus horas preferidas. Reemplaza todas las preferencias anteriores. |
-| PUT | `/users/me/preferences` | get_current_student, get_current_user |  | `update_schedule_preferences` (app/api/v1/endpoints/users.py:555) | Actualiza (reemplaza) las preferencias de horario del estudiante vía PUT. |
-| GET | `/users/me/student-profile` | get_current_user |  | `get_student_profile` (app/api/v1/endpoints/users.py:414) | Devuelve los datos del perfil de estudiante del usuario autenticado |
-| PATCH | `/users/me/student-profile` | get_current_user |  | `update_student_profile` (app/api/v1/endpoints/users.py:435) | Actualiza datos del perfil de estudiante (timezone, goal, etc.). Si cambia la zona horaria, se recalculan las preferencias de horario (StudentSchedulePreference) para preservar la hora LOCAL configurada por el estudiante — solo se recalcula el UTC equivalente. Ver core/schedule_recalc.py. |
-| GET | `/users/me/teachers` | get_current_student, get_current_user |  | `get_my_teachers` (app/api/v1/endpoints/users.py:607) | Profesores vinculados al estudiante, cada uno con su relación independiente (stage de reserva propio, enrollment activo si existe). En single-tenant siempre devuelve solo al featured teacher, para que el frontend use la misma forma de respuesta en ambos modos. |
-| DELETE | `/users/me/teachers/{teacher_username}` | get_current_student, get_current_user |  | `unlink_teacher` (app/api/v1/endpoints/users.py:724) | Termina la relación con un profesor (solo multi-tenant). Bloqueado si hay un enrollment activo o cualquier solicitud pendiente (renovación o cambio de paquete) con ese profesor. |
-| POST | `/users/me/teachers/{teacher_username}` | get_current_student, get_current_user |  | `link_teacher` (app/api/v1/endpoints/users.py:683) | Vincula al estudiante con un profesor adicional (solo multi-tenant). Idempotente — si el vínculo ya existe, no falla. |
+| GET | `/users/me/avatar` | get_current_user |  | `get_avatar` (app/api/v1/endpoints/users.py:358) | Obtiene la URL del avatar/foto del usuario autenticado. |
+| PATCH | `/users/me/avatar` | get_current_user |  | `upload_avatar_patch` (app/api/v1/endpoints/users.py:391) | Actualiza la foto de perfil (PATCH /me/avatar). |
+| POST | `/users/me/avatar` | get_current_user |  | `upload_avatar_post` (app/api/v1/endpoints/users.py:381) | Sube o reemplaza la foto de perfil (POST /me/avatar). |
+| POST | `/users/me/change-password` | get_current_user | 10/hour | `change_password` (app/api/v1/endpoints/users.py:207) | Cambia la contraseña verificando la actual |
+| GET | `/users/me/photo` | get_current_user |  | `get_photo` (app/api/v1/endpoints/users.py:375) | Alias para obtener la foto de perfil (GET /me/photo). |
+| PATCH | `/users/me/photo` | get_current_user |  | `upload_photo_patch` (app/api/v1/endpoints/users.py:411) | Alias de compatibilidad para actualizar foto (PATCH /me/photo). |
+| POST | `/users/me/photo` | get_current_user |  | `upload_photo_post` (app/api/v1/endpoints/users.py:401) | Alias de compatibilidad para subir foto (POST /me/photo). |
+| GET | `/users/me/preferences` | get_current_student, get_current_user |  | `get_schedule_preferences` (app/api/v1/endpoints/users.py:546) | Devuelve las preferencias de horario del estudiante en UTC para que el frontend las adapte |
+| POST | `/users/me/preferences` | get_current_student, get_current_user |  | `set_schedule_preferences` (app/api/v1/endpoints/users.py:492) | El estudiante configura sus horas preferidas. Reemplaza todas las preferencias anteriores. |
+| PUT | `/users/me/preferences` | get_current_student, get_current_user |  | `update_schedule_preferences` (app/api/v1/endpoints/users.py:564) | Actualiza (reemplaza) las preferencias de horario del estudiante vía PUT. |
+| GET | `/users/me/student-profile` | get_current_user |  | `get_student_profile` (app/api/v1/endpoints/users.py:423) | Devuelve los datos del perfil de estudiante del usuario autenticado |
+| PATCH | `/users/me/student-profile` | get_current_user |  | `update_student_profile` (app/api/v1/endpoints/users.py:444) | Actualiza datos del perfil de estudiante (timezone, goal, etc.). Si cambia la zona horaria, se recalculan las preferencias de horario (StudentSchedulePreference) para preservar la hora LOCAL configurada por el estudiante — solo se recalcula el UTC equivalente. Ver core/schedule_recalc.py. |
+| GET | `/users/me/teachers` | get_current_student, get_current_user |  | `get_my_teachers` (app/api/v1/endpoints/users.py:616) | Profesores vinculados al estudiante, cada uno con su relación independiente (stage de reserva propio, enrollment activo si existe). En single-tenant siempre devuelve solo al featured teacher, para que el frontend use la misma forma de respuesta en ambos modos. |
+| DELETE | `/users/me/teachers/{teacher_username}` | get_current_student, get_current_user |  | `unlink_teacher` (app/api/v1/endpoints/users.py:733) | Termina la relación con un profesor (solo multi-tenant). Bloqueado si hay un enrollment activo o cualquier solicitud pendiente (renovación o cambio de paquete) con ese profesor. |
+| POST | `/users/me/teachers/{teacher_username}` | get_current_student, get_current_user |  | `link_teacher` (app/api/v1/endpoints/users.py:692) | Vincula al estudiante con un profesor adicional (solo multi-tenant). Idempotente — si el vínculo ya existe, no falla. |
 
 ## Profesores
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| GET | `/teachers/` | — |  | `list_approved_teachers` (app/api/v1/endpoints/teachers.py:47) | Lista profesores aprobados. Filtrable por materia e idioma. Endpoint público. Excluye cuentas fijas de la suite de tests (is_test_account=True) — no deben aparecer en el marketplace real. |
-| POST | `/teachers/me/appeal` | get_current_teacher, get_current_user |  | `submit_appeal` (app/api/v1/endpoints/teachers.py:439) | El profesor apela un rechazo. Máximo 2 apelaciones por ciclo de rechazo. Al agotar las 2, debe subir un nuevo video (POST /teachers/me/video) para reiniciar el ciclo — no se pueden presentar más apelaciones. |
-| GET | `/teachers/me/appeals` | get_current_teacher, get_current_user |  | `get_my_appeals` (app/api/v1/endpoints/teachers.py:497) |  |
-| PATCH | `/teachers/me/feedback-seen` | get_current_teacher, get_current_user |  | `mark_rejection_feedback_seen` (app/api/v1/endpoints/teachers.py:425) | El profesor marcó como visto el banner de retroalimentación de rechazo. |
-| GET | `/teachers/me/profile` | get_current_teacher, get_current_user |  | `get_my_teacher_profile` (app/api/v1/endpoints/teachers.py:118) | Devuelve el perfil completo del profesor autenticado |
-| PATCH | `/teachers/me/profile` | get_current_teacher, get_current_user |  | `update_my_teacher_profile` (app/api/v1/endpoints/teachers.py:133) | Actualiza el perfil del profesor autenticado. Si cambia la zona horaria, se recalcula la disponibilidad semanal y las excepciones puntuales para que la hora LOCAL configurada por el profesor se preserve (ej. "06:00-08:00" en Sydney sigue siendo "06:00-08:00" al pasar a Bogotá) — lo único que cambia  |
-| GET | `/teachers/me/students` | get_current_teacher, get_current_user |  | `get_my_students` (app/api/v1/endpoints/teachers.py:183) | Lista los estudiantes vinculados al profesor autenticado (teacher_profiles.students). La usan los modales de asignar material/tareas para buscar solo entre sus propios estudiantes. |
-| GET | `/teachers/me/students-full` | get_current_teacher, get_current_user |  | `get_my_students_full` (app/api/v1/endpoints/teachers.py:223) | Devuelve la info completa de los estudiantes vinculados al profesor: datos de contacto, progreso de paquetes (enrollments) y materiales asignados. Pensado para la página de gestión de Estudiantes. |
-| DELETE | `/teachers/me/video` | get_current_teacher, get_current_user |  | `delete_teacher_video` (app/api/v1/endpoints/teachers.py:396) | Elimina el video de presentación del profesor. |
-| POST | `/teachers/me/video` | get_current_teacher, get_current_user |  | `upload_teacher_video` (app/api/v1/endpoints/teachers.py:321) | Sube (o reemplaza) el video de presentación del profesor. Es un requisito obligatorio para que el superadmin pueda aprobar el perfil. |
-| GET | `/teachers/{username}` | — |  | `get_teacher_profile` (app/api/v1/endpoints/teachers.py:93) | Perfil público de un profesor específico. Endpoint público — no requiere autenticación. |
+| GET | `/teachers/` | — |  | `list_approved_teachers` (app/api/v1/endpoints/teachers.py:48) | Lista profesores aprobados. Filtrable por materia e idioma. Endpoint público. Excluye cuentas fijas de la suite de tests (is_test_account=True) — no deben aparecer en el marketplace real. |
+| POST | `/teachers/me/appeal` | get_current_teacher, get_current_user |  | `submit_appeal` (app/api/v1/endpoints/teachers.py:440) | El profesor apela un rechazo. Máximo 2 apelaciones por ciclo de rechazo. Al agotar las 2, debe subir un nuevo video (POST /teachers/me/video) para reiniciar el ciclo — no se pueden presentar más apelaciones. |
+| GET | `/teachers/me/appeals` | get_current_teacher, get_current_user |  | `get_my_appeals` (app/api/v1/endpoints/teachers.py:498) |  |
+| PATCH | `/teachers/me/feedback-seen` | get_current_teacher, get_current_user |  | `mark_rejection_feedback_seen` (app/api/v1/endpoints/teachers.py:426) | El profesor marcó como visto el banner de retroalimentación de rechazo. |
+| GET | `/teachers/me/notifications` | get_current_teacher_or_teacher_admin, get_current_user |  | `list_my_notifications` (app/api/v1/endpoints/teachers.py:515) |  |
+| POST | `/teachers/me/notifications/mark-all-read` | get_current_teacher_or_teacher_admin, get_current_user |  | `mark_all_my_notifications_read` (app/api/v1/endpoints/teachers.py:554) |  |
+| GET | `/teachers/me/notifications/unread-count` | get_current_teacher_or_teacher_admin, get_current_user |  | `my_unread_notification_count` (app/api/v1/endpoints/teachers.py:529) |  |
+| PATCH | `/teachers/me/notifications/{notification_id}/read` | get_current_teacher_or_teacher_admin, get_current_user |  | `mark_my_notification_read` (app/api/v1/endpoints/teachers.py:537) |  |
+| GET | `/teachers/me/profile` | get_current_teacher, get_current_user |  | `get_my_teacher_profile` (app/api/v1/endpoints/teachers.py:119) | Devuelve el perfil completo del profesor autenticado |
+| PATCH | `/teachers/me/profile` | get_current_teacher, get_current_user |  | `update_my_teacher_profile` (app/api/v1/endpoints/teachers.py:134) | Actualiza el perfil del profesor autenticado. Si cambia la zona horaria, se recalcula la disponibilidad semanal y las excepciones puntuales para que la hora LOCAL configurada por el profesor se preserve (ej. "06:00-08:00" en Sydney sigue siendo "06:00-08:00" al pasar a Bogotá) — lo único que cambia  |
+| GET | `/teachers/me/students` | get_current_teacher, get_current_user |  | `get_my_students` (app/api/v1/endpoints/teachers.py:184) | Lista los estudiantes vinculados al profesor autenticado (teacher_profiles.students). La usan los modales de asignar material/tareas para buscar solo entre sus propios estudiantes. |
+| GET | `/teachers/me/students-full` | get_current_teacher, get_current_user |  | `get_my_students_full` (app/api/v1/endpoints/teachers.py:224) | Devuelve la info completa de los estudiantes vinculados al profesor: datos de contacto, progreso de paquetes (enrollments) y materiales asignados. Pensado para la página de gestión de Estudiantes. |
+| DELETE | `/teachers/me/video` | get_current_teacher, get_current_user |  | `delete_teacher_video` (app/api/v1/endpoints/teachers.py:397) | Elimina el video de presentación del profesor. |
+| POST | `/teachers/me/video` | get_current_teacher, get_current_user |  | `upload_teacher_video` (app/api/v1/endpoints/teachers.py:322) | Sube (o reemplaza) el video de presentación del profesor. Es un requisito obligatorio para que el superadmin pueda aprobar el perfil. |
+| GET | `/teachers/{username}` | — |  | `get_teacher_profile` (app/api/v1/endpoints/teachers.py:94) | Perfil público de un profesor específico. Endpoint público — no requiere autenticación. |
 
 ## Disponibilidad
 

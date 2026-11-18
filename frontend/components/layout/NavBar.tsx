@@ -8,10 +8,11 @@ import { useAuthStore } from "@/store/authStore";
 import { 
   LayoutDashboard, Users, GraduationCap, Calendar, Settings, LogOut, 
   MonitorPlay, UserCircle, ClipboardEdit, CreditCard, Book, BarChart, ChevronLeft,
-  CheckCheck, MoreHorizontal, Users2, LifeBuoy, Crown, AlertOctagon, MessagesSquare, ShieldCheck
+  CheckCheck, MoreHorizontal, Users2, LifeBuoy, Crown, AlertOctagon, MessagesSquare, ShieldCheck, Bell
 } from "lucide-react";
 import { useUnreadNotificationCount } from "@/hooks/useAdminData";
 import { useUnreadSupportCount } from "@/hooks/useSupport";
+import { useTeacherUnreadNotificationCount } from "@/hooks/useTeacherNotifications";
 import { useLandingData } from "@/hooks/useLandingData";
 import { usePlatformConfig } from "@/hooks/useStudentData";
 import { useUnreadChatCount } from "@/hooks/useChat";
@@ -46,6 +47,7 @@ const TEACHER_MAIN: TabItem[] = [
 ];
 const TEACHER_MORE: TabItem[] = [
   { href: "/teacher/chat", label: "Chat", icon: <MessagesSquare size={20} /> },
+  { href: "/teacher/notifications", label: "Avisos", icon: <Bell size={20} /> },
   { href: "/teacher/materials", label: "Materiales", icon: <Book size={20} /> },
   { href: "/teacher/homework", label: "Tareas", icon: <ClipboardEdit size={20} /> },
   { href: "/teacher/packages", label: "Paquetes", icon: <CreditCard size={20} /> },
@@ -207,13 +209,15 @@ export default function DashboardSidebar() {
   const showTeacherMenu = ["teacher", "teacher_admin"].includes(role);
   const showStudentMenu = role === "student";
   const { count: unreadCount } = useUnreadNotificationCount(showAdminMenu);
+  const { count: unreadTeacherNotifications } = useTeacherUnreadNotificationCount(showTeacherMenu);
   const { count: unreadSupportCount } = useUnreadSupportCount(showStudentMenu || (showTeacherMenu && role === "teacher"));
   const { config: platformConfig } = usePlatformConfig();
   const chatEnabled = platformConfig?.chat_enabled ?? true;
   const { count: unreadChatCount } = useUnreadChatCount(chatEnabled && (showStudentMenu || showTeacherMenu));
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    // Espera al POST /auth/logout: si la recarga lo aborta, las cookies siguen vivas y /login rebota al dashboard.
+    await logout();
     // Recarga completa (en vez de router.push) para evitar que el layout
     // quede montado un instante con user=null y renderice en blanco/crashee,
     // sobre todo en mobile donde la navegación client-side es más lenta.
@@ -321,6 +325,7 @@ export default function DashboardSidebar() {
                 {chatEnabled && (
                   <NavItem href="/teacher/chat" icon={<MessagesSquare size={20} />} label="Chat" active={isActive("/teacher/chat")} collapsed={collapsed} badge={unreadChatCount > 0 ? unreadChatCount : undefined} />
                 )}
+                <NavItem href="/teacher/notifications" icon={<Bell size={20} />} label="Avisos" active={isActive("/teacher/notifications")} collapsed={collapsed} badge={unreadTeacherNotifications > 0 ? unreadTeacherNotifications : undefined} />
                 <NavItem href="/teacher/availability" icon={<Calendar size={20} />} label="Disponibilidad" active={isActive("/teacher/availability")} collapsed={collapsed} />
                 <NavItem href="/teacher/students" icon={<GraduationCap size={20} />} label="Estudiantes" active={isActive("/teacher/students")} collapsed={collapsed} />
                 <NavItem href="/teacher/materials" icon={<Book size={20} />} label="Materiales" active={isActive("/teacher/materials")} collapsed={collapsed} />
@@ -404,6 +409,7 @@ export default function DashboardSidebar() {
           "/teacher/chat": unreadChatCount,
           "/dashboard/support": unreadSupportCount,
           "/teacher/support": unreadSupportCount,
+          "/teacher/notifications": unreadTeacherNotifications,
         }}
         onLogout={handleLogout}
       />

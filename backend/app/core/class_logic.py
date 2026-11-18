@@ -727,6 +727,51 @@ def release_stale_unpaid_enrollments(db: Session, older_than_hours: int = STALE_
 CLASS_STATUS_WINDOW_HOURS = 72
 
 
+AUTO_NO_SHOW_NOTIFICATION = "class_auto_no_show"
+AUTO_NO_SHOW_MAX_LISTED = 5
+NOTIFICATION_LINE_BREAK = chr(10)  # el mensaje lleva una línea por clase; la pantalla de avisos respeta los saltos
+
+
+def notify_teachers_auto_no_show(db: Session, classes: list[Class]) -> None:
+    """
+    Fase 13 (A9): avisa a cada profesor (campana «Avisos», sin correo) de las clases que pasaron solas a
+    `no_show` por no marcarlas en 72 h. UNA notificacion por profesor y pasada del job, aunque sean varias clases
+    (si el job estuvo caido no se le inunda). No hace commit: va en la misma transaccion que el cambio de estado.
+    """
+    from app.core.notifications import create_notification
+    from app.core.timezone import format_local_datetime
+
+    by_teacher: dict[int, list[Class]] = {}
+    for c in classes:
+        by_teacher.setdefault(c.teacher_id, []).append(c)
+
+    for items in by_teacher.values():
+        teacher = items[0].teacher
+        if teacher is None or teacher.user_id is None:
+            continue
+        items = sorted(items, key=lambda x: x.start_time_utc)
+        lines = []
+        for c in items[:AUTO_NO_SHOW_MAX_LISTED]:
+            who = getattr(c.student, "user_username", None) if c.student is not None else None
+            when = format_local_datetime(c.start_time_utc, teacher.timezone)
+            lines.append(f"• {c.subject or 'Clase'} · {when}" + (f" (alumno: {who})" if who else ""))
+        if len(items) > AUTO_NO_SHOW_MAX_LISTED:
+            lines.append(f"… y {len(items) - AUTO_NO_SHOW_MAX_LISTED} más")
+        lines.append(
+            f"Pasaron {CLASS_STATUS_WINDOW_HOURS} h sin marcarse, así que cuentan como «No asistió» y se descontó el "
+            "crédito. Si fue un error, pide la corrección a soporte desde la clase."
+        )
+        n = len(items)
+        create_notification(
+            db,
+            type=AUTO_NO_SHOW_NOTIFICATION,
+            title="Una clase pasó a «No asistió» automáticamente" if n == 1 else f"{n} clases pasaron a «No asistió» automáticamente",
+            message=NOTIFICATION_LINE_BREAK.join(lines),
+            recipient_role="teacher",
+            recipient_user_id=teacher.user_id,
+        )
+
+
 def finalize_past_classes(db: Session) -> int:
     """
     Marca como 'finalized' las clases confirmadas cuyo horario ya terminó,
@@ -769,6 +814,7 @@ def finalize_past_classes(db: Session) -> int:
         count += 1
         if c.class_type == ClassType.regular and c.enrollment_id:
             update_enrollment_counter(c.enrollment_id, delta=1, db=db)
+    notify_teachers_auto_no_show(db, unresolved)
 
     # BUG-04/12 fix: "pending" y "pending_payment" para clases regulares ya
     # no pueden producirse (el flujo de "reservar y pagar después" fue

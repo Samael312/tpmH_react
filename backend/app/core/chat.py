@@ -301,7 +301,19 @@ def mark_read(db: Session, convo: ChatConversation, user: User) -> None:
         state.last_read_at = now
     else:
         db.add(ChatReadState(conversation_id=convo.id, user_id=user.id, last_read_at=now))
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Dos peticiones /read simultaneas (primera apertura del hilo) intentan crear la fila a la vez: la unica
+        # (conversation_id, user_id) deja ganar a una y la otra solo actualiza la fecha.
+        db.rollback()
+        state = db.query(ChatReadState).filter(
+            ChatReadState.conversation_id == convo.id,
+            ChatReadState.user_id == user.id,
+        ).first()
+        if state:
+            state.last_read_at = now
+            db.commit()
 
 
 def get_unread_count_for_user(db: Session, current_user: User) -> int:

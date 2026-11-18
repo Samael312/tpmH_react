@@ -43,7 +43,7 @@ export default function ChatWidget() {
       {/* Botón flotante — ocupa la posición "de base" (antes era de
           ChipiWidget sin raised); ChipiWidget se corre arriba solo al
           detectar que este botón está presente, así que ya no hace falta
-          hardcodear acá offsets gigantes para esquivarlo. */}
+          hardcodear aquí offsets gigantes para esquivarlo. */}
       <button
         onClick={() => setOpen((o) => !o)}
         className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 sm:right-6 md:bottom-6

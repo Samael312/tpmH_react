@@ -11,6 +11,7 @@ def create_notification(
     related_teacher_id: Optional[int] = None,
     related_support_ticket_id: Optional[int] = None,
     recipient_role: str = "staff",
+    recipient_user_id: Optional[int] = None,
 ) -> Notification:
     """
     Crea una notificación persistente para el panel de staff.
@@ -19,6 +20,7 @@ def create_notification(
     """
     notification = Notification(
         recipient_role=recipient_role,
+        recipient_user_id=recipient_user_id,
         type=type,
         title=title,
         message=message,
@@ -33,4 +35,12 @@ def get_unread_count(db: Session, recipient_role: str = "staff") -> int:
     return db.query(Notification).filter(
         Notification.recipient_role == recipient_role,
         Notification.is_read == False,
+    ).count()
+
+
+def get_user_unread_count(db: Session, user_id: int) -> int:
+    """Avisos sin leer dirigidos a un usuario concreto (Fase 13, A9)."""
+    return db.query(Notification).filter(
+        Notification.recipient_user_id == user_id,
+        Notification.is_read == False,  # noqa: E712
     ).count()

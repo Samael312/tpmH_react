@@ -444,7 +444,7 @@ export default function StudentDashboard() {
           // queda solo para el caso genuino de "todavía no hay nada
           // agendado" (status "filling").
           // Correcciones Extra: ya no se listan las ClassCard de la cohorte
-          // acá (redundante con "Próximas clases") -- solo se necesita el
+          // aquí (redundante con "Próximas clases") -- solo se necesita el
           // conteo de completadas para el banner de abajo.
           const cohortCompletedClasses = isGroupEnr
             ? classesData.filter(c => c.cohort_id === enr.cohort_id && c.status === "completed").length
@@ -485,7 +485,7 @@ export default function StudentDashboard() {
 
               {isGroupEnr ? (
                 // Correcciones Extra: las clases del grupo ya se ven en la
-                // sección "Próximas clases" -- repetirlas acá era
+                // sección "Próximas clases" -- repetirlas aquí era
                 // redundante. En este lugar solo va un banner con info del
                 // paquete (profesor, estado del grupo, progreso), sin
                 // importar si hay sesiones próximas, en curso o ya
@@ -763,7 +763,7 @@ export default function StudentDashboard() {
       <div className="space-y-5">
         <p className="text-sm text-slate-500">
           Indícanos a dónde quieres que te devolvamos lo que pagaste para entrar a ese grupo. Todos los
-          campos son opcionales: completa el o los medios que tengas, o dejanos una nota si no tenés
+          campos son opcionales: completa el o los medios que tengas, o déjanos una nota si no tienes
           ninguno de los que mostramos abajo.
         </p>
         <RefundDestinationFields value={groupRefundForm} onChange={setGroupRefundForm} />

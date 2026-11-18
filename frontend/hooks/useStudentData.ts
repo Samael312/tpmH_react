@@ -1,5 +1,6 @@
-import { useQuery, keepPreviousData, type QueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { fetchMe } from "@/lib/me";
 
 import { fetchAllPages } from "@/lib/pagination";
 // Prefijo de queryKey compartido por useAvailableSlots. Se expone acá para
@@ -573,14 +574,15 @@ export interface StudentProfileData {
 }
 
 export function useStudentProfileData() {
+  const qc = useQueryClient();
   const query = useQuery({
     queryKey: ["student", "profile"],
     queryFn: async () => {
       const [userRes, studentRes] = await Promise.all([
-        api.get("/users/me"),
+        fetchMe(qc),
         api.get("/users/me/student-profile"),
       ]);
-      return { user: userRes.data, studentProfile: studentRes.data } as StudentProfileData;
+      return { user: userRes, studentProfile: studentRes.data } as StudentProfileData;
     },
   });
 

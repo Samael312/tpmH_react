@@ -813,7 +813,7 @@ export default function OnboardingPage() {
 
         <div className="flex-1 flex flex-col justify-center px-6 py-12 md:px-12 overflow-y-auto relative">
           {/* Salida de emergencia: mismo patrón que teacher/onboarding — si el
-              usuario llegó acá por error, tiene que poder volver al login sin
+              usuario llegó aquí por error, tiene que poder volver al login sin
               quedar atrapado, ya que el onboarding no tiene otro link de nav. */}
           <button
             onClick={() => { logout(); router.push("/login"); }}

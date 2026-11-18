@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import api from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { fetchMe } from "@/lib/me";
 import NavBar from "@/components/layout/NavBar";
 import DashboardTopbar from "@/components/layout/DashboardTopbar";
 import ChatWidget from "@/components/chat/ChatWidget";
@@ -16,6 +18,7 @@ const FULLSCREEN_ROUTES = ["/dashboard/onboarding"];
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const qc = useQueryClient();
   const pathname = usePathname();
   const { user, setUser, hasHydrated } = useAuthStore();
   const { platformName } = useLandingData();
@@ -49,7 +52,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       verifiedRef.current = false;
       // SEC-05 / UX-01: sesión por cookie HttpOnly pero sin `user` en localStorage -> se recupera de /users/me.
       // Si la sesión no es válida, el interceptor de api.ts intenta el refresh y, si falla, redirige al login.
-      api.get("/users/me").then((r) => setUser({ ...r.data })).catch(() => router.replace("/login"));
+      fetchMe(qc).then((me) => setUser({ ...me })).catch(() => router.replace("/login"));
       return;
     }
 
@@ -67,7 +70,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     if (verifiedRef.current) return;
 
     Promise.all([
-      api.get("/users/me"),
+      fetchMe(qc).then((data) => ({ data })),
       api.get("/users/me/student-profile").catch(() => ({ data: {} })),
     ]).then(([meRes, spRes]) => {
       const userData = meRes.data;
@@ -99,7 +102,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         setChecked(true);
       }
     });
-  }, [pathname, hasHydrated, hasUser, router, setUser]);
+  }, [pathname, hasHydrated, hasUser, router, setUser, qc]);
 
   // Si el store ya no tiene user/token (p.ej. logout en curso), no renderizar
   // el dashboard con datos nulos: mostrar spinner mientras se redirige.

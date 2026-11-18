@@ -27,7 +27,7 @@ import api from "@/lib/api";
 import Link from "next/link";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
 import PackageCheckout from "@/components/payments/PackageCheckout";
-import { formatTimeTz, formatDateHumanTz, getMyDisplayTimezone } from "@/lib/tzFormat";
+import { formatTimeTz, formatCalendarDateHuman, getMyDisplayTimezone } from "@/lib/tzFormat";
 import { priceLabelSuffix } from "@/lib/packageThemes";
 import BuyCreditsModal from "@/components/payments/BuyCreditsModal";
 import PaymentMethodsInfo from "@/components/payments/PaymentMethodsInfo";
@@ -42,6 +42,7 @@ import ClassCard from "@/components/classes/ClassCard";
 import type { RejectedPaymentInfo } from "@/hooks/useStudentData";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
+import LoadError from "@/components/ui/LoadError";
 
 function extractErrorMessage(e: unknown, fallback: string): string {
   const detail = axios.isAxiosError(e) ? e.response?.data?.detail : undefined;
@@ -197,7 +198,8 @@ function StepSelectSlot({
   // elegido el slot, con la materia por defecto ya fijada sin que el alumno
   // llegara a elegirla a propósito.
   const [subjectsLoading, setSubjectsLoading] = useState(isTrial);
-  const { slots, loading } = useAvailableSlots(date, effectiveDuration, teacherUsername, isTrial ? "trial" : "regular");
+  const { slots, loading, isError: slotsError, isFetching: slotsFetching, refetch: refetchSlots } =
+    useAvailableSlots(date, effectiveDuration, teacherUsername, isTrial ? "trial" : "regular");
   const myTz = getMyDisplayTimezone();
 
   // Si no es prueba o todavía no hay profesor elegido, no hay nada que
@@ -334,6 +336,8 @@ function StepSelectSlot({
           <div className="flex justify-center py-16">
             <div className="w-8 h-8 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
           </div>
+        ) : slotsError && slots.length === 0 ? (
+          <LoadError what="los horarios disponibles" onRetry={() => refetchSlots()} retrying={slotsFetching} />
         ) : slots.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <AlertCircle className="w-12 h-12 text-slate-200 mb-3" />
@@ -413,7 +417,7 @@ function StepConfirmTrial({
   const queryClient = useQueryClient();
 
   const myTz = getMyDisplayTimezone();
-  const fmtDate = formatDateHumanTz(date + "T00:00:00", myTz); 
+  const fmtDate = formatCalendarDateHuman(date); 
   const fmtTime = formatTimeTz(slot.start_time_utc, myTz);
   const fmtEndTime = formatTimeTz(slot.end_time_utc, myTz);
   const bufferMinutes: number = slot.buffer_minutes ?? 0;
@@ -450,7 +454,7 @@ function StepConfirmTrial({
         <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-2 flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5" /> Clase de prueba gratuita
         </p>
-        <p className="text-2xl font-black capitalize">{fmtDate}</p>
+        <p className="text-2xl font-black first-letter:uppercase">{fmtDate}</p>
         <div className="flex items-center gap-3 mt-2 flex-wrap">
           <span className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5 rounded-full text-sm font-bold">
             <Clock className="w-3.5 h-3.5" />
@@ -537,7 +541,7 @@ function StepPayment({
   const queryClient = useQueryClient();
 
   const myTz = getMyDisplayTimezone();
-  const fmtDate = formatDateHumanTz(date + "T00:00:00", myTz);
+  const fmtDate = formatCalendarDateHuman(date);
   const fmtTime = formatTimeTz(slot.start_time_utc, myTz);
   const fmtEndTime = formatTimeTz(slot.end_time_utc, myTz);
   const bufferMinutes: number = slot.buffer_minutes ?? 0;
@@ -583,7 +587,7 @@ function StepPayment({
       <div className="bg-gradient-to-r from-pink-500 to-rose-400 rounded-[2rem] p-6 text-white relative overflow-hidden shadow-xl shadow-pink-200">
         <div className="absolute top-[-30px] right-[-30px] w-32 h-32 bg-white/10 rounded-full blur-xl" />
         <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-2">Clase seleccionada</p>
-        <p className="text-2xl font-black capitalize">{fmtDate}</p>
+        <p className="text-2xl font-black first-letter:uppercase">{fmtDate}</p>
         <div className="flex items-center gap-3 mt-2 flex-wrap">
           <span className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5 rounded-full text-sm font-bold">
             <Clock className="w-3.5 h-3.5" /> {fmtTime}
@@ -1001,8 +1005,8 @@ function NeedsPackageScreen({
   // Antes esto era un fetch manual duplicado (useEffect + api.get) que
   // pegaba al mismo endpoint que useTeacherPackagesFor, sin compartir cache
   // con el resto de la app (ej. si el profesor ya se cargó en otra
-  // pantalla, acá se volvía a pedir desde cero).
-  const { packages, loading } = useTeacherPackagesFor(teacherUsername ?? undefined, true);
+  // pantalla, aquí se volvía a pedir desde cero).
+  const { packages, loading, isError: packagesError, refetch: refetchPackages } = useTeacherPackagesFor(teacherUsername ?? undefined, true);
   const [error, setError] = useState("");
   const [checkoutTarget, setCheckoutTarget] = useState<{ pkg: PackageInfo; enrollmentId: number | null } | null>(null);
 
@@ -1040,6 +1044,8 @@ function NeedsPackageScreen({
             <Skeleton key={i} className="h-40 rounded-2xl" />
           ))}
         </div>
+      ) : packagesError && packages.length === 0 ? (
+        <LoadError what="los paquetes del profesor" onRetry={() => refetchPackages()} />
       ) : packages.length === 0 ? (
         <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg py-16 text-center">
           <PackageIcon className="w-10 h-10 text-slate-200 mx-auto mb-3" />
@@ -1165,7 +1171,7 @@ function NeedsRenewalScreen({
   // Igual que en NeedsPackageScreen: esto era un Promise.all con dos fetches
   // manuales que duplicaban useTeacherPackagesFor y useEnrollments (ya
   // existentes en hooks/useStudentData.ts), sin cache compartido.
-  const { packages, loading: packagesLoading } = useTeacherPackagesFor(teacherUsername ?? undefined, true);
+  const { packages, loading: packagesLoading, isError: packagesError, refetch: refetchPackages } = useTeacherPackagesFor(teacherUsername ?? undefined, true);
   const { enrollments, loading: enrollmentsLoading } = useEnrollments();
   const loading = packagesLoading || enrollmentsLoading;
   // Preferimos el enrollment que booking-status ya resolvió para este
@@ -1192,6 +1198,14 @@ function NeedsRenewalScreen({
     return (
       <div className="flex justify-center py-24">
         <div className="w-10 h-10 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (packagesError && packages.length === 0) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <LoadError what="los paquetes del profesor" onRetry={() => refetchPackages()} />
       </div>
     );
   }
@@ -1353,7 +1367,7 @@ export default function SchedulePage() {
   // En single-tenant, el "profesor efectivo" no puede quedar en null: varias
   // pantallas de esta página (slots, paquetes, renovación) le pegan a
   // endpoints que necesitan el username real como path param y no tienen
-  // forma de resolverlo solos del lado del servidor. Lo resolvemos acá una
+  // forma de resolverlo solos del lado del servidor. Lo resolvemos aquí una
   // sola vez con useFeaturedTeacherUsername (que sí sabe consultar la
   // configuración real de la plataforma) y lo reusamos en toda la página.
   const { username: featuredTeacherUsername } = useFeaturedTeacherUsername(isSingleTenant);
@@ -1370,11 +1384,13 @@ export default function SchedulePage() {
       : manualTeacherUsername;
 
   const needsTeacherSelection = !isSingleTenant && myTeachers.length > 1 && !selectedTeacherUsername;
+  // Sin ningún profesor elegido no hay estado de reserva que cargar: el aviso de «elige un profesor» ya lo explica.
+  const noTeacherYet = !isSingleTenant && !teachersLoading && myTeachers.length === 0;
   const teacherBlocked = !teachersLoading && !isSingleTenant && myTeachers.length === 0;
 
   // Profesor suspendido/rechazado: sus créditos quedan "congelados" y no se
   // puede agendar clase nueva con él (ver /payments/book en el backend).
-  // Reflejamos ese bloqueo también acá para no mostrarle un calendario que
+  // Reflejamos ese bloqueo también aquí para no mostrarle un calendario que
   // de todas formas el backend va a rechazar.
   const selectedTeacherInfo = myTeachers.find(t => t.teacher_username === selectedTeacherUsername);
   const teacherSuspended = !!selectedTeacherUsername && !!selectedTeacherInfo && selectedTeacherInfo.status !== "approved";
@@ -1468,7 +1484,7 @@ export default function SchedulePage() {
                 {!needsTeacherSelection && stage === "renewal_pending" && "Renovación en revisión"}
                 {!needsTeacherSelection && stage === "ready" && step === "select" && "Agendar Clase"}
                 {!needsTeacherSelection && stage === "ready" && step === "payment" && "Confirmar Reserva"}
-                {!needsTeacherSelection && stage === "loading" && "Cargando..."}
+                {!needsTeacherSelection && stage === "loading" && (noTeacherYet ? "Agendar Clase" : "Cargando...")}
               </h1>
               <p className="text-slate-500 mt-1">
                 {needsTeacherSelection && "Selecciona el profesor con el que quieres agendar clases"}
@@ -1579,7 +1595,7 @@ export default function SchedulePage() {
               <p className="text-sm font-black text-indigo-800">Este es un paquete grupal</p>
               <p className="text-xs text-indigo-700 mt-0.5">
                 Las sesiones de tu grupo las agenda tu profesor(a) para todo el grupo — no eliges un horario
-                individual acá. Revisa tu <Link href="/dashboard" className="underline font-bold">panel principal</Link> para
+                individual aquí. Revisa tu <Link href="/dashboard" className="underline font-bold">panel principal</Link> para
                 ver tus próximas clases.
               </p>
             </div>
@@ -1678,7 +1694,7 @@ export default function SchedulePage() {
 
         {!needsTeacherSelection && !teacherBlocked && !teacherSuspended && (
           <div className="animate-in fade-in duration-300">
-            {stage === "loading" && (
+            {stage === "loading" && !noTeacherYet && (
               <div className="space-y-4 py-4">
                 <Skeleton className="h-20 rounded-2xl" />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

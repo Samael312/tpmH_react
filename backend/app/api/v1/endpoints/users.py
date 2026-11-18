@@ -172,6 +172,15 @@ def update_profile(
         resulting = update_data.get("spoken_languages", current_user.spoken_languages or [])
         if not resulting:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Indica al menos un idioma que hablas")
+    # La foto de perfil es obligatoria para los alumnos (la pantalla de onboarding ya la exige; aqui se aplica tambien en
+    # el servidor para que no se pueda saltar llamando a la API). Las cuentas de Google traen la suya.
+    if (
+        update_data.get("onboarding_completed") is True
+        and not current_user.onboarding_completed
+        and getattr(current_user.role, "value", current_user.role) == "student"
+        and not (update_data.get("avatar") or current_user.avatar)
+    ):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Sube una foto de perfil para terminar el registro")
 
     if "phone_number" in update_data:
         normalized_phone = normalize_phone(update_data["phone_number"])

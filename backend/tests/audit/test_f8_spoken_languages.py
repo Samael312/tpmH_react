@@ -225,9 +225,11 @@ def test_catalog_is_public_and_separate_from_taught_languages(client, db, world)
 
 # ─── Onboarding: minimo 1 ──────────────────────────────────────────────────────
 
-def fresh_user(db, role="student", name="nuevo"):
+def fresh_user(db, role="student", name="nuevo", with_avatar=True):
     u = _mk_user(db, role, name)
     u.onboarding_completed = False
+    if with_avatar:
+        u.avatar = "https://res.cloudinary.com/x/avatar.png"
     db.commit()
     return u
 
@@ -241,6 +243,17 @@ def test_onboarding_needs_at_least_one_language(client, db, world, role):
     assert r.status_code == 422
     assert me(client, u)["onboarding_completed"] is False
     r = patch(client, u, {"onboarding_completed": True, "spoken_languages": L("Español", level="native")})  # 1
+    assert r.status_code == 200 and r.json()["onboarding_completed"] is True
+
+
+def test_student_onboarding_needs_a_profile_photo(client, db, world):
+    u = fresh_user(db, "student", "sin_foto", with_avatar=False)
+    r = patch(client, u, {"onboarding_completed": True, "spoken_languages": L("Español", level="native")})
+    assert r.status_code == 422 and "foto" in r.json()["detail"].lower()
+    assert me(client, u)["onboarding_completed"] is False
+    # con foto (subida antes o enviada en la misma peticion) termina bien
+    r = patch(client, u, {"onboarding_completed": True, "spoken_languages": L("Español", level="native"),
+                          "avatar": "https://res.cloudinary.com/x/a.png"})
     assert r.status_code == 200 and r.json()["onboarding_completed"] is True
 
 

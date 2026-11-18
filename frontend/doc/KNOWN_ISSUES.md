@@ -5,7 +5,7 @@ Backend: `../../backend/doc/KNOWN_ISSUES.md`. Informe completo: `../../ANALISIS.
 | # | Problema | Dónde |
 |---|---|---|
 | F1 | **Retiros pendientes del admin dan 404** (ruta backend sin decorador, AUD-12) | `hooks/useAdminData.ts:171` | **corregido** (Fase 1) |
-| F2 | JWT en cookie legible por JS, 7 días, CSP con `unsafe-inline`/`unsafe-eval` (SEC-05) | `store/authStore.ts`, `lib/csp.ts` | **corregido** (Fase 3b): sesión en cookies HttpOnly; CSP con nonce por petición en `proxy.ts` (script-src sin `unsafe-inline`; `style-src` conserva `unsafe-inline`). Costo: todas las páginas son dinámicas (`await connection()` en `app/layout.tsx`) |
+| F2 | JWT en cookie legible por JS, 7 días, CSP con `unsafe-inline`/`unsafe-eval` (SEC-05) | `store/authStore.ts`, `lib/csp.ts` | **corregido** (Fase 3b): sesión en cookies HttpOnly; CSP con nonce por petición en `proxy.ts` (script-src sin `unsafe-inline`; `style-src` con nonce en producción y `style-src-attr 'unsafe-inline'` solo para atributos `style="…"`, Fase 13 A11). Costo: todas las páginas son dinámicas (`await connection()` en `app/layout.tsx`) |
 | F3 | `proxy.ts` no verifica la firma del JWT (solo UX; correcto mientras el backend valide, como hace) | `proxy.ts`, `lib/auth.ts` |
 | F4 | Cualquier 401 hace `window.location.href="/login"` y pierde formularios | `lib/api.ts` | **corregido** (Fase 4) |
 | F5 | Reglas del servidor duplicadas en la UI (mínimo de retiro $10, disponibilidad, duraciones); el backend no las aplica (AUD-01/13) | `teacher/wallet`, `student/schedule` | **corregido** (Fase 4) |

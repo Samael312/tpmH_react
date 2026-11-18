@@ -25,7 +25,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Flag seteado por /register en sessionStorage justo antes de redirigir acá.
+  // Flag seteado por /register en sessionStorage justo antes de redirigir aquí.
   // Se lee y se borra una sola vez al montar: evita el toast duplicado al
   // refrescar la página (que sí pasaba con el query param ?registered=1,
   // que persistía en la URL hasta que el replace terminaba de resolver) y
@@ -187,7 +187,7 @@ export default function LoginPage() {
       if (status === 403) {
         setError(getErrorMessage(e, "Cuenta desactivada, contacta con soporte."));
       } else if (status === 429) {
-        setError(getErrorMessage(e, "Demasiados intentos. Probá de nuevo en unos minutos."));
+        setError(getErrorMessage(e, "Demasiados intentos. Prueba de nuevo en unos minutos."));
       } else {
         setError("Usuario o contraseña incorrectos");
       }
@@ -295,7 +295,7 @@ export default function LoginPage() {
               <p className="text-xs text-slate-400 text-left">
                 ¿No puedes ingresar?{" "}
                 <a href="mailto:soporte@mail.tuprofemaria.com" className="font-bold text-slate-500 hover:text-pink-600">
-                  Escribenos a soporte
+                  Escríbenos a soporte
                 </a>
               </p>
 

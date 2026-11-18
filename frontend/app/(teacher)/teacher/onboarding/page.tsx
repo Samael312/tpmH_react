@@ -818,7 +818,7 @@ function StepVideo({ videoFile, setVideoFile, videoPreview, setVideoPreview, onF
     <div className="animate-in fade-in slide-in-from-right-4 duration-300 w-full max-w-2xl mx-auto space-y-7">
       <div>
         <h2 className="text-4xl font-black text-slate-800 tracking-tight">Video de presentación</h2>
-        <p className="text-slate-500 text-lg mt-2">Contales a tus futuros alumnos quién sos (opcional por ahora).</p>
+        <p className="text-slate-500 text-lg mt-2">Cuéntales a tus futuros alumnos quién eres (opcional por ahora).</p>
       </div>
 
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
@@ -851,7 +851,7 @@ function StepVideo({ videoFile, setVideoFile, videoPreview, setVideoPreview, onF
       <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex gap-3 items-start">
         <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
         <p className="text-sm font-bold text-amber-800">
-          Este paso es opcional para terminar el onboarding, pero <strong>tu perfil no será aprobado hasta que subas un video de presentación</strong>. Si preferís hacerlo más adelante, podés subirlo cuando quieras desde <strong>Mi Perfil</strong>.
+          Este paso es opcional para terminar el onboarding, pero <strong>tu perfil no será aprobado hasta que subas un video de presentación</strong>. Si prefieres hacerlo más adelante, puedes subirlo cuando quieras desde <strong>Mi Perfil</strong>.
         </p>
       </div>
 
@@ -1003,7 +1003,7 @@ export default function TeacherOnboardingPage() {
         });
       }
 
-      // 3b. Subir video de presentación si lo cargó (opcional acá; sin él
+      // 3b. Subir video de presentación si lo cargó (opcional aquí; sin él
       // el perfil queda pendiente de aprobación, se puede subir después
       // desde Mi Perfil). Es la llamada más pesada de toda la cadena (puede
       // pesar varios MB), así que le damos su propio mensaje de progreso
@@ -1047,7 +1047,7 @@ export default function TeacherOnboardingPage() {
       <SidebarProgress step={step} name={name} />
 
       <div className="flex-1 flex flex-col justify-center px-6 py-12 md:px-12 overflow-y-auto relative">
-        {/* Salida de emergencia: si el usuario llegó acá por error (ej. volvió
+        {/* Salida de emergencia: si el usuario llegó aquí por error (ej. volvió
             con el botón "atrás" del navegador y volvió a entrar con otra
             cuenta), tiene que poder volver al login sin quedar atrapado,
             ya que el onboarding no tiene ningún otro link de navegación. */}

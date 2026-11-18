@@ -30,7 +30,7 @@ const VARIANT_CONFIG: Record<DashboardTopbarVariant, VariantConfig> = {
     labelClass: 'text-xs text-slate-400 font-bold uppercase tracking-[0.2em]',
     badge: 'live',
     border: 'border-pink-100/50',
-    roleLabel: 'Profesor Verificado',
+    roleLabel: 'Profesor',
     roleLabelClass: 'text-[10px] text-pink-400 font-medium italic leading-none',
     avatar: 'circle',
   },

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError
 from app.core.config import settings
 
 def create_access_token(user_id: int, role: str) -> str:
@@ -43,7 +44,7 @@ def decode_oauth_state(state: str, purpose: str = "gcal") -> Optional[int]:
     """Devuelve el teacher_id del `state`, o None si es invalido, vencido o de otro tipo."""
     try:
         payload = jwt.decode(state, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-    except JWTError:
+    except PyJWTError:
         return None
     if payload.get("typ") != f"oauth_state:{purpose}" or "tid" not in payload:
         return None
@@ -61,7 +62,7 @@ def decode_access_token(token: str) -> Optional[dict]:
             settings.SECRET_KEY, 
             algorithms=[settings.ALGORITHM]
         )
-    except JWTError:
+    except PyJWTError:
         return None
     # Solo son tokens de acceso los que traen `sub` numerico y NO traen `typ` (los demas JWT firmados con la
     # misma clave, como el `state` de OAuth, no deben servir para autenticar; antes provocaban un 500).

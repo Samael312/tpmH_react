@@ -15,6 +15,7 @@ import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
+import LoadError from "@/components/ui/LoadError";
 import { useNow } from "@/lib/useNow";
 
 const STATUS_CONFIG: Record<string, {
@@ -441,7 +442,7 @@ function HomeworkCard({
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function StudentHomeworkPage() {
-  const { homeworks, loading, isFetching, refetch } = useStudentHomework();
+  const { homeworks, loading, isFetching, isError, refetch } = useStudentHomework();
   const [tab, setTab] = useState<"pending" | "graded">("pending");
   const [submitTarget, setSubmitTarget] = useState<StudentHomework | null>(null);
 
@@ -557,6 +558,8 @@ export default function StudentHomeworkPage() {
             Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-28 rounded-2xl" />
             ))
+          ) : isError && homeworks.length === 0 ? (
+            <LoadError what="tus tareas" onRetry={() => refetch()} retrying={isFetching} />
           ) : displayed.length === 0 ? (
             <div
               className="bg-white/80 backdrop-blur-xl rounded-[2rem]

@@ -81,3 +81,50 @@ def test_failures_below_threshold_do_not_lock_and_success_clears(client, db):
     assert _login(client, "lockfew", "Password123").status_code == 200
     db.expire_all()
     assert db.query(User).filter(User.username == "lockfew").one().failed_login_count == 0
+
+
+def test_register_race_on_unique_index_returns_400(client, monkeypatch):
+    """Dos registros simultáneos pasan la comprobación previa; el índice único rechaza al segundo -> 400, no 500."""
+    from sqlalchemy.exc import IntegrityError
+    from sqlalchemy.orm import Session
+
+    def boom(self, *a, **k):
+        raise IntegrityError("INSERT", {}, Exception("duplicate key"))
+
+    monkeypatch.setattr(Session, "flush", boom)
+    r = client.post(f"{API}/auth/register", json={
+        "username": "carrera_1", "email": "carrera1@x.com", "password": "Password123",
+        "name": "Ca", "surname": "Rr", "role": "student",
+    })
+    assert r.status_code == 400 and "registrado" in r.json()["detail"]
+
+
+def test_mark_read_survives_simultaneous_first_open(db, world):
+    """Dos /read simultáneos de un hilo sin estado de lectura: el segundo no debe romper por la fila única."""
+    from app.core.chat import mark_read
+    from app.models.chat import ChatConversation, ChatConversationType, ChatReadState
+
+    convo = ChatConversation(conversation_type=ChatConversationType.direct, teacher_id=world["tp"].id,
+                             student_id=world["sp"].id)
+    db.add(convo)
+    db.commit()
+    user = world["s_user"]
+    # Otra petición ya creó la fila entre la comprobación y el commit de ésta.
+    real_query = db.query
+    calls = {"n": 0}
+
+    class _Blind:
+        def __init__(self, q): self.q = q
+        def filter(self, *a, **k): return _Blind(self.q.filter(*a, **k))
+        def first(self):
+            calls["n"] += 1
+            return None if calls["n"] == 1 else self.q.first()
+
+    db.add(ChatReadState(conversation_id=convo.id, user_id=user.id, last_read_at=convo.created_at))
+    db.commit()
+    db.query = lambda m, *a, **k: _Blind(real_query(m, *a, **k)) if m is ChatReadState else real_query(m, *a, **k)
+    try:
+        mark_read(db, convo, user)  # no debe lanzar IntegrityError
+    finally:
+        db.query = real_query
+    assert db.query(ChatReadState).filter_by(conversation_id=convo.id, user_id=user.id).count() == 1

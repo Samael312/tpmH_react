@@ -14,6 +14,8 @@ El widget Chipi (asistente IA) está disponible incluso sin sesión.
 Notas UX: el servidor es quien valida (disponibilidad, duraciones, créditos); la UI solo ayuda. Una clase en curso sigue en «próximas» hasta que termina (con su enlace de Meet). El alumno no reagenda clases ya pasadas. Borrar cuenta anonimiza (lo dice el propio texto).
 
 ## Profesor (`/teacher/*`)
+**Avisos (Fase 13, A9):** `/teacher/notifications` lista los avisos dirigidos al profesor (hoy: clases que pasaron solas a «No asistió» tras 72 h sin marcar; «Cargar más» de 50 en 50, «Marcar leído» y «Marcar todo como leído»). Entrada «Avisos» en el menú lateral y en «Más» del móvil, con badge de no leídos; el contador se consulta al cargar y al volver a la pestaña, sin sondeo periódico. En el dashboard, las clases `finalized` muestran el tiempo que queda antes de pasar solas a «No asistió» y un banner resume las que faltan por marcar.
+
 `dashboard` · `onboarding` (perfil, vídeo, zona, disponibilidad; necesario para ser aprobado) · `availability` (semanal + excepciones) · `calendar/callback` (OAuth Google Calendar) · `packages` (crear/editar, cuotas, ilimitados) · `students` · `payments` (ver los pagos de sus alumnos como «pendiente de revisión»; no aprueba) · `wallet` (saldo y retiros; mínimo de retiro leído de las reglas del servidor) · `cohorts` (grupales) · `homework` · `materials` · `profile` (+`preview`) · `chat` · `support`.
 
 ## Admin (`/admin/*`, `superadmin` y `teacher_admin`)
@@ -24,5 +26,6 @@ Notas UX: el servidor es quien valida (disponibilidad, duraciones, créditos); l
 **Fase 10:** cada idioma lleva su **nivel** (nativo, fluido, intermedio, básico; obligatorio: sin él no se puede continuar el onboarding ni guardar el perfil; los idiomas antiguos sin nivel muestran el aviso para completarlo) y se ve como «Habla: español (nativo), inglés (intermedio)». En `/dashboard/teachers` (alumno) hay un selector **«Habla»** que filtra «Explorar más profesores» en el servidor (`GET /teachers/?speaks=`). La política de privacidad (`PrivacyContent`) lleva fecha del 17 de noviembre de 2026 y el bullet de idiomas en español e inglés. Playwright: `frontend/e2e/` (ver `TESTING.md`).
 
 ## UX transversal
+**Errores de carga frente a listas vacías:** un listado que no se pudo cargar muestra `components/ui/LoadError` («No se pudo cargar tus clases» + «Reintentar»), nunca el estado vacío; solo se muestra si no hay datos en caché (`isError && lista vacía`). Pantallas ya cubiertas: clases, materiales y tareas del alumno, horarios y paquetes de la reserva y renovación, y paquetes del profesor. Las pantallas nuevas deben usarlo.
 Mensajes de error en español; modales de confirmación; toasts (`store/toastStore`); `ErrorBoundary`, `app/error.tsx`, `global-error.tsx`, `not-found.tsx`; reporte automático de errores; preferencia de movimiento reducido para el 3D.
 Un 401 intenta renovar la sesión (`/auth/refresh`) una vez; solo si falla se va al login. El layout de cada rol comprueba el onboarding una vez por sesión, no en cada cambio de ruta.

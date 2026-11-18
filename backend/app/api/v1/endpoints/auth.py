@@ -1,3 +1,4 @@
+from sqlalchemy.exc import IntegrityError
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -133,17 +134,26 @@ def register(request: Request, response: Response, data: RegisterRequest, db: Se
         surname=data.surname,
         role=data.role
     )
-    db.add(user)
-    db.flush()
+    try:
+        db.add(user)
+        db.flush()
 
-    # 4. Crear perfil según rol
-    if data.role == UserRole.student:
-        db.add(StudentProfile(user_id=user.id, user_username=user.username))
-    elif data.role == UserRole.teacher:
-        db.add(TeacherProfile(user_id=user.id, user_username=user.username))
+        # 4. Crear perfil según rol
+        if data.role == UserRole.student:
+            db.add(StudentProfile(user_id=user.id, user_username=user.username))
+        elif data.role == UserRole.teacher:
+            db.add(TeacherProfile(user_id=user.id, user_username=user.username))
 
-    db.commit()
-    db.refresh(user)
+        db.commit()
+        db.refresh(user)
+    except IntegrityError:
+        # Dos registros simultaneos con el mismo email/usuario pasan la comprobacion previa a la vez: el indice unico
+        # decide cual gana y el otro recibe el mismo 400 que habria recibido en secuencia (antes: 500).
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este email o nombre de usuario ya está registrado",
+        )
 
     send_welcome_email(to_email=user.email, user_name=user.name, role=user.role)
     _issue_verification_email(user, db)

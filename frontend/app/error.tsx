@@ -57,7 +57,7 @@ export default function GlobalRouteError({
 
         <p className="text-sm text-ink-muted max-w-sm">
           Ocurrió un error inesperado al cargar esta página. Ya quedó
-          registrado — podés intentar de nuevo o volver al inicio.
+          registrado — puedes intentar de nuevo o volver al inicio.
         </p>
 
         {error.digest && (

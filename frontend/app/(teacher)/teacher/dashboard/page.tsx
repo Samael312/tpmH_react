@@ -253,7 +253,7 @@ function StudentFilterDropdown({
 }
 
 // Banner de estado del perfil para 'pending'/'suspended' (rejected tiene su
-// propio banner, RejectionFeedbackBanner, más abajo — no duplicar acá).
+// propio banner, RejectionFeedbackBanner, más abajo — no duplicar aquí).
 // Sin esto, un profesor recién onboardeado (sin video, o con video subido
 // pero aún en revisión) navega el dashboard entero sin ninguna pista de que
 // su perfil todavía no es visible para estudiantes.

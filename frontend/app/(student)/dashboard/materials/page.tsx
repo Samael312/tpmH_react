@@ -19,6 +19,7 @@ import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
+import LoadError from "@/components/ui/LoadError";
 
 type Material = MaterialAssignment["material"];
 
@@ -75,6 +76,7 @@ export default function StudentMaterialsPage() {
     materials,
     loading,
     isFetching,
+    isError,
     refetch: refetchMaterials,
   } = useStudentMaterials();
   const [search, setSearch] = useState("");
@@ -317,6 +319,8 @@ export default function StudentMaterialsPage() {
                   <Skeleton key={i} className="h-56 rounded-2xl" />
                 ))}
               </div>
+            ) : isError && materials.length === 0 ? (
+              <LoadError what="tus materiales" onRetry={() => refetchMaterials()} retrying={isFetching} />
             ) : filtered.length === 0 ? (
               <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg py-16 text-center max-w-lg mx-auto my-8">
                 <div className="w-12 h-12 bg-slate-100 text-slate-400 rounded-2xl flex items-center justify-center mx-auto mb-4">

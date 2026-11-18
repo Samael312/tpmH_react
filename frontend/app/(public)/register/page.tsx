@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import Link from "next/link";
 import Image from "next/image";
@@ -92,6 +92,8 @@ export default function RegisterPage() {
   const [showConfirmPw, setShowConfirmPw] = useState(false);
 
   const [loading, setLoading] = useState(false);
+  // Los clics seguidos llegan antes de que React pinte `disabled`: este ref bloquea el segundo envío al instante.
+  const submittingRef = useRef(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -161,11 +163,13 @@ export default function RegisterPage() {
     }
 
     if (!acceptedTerms) {
-      setError("Debés aceptar los Términos de Servicio y la Política de Privacidad para continuar.");
+      setError("Debes aceptar los Términos de Servicio y la Política de Privacidad para continuar.");
       return;
     }
 
     if (!step2Valid) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
 
     setLoading(true);
     setError("");
@@ -202,6 +206,7 @@ export default function RegisterPage() {
         setStep(1);
       }
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   };

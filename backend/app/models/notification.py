@@ -14,6 +14,7 @@ class Notification(Base):
       - "teacher_pending": nuevo profesor subió video / quedó pendiente de revisión
       - "teacher_appeal": el profesor presentó una apelación
       - "support_ticket": un student o teacher envió un ticket de soporte
+      - "class_auto_no_show": (recipient_role="teacher") clases que pasaron solas a "no_show" tras 72 h sin marcar
     """
     __tablename__ = "notifications"
 
@@ -29,6 +30,10 @@ class Notification(Base):
 
     related_teacher_id = Column(Integer, ForeignKey("teacher_profiles.id"), nullable=True)
     related_support_ticket_id = Column(Integer, ForeignKey("support_tickets.id"), nullable=True)
+
+    # Fase 13 (A9): aviso dirigido a UN usuario (hoy: el profesor cuando una clase pasa sola a "no_show").
+    # Los avisos de staff lo dejan en NULL y se siguen filtrando por recipient_role == "staff".
+    recipient_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

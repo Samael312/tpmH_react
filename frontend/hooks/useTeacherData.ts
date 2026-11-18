@@ -1,4 +1,5 @@
 import api from '@/lib/api'
+import { fetchMe } from '@/lib/me'
 import { fetchAllPages } from "@/lib/pagination";
 import { useLoadMoreList } from "@/hooks/useLoadMoreList";
 import type { SpokenLanguage } from '@/lib/spokenLanguages'
@@ -330,12 +331,10 @@ export interface CurrentUser {
 }
 
 export function useCurrentUser() {
+  const qc = useQueryClient()
   const query = useQuery({
     queryKey: ["user", "me"],
-    queryFn: async () => {
-      const res = await api.get('/users/me')
-      return res.data as CurrentUser
-    },
+    queryFn: () => fetchMe<CurrentUser>(qc),
   })
 
   return {

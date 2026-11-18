@@ -37,7 +37,7 @@ export default function ConversationList({
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-6 py-10 text-slate-400">
         <MessageCircle size={32} className="opacity-40" />
-        <p className="text-sm font-semibold">Todavía no tenés conversaciones</p>
+        <p className="text-sm font-semibold">Todavía no tienes conversaciones</p>
       </div>
     );
   }

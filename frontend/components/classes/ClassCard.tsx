@@ -632,7 +632,7 @@ export default function ClassCard({
               {isExternal && role === "teacher" && (
                 <span className="flex items-center gap-1.5 text-slate-400 italic">
                   <Calendar className="w-3.5 h-3.5 text-sky-400" />
-                  Bloqueada en tu Google Calendar — no gestionable desde acá
+                  Bloqueada en tu Google Calendar — no gestionable desde aquí
                 </span>
               )}
 

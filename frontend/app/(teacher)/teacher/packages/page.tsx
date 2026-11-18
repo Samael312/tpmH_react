@@ -27,6 +27,7 @@ import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useBusinessRules } from "@/hooks/useBusinessRules";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
+import LoadError from "@/components/ui/LoadError";
 
 const emptyForm = {
   name: "", subject: "", description: "",
@@ -92,12 +93,14 @@ export default function TeacherPackagesPage() {
     packages,
     loading: loadingPackages,
     isFetching: fetchingPackages,
+    isError: packagesError,
     refetch: refetchPackages,
   } = useTeacherPackages();
   const {
     enrollments,
     loading: loadingEnrollments,
     isFetching: fetchingEnrollments,
+    isError: enrollmentsError,
     refetch: refetchEnrollments,
   } = useTeacherEnrollments();
 
@@ -933,6 +936,8 @@ export default function TeacherPackagesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {[1, 2, 3].map(i => <Skeleton key={i} className="h-40 rounded-2xl" />)}
               </div>
+            ) : packagesError && packages.length === 0 ? (
+              <LoadError what="tus paquetes" onRetry={() => refetchPackages()} retrying={fetchingPackages} />
             ) : packages.length === 0 ? (
               <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg py-16 text-center">
                 <PackageIcon className="w-10 h-10 text-slate-200 mx-auto mb-3" />
@@ -1040,6 +1045,8 @@ export default function TeacherPackagesPage() {
               <div className="space-y-3">
                 {[1, 2].map(i => <Skeleton key={i} className="h-20 rounded-2xl" />)}
               </div>
+            ) : enrollmentsError && enrollments.length === 0 ? (
+              <LoadError what="la lista de estudiantes con paquetes" onRetry={() => refetchEnrollments()} retrying={fetchingEnrollments} />
             ) : enrollments.length === 0 ? (
               <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-lg py-12 text-center">
                 <p className="text-slate-500 font-bold">Aún no tienes estudiantes con paquetes asignados</p>
