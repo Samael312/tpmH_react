@@ -43,6 +43,8 @@ Cuenta de prueba sin tocar la BD real: `python -m tests.audit.run_server` (SQLit
 | `ALGORITHM` | `HS256` | no | JWT | |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `10080` (7 días) | no | caducidad del access token | Con refresh (SEC-05) bájalo a `30` cuando el frontend nuevo esté desplegado |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | no | caducidad del refresh token (cookie `tpm_refresh`) | |
+| `LOGIN_MAX_FAILED` | `8` | no | contraseñas erróneas seguidas que bloquean la cuenta | Requiere la migración `c2e6f7a8b9d0` |
+| `LOGIN_LOCK_MINUTES` | `15` | no | duración del bloqueo por logins fallidos | |
 | `COOKIE_DOMAIN` | vacío | prod | dominio de las cookies de sesión | `.tuprofemaria.com` en producción |
 | `COOKIE_SAMESITE` | `lax` | no | SameSite de las cookies | `none` solo si front y API son de sitios distintos |
 | `ENVIRONMENT` | `development` | no | `production` oculta `/docs` y bloquea `flow_tests` | ver ⚠4 |

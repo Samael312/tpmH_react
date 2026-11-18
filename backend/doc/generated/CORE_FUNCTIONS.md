@@ -228,33 +228,36 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/scheduler.py
 
-- `finalize_expired_classes()` — L27: Job que se ejecuta cada 10 minutos. Marca como 'finalized' las clases confirmadas cuyo horario ya pasó.
-- `send_class_reminders()` — L42: Job que se ejecuta cada hora. Busca clases confirmadas que empiezan en ~24h y envía el recordatorio si aún no se envió.
-- `send_chat_digests()` — L188: Job por vencimiento: un correo por profesor con sus conversaciones de chat pendientes (core/chat_digest.py).
-- `generate_upcoming_meet_links()` — L203: Job que se ejecuta cada 5 minutos. Genera automáticamente el link de videollamada (Google Meet, vía el Calendar del profesor) para las clases confirmadas que empiezan dentro de la ventana configurada por el superadmin (meet_link_autogen_minutes en PlatformConfig, default 30 min) y todavía NO tienen 
-- `sync_all_teacher_calendars()` — L266: Job que se ejecuta cada 30 minutos, en segundo plano, sin depender de que algún profesor tenga el panel abierto.
-- `notify_low_credit_packages()` — L288: Job semanal. Revisa enrollments activos con pocas clases restantes (finitos o ilimitados con crédito prepagado) y avisa al estudiante si no se le avisó ya dentro de la ventana configurada por el superadmin (low_credit_renotify_days en PlatformConfig).
-- `purge_old_chat_messages()` — L343: Job diario. Borra mensajes de chat interno más viejos que PlatformConfig.chat_retention_days (0 = sin límite, no borra nada).
-- `release_stale_enrollments()` — L363: Job diario. Cancela los enrollments sin pagar de mas de 24 h (antes lo hacia un GET).
-- `purge_old_logs()` — L378: Job diario. Purga `error_logs` y `email_log` por antiguedad (core/retention.py).
-- `class DueJob()` — L421
-- `_due_finalize(job: DueJob, db: Session, now: datetime)` — L429: Primera clase que hay que cerrar: confirmed/pending_trial al terminar, finalized a las 72 h de terminar.
-- `_due_meet_links(job: DueJob, db: Session, now: datetime)` — L445: Hora en que la proxima clase sin link entra en la ventana de autogeneracion. Solo cuentan los profesores con Google Calendar conectado: sin el, no se puede generar el link y el job reintentaba cada 5 min (despertando Neon) durante toda la ventana previa a cada clase.
-- `_due_chat_digest(job: DueJob, db: Session, now: datetime)` — L467
-- `_due_reminders(job: DueJob, db: Session, now: datetime)` — L472: Recordatorio 24 h antes: se envia en la ventana [23 h, 25 h] antes del inicio.
-- `_due_calendar_sync(job: DueJob, db: Session, now: datetime)` — L484: Sin profesores con Calendar conectado no hay nada que sincronizar. Con clase en curso o en las proximas 3 h: cada 30 min. Si no: cada 6 h, y siempre antes de que la proxima clase entre en esa ventana.
-- `compute_run_at(job: DueJob, due: Optional[datetime], now: datetime)` — L523: Cuando programar la proxima ejecucion: `due` acotado a [ahora+1s, ahora+MAX_SLEEP] y respetando `min_gap`.
-- `reschedule_job(job: DueJob)` — L532: Recalcula (con una consulta corta) cuando le toca al job y lo programa. Nunca lanza.
-- `_run_due_job(job_id: str)` — L551
-- `reschedule_all_due_jobs()` — L560
-- `request_reschedule(delay_seconds: int=3)` — L565: Pide recalcular los vencimientos (con un pequeño retraso: varias escrituras seguidas cuentan una vez).
-- `_watched_models()` — L581
-- `_after_flush(session, flush_context)` — L587
-- `_after_commit(session)` — L592
-- `_after_soft_rollback(session, previous_transaction)` — L597
-- `install_session_hooks()` — L601
-- `start_scheduler()` — L612
-- `stop_scheduler()` — L626: Para el scheduler al apagar la aplicación
+- `class JobFailed()` — L27: Un job por vencimiento no pudo con alguno de sus elementos. `_run_due_job` la cuenta como fallo (reintento con espera creciente y tope de intentos, ver `compute_run_at`).
+- `finalize_expired_classes()` — L32: Job que se ejecuta cada 10 minutos. Marca como 'finalized' las clases confirmadas cuyo horario ya pasó.
+- `send_class_reminders()` — L48: Job que se ejecuta cada hora. Busca clases confirmadas que empiezan en ~24h y envía el recordatorio si aún no se envió.
+- `send_chat_digests()` — L200: Job por vencimiento: un correo por profesor con sus conversaciones de chat pendientes (core/chat_digest.py).
+- `generate_upcoming_meet_links()` — L216: Job que se ejecuta cada 5 minutos. Genera automáticamente el link de videollamada (Google Meet, vía el Calendar del profesor) para las clases confirmadas que empiezan dentro de la ventana configurada por el superadmin (meet_link_autogen_minutes en PlatformConfig, default 30 min) y todavía NO tienen 
+- `sync_all_teacher_calendars()` — L285: Job que se ejecuta cada 30 minutos, en segundo plano, sin depender de que algún profesor tenga el panel abierto.
+- `notify_low_credit_packages()` — L308: Job semanal. Revisa enrollments activos con pocas clases restantes (finitos o ilimitados con crédito prepagado) y avisa al estudiante si no se le avisó ya dentro de la ventana configurada por el superadmin (low_credit_renotify_days en PlatformConfig).
+- `purge_old_chat_messages()` — L363: Job diario. Borra mensajes de chat interno más viejos que PlatformConfig.chat_retention_days (0 = sin límite, no borra nada).
+- `release_stale_enrollments()` — L383: Job diario. Cancela los enrollments sin pagar de mas de 24 h (antes lo hacia un GET).
+- `purge_old_logs()` — L398: Job diario. Purga `error_logs` y `email_log` por antiguedad (core/retention.py).
+- `class DueJob()` — L443
+- `_due_finalize(job: DueJob, db: Session, now: datetime)` — L452: Primera clase que hay que cerrar: confirmed/pending_trial al terminar, finalized a las 72 h de terminar.
+- `_due_meet_links(job: DueJob, db: Session, now: datetime)` — L468: Hora en que la proxima clase sin link entra en la ventana de autogeneracion. Solo cuentan los profesores con Google Calendar conectado: sin el, no se puede generar el link y el job reintentaba cada 5 min (despertando Neon) durante toda la ventana previa a cada clase.
+- `_due_chat_digest(job: DueJob, db: Session, now: datetime)` — L490
+- `_due_reminders(job: DueJob, db: Session, now: datetime)` — L495: Recordatorio 24 h antes: se envia en la ventana [23 h, 25 h] antes del inicio.
+- `_due_calendar_sync(job: DueJob, db: Session, now: datetime)` — L507: Sin profesores con Calendar conectado no hay nada que sincronizar. Con clase en curso o en las proximas 3 h: cada 30 min. Si no: cada 6 h, y siempre antes de que la proxima clase entre en esa ventana.
+- `retry_delay(job: DueJob)` — L546: Espera antes de reintentar tras `job.failures` fallos seguidos: min_gap x 2^(fallos-1), con tope MAX_BACKOFF.
+- `compute_run_at(job: DueJob, due: Optional[datetime], now: datetime)` — L551: Cuando programar la proxima ejecucion: `due` acotado a [ahora+1s, ahora+MAX_SLEEP] y respetando `min_gap`.
+- `reschedule_job(job: DueJob)` — L564: Recalcula (con una consulta corta) cuando le toca al job y lo programa. Nunca lanza.
+- `report_job_failure(job: DueJob, exc: Exception)` — L583: Deja el fallo en la pantalla de Logs del admin (ErrorLog) con el numero de intento. Nunca lanza.
+- `_run_due_job(job_id: str)` — L600
+- `reschedule_all_due_jobs()` — L613
+- `request_reschedule(delay_seconds: int=3)` — L618: Pide recalcular los vencimientos (con un pequeño retraso: varias escrituras seguidas cuentan una vez).
+- `_watched_models()` — L634
+- `_after_flush(session, flush_context)` — L640
+- `_after_commit(session)` — L645
+- `_after_soft_rollback(session, previous_transaction)` — L650
+- `install_session_hooks()` — L654
+- `start_scheduler()` — L665
+- `stop_scheduler()` — L679: Para el scheduler al apagar la aplicación
 
 ## app/core/spoken_languages.py
 
@@ -306,11 +309,11 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/upload_quota.py
 
-- `quota_bytes()` — L20
-- `get_upload_size(fileobj)` — L24: Tamano en bytes de un objeto tipo archivo sin cargarlo en memoria (deja el puntero al inicio).
-- `used_bytes(db: Session, teacher_id: int)` — L32
-- `usage(db: Session, teacher_id: int)` — L38
-- `ensure_quota(db: Session, teacher_id: int, new_size: int)` — L45: 413 si subir `new_size` bytes superaria la cuota del profesor.
+- `quota_bytes()` — L21
+- `get_upload_size(fileobj)` — L25: Tamano en bytes de un objeto tipo archivo sin cargarlo en memoria (deja el puntero al inicio).
+- `used_bytes(db: Session, teacher_id: int)` — L33
+- `usage(db: Session, teacher_id: int)` — L39
+- `ensure_quota(db: Session, teacher_id: int, new_size: int)` — L46: 413 si subir `new_size` bytes superaria la cuota del profesor.
 
 ## app/core/chipi/context.py
 
@@ -364,6 +367,7 @@ Las que empiezan por `_` son privadas del módulo.
 
 - `hash_password(password: str)` — L3: Convierte la contraseña en un hash seguro
 - `verify_password(plain_password: str, hashed_password: str)` — L9: Compara la contraseña introducida con el hash guardado
+- `burn_password_check(plain_password: str)` — L20: Gasta el mismo tiempo que verify_password; el resultado se descarta.
 
 ## app/auth/session.py
 

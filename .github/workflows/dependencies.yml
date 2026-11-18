@@ -1,0 +1,47 @@
+name: dependencies
+
+# Vulnerabilidades conocidas en dependencias: pip-audit (backend) y npm audit (frontend).
+# De momento solo AVISAN (continue-on-error): un fallo aparece en rojo en Actions pero no bloquea el PR.
+# Cuando los resultados esten limpios, quitar `continue-on-error` para que bloqueen.
+# Corre cuando cambian las dependencias y una vez por semana (aparecen avisos nuevos sin tocar el codigo).
+
+on:
+  pull_request:
+    paths:
+      - "backend/requirements.txt"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - ".github/workflows/dependencies.yml"
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pip-audit
+      - name: pip-audit (backend)
+        run: pip-audit -r backend/requirements.txt --progress-spinner off
+
+  npm-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # Solo dependencias de produccion: las de desarrollo no llegan al servidor.
+      - name: npm audit (frontend, produccion)
+        run: npm audit --omit=dev --audit-level=high

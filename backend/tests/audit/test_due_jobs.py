@@ -232,9 +232,8 @@ def test_run_due_job_runs_then_reschedules_even_if_it_fails(db, world, fake_sche
     j = sch.DueJob("x", lambda: (calls.append(1), (_ for _ in ()).throw(RuntimeError("fallo")))[1],
                    lambda *a: None, timedelta(minutes=1))
     monkeypatch.setitem(sch._JOBS_BY_ID, "x", j)
-    with pytest.raises(RuntimeError):
-        sch._run_due_job("x")
-    assert calls == [1] and j.last_run is not None and "x" in fake_sched.jobs
+    sch._run_due_job("x")   # el fallo se registra y cuenta (A6), no revienta el scheduler
+    assert calls == [1] and j.last_run is not None and "x" in fake_sched.jobs and j.failures == 1
 
 
 def test_end_to_end_meet_job_generates_then_goes_to_sleep(db, world, fake_sched, monkeypatch):
@@ -344,3 +343,89 @@ def test_reminder_without_recipient_is_marked_and_not_retried(db, world):
     db.expire_all()
     assert db.get(Class, c.id).reminder_sent_at is not None
     assert _due("class_reminders", db) is None
+
+
+# ─── A6: reintentos con espera creciente, tope de intentos y registro del fallo ───
+
+def _failing_job(job_id="f", min_gap=timedelta(minutes=5)):
+    def boom():
+        raise RuntimeError("fallo de prueba")
+    return sch.DueJob(job_id, boom, lambda *a: None, min_gap)
+
+
+def test_retry_delay_doubles_and_is_capped():
+    j = sch.DueJob("t", lambda: None, lambda *a: None, timedelta(minutes=5))
+    got = []
+    for n in (1, 2, 3, 4, 5, 20):
+        j.failures = n
+        got.append(sch.retry_delay(j))
+    assert got[:4] == [timedelta(minutes=5), timedelta(minutes=10), timedelta(minutes=20), timedelta(minutes=40)]
+    assert got[-1] == sch.MAX_BACKOFF
+
+
+def test_failures_delay_the_next_run_beyond_min_gap():
+    j = sch.DueJob("t", lambda: None, lambda *a: None, timedelta(minutes=5))
+    now = utc_now()
+    j.last_run = now
+    j.failures = 3
+    assert sch.compute_run_at(j, now - timedelta(hours=1), now) == now + timedelta(minutes=20)
+
+
+def test_after_max_attempts_it_stops_for_a_day():
+    j = sch.DueJob("t", lambda: None, lambda *a: None, timedelta(minutes=5))
+    now = utc_now()
+    j.last_run = now
+    j.failures = sch.MAX_JOB_ATTEMPTS
+    assert sch.compute_run_at(j, now - timedelta(hours=1), now) == now + sch.MAX_SLEEP
+
+
+def test_success_resets_the_failure_counter(db, world, fake_sched, monkeypatch):
+    state = {"fail": True}
+
+    def run():
+        if state["fail"]:
+            raise RuntimeError("x")
+
+    j = sch.DueJob("r", run, lambda *a: None, timedelta(minutes=5))
+    monkeypatch.setitem(sch._JOBS_BY_ID, "r", j)
+    sch._run_due_job("r")
+    sch._run_due_job("r")
+    assert j.failures == 2
+    state["fail"] = False
+    sch._run_due_job("r")
+    assert j.failures == 0
+
+
+def test_failure_is_written_to_the_error_log_with_attempt_number(db, world, fake_sched, monkeypatch):
+    from app.models.error_log import ErrorLog
+    j = _failing_job("logged")
+    monkeypatch.setitem(sch._JOBS_BY_ID, "logged", j)
+    sch._run_due_job("logged")
+    db.expire_all()
+    row = db.query(ErrorLog).order_by(ErrorLog.id.desc()).first()
+    assert row is not None and "logged" in row.message and "intento 1 de" in row.message
+    assert row.extra_data["job"] == "logged" and row.extra_data["gave_up"] is False
+
+
+def test_give_up_message_is_logged_once_attempts_are_exhausted(db, world, fake_sched, monkeypatch):
+    from app.models.error_log import ErrorLog
+    j = _failing_job("giveup")
+    monkeypatch.setitem(sch._JOBS_BY_ID, "giveup", j)
+    for _ in range(sch.MAX_JOB_ATTEMPTS):
+        sch._run_due_job("giveup")
+    db.expire_all()
+    row = db.query(ErrorLog).order_by(ErrorLog.id.desc()).first()
+    assert row.extra_data["gave_up"] is True and "se detienen los reintentos" in row.message
+    _f, trig, _a = fake_sched.jobs["giveup"]
+    assert trig.run_date >= utc_now() + sch.MAX_SLEEP - timedelta(seconds=5)
+
+
+def test_partial_reminder_failure_counts_as_job_failure(db, world, monkeypatch):
+    _cls(db, world, future(24))
+
+    def boom(**kw):
+        raise RuntimeError("smtp caido")
+
+    monkeypatch.setattr(sch, "send_class_reminder_email", boom)
+    with pytest.raises(sch.JobFailed):
+        sch.send_class_reminders()

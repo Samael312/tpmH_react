@@ -1,5 +1,6 @@
 'use client'
 
+import { pendingToMark, pendingToMarkText } from '@/lib/classStatusNotice'
 import { useState, useMemo, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -570,6 +571,9 @@ export default function TeacherDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [safeClasses])
 
+  // Clases terminadas que el profesor aún no marcó (pasan solas a «No asistió» a las 72 h)
+  const toMark = useMemo(() => pendingToMark(safeClasses), [safeClasses])
+
   const historyList = useMemo(() => {
     return safeClasses
       .filter(c => HISTORY_STATUSES.includes(c.status))
@@ -809,6 +813,21 @@ export default function TeacherDashboard() {
             </div>
           )}
         </div>
+
+        {/* Resumen de clases por marcar */}
+        {toMark && !loading && (
+          <button
+            type="button"
+            onClick={() => { setTab('history'); setSelectedDate(null) }}
+            className={`w-full text-left rounded-2xl border px-4 py-3 text-sm font-bold transition-colors ${
+              toMark.hoursLeft < 24
+                ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
+                : 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
+            }`}
+          >
+            {pendingToMarkText(toMark)} <span className="underline">Ver en el historial</span>
+          </button>
+        )}
 
         {/* Tabs y lista */}
         <div className="animate-fade-up animate-fade-up-delay-3">

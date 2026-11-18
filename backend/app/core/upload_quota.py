@@ -13,6 +13,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.material import Material
+from app.models.teacher import TeacherProfile
 
 MATERIALS_QUOTA_MB = int(os.getenv("MATERIALS_QUOTA_MB", "500"))
 
@@ -43,10 +44,16 @@ def usage(db: Session, teacher_id: int) -> dict:
 
 
 def ensure_quota(db: Session, teacher_id: int, new_size: int) -> None:
-    """413 si subir `new_size` bytes superaria la cuota del profesor."""
+    """413 si subir `new_size` bytes superaria la cuota del profesor.
+
+    Bloquea la fila del profesor (`FOR UPDATE`) hasta el commit del llamador: dos subidas simultaneas del MISMO
+    profesor se ejecutan una tras otra, asi la segunda ve el espacio que ocupo la primera y la cuota no se puede
+    superar por carrera. Los demas profesores no se ven afectados.
+    """
     limit = quota_bytes()
     if limit == 0:
         return
+    db.query(TeacherProfile.id).filter(TeacherProfile.id == teacher_id).with_for_update().first()
     if used_bytes(db, teacher_id) + new_size > limit:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,

@@ -24,6 +24,11 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 
+class JobFailed(Exception):
+    """Un job por vencimiento no pudo con alguno de sus elementos. `_run_due_job` la cuenta como fallo (reintento con
+    espera creciente y tope de intentos, ver `compute_run_at`)."""
+
+
 def finalize_expired_classes():
     """
     Job que se ejecuta cada 10 minutos.
@@ -36,6 +41,7 @@ def finalize_expired_classes():
             logger.info(f"Clases finalizadas automáticamente: {count}")
     except Exception as e:
         logger.error(f"Error en job de finalización de clases: {e}")
+        raise
     finally:
         db.close()
 
@@ -61,6 +67,7 @@ def send_class_reminders():
         ).all()
 
         logger.info(f"Recordatorios: {len(upcoming)} clases en ventana 24h")
+        failed = 0  # clases cuyo recordatorio falló: siguen sin marcar y se reintentarán (con tope)
 
         # Fase 9: el profesor recibe UN correo con todas sus clases de la ventana, no uno por clase.
         teacher_items: dict[int, dict] = {}
@@ -160,6 +167,7 @@ def send_class_reminders():
                 db.commit()
 
             except Exception as e:
+                failed += 1
                 logger.error(
                     f"Error enviando recordatorio clase {class_.id}: {e}"
                 )
@@ -180,8 +188,12 @@ def send_class_reminders():
             except Exception as e:
                 logger.error(f"Error enviando recordatorio agrupado al profesor {entry['user'].id}: {e}")
 
+        if failed:
+            raise JobFailed(f"{failed} recordatorio(s) de clase fallaron")
+
     except Exception as e:
         logger.error(f"Error en job de recordatorios: {e}")
+        raise
     finally:
         db.close()
 
@@ -196,6 +208,7 @@ def send_chat_digests():
             logger.info(f"Resumenes de chat enviados: {n}")
     except Exception as e:
         logger.error(f"Error en job de resumen de chat: {e}")
+        raise
     finally:
         db.close()
 
@@ -239,6 +252,7 @@ def generate_upcoming_meet_links():
         ).all()
 
         generated = 0
+        failed = 0
         for class_ in upcoming:
             try:
                 link = generate_meet_link_for_class(class_, db)
@@ -247,14 +261,19 @@ def generate_upcoming_meet_links():
                     generated += 1
                 db.commit()  # persiste el link y/o el google_event_id nuevo aunque no haya link
             except Exception as e:
+                failed += 1
                 logger.error(f"Error generando meet link automático para clase {class_.id}: {e}")
                 db.rollback()
 
         if generated:
             logger.info(f"Meet links generados automáticamente: {generated}")
 
+        if failed:
+            raise JobFailed(f"{failed} enlace(s) de Meet no se pudieron generar")
+
     except Exception as e:
         logger.error(f"Error en job de generación automática de meet links: {e}")
+        raise
     finally:
         db.close()
 
@@ -282,6 +301,7 @@ def sync_all_teacher_calendars():
         run_calendar_sync_for_all_teachers(db)
     except Exception as e:
         logger.error(f"Error en job de sincronización de calendarios: {e}")
+        raise
     finally:
         db.close()
 
@@ -415,6 +435,8 @@ CALENDAR_ACTIVE_WINDOW = timedelta(hours=3)  # sync cada 30 min mientras haya cl
 CALENDAR_ACTIVE_GAP = timedelta(minutes=30)
 CALENDAR_IDLE_GAP = timedelta(hours=6)       # sin clases cerca: una sync cada 6 h
 RESCHEDULE_ID = "reschedule_due_jobs"
+MAX_JOB_ATTEMPTS = 5                         # fallos seguidos antes de dejar de insistir hasta el dia siguiente
+MAX_BACKOFF = timedelta(hours=6)             # tope de la espera creciente entre reintentos
 
 
 @dataclass
@@ -424,6 +446,7 @@ class DueJob:
     next_due: Callable[["DueJob", Session, datetime], Optional[datetime]]
     min_gap: timedelta                       # separacion minima entre dos ejecuciones (frena reintentos en bucle)
     last_run: Optional[datetime] = None
+    failures: int = 0                        # fallos seguidos (vuelve a 0 con la primera ejecucion correcta)
 
 
 def _due_finalize(job: DueJob, db: Session, now: datetime) -> Optional[datetime]:
@@ -520,12 +543,21 @@ DUE_JOBS = [
 _JOBS_BY_ID = {j.id: j for j in DUE_JOBS}
 
 
+def retry_delay(job: DueJob) -> timedelta:
+    """Espera antes de reintentar tras `job.failures` fallos seguidos: min_gap x 2^(fallos-1), con tope MAX_BACKOFF."""
+    return min(job.min_gap * (2 ** max(job.failures - 1, 0)), MAX_BACKOFF)
+
+
 def compute_run_at(job: DueJob, due: Optional[datetime], now: datetime) -> datetime:
     """Cuando programar la proxima ejecucion: `due` acotado a [ahora+1s, ahora+MAX_SLEEP] y respetando `min_gap`."""
     run_at = due if due is not None else now + MAX_SLEEP
     run_at = min(run_at, now + MAX_SLEEP)
     if job.last_run is not None:
         run_at = max(run_at, job.last_run + job.min_gap)
+        if job.failures >= MAX_JOB_ATTEMPTS:
+            run_at = max(run_at, job.last_run + MAX_SLEEP)  # se rindio: no vuelve a intentarlo hasta dentro de 24 h
+        elif job.failures:
+            run_at = max(run_at, job.last_run + retry_delay(job))
     return max(run_at, now + timedelta(seconds=1))
 
 
@@ -548,10 +580,31 @@ def reschedule_job(job: DueJob) -> None:
     )
 
 
+def report_job_failure(job: DueJob, exc: Exception) -> None:
+    """Deja el fallo en la pantalla de Logs del admin (ErrorLog) con el numero de intento. Nunca lanza."""
+    gave_up = job.failures >= MAX_JOB_ATTEMPTS
+    if gave_up:
+        message = f"Job «{job.id}»: {job.failures} fallos seguidos; se detienen los reintentos hasta dentro de 24 h"
+    else:
+        message = f"Job «{job.id}» falló (intento {job.failures} de {MAX_JOB_ATTEMPTS}); se reintentará en {retry_delay(job)}"
+    try:
+        from app.core.error_log import log_error
+        log_error(
+            source="backend", level="error", message=message, detail=f"{type(exc).__name__}: {exc}",
+            extra={"job": job.id, "failures": job.failures, "gave_up": gave_up},
+        )
+    except Exception:
+        logger.exception("No se pudo registrar el fallo del job %s", job.id)
+
+
 def _run_due_job(job_id: str) -> None:
     job = _JOBS_BY_ID[job_id]
     try:
         job.run()
+        job.failures = 0
+    except Exception as exc:
+        job.failures += 1
+        report_job_failure(job, exc)
     finally:
         job.last_run = utc_now()
         reschedule_job(job)

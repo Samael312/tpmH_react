@@ -6,6 +6,7 @@ import { Card, Badge, RefreshButton, Skeleton, DesktopOnly } from '@/components/
 import { usePageTopBar } from '@/lib/mobileTopBar'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
+import LoadMoreButton from '@/components/ui/LoadMoreButton'
 import { Wallet as WalletIcon, TrendingUp, CheckCircle2, X, Loader2, ArrowDownLeft, ArrowUpRight, AlertTriangle, RefreshCw, Coins, Landmark } from 'lucide-react'
 import { useBusinessRules } from "@/hooks/useBusinessRules";
 import { useToast } from "@/hooks/useToast";
@@ -187,8 +188,8 @@ function RequestWithdrawalModal({
 
 export default function WalletPage() {
   const { wallet, loading: wBalanceLoading, isFetching: wFetching, isError: wError, refetch: refetchWallet } = useWallet()
-  const { withdrawals, loading: wLoading, isFetching: wListFetching, isError: wListError, refetch: refetchW } = useMyWithdrawals()
-  const { income, loading: iLoading, isFetching: iFetching, isError: iError, refetch: refetchI } = useMyIncome()
+  const { withdrawals, hasMore: wHasMore, loadMore: wLoadMore, loadingMore: wLoadingMore, loading: wLoading, isFetching: wListFetching, isError: wListError, refetch: refetchW } = useMyWithdrawals()
+  const { income, hasMore: iHasMore, loadMore: iLoadMore, loadingMore: iLoadingMore, loading: iLoading, isFetching: iFetching, isError: iError, refetch: refetchI } = useMyIncome()
   
   const [showModal, setShowModal] = useState(false)
   
@@ -331,6 +332,7 @@ export default function WalletPage() {
                   ))}
                 </div>
               )}
+              <LoadMoreButton hasMore={wHasMore} loading={wLoadingMore} onClick={wLoadMore} />
             </Card>
           </div>
 
@@ -374,6 +376,7 @@ export default function WalletPage() {
                   ))}
                 </div>
               )}
+              <LoadMoreButton hasMore={iHasMore} loading={iLoadingMore} onClick={iLoadMore} />
             </Card>
           </div>
         </div>

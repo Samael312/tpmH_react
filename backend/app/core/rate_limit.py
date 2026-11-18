@@ -31,15 +31,15 @@ def user_or_ip_key(request) -> str:
     proxy) y un anonimo no puede agotar el cupo de los demas. Un token invalido o vencido cae a la IP
     (no se puede falsificar otro usuario porque la firma si se verifica).
     """
-    auth = request.headers.get("authorization", "")
-    if auth.lower().startswith("bearer "):
-        try:
-            from app.auth.jwt import decode_access_token
-            payload = decode_access_token(auth[7:].strip())
-            if payload and payload.get("sub"):
-                return f"user:{payload['sub']}"
-        except Exception:
-            pass
+    try:
+        from app.auth.jwt import decode_access_token
+        from app.auth.session import token_from_request  # cabecera Bearer o cookie HttpOnly
+        token = token_from_request(request)
+        payload = decode_access_token(token) if token else None
+        if payload and payload.get("sub"):
+            return f"user:{payload['sub']}"
+    except Exception:
+        pass
     return get_remote_address(request)
 
 

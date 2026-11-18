@@ -104,3 +104,19 @@ def test_material_without_file_and_legacy_rows_count_zero(client, db, world, clo
 
 def test_student_cannot_see_teacher_quota(client, world):
     assert client.get(f"{API}/materials/quota", headers=hdr(world["s_user"])).status_code in (401, 403)
+
+
+def test_quota_check_locks_the_teacher_row(db, world, tiny_quota, monkeypatch):
+    """Fase 13 (A2): la comprobacion bloquea la fila del profesor (FOR UPDATE) para que dos subidas
+    simultaneas no superen la cuota. SQLite ignora el bloqueo; la carrera real se prueba en concurrency_live."""
+    from sqlalchemy.orm import Query
+    locked = []
+    original = Query.with_for_update
+
+    def spy(self, *a, **k):
+        locked.append(1)
+        return original(self, *a, **k)
+
+    monkeypatch.setattr(Query, "with_for_update", spy)
+    upload_quota.ensure_quota(db, world["tp"].id, 10)
+    assert locked, "ensure_quota debe pedir FOR UPDATE sobre el profesor"

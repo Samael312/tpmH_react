@@ -22,6 +22,6 @@ Backend: `../../backend/doc/KNOWN_ISSUES.md`. Informe completo: `../../ANALISIS.
 Nota sobre `generated/API_CALLS.md`: de las 4 llamadas «sin ruta», solo `/payments/admin/withdrawals/pending` es un fallo real; las otras 3 son artefactos del regex (URLs con query o plantillas dinámicas).
 
 ## Fase 11
-- Los listados cargan **todas** las páginas del servidor (`fetchAllPages`, también `/admin/users` con `skip` y el Modo Dios), no una por una: ya no se cortan a 200 filas, pero con miles de filas la carga inicial crece. Si algún listado lo necesita, pasarlo a `useInfiniteQuery` con filtros en el servidor.
+- Los listados cargan **todas** las páginas del servidor (`fetchAllPages`, también `/admin/users` con `skip` y el Modo Dios), no una por una: ya no se cortan a 200 filas, pero con miles de filas la carga inicial crece. Ya usan «Cargar más» (`useLoadMoreList`) el historial de pagos, ingresos y retiros del profesor; el resto sigue con `fetchAllPages` porque suma o filtra sobre la lista completa. Si otro listado lo necesita, usar `useLoadMoreList` y mover filtros y contadores al servidor.
 - Buscadores que llaman a la API usan `useDebouncedValue` (400 ms): auditoría de chats y alumnos del admin. El resto filtra en el cliente.
 - Modelo 3D comprimido a 6,65 MB (Fase 11); la textura normal bajó de 4096 a 1024 px, sin diferencia visible en la mascota de la landing.

@@ -1,0 +1,43 @@
+name: docs
+
+# La documentacion AUTOMATICA (backend/doc/generated y frontend/doc/generated) debe coincidir con el codigo.
+# Regenera con backend/doc/generate_docs.py y falla si el resultado difiere de lo commiteado.
+# Arreglo local:  cd backend && python doc/generate_docs.py   y commitea los .md que cambien.
+# Solo comprueba lo generado: README, BUSINESS_RULES, KNOWN_ISSUES, etc. se mantienen a mano.
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/docs.yml"
+  push:
+    branches: [master]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+
+jobs:
+  generated-docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      # El generador importa la app (rutas, modelos, esquemas): necesita las dependencias, no .env ni PostgreSQL.
+      - run: pip install -r backend/requirements.txt
+      - name: Regenerar la documentacion
+        working-directory: backend
+        run: python doc/generate_docs.py
+      - name: Comprobar que no hay diferencias
+        run: |
+          if [ -n "$(git status --porcelain -- backend/doc/generated frontend/doc/generated)" ]; then
+            echo "::error::La documentacion generada esta desactualizada. Ejecuta 'cd backend && python doc/generate_docs.py' y commitea los cambios."
+            git status --short -- backend/doc/generated frontend/doc/generated
+            git --no-pager diff --stat -- backend/doc/generated frontend/doc/generated
+            exit 1
+          fi

@@ -1,5 +1,6 @@
 import api from '@/lib/api'
 import { fetchAllPages } from "@/lib/pagination";
+import { useLoadMoreList } from "@/hooks/useLoadMoreList";
 import type { SpokenLanguage } from '@/lib/spokenLanguages'
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 
@@ -198,21 +199,8 @@ export function useTeacherPendingPayments(enabled: boolean = true) {
 }
 
 export function useTeacherPaymentsHistory(enabled: boolean = true) {
-  const query = useQuery({
-    queryKey: ["teacher", "payments", "history"],
-    queryFn: async () => {
-      return (await fetchAllPages<TeacherPaymentEntry>('/payments/history')).rows
-    },
-    enabled,
-  })
-
-  return {
-    history: query.data ?? [],
-    loading: query.isLoading,
-    isFetching: query.isFetching,
-    isError: query.isError,
-    refetch: query.refetch,
-  }
+  const list = useLoadMoreList<TeacherPaymentEntry>(["teacher", "payments", "history"], '/payments/history', { enabled })
+  return { history: list.rows, loading: list.loading, isFetching: list.isFetching, isError: list.isError, refetch: list.refetch, hasMore: list.hasMore, loadMore: list.loadMore, loadingMore: list.loadingMore }
 }
 
 export function useTeacherMaterials() {
@@ -234,37 +222,13 @@ export function useTeacherMaterials() {
 }
 
 export function useMyWithdrawals() {
-  const query = useQuery({
-    queryKey: ["teacher", "wallet", "withdrawals"],
-    queryFn: async () => {
-      return (await fetchAllPages<WithdrawalHistoryItem>('/payments/my-withdrawals')).rows
-    },
-  })
-
-  return {
-    withdrawals: query.data ?? [],
-    loading: query.isLoading,
-    isFetching: query.isFetching,
-    isError: query.isError,
-    refetch: query.refetch,
-  }
+  const list = useLoadMoreList<WithdrawalHistoryItem>(["teacher", "wallet", "withdrawals"], '/payments/my-withdrawals')
+  return { withdrawals: list.rows, loading: list.loading, isFetching: list.isFetching, isError: list.isError, refetch: list.refetch, hasMore: list.hasMore, loadMore: list.loadMore, loadingMore: list.loadingMore }
 }
 
 export function useMyIncome() {
-  const query = useQuery({
-    queryKey: ["teacher", "wallet", "income"],
-    queryFn: async () => {
-      return (await fetchAllPages<IncomeHistoryItem>('/payments/my-income')).rows
-    },
-  })
-
-  return {
-    income: query.data ?? [],
-    loading: query.isLoading,
-    isFetching: query.isFetching,
-    isError: query.isError,
-    refetch: query.refetch,
-  }
+  const list = useLoadMoreList<IncomeHistoryItem>(["teacher", "wallet", "income"], '/payments/my-income')
+  return { income: list.rows, loading: list.loading, isFetching: list.isFetching, isError: list.isError, refetch: list.refetch, hasMore: list.hasMore, loadMore: list.loadMore, loadingMore: list.loadingMore }
 }
 
 // ─── Estudiantes del profesor (detalle completo) ─────────────────────────────

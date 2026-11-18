@@ -10,17 +10,17 @@ Total de rutas: **220**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| POST | `/auth/forgot-password` | — | 5/hour | `forgot_password` (app/api/v1/endpoints/auth.py:365) | Inicia el flujo de recuperación de contraseña. Siempre devuelve 200 aunque el email no exista para no revelar qué emails están registrados. |
-| POST | `/auth/forgot-username` | — | 5/hour | `forgot_username` (app/api/v1/endpoints/auth.py:453) | Envía el nombre de usuario asociado a un email. Igual que forgot-password: siempre devuelve el mismo mensaje, exista o no el email, para no revelar qué correos están registrados. |
-| POST | `/auth/google` | — | 20/minute | `google_login` (app/api/v1/endpoints/auth.py:213) | Paso 1 del flujo Google (GSI). Verifica el id_token contra Google. - Si el email ya tiene cuenta -> login normal, devuelve token. - Si no existe -> NO crea la cuenta. Devuelve needs_registration=True   junto con los datos de Google para que el frontend pida   username + rol antes de crear la cuenta. |
-| POST | `/auth/google/register` | — | 10/hour | `google_register` (app/api/v1/endpoints/auth.py:282) |  |
-| POST | `/auth/login` | — | 10/minute | `login` (app/api/v1/endpoints/auth.py:161) |  |
-| POST | `/auth/logout` | — | 60/minute | `logout` (app/api/v1/endpoints/auth.py:356) | SEC-05: revoca la familia del refresh token y borra las cookies. No exige estar autenticado. |
-| POST | `/auth/refresh` | — | 60/minute | `refresh_session` (app/api/v1/endpoints/auth.py:338) | SEC-05: renueva la sesion con el refresh token de la cookie HttpOnly (rotacion: el anterior queda revocado). Si el token es desconocido/vencido/reutilizado responde 401 y limpia las cookies. |
-| POST | `/auth/register` | — | 5/hour | `register` (app/api/v1/endpoints/auth.py:108) |  |
-| POST | `/auth/resend-verification` | get_current_user | 3/hour | `resend_verification` (app/api/v1/endpoints/auth.py:98) | SEC-04: reenvia el correo de verificacion al usuario autenticado (no permite enumerar cuentas). |
-| POST | `/auth/reset-password` | — | 10/hour | `reset_password` (app/api/v1/endpoints/auth.py:409) | Establece la nueva contraseña usando el token del email. |
-| POST | `/auth/verify-email` | — | 20/hour | `verify_email` (app/api/v1/endpoints/auth.py:73) | SEC-04: consume el token del correo y marca la cuenta como verificada. Un solo uso, 24 h. |
+| POST | `/auth/forgot-password` | — | 5/hour | `forgot_password` (app/api/v1/endpoints/auth.py:390) | Inicia el flujo de recuperación de contraseña. Siempre devuelve 200 aunque el email no exista para no revelar qué emails están registrados. |
+| POST | `/auth/forgot-username` | — | 5/hour | `forgot_username` (app/api/v1/endpoints/auth.py:480) | Envía el nombre de usuario asociado a un email. Igual que forgot-password: siempre devuelve el mismo mensaje, exista o no el email, para no revelar qué correos están registrados. |
+| POST | `/auth/google` | — | 20/minute | `google_login` (app/api/v1/endpoints/auth.py:238) | Paso 1 del flujo Google (GSI). Verifica el id_token contra Google. - Si el email ya tiene cuenta -> login normal, devuelve token. - Si no existe -> NO crea la cuenta. Devuelve needs_registration=True   junto con los datos de Google para que el frontend pida   username + rol antes de crear la cuenta. |
+| POST | `/auth/google/register` | — | 10/hour | `google_register` (app/api/v1/endpoints/auth.py:307) |  |
+| POST | `/auth/login` | — | 10/minute | `login` (app/api/v1/endpoints/auth.py:162) |  |
+| POST | `/auth/logout` | — | 60/minute | `logout` (app/api/v1/endpoints/auth.py:381) | SEC-05: revoca la familia del refresh token y borra las cookies. No exige estar autenticado. |
+| POST | `/auth/refresh` | — | 60/minute | `refresh_session` (app/api/v1/endpoints/auth.py:363) | SEC-05: renueva la sesion con el refresh token de la cookie HttpOnly (rotacion: el anterior queda revocado). Si el token es desconocido/vencido/reutilizado responde 401 y limpia las cookies. |
+| POST | `/auth/register` | — | 5/hour | `register` (app/api/v1/endpoints/auth.py:109) |  |
+| POST | `/auth/resend-verification` | get_current_user | 3/hour | `resend_verification` (app/api/v1/endpoints/auth.py:99) | SEC-04: reenvia el correo de verificacion al usuario autenticado (no permite enumerar cuentas). |
+| POST | `/auth/reset-password` | — | 10/hour | `reset_password` (app/api/v1/endpoints/auth.py:434) | Establece la nueva contraseña usando el token del email. |
+| POST | `/auth/verify-email` | — | 20/hour | `verify_email` (app/api/v1/endpoints/auth.py:74) | SEC-04: consume el token del correo y marca la cuenta como verificada. Un solo uso, 24 h. |
 
 ## Usuarios
 
@@ -78,18 +78,18 @@ Total de rutas: **220**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| DELETE | `/classes/admin/{class_id}` | get_current_staff, get_current_user |  | `cancel_class_admin` (app/api/v1/endpoints/classes.py:913) | El staff/admin cancela una clase. El crédito SIEMPRE se reembolsa, igual que en la cancelación del profesor. |
-| PATCH | `/classes/admin/{class_id}/reschedule` | get_current_staff, get_current_user |  | `reschedule_class_admin` (app/api/v1/endpoints/classes.py:865) |  |
-| GET | `/classes/my-classes` | get_current_student, get_current_user |  | `get_my_classes_student` (app/api/v1/endpoints/classes.py:286) |  |
-| GET | `/classes/teacher/classes` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_classes_teacher` (app/api/v1/endpoints/classes.py:579) |  |
-| DELETE | `/classes/teacher/{class_id}` | get_current_teacher_or_teacher_admin, get_current_user |  | `cancel_class_teacher` (app/api/v1/endpoints/classes.py:754) | El profesor cancela una clase. El crédito SIEMPRE se le reembolsa al estudiante, sin importar la antelación — la penalización de 12h es exclusivamente para cancelaciones hechas por el propio estudiante. |
-| PATCH | `/classes/teacher/{class_id}/reschedule` | get_current_teacher_or_teacher_admin, get_current_user |  | `reschedule_class_teacher` (app/api/v1/endpoints/classes.py:811) |  |
-| POST | `/classes/trial` | get_current_staff, get_current_user |  | `book_trial_class` (app/api/v1/endpoints/classes.py:496) |  |
-| DELETE | `/classes/{class_id}` | get_current_student, get_current_user |  | `cancel_class_student` (app/api/v1/endpoints/classes.py:397) |  |
-| DELETE | `/classes/{class_id}/leave` | get_current_student, get_current_user |  | `leave_group_class` (app/api/v1/endpoints/classes.py:341) | El estudiante cancela SU participación en una sesión grupal puntual (Class con class_type='group'). No cancela la clase para los demás inscritos — solo libera su propio cupo (vía ClassParticipant), igual que hace release_cohort_seat al migrar de grupal a individual. |
-| PATCH | `/classes/{class_id}/meet-link` | get_current_teacher_or_teacher_admin, get_current_user |  | `update_meet_link` (app/api/v1/endpoints/classes.py:723) | El profesor carga/edita manualmente el link de la videollamada. Campo 100% opcional: no bloquea ninguna otra acción sobre la clase. Solo se permite mientras la clase está 'confirmed' (mismo estado en el que ClassResponse se lo muestra al estudiante). |
-| PATCH | `/classes/{class_id}/reschedule` | get_current_student, get_current_user |  | `reschedule_class_student` (app/api/v1/endpoints/classes.py:430) |  |
-| PATCH | `/classes/{class_id}/status` | get_current_teacher_or_teacher_admin, get_current_user |  | `update_class_status` (app/api/v1/endpoints/classes.py:643) |  |
+| DELETE | `/classes/admin/{class_id}` | get_current_staff, get_current_user |  | `cancel_class_admin` (app/api/v1/endpoints/classes.py:916) | El staff/admin cancela una clase. El crédito SIEMPRE se reembolsa, igual que en la cancelación del profesor. |
+| PATCH | `/classes/admin/{class_id}/reschedule` | get_current_staff, get_current_user |  | `reschedule_class_admin` (app/api/v1/endpoints/classes.py:868) |  |
+| GET | `/classes/my-classes` | get_current_student, get_current_user |  | `get_my_classes_student` (app/api/v1/endpoints/classes.py:300) |  |
+| GET | `/classes/teacher/classes` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_classes_teacher` (app/api/v1/endpoints/classes.py:586) |  |
+| DELETE | `/classes/teacher/{class_id}` | get_current_teacher_or_teacher_admin, get_current_user |  | `cancel_class_teacher` (app/api/v1/endpoints/classes.py:757) | El profesor cancela una clase. El crédito SIEMPRE se le reembolsa al estudiante, sin importar la antelación — la penalización de 12h es exclusivamente para cancelaciones hechas por el propio estudiante. |
+| PATCH | `/classes/teacher/{class_id}/reschedule` | get_current_teacher_or_teacher_admin, get_current_user |  | `reschedule_class_teacher` (app/api/v1/endpoints/classes.py:814) |  |
+| POST | `/classes/trial` | get_current_staff, get_current_user |  | `book_trial_class` (app/api/v1/endpoints/classes.py:503) |  |
+| DELETE | `/classes/{class_id}` | get_current_student, get_current_user |  | `cancel_class_student` (app/api/v1/endpoints/classes.py:404) |  |
+| DELETE | `/classes/{class_id}/leave` | get_current_student, get_current_user |  | `leave_group_class` (app/api/v1/endpoints/classes.py:348) | El estudiante cancela SU participación en una sesión grupal puntual (Class con class_type='group'). No cancela la clase para los demás inscritos — solo libera su propio cupo (vía ClassParticipant), igual que hace release_cohort_seat al migrar de grupal a individual. |
+| PATCH | `/classes/{class_id}/meet-link` | get_current_teacher_or_teacher_admin, get_current_user |  | `update_meet_link` (app/api/v1/endpoints/classes.py:726) | El profesor carga/edita manualmente el link de la videollamada. Campo 100% opcional: no bloquea ninguna otra acción sobre la clase. Solo se permite mientras la clase está 'confirmed' (mismo estado en el que ClassResponse se lo muestra al estudiante). |
+| PATCH | `/classes/{class_id}/reschedule` | get_current_student, get_current_user |  | `reschedule_class_student` (app/api/v1/endpoints/classes.py:437) |  |
+| PATCH | `/classes/{class_id}/status` | get_current_teacher_or_teacher_admin, get_current_user |  | `update_class_status` (app/api/v1/endpoints/classes.py:646) |  |
 
 ## Materiales
 

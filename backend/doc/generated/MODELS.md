@@ -576,6 +576,8 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | is_banned | BOOLEAN | ? default=False |
 | ban_reason | VARCHAR | ? |
 | banned_at | DATETIME | ? |
+| failed_login_count | INTEGER | default=0 |
+| locked_until | DATETIME | ? |
 | is_test_account | BOOLEAN | default=False |
 
 ## withdrawals

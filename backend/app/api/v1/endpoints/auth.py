@@ -8,7 +8,7 @@ from app.core.rate_limit import limiter
 from app.models.user import User, UserRole
 from app.models.teacher import TeacherProfile
 from app.models.student import StudentProfile
-from app.auth.passwords import hash_password, verify_password
+from app.auth.passwords import burn_password_check, hash_password, verify_password
 from app.auth.session import (
     REFRESH_COOKIE, clear_auth_cookies, revoke_all_sessions, revoke_refresh_family,
     rotate_refresh_token, set_auth_cookies,
@@ -25,7 +25,8 @@ from app.schemas.auth import (
     ForgotUsernameRequest,
     ResetPasswordRequest,
     )
-from datetime import timedelta
+from datetime import timedelta, timezone
+from app.core.config import settings
 from app.models.password_reset import PasswordResetToken
 from app.core.email import send_password_reset_email, send_username_recovery_email  
 from app.core.timezone import utc_now
@@ -176,11 +177,35 @@ def login(request: Request, response: Response, data: LoginRequest, db: Session 
     # Mismo mensaje para usuario no encontrado y contraseña incorrecta
     # Nunca le digas al atacante cuál de los dos falló
     # Cuenta creada solo con Google: password_hash es NULL (verify_password daba 500).
-    if not user or not user.password_hash or not verify_password(data.password, user.password_hash):
+    if not user or not user.password_hash:
+        burn_password_check(data.password)  # SEC: igualar el tiempo de respuesta (no enumerar cuentas)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas"
         )
+    now = utc_now()
+    locked_until = user.locked_until.replace(tzinfo=timezone.utc) if user.locked_until is not None and user.locked_until.tzinfo is None else user.locked_until
+    if locked_until is not None and locked_until > now:
+        # Cuenta bloqueada: ni siquiera se mira la contraseña (la correcta tampoco entra hasta que pase el plazo).
+        burn_password_check(data.password)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Demasiados intentos fallidos. Inténtalo de nuevo en unos minutos o restablece tu contraseña.",
+        )
+    if not verify_password(data.password, user.password_hash):
+        user.failed_login_count = (user.failed_login_count or 0) + 1
+        if user.failed_login_count >= settings.LOGIN_MAX_FAILED:
+            user.locked_until = now + timedelta(minutes=settings.LOGIN_LOCK_MINUTES)
+            user.failed_login_count = 0
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales incorrectas"
+        )
+    if user.failed_login_count or user.locked_until is not None:
+        user.failed_login_count = 0
+        user.locked_until = None
+        db.commit()
 
     if not user.is_active:
         raise HTTPException(
@@ -439,6 +464,8 @@ def reset_password(
         )
 
     user.password_hash = hash_password(data.new_password)
+    user.failed_login_count = 0  # restablecer la contraseña también levanta el bloqueo
+    user.locked_until = None
 
     # Marcar token como usado
     reset_token.is_used = True

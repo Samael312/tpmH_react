@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 10080)
     REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 30))
 
+    # Bloqueo por cuenta tras logins fallidos (Fase 13, A1). Se complementa con el limite por IP del endpoint.
+    LOGIN_MAX_FAILED: int = int(os.getenv("LOGIN_MAX_FAILED", 8))
+    LOGIN_LOCK_MINUTES: int = int(os.getenv("LOGIN_LOCK_MINUTES", 15))
+
     # Cookies de sesion (SEC-05). Produccion mismo sitio: COOKIE_DOMAIN=.tuprofemaria.com, SameSite=lax.
     # Si frontend y API estuvieran en sitios distintos habria que usar COOKIE_SAMESITE=none (exige Secure).
     COOKIE_DOMAIN: Optional[str] = os.getenv("COOKIE_DOMAIN") or None

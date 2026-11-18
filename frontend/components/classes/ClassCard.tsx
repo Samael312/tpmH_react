@@ -1,5 +1,6 @@
 "use client";
 
+import { finalizedNotice } from "@/lib/classStatusNotice";
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { createPortal } from "react-dom";
@@ -257,6 +258,7 @@ export default function ClassCard({
   // esos cambios viven en la otra plataforma) — solo unirse si trae link.
   const isExternal = class_.class_type === "external";
 
+  const notice = finalizedNotice(role, endDate);
   const personName = role === "student" ? class_.teacher_name : class_.student_name;
   const personAvatar = role === "student" ? class_.teacher_avatar : class_.student_avatar;
   const personNationality = role === "student" ? class_.teacher_nationality : class_.student_nationality;
@@ -592,6 +594,13 @@ export default function ClassCard({
                 </span>
               )}
             </div>
+
+            {/* Clase terminada sin marcar: avisa del plazo de 72 h (profesor) o de que espera al profesor (alumno) */}
+            {class_.status === "finalized" && !isExternal && !readOnly && notice && (
+              <p className={`text-[11px] font-bold mb-1.5 ${notice.urgent ? "text-rose-600" : "text-slate-500"}`}>
+                {notice.text}
+              </p>
+            )}
 
             {/* ASIGNATURA DESTACADA */}
             <h3 className="text-base font-black text-slate-800 truncate mb-1">

@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from app.core.pagination import Pagination
-from sqlalchemy import func, or_
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session, joinedload
 from app.core.email import (
     send_class_cancelled_email, 
@@ -106,6 +106,20 @@ def _reject_if_external(class_: Class) -> None:
                 "no se puede reagendar, cancelar ni editar desde la plataforma."
             ),
         )
+
+
+def _class_counters(query, now, completed_statuses: tuple[str, ...]) -> tuple[int, int, int]:
+    """
+    (total, proximas, completadas) de la consulta YA filtrada, en una sola agregacion SQL.
+    Antes se cargaban todas las clases en memoria solo para contarlas; ahora la BD cuenta y la pagina pide solo sus filas.
+    """
+    total, upcoming, completed = query.order_by(None).with_entities(
+        func.count(Class.id),
+        func.coalesce(func.sum(case((and_(Class.status.in_(UPCOMING_STATUSES), Class.end_time_utc > now), 1), else_=0)), 0),
+        func.coalesce(func.sum(case((Class.status.in_(completed_statuses), 1), else_=0)), 0),
+    ).one()
+    return int(total or 0), int(upcoming or 0), int(completed or 0)
+
 
 
 def _build_class_responses(classes: list[Class], db: Session) -> list[ClassResponse]:
@@ -298,17 +312,15 @@ def get_my_classes_student(
     # grupales no llevan ese campo (compartido entre varios alumnos), así
     # que se detectan vía ClassParticipant (ver models/class_participant.py).
     from app.models.class_participant import ClassParticipant
-    group_class_ids = [
-        row[0] for row in db.query(ClassParticipant.class_id).filter(
-            ClassParticipant.student_id == student_id,
-            ClassParticipant.attendance_status != "cancelled",
-        ).all()
-    ]
+    group_class_ids = db.query(ClassParticipant.class_id).filter(
+        ClassParticipant.student_id == student_id,
+        ClassParticipant.attendance_status != "cancelled",
+    )
 
     query = db.query(Class).filter(
         or_(
             Class.student_id == student_id,
-            Class.id.in_(group_class_ids) if group_class_ids else False,
+            Class.id.in_(group_class_ids),
         )
     )
 
@@ -320,19 +332,14 @@ def get_my_classes_student(
             Class.end_time_utc > now
         )
 
-    all_classes = query.order_by(Class.start_time_utc).all()
+    # Los contadores son de TODAS las clases; solo se cargan y serializan las de la pagina pedida.
+    total, upcoming, completed = _class_counters(query, now, ("completed", "finalized"))
+    page_classes = query.order_by(Class.start_time_utc, Class.id).offset(page.offset).limit(page.limit).all()
 
-    upcoming = sum(
-        1 for c in all_classes
-        if c.status in UPCOMING_STATUSES and c.end_time_utc > now
-    )
-    completed = sum(1 for c in all_classes if c.status in ("completed", "finalized"))
-
-    response.headers["X-Total-Count"] = str(len(all_classes))
+    response.headers["X-Total-Count"] = str(total)
     return ClassListResponse(
-        # Los contadores son de TODAS las clases; solo se serializa la pagina pedida.
-        classes=_build_class_responses(all_classes[page.offset:page.offset + page.limit], db),
-        total=len(all_classes),
+        classes=_build_class_responses(page_classes, db),
+        total=total,
         upcoming=upcoming,
         completed=completed
     )
@@ -624,17 +631,13 @@ def get_my_classes_teacher(
             Class.end_time_utc > now
         )
 
-    all_classes = query.order_by(Class.start_time_utc).all()
-    upcoming = sum(
-        1 for c in all_classes
-        if c.status in UPCOMING_STATUSES and c.end_time_utc > now
-    )
-    completed = sum(1 for c in all_classes if c.status == "completed")
+    total, upcoming, completed = _class_counters(query, now, ("completed",))
+    page_classes = query.order_by(Class.start_time_utc, Class.id).offset(page.offset).limit(page.limit).all()
 
-    response.headers["X-Total-Count"] = str(len(all_classes))
+    response.headers["X-Total-Count"] = str(total)
     return ClassListResponse(
-        classes=_build_class_responses(all_classes[page.offset:page.offset + page.limit], db),
-        total=len(all_classes),
+        classes=_build_class_responses(page_classes, db),
+        total=total,
         upcoming=upcoming,
         completed=completed
     )

@@ -42,6 +42,12 @@ class User(Base):
     ban_reason = Column(String, nullable=True)
     banned_at = Column(DateTime(timezone=True), nullable=True)
 
+    # ─── Bloqueo temporal por logins fallidos (Fase 13, A1) ───
+    # Tras LOGIN_MAX_FAILED fallos seguidos la cuenta no acepta login durante LOGIN_LOCK_MINUTES.
+    # Un login correcto o restablecer la contraseña lo reinicia.
+    failed_login_count = Column(Integer, nullable=False, default=0, server_default="0")
+    locked_until = Column(DateTime(timezone=True), nullable=True)
+
     # ─── Cuentas fijas de la suite backend/tests/flow ───
     # Marca las 4 cuentas de prueba (superadmin/teacher_admin/teacher/
     # student) que se reutilizan entre corridas. Se usa para ocultarlas de

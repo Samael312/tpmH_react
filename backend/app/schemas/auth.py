@@ -109,7 +109,7 @@ class ForgotUsernameRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str
+    new_password: str = Field(max_length=128)
 
     @field_validator("new_password")
     @classmethod

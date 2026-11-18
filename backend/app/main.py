@@ -73,6 +73,16 @@ async def reject_foreign_origin_with_cookies(request: Request, call_next):
     return await call_next(request)
 
 
+# Cabeceras de seguridad en las respuestas de la API (JSON): sin sniffing de tipo, sin referrer y sin iframes.
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    return response
+
+
 # Rate limiting — ver app/core/rate_limit.py. `app.state.limiter` es lo
 # que lee el decorador @limiter.limit(...) en cada endpoint, y el
 # middleware es el que efectivamente cuenta las requests y agrega los

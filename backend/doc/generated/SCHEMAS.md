@@ -25,7 +25,7 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 - **GoogleAuthRequest** — id_token: str
 - **ForgotPasswordRequest** — email: EmailStr
 - **ForgotUsernameRequest** — email: EmailStr
-- **ResetPasswordRequest** — token: str; new_password: str  _(validadores: validate_password)_
+- **ResetPasswordRequest** — token: str; new_password: str = Field(max_length=128)  _(validadores: validate_password)_
 
 ## schemas/availability.py
 
@@ -217,4 +217,4 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 - **StudentProfileUpdate** — timezone: Optional[str] = None; goal: Optional[str] = None; phone_number: Optional[str] = None; preferred_payment_methods: Optional[List[str]] = None; nationality: Optional[str] = None
 - **UpdateProfileRequest** — username: Optional[str] = None; email: Optional[EmailStr] = None; name: Optional[str] = None; surname: Optional[str] = None; avatar: Optional[str] = None; phone_number: Optional[str] = None; timezone: Optional[str] = None; nationality: Optional[str] = None; onboarding_completed: Optional[bool] = None; spoken_languages: Optional[List[Any]] = None
 - **DeleteAccountRequest** — password: Optional[str] = None; confirm_username: str
-- **ChangePasswordRequest** — current_password: str; new_password: str  _(validadores: validate_password)_
+- **ChangePasswordRequest** — current_password: str = Field(max_length=128); new_password: str = Field(max_length=128)  _(validadores: validate_password)_

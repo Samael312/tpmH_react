@@ -217,3 +217,20 @@ Frontend: `npx tsc --noEmit` ✅, `npx eslint .` ✅, `npx next build` ✅.
 4. ¿La comisión se aplica sobre el pago *aprobado* (como hoy) y, en reembolsos, el profesor devuelve su parte?
 5. ¿Hay despliegue con más de un worker/instancia? (afecta rate-limit, scheduler y flow-tests).
 6. ¿Quieres que corrija los hallazgos? Puedo hacerlo por lotes (cada AUD con su test pasando de `xfail` a normal).
+
+
+---
+
+## Puntuaciones 0-100 (rúbrica nueva, registro por tandas)
+
+**Origen y límites.** No se conservaban las notas del análisis anterior, así que esta es una rúbrica nueva. La columna «Antes» es una **estimación hecha tras la tanda 2 de la Fase 12** (commit `049c181`) con el código y los documentos del repo; no es una medición. Ningún valor se ha medido en producción (por ejemplo `/users/me` sigue sin medirse). Se actualiza al cerrar cada fase o grupo de tandas.
+
+| Aspecto | Antes (`049c181`) | Tras tandas 3-5 | Qué cambió y qué lo limita |
+|---|---|---|---|
+| Robustez | 78 | 78 | Sin cambios de lógica de negocio en estas tandas. Limita: un solo worker, jobs en memoria y carrera de cuota de materiales. |
+| Profesionalidad | 80 | 81 | Docs al día y tests nuevos (backend 4, frontend 9). Limita: `backend.yml` nunca se ha ejecutado en GitHub. |
+| Seguridad | 74 | 79 | Tope de contraseña, login sin enumeración por tiempo, límite de tasa por cookie, cabeceras de la API. Limita: sin bloqueo por cuenta, Bearer y `?token=` siguen activos hasta el lanzamiento y la CSP conserva `unsafe-inline` en estilos. |
+| Escalabilidad | 62 | 64 | Pagos, ingresos y retiros del profesor paginados en el servidor. Limita: 40 usos de `fetchAllPages`, un worker y sin Redis. |
+| UX | 76 | 78 | Aviso del plazo de 72 h en clases `finalized` (profesor y alumno). Limita: el profesor no recibe aviso cuando una clase pasa sola a `no_show`. |
+
+**Criterios.** Seguridad: hallazgos cerrados frente a abiertos y estado de la autenticación. Escalabilidad: listados sin tope en servidor y puntos únicos de fallo. UX: flujos con avisos claros y sin estados mudos. Robustez: bugs graves corregidos y tests de concurrencia. Profesionalidad: documentación, CI y configuración sin código muerto.

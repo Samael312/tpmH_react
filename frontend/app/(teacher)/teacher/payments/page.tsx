@@ -7,6 +7,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useTeacherPendingPayments, useTeacherPaymentsHistory, TeacherPaymentEntry } from "@/hooks/useTeacherData";
 import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
+import LoadMoreButton from "@/components/ui/LoadMoreButton";
 import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useToast } from "@/hooks/useToast";
@@ -43,6 +44,9 @@ export default function TeacherPaymentsPage() {
     isFetching: historyFetching,
     isError: historyError,
     refetch: refetchHistory,
+    hasMore: historyHasMore,
+    loadMore: loadMoreHistory,
+    loadingMore: historyLoadingMore,
   } = useTeacherPaymentsHistory(!isPendingTab);
 
   const [processing, setProcessing] = useState<number | null>(null);
@@ -217,6 +221,7 @@ export default function TeacherPaymentsPage() {
               </div>
             );
           })}
+          {!isPendingTab && <LoadMoreButton hasMore={historyHasMore} loading={historyLoadingMore} onClick={loadMoreHistory} />}
         </div>
       )}
       <ChipiWidget screenName="teacher_payments" />
