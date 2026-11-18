@@ -23,26 +23,34 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/chat.py
 
-- `assert_chat_enabled(db: Session)` — L28: Bloquea a nivel backend el chat cuando el superadmin/teacher_admin lo desactivó desde /admin/settings — no basta con ocultarlo en el UI, porque alguien podría pegar la URL o abrir el WS directo.
-- `assert_chat_enabled_ws(db: Session)` — L43: Misma validación que assert_chat_enabled pero sin levantar HTTPException (dentro de un WebSocket ya aceptado no tiene sentido — el caller cierra el socket con un código explícito). Devuelve None si está deshabilitado.
-- `_teacher_has_student(teacher: TeacherProfile, student_id: int)` — L53: Fuente de verdad del vínculo directo profesor-alumno en AMBOS modos (single y multi-tenant): TeacherProfile.students (JSONB), poblada por core/teacher_students.py::link_student_to_teacher. StudentTeacherLink NO sirve para esto — queda vacía en single-tenant (ver su docstring y payments.py::_ensure_t
-- `_cohort_participant_ids(db: Session, cohort_id: int)` — L64: IDs de StudentProfile con Enrollment (activo o pendiente) en la cohorte.
-- `get_direct_conversation_or_404(db: Session, current_user: User, other_username: str)` — L73: Resuelve (creando si hace falta) la conversación 1:1 entre el usuario actual y `other_username`.
-- `ensure_direct_conversation(db: Session, student_id: int, teacher_id: int)` — L125: Wrapper público de `_get_or_create_direct` para llamarse desde fuera de este módulo (ver core/teacher_students.py::link_student_to_teacher) sin tocar un nombre "privado". Idempotente: no crea duplicados si ya existe.
-- `_get_or_create_direct(db: Session, student_id: int, teacher_id: int)` — L134
-- `get_group_conversation_or_404(db: Session, current_user: User, cohort_id: int)` — L153
-- `assert_participant(db: Session, current_user: User, convo: ChatConversation)` — L188: Re-valida pertenencia contra una conversación ya existente (para el WS y para /messages).
-- `conversation_participant_user_ids(db: Session, convo: ChatConversation)` — L211: User.id de todos los participantes — para el broadcast por WS.
-- `list_conversations_for_user(db: Session, current_user: User)` — L233
-- `_student_cohort_ids(db: Session, student_id: int)` — L260
-- `get_messages(db: Session, convo: ChatConversation, before_id: Optional[int]=None, after_id: Optional[int]=None, limit: int=50)` — L269: - Sin `before_id` ni `after_id`: los últimos `limit` (historial inicial). - `before_id`: página hacia atrás (scroll-up / "cargar más antiguos"). - `after_id`: SOLO los mensajes nuevos desde el último que el cliente   ya tiene cacheado (ver frontend/store/chatStore.ts) — evita   volver a traer los 50
-- `mark_read(db: Session, convo: ChatConversation, user: User)` — L294
-- `get_unread_count_for_user(db: Session, current_user: User)` — L319: Suma de mensajes no leídos en todas las conversaciones del usuario.
-- `find_message_by_client_id(db: Session, conversation_id: int, sender_id: int, client_id: Optional[str])` — L342
-- `send_message(db: Session, config: PlatformConfig, convo: ChatConversation, sender: User, content: str, client_id: Optional[str]=None)` — L354: Persiste el mensaje y determina si corresponde disparar el email de aviso al profesor (solo cuando el remitente es un estudiante y la conversación estaba inactiva por más de chat_reactivation_hours, o es el primer mensaje de la conversación).
-- `mark_delivered_by_id(db: Session, message_id: int)` — L423: UPDATE atómico de una sola query: devuelve el instante si ESTA llamada fue la que marcó el mensaje como entregado, None si ya lo estaba.
-- `catch_up_deliveries(db: Session, user: User)` — L436: Al conectarse (o reconectarse) el socket global de `user`, cualquier mensaje QUE LE HAYAN MANDADO A ÉL en cualquiera de sus conversaciones y que siguiera sin `delivered_at` (porque no estaba online cuando se envió) pasa a estar entregado en este instante.
-- `purge_old_messages(db: Session, retention_days: int)` — L466: Borra mensajes más viejos que `retention_days`. 0 = sin límite (no borra nada).
+- `class ChatSettings()` — L41
+- `get_chat_settings(db: Session)` — L46
+- `invalidate_chat_settings()` — L53
+- `assert_chat_enabled(db: Session)` — L57: Bloquea a nivel backend el chat cuando el superadmin/teacher_admin lo desactivó desde /admin/settings — no basta con ocultarlo en el UI, porque alguien podría pegar la URL o abrir el WS directo.
+- `assert_chat_enabled_ws(db: Session)` — L72: Misma validación que assert_chat_enabled pero sin levantar HTTPException (dentro de un WebSocket ya aceptado no tiene sentido — el caller cierra el socket con un código explícito). Devuelve None si está deshabilitado.
+- `_teacher_has_student(teacher: TeacherProfile, student_id: int)` — L82: Fuente de verdad del vínculo directo profesor-alumno en AMBOS modos (single y multi-tenant): TeacherProfile.students (JSONB), poblada por core/teacher_students.py::link_student_to_teacher. StudentTeacherLink NO sirve para esto — queda vacía en single-tenant (ver su docstring y payments.py::_ensure_t
+- `_cohort_participant_ids(db: Session, cohort_id: int)` — L93: IDs de StudentProfile con Enrollment (activo o pendiente) en la cohorte.
+- `get_direct_conversation_or_404(db: Session, current_user: User, other_username: str)` — L102: Resuelve (creando si hace falta) la conversación 1:1 entre el usuario actual y `other_username`.
+- `ensure_direct_conversation(db: Session, student_id: int, teacher_id: int)` — L154: Wrapper público de `_get_or_create_direct` para llamarse desde fuera de este módulo (ver core/teacher_students.py::link_student_to_teacher) sin tocar un nombre "privado". Idempotente: no crea duplicados si ya existe.
+- `_get_or_create_direct(db: Session, student_id: int, teacher_id: int)` — L163
+- `get_group_conversation_or_404(db: Session, current_user: User, cohort_id: int)` — L182
+- `assert_participant(db: Session, current_user: User, convo: ChatConversation)` — L217: Re-valida pertenencia contra una conversación ya existente (para el WS y para /messages).
+- `conversation_participant_user_ids(db: Session, convo: ChatConversation)` — L240: User.id de todos los participantes — para el broadcast por WS. Una sola consulta por conversación.
+- `_conversation_filter(current_user: User)` — L259: Condición SQL «conversaciones en las que participa este usuario», o None si su rol no tiene chat.
+- `conversation_ids_subquery(current_user: User)` — L300
+- `with_display_relations(query)` — L305: Carga en bloque lo que muestra la lista (nombre y avatar del otro, paquete del grupo): sin esto, cada conversación hacía 2-3 consultas perezosas.
+- `conversations_page_for_user(db: Session, current_user: User, offset: int, limit: int)` — L315: (total, página) paginando en SQL. Antes se cargaban TODAS las conversaciones y se cortaba en Python.
+- `list_conversations_for_user(db: Session, current_user: User)` — L331
+- `get_messages(db: Session, convo: ChatConversation, before_id: Optional[int]=None, after_id: Optional[int]=None, limit: int=50)` — L338: - Sin `before_id` ni `after_id`: los últimos `limit` (historial inicial). - `before_id`: página hacia atrás (scroll-up / "cargar más antiguos"). - `after_id`: SOLO los mensajes nuevos desde el último que el cliente   ya tiene cacheado (ver frontend/store/chatStore.ts) — evita   volver a traer los 50
+- `mark_read(db: Session, convo: ChatConversation, user: User)` — L364
+- `_unread_query(db: Session, user_id: int, conversation_ids)` — L389: Mensajes ajenos posteriores a la última lectura del usuario (o todos si nunca abrió la conversación). `conversation_ids` puede ser una lista o una subconsulta.
+- `unread_counts(db: Session, user_id: int, conversation_ids: list[int])` — L405: {conversation_id: no leídos} en UNA consulta (antes: 2 por conversación).
+- `get_unread_count_for_user(db: Session, current_user: User)` — L412: Suma de mensajes no leídos en todas las conversaciones del usuario: una consulta.
+- `find_message_by_client_id(db: Session, conversation_id: int, sender_id: int, client_id: Optional[str])` — L422
+- `send_message(db: Session, config: ChatSettings, convo: ChatConversation, sender: User, content: str, client_id: Optional[str]=None)` — L434: Persiste el mensaje y determina si corresponde disparar el email de aviso al profesor (solo cuando el remitente es un estudiante y la conversación estaba inactiva por más de chat_reactivation_hours, o es el primer mensaje de la conversación).
+- `mark_delivered_by_id(db: Session, message_id: int)` — L503: UPDATE atómico de una sola query: devuelve el instante si ESTA llamada fue la que marcó el mensaje como entregado, None si ya lo estaba.
+- `catch_up_deliveries(db: Session, user: User)` — L516: Al conectarse (o reconectarse) el socket global de `user`, cualquier mensaje QUE LE HAYAN MANDADO A ÉL en cualquiera de sus conversaciones y que siguiera sin `delivered_at` (porque no estaba online cuando se envió) pasa a estar entregado en este instante.
+- `purge_old_messages(db: Session, retention_days: int)` — L555: Borra mensajes más viejos que `retention_days`. 0 = sin límite (no borra nada).
 
 ## app/core/chat_digest.py
 

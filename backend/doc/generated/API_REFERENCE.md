@@ -127,30 +127,30 @@ Total de rutas: **224**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| GET | `/admin/appeals` | get_current_staff, get_current_user |  | `list_appeals` (app/api/v1/endpoints/admin.py:489) | Bandeja global de apelaciones — usada en Visión Global y en la pestaña Rechazados de Profesores. Por defecto muestra todas; filtrable por status. |
-| PATCH | `/admin/appeals/{appeal_id}/resolve` | get_current_staff, get_current_user |  | `resolve_appeal` (app/api/v1/endpoints/admin.py:530) | Resuelve una apelación pendiente. - approve: el profesor vuelve a "approved" (perfil público). - reject: incrementa el conteo de apelaciones agotadas. Al llegar a 2,   el perfil permanece "rejected" pero se marca appeal_exhausted=True,   lo que habilita en el dashboard del profesor la opción de subi |
-| GET | `/admin/email-settings` | get_current_user |  | `get_email_settings` (app/api/v1/endpoints/admin.py:1274) | Interruptores por categoria, uso de hoy contra la cuota y estado del modo ahorro. Solo superadmin. |
-| PUT | `/admin/email-settings` | get_current_user |  | `update_email_settings` (app/api/v1/endpoints/admin.py:1283) | Actualiza interruptores, limite diario y modo ahorro. Solo superadmin. Las categorias esenciales no se pueden apagar (422); una categoria desconocida tambien es 422. |
-| GET | `/admin/notifications` | get_current_staff, get_current_user |  | `list_notifications` (app/api/v1/endpoints/admin.py:739) |  |
-| POST | `/admin/notifications/mark-all-read` | get_current_staff, get_current_user |  | `mark_all_notifications_read` (app/api/v1/endpoints/admin.py:774) |  |
-| GET | `/admin/notifications/unread-count` | get_current_staff, get_current_user |  | `unread_notification_count` (app/api/v1/endpoints/admin.py:752) |  |
-| PATCH | `/admin/notifications/{notification_id}/read` | get_current_staff, get_current_user |  | `mark_notification_read` (app/api/v1/endpoints/admin.py:760) |  |
-| GET | `/admin/platform-config` | — |  | `get_platform_config` (app/api/v1/endpoints/admin.py:1046) | Configuración pública de la plataforma. Endpoint público — el frontend lo consulta al cargar. |
-| PATCH | `/admin/platform-config` | get_current_staff, get_current_user |  | `update_platform_config` (app/api/v1/endpoints/admin.py:1056) | El superadmin (o teacher_admin, como staff) configura el modo de la plataforma |
-| GET | `/admin/stats` | get_current_staff, get_current_user |  | `get_platform_stats` (app/api/v1/endpoints/admin.py:100) | KPIs globales de la plataforma. Todas las métricas en una sola llamada para el dashboard. |
-| POST | `/admin/students/{user_id}/ban` | get_current_staff, get_current_user |  | `ban_student` (app/api/v1/endpoints/admin.py:895) | Banea a un estudiante: lo desactiva, cancela sus enrollments activos y sus clases futuras/pendientes, y deja registrado el motivo. El email queda "quemado" por el unique constraint existente en users.email, así que no puede volver a registrarse con el mismo correo. |
-| GET | `/admin/students/{user_id}/detail` | get_current_staff, get_current_user |  | `get_student_detail` (app/api/v1/endpoints/admin.py:968) | Detalle completo de un estudiante para el desplegable en /admin/students: enrollments (paquetes) y materiales asignados, con nombre del profesor y del recurso. Usado bajo demanda al expandir la card. |
-| POST | `/admin/students/{user_id}/unban` | get_current_staff, get_current_user |  | `unban_student` (app/api/v1/endpoints/admin.py:945) | Revierte el baneo. No reactiva enrollments/clases canceladas automáticamente. |
-| GET | `/admin/support-tickets` | get_current_staff, get_current_user |  | `list_support_tickets` (app/api/v1/endpoints/admin.py:595) | Bandeja global de tickets de soporte, filtrable por estado y categoría. |
-| PATCH | `/admin/support-tickets/{ticket_id}/resolve` | get_current_staff, get_current_user |  | `resolve_support_ticket` (app/api/v1/endpoints/admin.py:664) | Responde y cierra un ticket pendiente. Notifica al usuario por email y reactiva el aviso in-app (user_notified_seen=False) en su bandeja. |
-| GET | `/admin/teachers` | get_current_staff, get_current_user |  | `list_all_teachers` (app/api/v1/endpoints/admin.py:205) | Lista todos los profesores con sus métricas. Filtrable por estado: pending, approved, rejected, suspended. |
-| GET | `/admin/teachers/{teacher_id}` | get_current_staff, get_current_user |  | `get_teacher_detail` (app/api/v1/endpoints/admin.py:294) | Detalle de un profesor para el modal de revisión: incluye video, motivo de rechazo y estado de apelaciones. Usado por /admin/teachers al abrir el modal de detalle. |
-| GET | `/admin/teachers/{teacher_id}/appeals` | get_current_staff, get_current_user |  | `get_teacher_appeals` (app/api/v1/endpoints/admin.py:344) | Historial de apelaciones de un profesor, para el modal de detalle. |
-| PATCH | `/admin/teachers/{teacher_id}/commission` | get_current_staff, get_current_user |  | `update_teacher_commission` (app/api/v1/endpoints/admin.py:437) | Actualiza la comisión de un profesor específico. Permite personalizar la comisión por profesor. |
-| PATCH | `/admin/teachers/{teacher_id}/status` | get_current_staff, get_current_user |  | `update_teacher_status` (app/api/v1/endpoints/admin.py:359) | Aprueba, rechaza o suspende un profesor. Es el flujo principal de onboarding de nuevos profesores. |
-| GET | `/admin/users` | get_current_staff, get_current_user |  | `list_all_users` (app/api/v1/endpoints/admin.py:789) | Lista todos los usuarios con filtros y paginación. Por defecto NO incluye baneados en /admin/students — ese listado usa is_banned=False explícitamente desde el frontend; este endpoint general deja el filtro abierto para la vista separada de baneados. |
-| PATCH | `/admin/users/{user_id}` | get_current_user |  | `admin_update_user` (app/api/v1/endpoints/admin.py:1170) |  |
-| PATCH | `/admin/users/{user_id}/status` | get_current_staff, get_current_user |  | `update_user_status` (app/api/v1/endpoints/admin.py:848) | Activa o desactiva un usuario (distinto de banear). No se puede desactivar a sí mismo ni a otro superadmin. |
+| GET | `/admin/appeals` | get_current_staff, get_current_user |  | `list_appeals` (app/api/v1/endpoints/admin.py:490) | Bandeja global de apelaciones — usada en Visión Global y en la pestaña Rechazados de Profesores. Por defecto muestra todas; filtrable por status. |
+| PATCH | `/admin/appeals/{appeal_id}/resolve` | get_current_staff, get_current_user |  | `resolve_appeal` (app/api/v1/endpoints/admin.py:531) | Resuelve una apelación pendiente. - approve: el profesor vuelve a "approved" (perfil público). - reject: incrementa el conteo de apelaciones agotadas. Al llegar a 2,   el perfil permanece "rejected" pero se marca appeal_exhausted=True,   lo que habilita en el dashboard del profesor la opción de subi |
+| GET | `/admin/email-settings` | get_current_user |  | `get_email_settings` (app/api/v1/endpoints/admin.py:1276) | Interruptores por categoria, uso de hoy contra la cuota y estado del modo ahorro. Solo superadmin. |
+| PUT | `/admin/email-settings` | get_current_user |  | `update_email_settings` (app/api/v1/endpoints/admin.py:1285) | Actualiza interruptores, limite diario y modo ahorro. Solo superadmin. Las categorias esenciales no se pueden apagar (422); una categoria desconocida tambien es 422. |
+| GET | `/admin/notifications` | get_current_staff, get_current_user |  | `list_notifications` (app/api/v1/endpoints/admin.py:740) |  |
+| POST | `/admin/notifications/mark-all-read` | get_current_staff, get_current_user |  | `mark_all_notifications_read` (app/api/v1/endpoints/admin.py:775) |  |
+| GET | `/admin/notifications/unread-count` | get_current_staff, get_current_user |  | `unread_notification_count` (app/api/v1/endpoints/admin.py:753) |  |
+| PATCH | `/admin/notifications/{notification_id}/read` | get_current_staff, get_current_user |  | `mark_notification_read` (app/api/v1/endpoints/admin.py:761) |  |
+| GET | `/admin/platform-config` | — |  | `get_platform_config` (app/api/v1/endpoints/admin.py:1047) | Configuración pública de la plataforma. Endpoint público — el frontend lo consulta al cargar. |
+| PATCH | `/admin/platform-config` | get_current_staff, get_current_user |  | `update_platform_config` (app/api/v1/endpoints/admin.py:1057) | El superadmin (o teacher_admin, como staff) configura el modo de la plataforma |
+| GET | `/admin/stats` | get_current_staff, get_current_user |  | `get_platform_stats` (app/api/v1/endpoints/admin.py:101) | KPIs globales de la plataforma. Todas las métricas en una sola llamada para el dashboard. |
+| POST | `/admin/students/{user_id}/ban` | get_current_staff, get_current_user |  | `ban_student` (app/api/v1/endpoints/admin.py:896) | Banea a un estudiante: lo desactiva, cancela sus enrollments activos y sus clases futuras/pendientes, y deja registrado el motivo. El email queda "quemado" por el unique constraint existente en users.email, así que no puede volver a registrarse con el mismo correo. |
+| GET | `/admin/students/{user_id}/detail` | get_current_staff, get_current_user |  | `get_student_detail` (app/api/v1/endpoints/admin.py:969) | Detalle completo de un estudiante para el desplegable en /admin/students: enrollments (paquetes) y materiales asignados, con nombre del profesor y del recurso. Usado bajo demanda al expandir la card. |
+| POST | `/admin/students/{user_id}/unban` | get_current_staff, get_current_user |  | `unban_student` (app/api/v1/endpoints/admin.py:946) | Revierte el baneo. No reactiva enrollments/clases canceladas automáticamente. |
+| GET | `/admin/support-tickets` | get_current_staff, get_current_user |  | `list_support_tickets` (app/api/v1/endpoints/admin.py:596) | Bandeja global de tickets de soporte, filtrable por estado y categoría. |
+| PATCH | `/admin/support-tickets/{ticket_id}/resolve` | get_current_staff, get_current_user |  | `resolve_support_ticket` (app/api/v1/endpoints/admin.py:665) | Responde y cierra un ticket pendiente. Notifica al usuario por email y reactiva el aviso in-app (user_notified_seen=False) en su bandeja. |
+| GET | `/admin/teachers` | get_current_staff, get_current_user |  | `list_all_teachers` (app/api/v1/endpoints/admin.py:206) | Lista todos los profesores con sus métricas. Filtrable por estado: pending, approved, rejected, suspended. |
+| GET | `/admin/teachers/{teacher_id}` | get_current_staff, get_current_user |  | `get_teacher_detail` (app/api/v1/endpoints/admin.py:295) | Detalle de un profesor para el modal de revisión: incluye video, motivo de rechazo y estado de apelaciones. Usado por /admin/teachers al abrir el modal de detalle. |
+| GET | `/admin/teachers/{teacher_id}/appeals` | get_current_staff, get_current_user |  | `get_teacher_appeals` (app/api/v1/endpoints/admin.py:345) | Historial de apelaciones de un profesor, para el modal de detalle. |
+| PATCH | `/admin/teachers/{teacher_id}/commission` | get_current_staff, get_current_user |  | `update_teacher_commission` (app/api/v1/endpoints/admin.py:438) | Actualiza la comisión de un profesor específico. Permite personalizar la comisión por profesor. |
+| PATCH | `/admin/teachers/{teacher_id}/status` | get_current_staff, get_current_user |  | `update_teacher_status` (app/api/v1/endpoints/admin.py:360) | Aprueba, rechaza o suspende un profesor. Es el flujo principal de onboarding de nuevos profesores. |
+| GET | `/admin/users` | get_current_staff, get_current_user |  | `list_all_users` (app/api/v1/endpoints/admin.py:790) | Lista todos los usuarios con filtros y paginación. Por defecto NO incluye baneados en /admin/students — ese listado usa is_banned=False explícitamente desde el frontend; este endpoint general deja el filtro abierto para la vista separada de baneados. |
+| PATCH | `/admin/users/{user_id}` | get_current_user |  | `admin_update_user` (app/api/v1/endpoints/admin.py:1172) |  |
+| PATCH | `/admin/users/{user_id}/status` | get_current_staff, get_current_user |  | `update_user_status` (app/api/v1/endpoints/admin.py:849) | Activa o desactiva un usuario (distinto de banear). No se puede desactivar a sí mismo ni a otro superadmin. |
 
 ## Reseñas
 
@@ -333,19 +333,19 @@ Total de rutas: **224**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| GET | `/chat/admin/conversations` | get_current_staff, get_current_user |  | `admin_list_conversations` (app/api/v1/endpoints/chat.py:513) |  |
-| GET | `/chat/admin/conversations/{conversation_id}` | get_current_staff, get_current_user |  | `admin_get_conversation` (app/api/v1/endpoints/chat.py:540) |  |
-| GET | `/chat/admin/conversations/{conversation_id}/messages` | get_current_staff, get_current_user |  | `admin_get_conversation_messages` (app/api/v1/endpoints/chat.py:552) |  |
-| GET | `/chat/conversations` | get_current_user |  | `list_conversations` (app/api/v1/endpoints/chat.py:153) |  |
-| GET | `/chat/conversations/direct/{other_username}` | get_current_user |  | `open_direct_conversation` (app/api/v1/endpoints/chat.py:176) |  |
-| GET | `/chat/conversations/group/{cohort_id}` | get_current_user |  | `open_group_conversation` (app/api/v1/endpoints/chat.py:187) |  |
-| GET | `/chat/conversations/unread-count` | get_current_user |  | `unread_count` (app/api/v1/endpoints/chat.py:167) |  |
-| GET | `/chat/conversations/{conversation_id}/messages` | get_current_user |  | `get_messages` (app/api/v1/endpoints/chat.py:198) |  |
-| POST | `/chat/conversations/{conversation_id}/messages` | get_current_user | 30/minute | `post_message` (app/api/v1/endpoints/chat.py:330) | Envío por REST: fallback si el WS global no está conectado o no devolvió el eco a tiempo (ver store/chatStore.ts). Comparte todo el camino con el WS (`_send_and_fanout`) y es idempotente por `client_id`, así que reintentar un mensaje que en realidad sí se guardó no lo duplica. |
-| POST | `/chat/conversations/{conversation_id}/read` | get_current_user |  | `mark_conversation_read` (app/api/v1/endpoints/chat.py:219) |  |
+| GET | `/chat/admin/conversations` | get_current_staff, get_current_user |  | `admin_list_conversations` (app/api/v1/endpoints/chat.py:514) |  |
+| GET | `/chat/admin/conversations/{conversation_id}` | get_current_staff, get_current_user |  | `admin_get_conversation` (app/api/v1/endpoints/chat.py:542) |  |
+| GET | `/chat/admin/conversations/{conversation_id}/messages` | get_current_staff, get_current_user |  | `admin_get_conversation_messages` (app/api/v1/endpoints/chat.py:554) |  |
+| GET | `/chat/conversations` | get_current_user |  | `list_conversations` (app/api/v1/endpoints/chat.py:149) |  |
+| GET | `/chat/conversations/direct/{other_username}` | get_current_user |  | `open_direct_conversation` (app/api/v1/endpoints/chat.py:178) |  |
+| GET | `/chat/conversations/group/{cohort_id}` | get_current_user |  | `open_group_conversation` (app/api/v1/endpoints/chat.py:189) |  |
+| GET | `/chat/conversations/unread-count` | get_current_user |  | `unread_count` (app/api/v1/endpoints/chat.py:169) |  |
+| GET | `/chat/conversations/{conversation_id}/messages` | get_current_user |  | `get_messages` (app/api/v1/endpoints/chat.py:200) |  |
+| POST | `/chat/conversations/{conversation_id}/messages` | get_current_user | 30/minute | `post_message` (app/api/v1/endpoints/chat.py:332) | Envío por REST: fallback si el WS global no está conectado o no devolvió el eco a tiempo (ver store/chatStore.ts). Comparte todo el camino con el WS (`_send_and_fanout`) y es idempotente por `client_id`, así que reintentar un mensaje que en realidad sí se guardó no lo duplica. |
+| POST | `/chat/conversations/{conversation_id}/read` | get_current_user |  | `mark_conversation_read` (app/api/v1/endpoints/chat.py:221) |  |
 
 ## -
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| WS | `/chat/ws` | — |  | `chat_websocket` (app/api/v1/endpoints/chat.py:411) |  |
+| WS | `/chat/ws` | — |  | `chat_websocket` (app/api/v1/endpoints/chat.py:413) |  |

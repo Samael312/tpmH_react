@@ -41,20 +41,9 @@ logger = logging.getLogger(__name__)
 
 # ─── Serialización ───────────────────────────────────────────────────────
 
-def _serialize_conversation(db: Session, convo: ChatConversation, current_user: User) -> ChatConversationResponse:
-    from app.models.chat import ChatReadState
-
-    state = db.query(ChatReadState).filter(
-        ChatReadState.conversation_id == convo.id,
-        ChatReadState.user_id == current_user.id,
-    ).first()
-    unread_q = db.query(ChatMessage).filter(
-        ChatMessage.conversation_id == convo.id,
-        ChatMessage.sender_id != current_user.id,
-    )
-    if state and state.last_read_at:
-        unread_q = unread_q.filter(ChatMessage.created_at > state.last_read_at)
-    unread_count = unread_q.count()
+def _serialize_conversation(convo: ChatConversation, current_user: User, unread_count: int) -> ChatConversationResponse:
+    """Sin consultas propias: los no leídos llegan calculados en bloque (chat_core.unread_counts) y las relaciones
+    que muestra, precargadas (chat_core.with_display_relations)."""
 
     if convo.conversation_type == ChatConversationType.direct:
         if current_user.role == UserRole.student:
@@ -104,11 +93,18 @@ def _serialize_message(msg) -> ChatMessageResponse:
     )
 
 
-def _serialize_conversation_admin(db: Session, convo: ChatConversation) -> ChatConversationAdminResponse:
+def _message_counts(db: Session, conversation_ids: list[int]) -> dict[int, int]:
+    """{conversation_id: total de mensajes} en una consulta (antes: una por conversación)."""
+    if not conversation_ids:
+        return {}
+    rows = db.query(ChatMessage.conversation_id, func.count(ChatMessage.id)).filter(
+        ChatMessage.conversation_id.in_(conversation_ids)
+    ).group_by(ChatMessage.conversation_id).all()
+    return {cid: n for cid, n in rows}
+
+
+def _serialize_conversation_admin(convo: ChatConversation, message_count: int) -> ChatConversationAdminResponse:
     teacher_user = convo.teacher.user if convo.teacher else None
-    message_count = db.query(func.count(ChatMessage.id)).filter(
-        ChatMessage.conversation_id == convo.id
-    ).scalar() or 0
 
     if convo.conversation_type == ChatConversationType.direct:
         student_user = convo.student.user if convo.student else None
@@ -158,10 +154,16 @@ def list_conversations(
     db: Session = Depends(get_db),
 ):
     chat_core.assert_chat_enabled(db)
-    convos = chat_core.list_conversations_for_user(db, current_user)
-    response.headers["X-Total-Count"] = str(len(convos))
-    # Se serializa solo la pagina pedida (cada conversacion cuesta consultas).
-    return [_serialize_conversation(db, c, current_user) for c in convos[page.offset:page.offset + page.limit]]
+    # Consultas fijas, no por conversación: total, página (con relaciones precargadas) y no leídos de la página.
+    total, convos = chat_core.conversations_page_for_user(db, current_user, page.offset, page.limit)
+    response.headers["X-Total-Count"] = str(total)
+    unread = chat_core.unread_counts(db, current_user.id, [c.id for c in convos])
+    return [_serialize_conversation(c, current_user, unread.get(c.id, 0)) for c in convos]
+
+
+def _serialize_one(db: Session, convo: ChatConversation, current_user: User) -> ChatConversationResponse:
+    unread = chat_core.unread_counts(db, current_user.id, [convo.id])
+    return _serialize_conversation(convo, current_user, unread.get(convo.id, 0))
 
 
 @router.get("/conversations/unread-count", response_model=UnreadCountResponse)
@@ -181,7 +183,7 @@ def open_direct_conversation(
 ):
     chat_core.assert_chat_enabled(db)
     convo = chat_core.get_direct_conversation_or_404(db, current_user, other_username)
-    return _serialize_conversation(db, convo, current_user)
+    return _serialize_one(db, convo, current_user)
 
 
 @router.get("/conversations/group/{cohort_id}", response_model=ChatConversationResponse)
@@ -192,7 +194,7 @@ def open_group_conversation(
 ):
     chat_core.assert_chat_enabled(db)
     convo = chat_core.get_group_conversation_or_404(db, current_user, cohort_id)
-    return _serialize_conversation(db, convo, current_user)
+    return _serialize_one(db, convo, current_user)
 
 
 @router.get("/conversations/{conversation_id}/messages", response_model=list[ChatMessageResponse])
@@ -377,27 +379,27 @@ async def post_message(
 #     {"type": "error", "detail": str, "client_id": str | None}
 
 
-def _ws_validate(user_id: int) -> Optional[int]:
+def _ws_close_code(db: Session, user: Optional[User]) -> Optional[int]:
     """None si el usuario puede abrir el socket; si no, el close code."""
+    if not user or not user.is_active:
+        return 4401
+    if chat_core.assert_chat_enabled_ws(db) is None:
+        return 4403
+    if user.role not in (UserRole.student, UserRole.teacher, UserRole.teacher_admin):
+        return 4403
+    return None
+
+
+def _ws_open(user_id: int) -> tuple[Optional[int], dict[int, list[int]]]:
+    """Validación y catch-up de entregas con UNA sesión y una sola lectura del usuario (antes eran dos sesiones y
+    dos lecturas). Importa tras un reinicio del servidor: todos los clientes reconectan a la vez."""
     db = ChatSessionLocal()
     try:
         user = db.query(User).filter(User.id == user_id).first()
-        if not user or not user.is_active:
-            return 4401
-        if chat_core.assert_chat_enabled_ws(db) is None:
-            return 4403
-        if user.role not in (UserRole.student, UserRole.teacher, UserRole.teacher_admin):
-            return 4403
-        return None
-    finally:
-        db.close()
-
-
-def _ws_catch_up(user_id: int) -> dict[int, list[int]]:
-    db = ChatSessionLocal()
-    try:
-        user = db.query(User).filter(User.id == user_id).first()
-        return chat_core.catch_up_deliveries(db, user) if user else {}
+        code = _ws_close_code(db, user)
+        if code:
+            return code, {}
+        return None, chat_core.catch_up_deliveries(db, user)
     finally:
         db.close()
 
@@ -426,16 +428,15 @@ async def chat_websocket(websocket: WebSocket, token: Optional[str] = Query(None
         return
     user_id = int(payload["sub"])
 
-    close_code = await run_in_threadpool(_ws_validate, user_id)
+    # Catch-up: los mensajes que le mandaron mientras estaba offline pasan a "entregado" ahora — se lo avisamos a
+    # cada emisor online.
+    close_code, by_sender = await run_in_threadpool(_ws_open, user_id)
     if close_code:
         await websocket.close(code=close_code)
         return
 
     await chat_manager.connect(user_id, websocket)
     try:
-        # Catch-up: los mensajes que le mandaron mientras estaba offline
-        # pasan a "entregado" ahora — se lo avisamos a cada emisor online.
-        by_sender = await run_in_threadpool(_ws_catch_up, user_id)
         for sender_id, message_ids in by_sender.items():
             for message_id in message_ids:
                 await chat_manager.send_to_user(sender_id, {"type": "delivered", "id": message_id})
@@ -531,10 +532,11 @@ def admin_list_conversations(
             User, StudentProfile.user_id == User.id
         ).filter(User.username.ilike(f"%{student_username}%"))
 
-    convos = query.order_by(
-        ChatConversation.last_message_at.is_(None), ChatConversation.last_message_at.desc(),
+    convos = chat_core.with_display_relations(query).order_by(
+        ChatConversation.last_message_at.is_(None), ChatConversation.last_message_at.desc(), ChatConversation.id.desc(),
     ).offset(skip).limit(limit).all()
-    return [_serialize_conversation_admin(db, c) for c in convos]
+    counts = _message_counts(db, [c.id for c in convos])
+    return [_serialize_conversation_admin(c, counts.get(c.id, 0)) for c in convos]
 
 
 @router.get("/admin/conversations/{conversation_id}", response_model=ChatConversationAdminResponse)
@@ -546,7 +548,7 @@ def admin_get_conversation(
     convo = db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
     if not convo:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversación no encontrada")
-    return _serialize_conversation_admin(db, convo)
+    return _serialize_conversation_admin(convo, _message_counts(db, [convo.id]).get(convo.id, 0))
 
 
 @router.get("/admin/conversations/{conversation_id}/messages", response_model=list[ChatMessageResponse])

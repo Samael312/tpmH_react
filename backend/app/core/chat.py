@@ -5,11 +5,12 @@
 # necesidad de abrir sockets.
 
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
-from sqlalchemy import or_, update
+from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.models.chat import ChatConversation, ChatConversationType, ChatMessage, ChatReadState
@@ -18,34 +19,62 @@ from app.models.teacher import TeacherProfile, TeacherStatus
 from app.models.student import StudentProfile
 from app.models.group_cohort import GroupCohort
 from app.models.package import Enrollment, EnrollmentStatus
-from app.models.payment_config import PlatformConfig
+from app.core.cache import cache_invalidate, cached
 from app.core.platform_config import get_or_create_platform_config
 from app.core.timezone import utc_now
 
 
 # ─── Config / gate ───────────────────────────────────────────────────────
+#
+# Cada petición del chat (listar, no leídos, enviar, abrir el socket) comprobaba si el chat está activo leyendo
+# PlatformConfig en la BD. Esos dos valores cambian casi nunca, así que se guardan 30 s en memoria del proceso y
+# se invalidan al guardar los ajustes (admin.py::update_platform_config). Una sola instancia: ver core/cache.py.
 
-def assert_chat_enabled(db: Session) -> PlatformConfig:
+CHAT_SETTINGS_CACHE_KEY = "chat:settings"
+CHAT_SETTINGS_TTL_SECONDS = 30
+ACTIVE_COHORT_STATUSES = (
+    EnrollmentStatus.active, EnrollmentStatus.pending_renewal, EnrollmentStatus.pending_package_change,
+)
+
+
+@dataclass(frozen=True)
+class ChatSettings:
+    chat_enabled: bool
+    chat_reactivation_hours: int
+
+
+def get_chat_settings(db: Session) -> ChatSettings:
+    def load() -> ChatSettings:
+        config = get_or_create_platform_config(db)
+        return ChatSettings(bool(config.chat_enabled), int(config.chat_reactivation_hours or 0))
+    return cached(CHAT_SETTINGS_CACHE_KEY, CHAT_SETTINGS_TTL_SECONDS, load)
+
+
+def invalidate_chat_settings() -> None:
+    cache_invalidate(CHAT_SETTINGS_CACHE_KEY)
+
+
+def assert_chat_enabled(db: Session) -> ChatSettings:
     """
     Bloquea a nivel backend el chat cuando el superadmin/teacher_admin lo
     desactivó desde /admin/settings — no basta con ocultarlo en el UI,
     porque alguien podría pegar la URL o abrir el WS directo.
     """
-    config = get_or_create_platform_config(db)
-    if not config.chat_enabled:
+    settings = get_chat_settings(db)
+    if not settings.chat_enabled:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="El chat interno está deshabilitado por el momento.",
         )
-    return config
+    return settings
 
 
-def assert_chat_enabled_ws(db: Session) -> Optional[PlatformConfig]:
+def assert_chat_enabled_ws(db: Session) -> Optional[ChatSettings]:
     """Misma validación que assert_chat_enabled pero sin levantar HTTPException
     (dentro de un WebSocket ya aceptado no tiene sentido — el caller cierra
     el socket con un código explícito). Devuelve None si está deshabilitado."""
-    config = get_or_create_platform_config(db)
-    return config if config.chat_enabled else None
+    settings = get_chat_settings(db)
+    return settings if settings.chat_enabled else None
 
 
 # ─── Autorización ────────────────────────────────────────────────────────
@@ -65,7 +94,7 @@ def _cohort_participant_ids(db: Session, cohort_id: int) -> set[int]:
     """IDs de StudentProfile con Enrollment (activo o pendiente) en la cohorte."""
     rows = db.query(Enrollment.student_id).filter(
         Enrollment.cohort_id == cohort_id,
-        Enrollment.status.in_([EnrollmentStatus.active, EnrollmentStatus.pending_renewal, EnrollmentStatus.pending_package_change]),
+        Enrollment.status.in_(ACTIVE_COHORT_STATUSES),
     ).all()
     return {r[0] for r in rows}
 
@@ -209,61 +238,101 @@ def assert_participant(db: Session, current_user: User, convo: ChatConversation)
 
 
 def conversation_participant_user_ids(db: Session, convo: ChatConversation) -> set[int]:
-    """User.id de todos los participantes — para el broadcast por WS."""
+    """User.id de todos los participantes — para el broadcast por WS. Una sola consulta por conversación."""
+    teacher_user = select(TeacherProfile.user_id).where(TeacherProfile.id == convo.teacher_id)
     if convo.conversation_type == ChatConversationType.direct:
-        ids = set()
-        if convo.teacher and convo.teacher.user_id:
-            ids.add(convo.teacher.user_id)
-        if convo.student and convo.student.user_id:
-            ids.add(convo.student.user_id)
-        return ids
-    student_ids = _cohort_participant_ids(db, convo.cohort_id)
-    user_ids = {
-        r[0] for r in db.query(StudentProfile.user_id).filter(
-            StudentProfile.id.in_(student_ids)
+        rows = db.execute(
+            teacher_user.union_all(select(StudentProfile.user_id).where(StudentProfile.id == convo.student_id))
         ).all()
-    }
-    if convo.teacher and convo.teacher.user_id:
-        user_ids.add(convo.teacher.user_id)
-    return user_ids
+    else:
+        students = (
+            select(StudentProfile.user_id)
+            .join(Enrollment, Enrollment.student_id == StudentProfile.id)
+            .where(Enrollment.cohort_id == convo.cohort_id, Enrollment.status.in_(ACTIVE_COHORT_STATUSES))
+        )
+        rows = db.execute(teacher_user.union_all(students)).all()
+    return {r[0] for r in rows if r[0]}
 
 
 # ─── Listado / historial / lectura ──────────────────────────────────────
 
-def list_conversations_for_user(db: Session, current_user: User) -> list[ChatConversation]:
+def _conversation_filter(current_user: User):
+    """Condición SQL «conversaciones en las que participa este usuario», o None si su rol no tiene chat.
+
+    Es una sola expresión (con subconsulta para las cohortes del alumno) para que listar, contar no leídos y el
+    catch-up del socket se resuelvan en una consulta cada uno, sin traer antes la lista de conversaciones.
+    """
     if current_user.role == UserRole.student:
         student_profile: StudentProfile = current_user.student_profile
-        direct = db.query(ChatConversation).filter(
-            ChatConversation.conversation_type == ChatConversationType.direct,
-            ChatConversation.student_id == student_profile.id,
+        if not student_profile:
+            return None
+        cohorts = select(Enrollment.cohort_id).where(
+            Enrollment.student_id == student_profile.id,
+            Enrollment.cohort_id.isnot(None),
+            Enrollment.status.in_(ACTIVE_COHORT_STATUSES),
         )
-        cohort_ids = list(_student_cohort_ids(db, student_profile.id))
-        group = db.query(ChatConversation).filter(
-            ChatConversation.conversation_type == ChatConversationType.group,
-            ChatConversation.cohort_id.in_(cohort_ids) if cohort_ids else False,
+        return or_(
+            and_(
+                ChatConversation.conversation_type == ChatConversationType.direct,
+                ChatConversation.student_id == student_profile.id,
+            ),
+            and_(
+                ChatConversation.conversation_type == ChatConversationType.group,
+                ChatConversation.cohort_id.in_(cohorts),
+            ),
         )
-        convos = direct.all() + (group.all() if cohort_ids else [])
-    elif current_user.role in (UserRole.teacher, UserRole.teacher_admin):
+    if current_user.role in (UserRole.teacher, UserRole.teacher_admin):
         teacher_profile: TeacherProfile = current_user.teacher_profile
         if not teacher_profile:
-            return []
-        convos = db.query(ChatConversation).filter(
-            ChatConversation.teacher_id == teacher_profile.id,
-        ).all()
-    else:
+            return None
+        return ChatConversation.teacher_id == teacher_profile.id
+    return None
+
+
+# Más reciente primero; las que aún no tienen mensajes, por fecha de creación. El id desempata (orden estable
+# entre páginas).
+CONVERSATION_ORDER = (
+    func.coalesce(ChatConversation.last_message_at, ChatConversation.created_at).desc(),
+    ChatConversation.id.desc(),
+)
+
+
+def conversation_ids_subquery(current_user: User):
+    cond = _conversation_filter(current_user)
+    return None if cond is None else select(ChatConversation.id).where(cond)
+
+
+def with_display_relations(query):
+    """Carga en bloque lo que muestra la lista (nombre y avatar del otro, paquete del grupo): sin esto, cada
+    conversación hacía 2-3 consultas perezosas."""
+    return query.options(
+        selectinload(ChatConversation.teacher).selectinload(TeacherProfile.user),
+        selectinload(ChatConversation.student).selectinload(StudentProfile.user),
+        selectinload(ChatConversation.cohort).selectinload(GroupCohort.package),
+    )
+
+
+def conversations_page_for_user(
+    db: Session, current_user: User, offset: int, limit: int,
+) -> tuple[int, list[ChatConversation]]:
+    """(total, página) paginando en SQL. Antes se cargaban TODAS las conversaciones y se cortaba en Python."""
+    cond = _conversation_filter(current_user)
+    if cond is None:
+        return 0, []
+    total = db.query(func.count(ChatConversation.id)).filter(cond).scalar() or 0
+    if not total:
+        return 0, []
+    rows = with_display_relations(
+        db.query(ChatConversation).filter(cond).order_by(*CONVERSATION_ORDER)
+    ).offset(offset).limit(limit).all()
+    return total, rows
+
+
+def list_conversations_for_user(db: Session, current_user: User) -> list[ChatConversation]:
+    cond = _conversation_filter(current_user)
+    if cond is None:
         return []
-
-    convos.sort(key=lambda c: c.last_message_at or c.created_at, reverse=True)
-    return convos
-
-
-def _student_cohort_ids(db: Session, student_id: int) -> set[int]:
-    rows = db.query(Enrollment.cohort_id).filter(
-        Enrollment.student_id == student_id,
-        Enrollment.cohort_id.isnot(None),
-        Enrollment.status.in_([EnrollmentStatus.active, EnrollmentStatus.pending_renewal, EnrollmentStatus.pending_package_change]),
-    ).all()
-    return {r[0] for r in rows}
+    return db.query(ChatConversation).filter(cond).order_by(*CONVERSATION_ORDER).all()
 
 
 def get_messages(
@@ -282,7 +351,8 @@ def get_messages(
       visto en esta sesión. No lleva límite propio: en la práctica son
       pocos (lo que se mandó mientras no estabas mirando ese hilo).
     """
-    q = db.query(ChatMessage).filter(ChatMessage.conversation_id == convo.id)
+    # joinedload: el serializador usa `sender.username`; sin esto eran hasta 50 consultas extra por página.
+    q = db.query(ChatMessage).options(joinedload(ChatMessage.sender)).filter(ChatMessage.conversation_id == convo.id)
     if after_id:
         q = q.filter(ChatMessage.id > after_id)
         return q.order_by(ChatMessage.id.asc()).all()
@@ -316,25 +386,35 @@ def mark_read(db: Session, convo: ChatConversation, user: User) -> None:
             db.commit()
 
 
-def get_unread_count_for_user(db: Session, current_user: User) -> int:
-    """Suma de mensajes no leídos en todas las conversaciones del usuario."""
-    convos = list_conversations_for_user(db, current_user)
-    if not convos:
-        return 0
-    total = 0
-    for convo in convos:
-        state = db.query(ChatReadState).filter(
-            ChatReadState.conversation_id == convo.id,
-            ChatReadState.user_id == current_user.id,
-        ).first()
-        q = db.query(ChatMessage).filter(
-            ChatMessage.conversation_id == convo.id,
-            ChatMessage.sender_id != current_user.id,
+def _unread_query(db: Session, user_id: int, conversation_ids):
+    """Mensajes ajenos posteriores a la última lectura del usuario (o todos si nunca abrió la conversación).
+    `conversation_ids` puede ser una lista o una subconsulta."""
+    state = ChatReadState
+    return (
+        db.query(ChatMessage.conversation_id, func.count(ChatMessage.id))
+        .outerjoin(state, and_(state.conversation_id == ChatMessage.conversation_id, state.user_id == user_id))
+        .filter(
+            ChatMessage.conversation_id.in_(conversation_ids),
+            ChatMessage.sender_id != user_id,
+            or_(state.last_read_at.is_(None), ChatMessage.created_at > state.last_read_at),
         )
-        if state and state.last_read_at:
-            q = q.filter(ChatMessage.created_at > state.last_read_at)
-        total += q.count()
-    return total
+        .group_by(ChatMessage.conversation_id)
+    )
+
+
+def unread_counts(db: Session, user_id: int, conversation_ids: list[int]) -> dict[int, int]:
+    """{conversation_id: no leídos} en UNA consulta (antes: 2 por conversación)."""
+    if not conversation_ids:
+        return {}
+    return {cid: n for cid, n in _unread_query(db, user_id, conversation_ids).all()}
+
+
+def get_unread_count_for_user(db: Session, current_user: User) -> int:
+    """Suma de mensajes no leídos en todas las conversaciones del usuario: una consulta."""
+    ids = conversation_ids_subquery(current_user)
+    if ids is None:
+        return 0
+    return sum(n for _cid, n in _unread_query(db, current_user.id, ids).all())
 
 
 # ─── Envío de mensajes + reactivación de email ──────────────────────────
@@ -352,7 +432,7 @@ def find_message_by_client_id(
 
 
 def send_message(
-    db: Session, config: PlatformConfig, convo: ChatConversation, sender: User, content: str,
+    db: Session, config: ChatSettings, convo: ChatConversation, sender: User, content: str,
     client_id: Optional[str] = None,
 ) -> tuple[ChatMessage, bool, bool]:
     """
@@ -439,25 +519,34 @@ def catch_up_deliveries(db: Session, user: User) -> dict[int, list[int]]:
     que siguiera sin `delivered_at` (porque no estaba online cuando se
     envió) pasa a estar entregado en este instante.
 
+    Una lectura de (id, remitente) y un UPDATE por lotes: antes se cargaban todas las conversaciones y cada
+    mensaje pendiente como objeto completo.
+
     Devuelve {sender_user_id: [message_id, ...]} para que el caller le
     avise el segundo checkmark a cada emisor que siga conectado."""
-    convos = list_conversations_for_user(db, user)
-    convo_ids = [c.id for c in convos]
-    if not convo_ids:
+    ids = conversation_ids_subquery(user)
+    if ids is None:
         return {}
-    pending = db.query(ChatMessage).filter(
-        ChatMessage.conversation_id.in_(convo_ids),
+    pending = db.query(ChatMessage.id, ChatMessage.sender_id).filter(
+        ChatMessage.conversation_id.in_(ids),
         ChatMessage.sender_id != user.id,
         ChatMessage.delivered_at.is_(None),
     ).all()
     if not pending:
         return {}
     now = utc_now()
-    by_sender: dict[int, list[int]] = defaultdict(list)
-    for message in pending:
-        message.delivered_at = now
-        by_sender[message.sender_id].append(message.id)
+    message_ids = [message_id for message_id, _ in pending]
+    for start in range(0, len(message_ids), 500):
+        db.execute(
+            update(ChatMessage)
+            .where(ChatMessage.id.in_(message_ids[start:start + 500]), ChatMessage.delivered_at.is_(None))
+            .values(delivered_at=now)
+            .execution_options(synchronize_session=False)
+        )
     db.commit()
+    by_sender: dict[int, list[int]] = defaultdict(list)
+    for message_id, sender_id in pending:
+        by_sender[sender_id].append(message_id)
     return dict(by_sender)
 
 

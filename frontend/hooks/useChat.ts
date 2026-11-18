@@ -42,17 +42,36 @@ export async function markConversationRead(queryClient: QueryClient, conversatio
     );
     queryClient.setQueryData<number>(UNREAD_KEY, (n) => Math.max(0, (n ?? 0) - prevUnread));
   }
-  try {
-    await api.post(`/chat/conversations/${conversationId}/read`);
-  } catch {
-    // no crítico — se corrige en el próximo evento/poll
+  // Una sola petición por hilo a la vez: al abrir un hilo coinciden el montaje, el foco de la pestaña y algún
+  // mensaje entrante (y en desarrollo, el doble efecto de StrictMode). Antes salían 2-3 POST casi simultáneos.
+  let pending = readsInFlight.get(conversationId);
+  if (!pending) {
+    pending = api
+      .post(`/chat/conversations/${conversationId}/read`)
+      .then(() => undefined, () => undefined) // no crítico — se corrige en el próximo evento/poll
+      .finally(() => readsInFlight.delete(conversationId));
+    readsInFlight.set(conversationId, pending);
   }
+  await pending;
   queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
   queryClient.invalidateQueries({ queryKey: UNREAD_KEY });
 }
 
+const readsInFlight = new Map<number, Promise<void>>();
+
 // ─── Lista de conversaciones ──────────────────────────────────────────────
+// Con el WebSocket conectado los cambios llegan por el socket: el polling baja a una comprobación cada 5 min (por si
+// se perdió un evento). Sin socket se usa el intervalo normal. Con la pestaña oculta, nada.
+export const CONNECTED_SAFETY_POLL_MS = 5 * 60 * 1000;
+
+export function fallbackPollInterval(disconnectedMs: number, connected = useChatStore.getState().connected): number | false {
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
+  return connected ? CONNECTED_SAFETY_POLL_MS : disconnectedMs;
+}
+
 export function useChatConversations(enabled: boolean = true) {
+  // Suscrito al estado del socket: al conectarse o caerse cambia el intervalo en el acto (no al siguiente fetch).
+  const connected = useChatStore((s) => s.connected);
   const query = useQuery({
     queryKey: [...CONVERSATIONS_KEY],
     queryFn: async () => {
@@ -61,13 +80,10 @@ export function useChatConversations(enabled: boolean = true) {
     enabled,
     // El WS global (ver store/chatStore.ts + useChatSocketBootstrap acá
     // abajo) invalida este query apenas llega un mensaje nuevo o se marca
-    // como leído — este polling queda como red de contención por si se
-    // perdió algún evento (reconexión, pestaña que estuvo dormida, etc.),
-    // ya no es la única vía de actualización.
-    refetchInterval: () => {
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
-      return 30000;
-    },
+    // como leído, y al reconectar fuerza una revalidación. Por eso, con el
+    // socket conectado, el polling solo es una red de seguridad lenta; con
+    // el socket caído vuelve a ser la vía principal.
+    refetchInterval: () => fallbackPollInterval(30000, connected),
   });
 
   return {
@@ -88,6 +104,7 @@ export function useChatConversations(enabled: boolean = true) {
 // Y desde el WS global (mensaje nuevo / entregado) — ver
 // useChatSocketBootstrap.
 export function useUnreadChatCount(enabled: boolean = true) {
+  const connected = useChatStore((s) => s.connected);
   const query = useQuery({
     queryKey: [...UNREAD_KEY],
     queryFn: async () => {
@@ -95,10 +112,7 @@ export function useUnreadChatCount(enabled: boolean = true) {
       return res.data.unread_count as number;
     },
     enabled,
-    refetchInterval: () => {
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
-      return 45000; // red de contención — ver comentario arriba
-    },
+    refetchInterval: () => fallbackPollInterval(45000, connected), // red de contención — ver comentario arriba
   });
 
   return { count: enabled ? (query.data ?? 0) : 0, refetch: query.refetch };

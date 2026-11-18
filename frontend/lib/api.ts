@@ -16,7 +16,7 @@ const api = axios.create({
 // Un único refresh en vuelo: si varias peticiones reciben 401 a la vez, todas esperan al mismo
 // POST /auth/refresh (el refresh token rota: dos refresh simultáneos revocarían la sesión).
 let refreshInFlight: Promise<void> | null = null;
-function refreshSession(): Promise<void> {
+export function refreshSession(): Promise<void> {
   if (!refreshInFlight) {
     refreshInFlight = axios
       .post(`${API_BASE}/auth/refresh`, null, { withCredentials: true })

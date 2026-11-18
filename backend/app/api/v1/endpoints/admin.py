@@ -46,6 +46,7 @@ from app.schemas.support import (
 from app.models.payment_config import PlatformConfig
 from app.core.platform_config import get_or_create_platform_config, serialize_platform_config
 from app.api.v1.endpoints.public import invalidate_landing_cache
+from app.core.chat import invalidate_chat_settings
 
 
 def _get_teacher_wallet_balance(teacher_id: int, db: Session) -> float:
@@ -1165,6 +1166,7 @@ def update_platform_config(
 
     db.commit()
     invalidate_landing_cache()
+    invalidate_chat_settings()  # el chat cachea 30 s si está activo y las horas de reactivación
     return {"message": "Configuración actualizada"}
 
 @router.patch("/users/{user_id}")

@@ -32,8 +32,8 @@
 - `components/landing/TeacherVideosCarousel.tsx` (135 líneas, referenciado en 1 archivos) — exports: VideoTeacher, TeacherVideosCarousel
 - `components/layout/CalendarPicker.tsx` (154 líneas, referenciado en 1 archivos) — exports: CalendarPicker
 - `components/layout/DashboardTopbar.tsx` (100 líneas, referenciado en 3 archivos) — exports: DashboardTopbarVariant, DashboardTopbar
-- `components/layout/NavBar.tsx` (458 líneas, referenciado en 6 archivos) — exports: DashboardSidebar
-- `components/layout/VerifyEmailBanner.tsx` (61 líneas, referenciado en 2 archivos) — exports: VerifyEmailBanner
+- `components/layout/NavBar.tsx` (459 líneas, referenciado en 6 archivos) — exports: DashboardSidebar
+- `components/layout/VerifyEmailBanner.tsx` (68 líneas, referenciado en 2 archivos) — exports: VerifyEmailBanner
 - `components/legal/PrivacyContent.tsx` (483 líneas, referenciado en 1 archivos) — exports: PrivacyContent
 - `components/legal/TermsContent.tsx` (418 líneas, referenciado en 1 archivos) — exports: TermsContent
 - `components/payments/BuyCreditsModal.tsx` (170 líneas, referenciado en 2 archivos) — exports: BuyCreditsModal
@@ -69,7 +69,7 @@
 
 - `hooks/useAdminData.ts` (569 líneas, referenciado en 9 archivos) — exports: PendingPayment, Teacher, Student, WithdrawalRecord, PaymentHistoryItem, usePaymentsHistory, useStudents, useStudentDetail, useWithdrawals, useAdminStats, usePendingPayments, useTeachers
 - `hooks/useBusinessRules.ts` (66 líneas, referenciado en 9 archivos) — exports: BusinessRules, CLASS_DURATION_OPTIONS, useBusinessRules
-- `hooks/useChat.ts` (255 líneas, referenciado en 12 archivos) — exports: ChatConversation, ChatMessage, markConversationRead, useChatConversations, useUnreadChatCount, openDirectConversation, openGroupConversation, useChatSocketBootstrap, useChatThread
+- `hooks/useChat.ts` (269 líneas, referenciado en 13 archivos) — exports: ChatConversation, ChatMessage, markConversationRead, CONNECTED_SAFETY_POLL_MS, fallbackPollInterval, useChatConversations, useUnreadChatCount, openDirectConversation, openGroupConversation, useChatSocketBootstrap, useChatThread
 - `hooks/useChatAdmin.ts` (88 líneas, referenciado en 1 archivos) — exports: ChatConversationAdmin, useChatAdminConversations, useChatAdminMessages — hooks/useChatAdmin.ts N5: panel de auditoría de chats para superadmin/teacher_admin — ver backend/app/api/v1/endpoints/chat.py (sección "N5: Auditoría"). Listar
 - `hooks/useDebouncedValue.ts` (18 líneas, referenciado en 1 archivos) — exports: useDebouncedValue
 - `hooks/useEmailSettings.ts` (32 líneas, referenciado en 2 archivos) — exports: EMAIL_SETTINGS_KEY, useEmailSettings
@@ -78,29 +78,29 @@
 - `hooks/useLandingData.ts` (215 líneas, referenciado en 14 archivos) — exports: LandingTeacher, LandingReview, LandingPackage, LandingGroupStep, TitleGradientMap, LandingContent, LANDING_CONTENT_DEFAULTS, useLandingData
 - `hooks/useLoadMoreList.ts` (30 líneas, referenciado en 2 archivos) — exports: useLoadMoreList
 - `hooks/useRevealOnScroll.ts` (45 líneas, referenciado en 1 archivos) — exports: useRevealOnScroll
-- `hooks/useSpokenLanguages.ts` (52 líneas, referenciado en 2 archivos) — exports: MY_SPOKEN_LANGUAGES_KEY, useMySpokenLanguages
-- `hooks/useStudentData.ts` (712 líneas, referenciado en 25 archivos) — exports: AVAILABLE_SLOTS_QUERY_PREFIX, invalidateAvailableSlots, BookingStage, RejectedPaymentInfo, PendingRechargeInfo, StudentClass, AvailableSlot, PackageInfo, StudentEnrollment, StudentMaterial, StudentHomework, TeacherResolution
+- `hooks/useSpokenLanguages.ts` (53 líneas, referenciado en 2 archivos) — exports: MY_SPOKEN_LANGUAGES_KEY, useMySpokenLanguages
+- `hooks/useStudentData.ts` (714 líneas, referenciado en 25 archivos) — exports: AVAILABLE_SLOTS_QUERY_PREFIX, invalidateAvailableSlots, BookingStage, RejectedPaymentInfo, PendingRechargeInfo, StudentClass, AvailableSlot, PackageInfo, StudentEnrollment, StudentMaterial, StudentHomework, TeacherResolution
 - `hooks/useSupport.ts` (95 líneas, referenciado en 3 archivos) — exports: SupportCategory, SupportTicketStatus, SupportTicket, useMySupportTickets, createSupportTicket, markSupportTicketSeen, useUnreadSupportCount, useSupportQueryInvalidation
 - `hooks/useSystemCatalogs.ts` (56 líneas, referenciado en 9 archivos) — exports: StudentGoal, PaymentMethodOption, ThemePreset, SubjectTheme, GoalCategoryKey, StudentGoalsCatalog, SystemCatalogs, SYSTEM_CATALOGS_QUERY_KEY, useSystemCatalogs
-- `hooks/useTeacherData.ts` (680 líneas, referenciado en 12 archivos) — exports: TeacherClass, TeacherProfile, WeeklySlot, WalletData, CalendarStatus, StudentEnrollmentSummary, StudentMaterialSummary, TeacherStudentFull, WithdrawalHistoryItem, IncomeHistoryItem, TeacherMaterial, TeacherPaymentEntry
+- `hooks/useTeacherData.ts` (679 líneas, referenciado en 12 archivos) — exports: TeacherClass, TeacherProfile, WeeklySlot, WalletData, CalendarStatus, StudentEnrollmentSummary, StudentMaterialSummary, TeacherStudentFull, WithdrawalHistoryItem, IncomeHistoryItem, TeacherMaterial, TeacherPaymentEntry
 - `hooks/useTeacherNotifications.ts` (47 líneas, referenciado en 2 archivos) — exports: TeacherNotification, useTeacherUnreadNotificationCount, useTeacherNotifications
 - `hooks/useToast.ts` (16 líneas, referenciado en 40 archivos) — exports: useToast
 
 ## store/
 
-- `store/authStore.ts` (88 líneas, referenciado en 33 archivos) — exports: User, useAuthStore
-- `store/chatStore.ts` (530 líneas, referenciado en 8 archivos) — exports: ChatMessageStatus, ChatMessage, onChatMessage, useChatStore — store/chatStore.ts N3: reemplaza la conexión WS "por conversación" de hooks/useChat.ts por UNA sola conexión GLOBAL por sesión (ver backend/app/core/chat_ws.py 
+- `store/authStore.ts` (93 líneas, referenciado en 34 archivos) — exports: User, useAuthStore
+- `store/chatStore.ts` (558 líneas, referenciado en 9 archivos) — exports: ChatMessageStatus, ChatMessage, reconnectDelay, onChatMessage, useChatStore — store/chatStore.ts N3: reemplaza la conexión WS "por conversación" de hooks/useChat.ts por UNA sola conexión GLOBAL por sesión (ver backend/app/core/chat_ws.py 
 - `store/chatWidgetPresenceStore.ts` (28 líneas, referenciado en 2 archivos) — exports: useChatWidgetPresenceStore — store/chatWidgetPresenceStore.ts N2 (ubicación del ChatWidget): puente mínimo para que ChipiWidget sepa, SIN que cada una de las ~40 páginas que lo montan tenga
 - `store/toastStore.ts` (66 líneas, referenciado en 3 archivos) — exports: ToastVariant, ToastItem, ToastOptions, useToastStore, toast
 
 ## lib/
 
-- `lib/api.ts` (107 líneas, referenciado en 84 archivos) — exports: —
-- `lib/auth.ts` (25 líneas, referenciado en 18 archivos) — exports: decodeToken, isTokenExpired
+- `lib/api.ts` (108 líneas, referenciado en 87 archivos) — exports: refreshSession
+- `lib/auth.ts` (25 líneas, referenciado en 19 archivos) — exports: decodeToken, isTokenExpired
 - `lib/classStatusNotice.ts` (54 líneas, referenciado en 3 archivos) — exports: MANUAL_STATUS_WINDOW_HOURS, finalizedNotice, PendingToMark, pendingToMark, pendingToMarkText — Misma ventana que `CLASS_STATUS_WINDOW_HOURS` del backend (`class_logic.py`).
 - `lib/cloudinaryImage.ts` (41 líneas, referenciado en 3 archivos) — exports: withWidthParam, cloudinaryOptimized — Imágenes de Cloudinary optimizadas por el propio Cloudinary (Fase 11). Con el optimizador de Next.js cada imagen se descarga de Cloudinary, se recodifica en el 
 - `lib/color.ts` (36 líneas, referenciado en 19 archivos) — exports: hexToRgb, shadeColor, DEFAULT_THEME_COLOR, THEME_PRESETS
-- `lib/csp.ts` (50 líneas, referenciado en 5 archivos) — exports: buildCsp — Content-Security-Policy con nonce por petición (SEC-05, paso final). La construye proxy.ts en cada respuesta de página (ver node_modules/next/dist/docs/01-app/0
+- `lib/csp.ts` (56 líneas, referenciado en 5 archivos) — exports: buildCsp — Content-Security-Policy con nonce por petición (SEC-05, paso final). La construye proxy.ts en cada respuesta de página (ver node_modules/next/dist/docs/01-app/0
 - `lib/displayName.ts` (11 líneas, referenciado en 6 archivos) — exports: displayName
 - `lib/emailSettings.ts` (86 líneas, referenciado en 4 archivos) — exports: EmailProbability, EmailCategory, EmailSettings, PROBABILITY_LABEL, PROBABILITY_STYLE, quotaPercent, usageLabel, alertMessage, buildUpdate — Fase 7: lógica pura del panel de control de correos (sin React, testeable con Vitest).
 - `lib/errorMessage.ts` (41 líneas, referenciado en 50 archivos) — exports: getErrorMessage
@@ -110,6 +110,7 @@
 - `lib/imageLoader.ts` (14 líneas, referenciado en 1 archivos) — exports: imageLoader
 - `lib/landingServer.ts` (107 líneas, referenciado en 4 archivos) — exports: getLandingDataServer, buildDefaultSiteTitle
 - `lib/loadMore.ts` (32 líneas, referenciado en 6 archivos) — exports: LOAD_MORE_PAGE_SIZE, LoadMorePage, fetchPage, nextOffset
+- `lib/me.ts` (20 líneas, referenciado en 27 archivos) — exports: ME_QUERY_KEY, fetchMe
 - `lib/mobileTopBar.tsx` (67 líneas, referenciado en 37 archivos) — exports: MobileTopBarProvider, useMobileTopBar, usePageTopBar
 - `lib/nationalities.ts` (43 líneas, referenciado en 12 archivos) — exports: countryCodeToFlag, NationalityOption, NATIONALITIES, getFlagForNationality — Lista de nacionalidades con bandera generada por código ISO 3166-1 alpha-2. Se guarda el NOMBRE del país (no el código) en la BD, para que sea legible directame
 - `lib/packageThemes.ts` (47 líneas, referenciado en 4 archivos) — exports: PackageTheme, SUBJECT_THEME_MAP, DEFAULT_PACKAGE_THEME, getSuggestedTheme, ICON_PICKER_OPTIONS, priceLabelSuffix
@@ -120,7 +121,7 @@
 - `lib/teacherOptions.ts` (86 líneas, referenciado en 8 archivos) — exports: SUBJECTS, LANGUAGES, SKILL_SUGGESTIONS, GOAL_CATEGORIES, GoalCategoryKey, GOALS, normalizeGoalsCatalog, flattenGoals, PAYMENT_METHODS, TOPICS, LEVELS — Opciones compartidas de perfil de profesor. Fuente única de verdad — se usa en onboarding, edición de perfil y creación de paquetes, para no duplicar estas list
 - `lib/textFormat.ts` (10 líneas, referenciado en 2 archivos) — exports: capitalizeWords — Capitaliza la primera letra de cada palabra a medida que el usuario escribe, sin tocar el resto de los caracteres ya tipeados (para no pelear con el cursor ni f
 - `lib/timezones.ts` (78 líneas, referenciado en 6 archivos) — exports: TIMEZONE_OPTIONS, TIMEZONE_TO_COUNTRY, DEFAULT_COUNTRY, CountryInfo, COUNTRY_OPTIONS, parsePhoneNumber — frontend/lib/timezones.ts
-- `lib/tzFormat.ts` (100 líneas, referenciado en 12 archivos) — exports: getMyDisplayTimezone, formatTimeTz, formatWeekdayShortTz, formatMonthShortTz, getDayOfMonthTz, getHourMinuteTz, formatDateHumanTz, getDateKeyTz — frontend/lib/tzFormat.ts Utilidades para mostrar instantes UTC (lo que siempre devuelve el backend) en la zona horaria CORRECTA de la persona que está mirando l
+- `lib/tzFormat.ts` (111 líneas, referenciado en 12 archivos) — exports: getMyDisplayTimezone, formatTimeTz, formatWeekdayShortTz, formatMonthShortTz, getDayOfMonthTz, getHourMinuteTz, formatDateHumanTz, formatCalendarDateHuman, getDateKeyTz — frontend/lib/tzFormat.ts Utilidades para mostrar instantes UTC (lo que siempre devuelve el backend) en la zona horaria CORRECTA de la persona que está mirando l
 - `lib/useIsMobileOrReducedMotion.ts` (37 líneas, referenciado en 2 archivos) — exports: useIsMobileOrReducedMotion
 - `lib/useNow.ts` (24 líneas, referenciado en 2 archivos) — exports: useNow
 - `lib/videoThumbnail.ts` (39 líneas, referenciado en 1 archivos) — exports: getVideoFirstFrameUrl — Deriva la URL del primer frame de un video subido a Cloudinary, sin necesidad de procesar/guardar un thumbnail aparte. Cloudinary genera imágenes de video "on t

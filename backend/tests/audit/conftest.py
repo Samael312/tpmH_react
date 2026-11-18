@@ -84,6 +84,8 @@ from app.models.availability import TeacherAvailability  # noqa: E402
 def fresh_db():
     from app.core.rate_limit import limiter
     limiter.reset()  # el limite de registro (5/hora) se acumulaba entre tests
+    from app.core import cache
+    cache._store.clear()  # la BD se recrea en cada test: la caché en memoria (landing, ajustes del chat) también
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield

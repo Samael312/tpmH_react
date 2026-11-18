@@ -15,7 +15,7 @@ Llamadas `api.<verbo>(...)` por archivo (regex; las URLs construidas dinámicame
 - `app/(student)/dashboard/availability/page.tsx`: PUT /users/me/preferences
 - `app/(student)/dashboard/classes/page.tsx`: DELETE /classes/{x}, DELETE /classes/{x}/leave, POST /cohorts/{x}/leave
 - `app/(student)/dashboard/homework/page.tsx`: POST /homework/student/{x}/submit
-- `app/(student)/dashboard/layout.tsx`: GET /users/me, GET /users/me/student-profile
+- `app/(student)/dashboard/layout.tsx`: GET /users/me/student-profile
 - `app/(student)/dashboard/materials/page.tsx`: PATCH /materials/student/{x}/progress, POST /tts/vocabulary/{x}
 - `app/(student)/dashboard/onboarding/page.tsx`: GET /users/me, PATCH /users/me, PATCH /users/me/avatar, PATCH /users/me/student-profile, POST /users/me/preferences
 - `app/(student)/dashboard/page.tsx`: POST /payments/request-refund-cohort-cancelled
@@ -36,7 +36,7 @@ Llamadas `api.<verbo>(...)` por archivo (regex; las URLs construidas dinámicame
 - `app/(teacher)/teacher/cohorts/page.tsx`: GET /cohorts/{x}/recurring-candidates, PATCH /cohorts/sessions/{x}/participants/{x}/attendance, PATCH /cohorts/{x}, POST /cohorts, POST /cohorts/{x}/cancel, POST /cohorts/{x}/close, POST /cohorts/{x}/complete, POST /cohorts/{x}/reopen, POST /cohorts/{x}/sessions
 - `app/(teacher)/teacher/dashboard/page.tsx`: PATCH /teachers/me/feedback-seen, POST /teachers/me/appeal, POST /teachers/me/video
 - `app/(teacher)/teacher/homework/page.tsx`: DELETE /homework/{x}, PATCH /homework/{x}, PATCH /homework/{x}/submissions/{x}/grade, POST /homework
-- `app/(teacher)/teacher/layout.tsx`: GET /teachers/me/profile, GET /users/me
+- `app/(teacher)/teacher/layout.tsx`: GET /teachers/me/profile
 - `app/(teacher)/teacher/materials/page.tsx`: DELETE /materials/{x}, PATCH /materials/{x}, POST /materials, POST /materials/{x}/assign, POST /materials/{x}/vocabulary
 - `app/(teacher)/teacher/onboarding/page.tsx`: GET /users/me, PATCH /teachers/me/profile, PATCH /users/me, POST /teachers/me/video, POST /users/me/photo, PUT /availability/me/weekly
 - `app/(teacher)/teacher/packages/page.tsx`: DELETE /packages/{x}, PATCH /packages/{x}, POST /packages, POST /payments/manual-grant
@@ -52,17 +52,18 @@ Llamadas `api.<verbo>(...)` por archivo (regex; las URLs construidas dinámicame
 - `components/payments/PackageCheckout.tsx`: POST /payments/notify-payment
 - `hooks/useAdminData.ts`: GET /admin/notifications, GET /admin/notifications/unread-count, GET /admin/platform-config, GET /admin/stats, GET /admin/teachers/{x}/appeals, GET /admin/users, GET /payments/config, GET /payments/pending-review, GET /system-catalogs/business-rules
 - `hooks/useBusinessRules.ts`: GET /system-catalogs/business-rules
-- `hooks/useChat.ts`: GET /chat/conversations/direct/{x}, GET /chat/conversations/group/{x}, GET /chat/conversations/unread-count, POST /chat/conversations/{x}/read
+- `hooks/useChat.ts`: GET /chat/conversations/direct/{x}, GET /chat/conversations/group/{x}, GET /chat/conversations/unread-count
 - `hooks/useChatAdmin.ts`: GET /chat/admin/conversations, GET /chat/admin/conversations/{x}/messages
 - `hooks/useEmailSettings.ts`: GET /admin/email-settings, PUT /admin/email-settings
 - `hooks/useErrorLogs.ts`: GET /logs, GET /logs/stats, GET /logs/users
 - `hooks/useGodMode.ts`: GET /god-mode/audit-log, GET /god-mode/lookup/class-durations, GET /god-mode/lookup/teachers/{x}/packages, GET /god-mode/lookup/teachers/{x}/reviews, GET /god-mode/lookup/teachers/{x}/students/reviewable, GET /god-mode/lookup/teachers/{x}/students/{x}/classes, GET /god-mode/lookup/teachers/{x}/students/{x}/payments
 - `hooks/useLandingData.ts`: GET /public/landing
-- `hooks/useSpokenLanguages.ts`: GET /users/me, PATCH /users/me
-- `hooks/useStudentData.ts`: GET /admin/platform-config, GET /availability/featured-teacher/username, GET /availability/{x}/slots, GET /homework/student/my-homework, GET /materials/student/my-materials, GET /packages/my-enrollments, GET /packages/teacher/{x}, GET /payments/booking-status, GET /payments/booking-status{x}, GET /reviews/{x}, GET /reviews/{x}/summary, GET /teachers, GET /teachers/{x}, GET /users/me, GET /users/me/preferences, GET /users/me/student-profile, GET /users/me/teachers
+- `hooks/useSpokenLanguages.ts`: PATCH /users/me
+- `hooks/useStudentData.ts`: GET /admin/platform-config, GET /availability/featured-teacher/username, GET /availability/{x}/slots, GET /homework/student/my-homework, GET /materials/student/my-materials, GET /packages/my-enrollments, GET /packages/teacher/{x}, GET /payments/booking-status, GET /payments/booking-status{x}, GET /reviews/{x}, GET /reviews/{x}/summary, GET /teachers, GET /teachers/{x}, GET /users/me/preferences, GET /users/me/student-profile, GET /users/me/teachers
 - `hooks/useSupport.ts`: GET /support/tickets/me/unread-count, PATCH /support/tickets/{x}/seen, POST /support/tickets
 - `hooks/useSystemCatalogs.ts`: GET /system-catalogs
-- `hooks/useTeacherData.ts`: GET /availability/me/weekly, GET /calendar/status, GET /cohorts/{x}/members, GET /homework/my-homework, GET /homework/{x}/submissions, GET /materials/my-materials, GET /packages/my-packages, GET /payments/my-wallet, GET /payments/pending-review, GET /reviews/{x}, GET /teachers/me/profile, GET /users/me, POST /payments/request-withdrawal
+- `hooks/useTeacherData.ts`: GET /availability/me/weekly, GET /calendar/status, GET /cohorts/{x}/members, GET /homework/my-homework, GET /homework/{x}/submissions, GET /materials/my-materials, GET /packages/my-packages, GET /payments/my-wallet, GET /payments/pending-review, GET /reviews/{x}, GET /teachers/me/profile, POST /payments/request-withdrawal
 - `hooks/useTeacherNotifications.ts`: GET /teachers/me/notifications/unread-count, PATCH /teachers/me/notifications/{x}/read, POST /teachers/me/notifications/mark-all-read
+- `lib/me.ts`: GET /users/me
 - `lib/platformTenantMode.ts`: GET /admin/platform-config
 - `store/chatStore.ts`: GET /chat/conversations/{x}/messages, POST /chat/conversations/{x}/messages

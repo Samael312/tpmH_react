@@ -34,7 +34,7 @@
 // decidir a propósito, no un default.
 
 import { create } from "zustand";
-import api from "@/lib/api";
+import api, { refreshSession } from "@/lib/api";
 
 export type ChatMessageStatus = "sending" | "sent" | "delivered" | "failed";
 
@@ -73,6 +73,20 @@ const ACK_TIMEOUT_MS = 5000;
 // durmió) que siguen en readyState OPEN pero ya no entregan nada.
 const PING_INTERVAL_MS = 25000;
 const PONG_TIMEOUT_MS = 8000;
+// Reconexión: retroceso exponencial con tope y un componente aleatorio. Sin el aleatorio, tras reiniciar el servidor
+// todos los clientes reconectaban en el mismo segundo (y cada apertura cuesta una lectura en la BD).
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 30000;
+// Códigos de cierre del backend (endpoints/chat.py): 4401 sesión no válida, 4403 chat apagado o rol sin chat.
+const CLOSE_UNAUTHORIZED = 4401;
+const CLOSE_FORBIDDEN = 4403;
+const FORBIDDEN_RETRY_MS = 5 * 60 * 1000;
+
+export function reconnectDelay(attempt: number, random: () => number = Math.random): number {
+  const ceiling = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** attempt);
+  // "Equal jitter": la mitad fija y la otra mitad aleatoria, para no reconectar nunca de inmediato en bucle.
+  return Math.round(ceiling / 2 + random() * (ceiling / 2));
+}
 
 function toClientMessage(m: ServerMessagePayload): ChatMessage {
   return {
@@ -461,14 +475,28 @@ function openSocket() {
     hasConnectedOnce = true;
   };
 
-  socket.onclose = () => {
+  socket.onclose = (event) => {
     useChatStore.setState({ connected: false });
     if (intentionalClose || ws !== socket) return;
     stopHeartbeat();
-    // Backoff simple: 1s, 2s, 4s, 8s... tope 30s.
-    const delay = Math.min(30000, 1000 * 2 ** reconnectAttempts);
+    if (event.code === CLOSE_FORBIDDEN) {
+      // Chat apagado por el admin (o rol sin chat): reintentar cada pocos segundos no lo va a cambiar. Se vuelve a
+      // probar al rato o al volver a la pestaña (handleWake).
+      scheduleReconnect(FORBIDDEN_RETRY_MS);
+      return;
+    }
+    if (event.code === CLOSE_UNAUTHORIZED) {
+      // El access de la cookie venció: se renueva por REST (un solo refresh compartido con axios) y se reconecta.
+      // Si la sesión terminó de verdad, el interceptor de api.ts ya lleva al login en la siguiente petición.
+      const attempt = reconnectAttempts++;
+      refreshSession().then(
+        () => scheduleReconnect(0),
+        () => scheduleReconnect(reconnectDelay(attempt + 3)),
+      );
+      return;
+    }
+    scheduleReconnect(reconnectDelay(reconnectAttempts));
     reconnectAttempts += 1;
-    scheduleReconnect(delay);
   };
 
   socket.onerror = () => {
