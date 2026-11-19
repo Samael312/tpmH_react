@@ -11,13 +11,14 @@ import { getFlagForNationality } from '@/lib/nationalities'
 import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
+import LoadMoreButton from '@/components/ui/LoadMoreButton'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 import { usePageTopBar } from '@/lib/mobileTopBar'
 import { useToast } from '@/hooks/useToast'
 import { getErrorMessage } from '@/lib/errorMessage'
 
 export default function BannedStudentsPage() {
-  const { students, loading, isFetching, isError, refetch } = useBannedStudents()
+  const { students, total, loading, isFetching, isError, refetch, hasMore, loadMore, loadingMore } = useBannedStudents()
   const [revertingId, setRevertingId] = useState<number | null>(null)
   const [confirmTarget, setConfirmTarget] = useState<Student | null>(null)
   const toast = useToast()
@@ -58,7 +59,7 @@ export default function BannedStudentsPage() {
                 Estudiantes Baneados
               </h1>
               <p className="text-slate-500 text-xs font-semibold mt-0.5">
-                {students.length} estudiante{students.length !== 1 ? 's' : ''} expulsado{students.length !== 1 ? 's' : ''} de la plataforma
+                {total} estudiante{total !== 1 ? 's' : ''} expulsado{total !== 1 ? 's' : ''} de la plataforma
               </p>
             </div>
           </div>
@@ -145,6 +146,7 @@ export default function BannedStudentsPage() {
                   </div>
                 </div>
               ))}
+              <LoadMoreButton hasMore={hasMore} loading={loadingMore} onClick={loadMore} />
             </div>
           )}
         </Card>

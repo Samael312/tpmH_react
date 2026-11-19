@@ -15,6 +15,7 @@ from app.schemas.system_catalog import (
 )
 from app.schemas.classes import CLASS_DURATION_OPTIONS, DEFAULT_BUFFER_MINUTES
 from app.schemas.payments import MIN_WITHDRAWAL_AMOUNT
+from app.core.platform_config import get_platform_config  # Fase 14, E9: una lectura por petición
 
 router = APIRouter()
 
@@ -51,7 +52,7 @@ def list_catalogs_admin(
 @router.get("/business-rules", response_model=BusinessRulesResponse)
 def get_business_rules(db: Session = Depends(get_db)):
     """Público — el frontend lo necesita para validar duraciones/plazos sin sesión de admin."""
-    config = db.query(PlatformConfig).first()
+    config = get_platform_config(db)
     if not config:
         config = PlatformConfig()
         db.add(config)
@@ -101,7 +102,7 @@ def update_business_rules(
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db),
 ):
-    config = db.query(PlatformConfig).first()
+    config = get_platform_config(db)
     if not config:
         config = PlatformConfig()
         db.add(config)

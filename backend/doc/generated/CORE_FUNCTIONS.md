@@ -64,29 +64,29 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/class_logic.py
 
-- `is_within_teacher_availability(teacher_id: int, start_utc: datetime, end_utc: datetime, db: Session)` — L26: Verifica que [start_utc, end_utc) caiga dentro de un bloque de disponibilidad declarado por el profesor (horario semanal recurrente + excepciones puntuales de disponibilidad extra), y que no choque con una excepción de bloqueo puntual (vacaciones, feriado, etc).
-- `validate_payment_method(payment_method: str, db: Session)` — L108: Correcciones Extra (informe D1-D14): el método de pago que indica el estudiante al notificar un pago tiene que ser uno de los métodos que el admin tiene efectivamente habilitados en ese momento (no alcanza con que sea una de las 4 claves conocidas -- si el admin apagó "bank_transfer", ya no es un mé
-- `get_price_per_class(package)` — L138: Correcciones Extra (informe D1-D14): precio de una clase suelta dentro de `package`. Usa el campo `price_per_class` guardado a mano por el profesor si existe; si es un paquete creado antes de que ese campo existiera (queda NULL), cae al cálculo derivado de siempre (price/classes_count) para no rompe
-- `get_business_rules(db: Session)` — L154: Lee las reglas de negocio configuradas por el superadmin desde PlatformConfig. Si no hay fila aún, cae a los defaults de arriba.
-- `validate_class_duration(duration_minutes: int, db: Session)` — L206: Valida una duración de clase REGULAR contra el subconjunto configurado por el superadmin. No aplica a trial (ver get_trial_duration_minutes, que no es una elección del usuario sino un valor fijo de config).
-- `validate_package_duration(duration_minutes: int, db: Session)` — L217: Valida la duración de clase de un PAQUETE contra el subconjunto configurado por el superadmin (allowed_package_durations) — catálogo independiente de allowed_class_durations, aunque hoy comparten el mismo pool fijo (CLASS_DURATION_OPTIONS).
-- `get_buffer_minutes_for_type(class_type, db: Session)` — L229: Minutos de margen que se descuentan del final real de una clase de este tipo, según la config vigente. `class_type` puede ser un ClassType o su valor string ("trial" | "regular" | "group").
-- `lock_booking_rows(db: Session, teacher_id: int, student_id: int | None=None)` — L246: Serializa las reservas concurrentes tomando un lock de fila (SELECT ... FOR UPDATE) sobre el alumno y luego el profesor (siempre en ese orden, para evitar deadlocks). Sin esto, dos requests simultaneos leen la agenda/creditos antes de que el otro haga commit y ambos pasan los chequeos (doble reserva
-- `lock_class_row(db: Session, class_id: int)` — L262: Recarga la clase con lock de fila para que dos cancelaciones simultaneas no devuelvan el credito dos veces.
-- `can_book_slot(start_time_utc: datetime, teacher_id: int, student_id: int, end_time_utc: datetime, db: Session, exclude_class_id: int=None, enforce_min_not)` — L267
-- `can_join_group_class(class_: Class, db: Session)` — L414: Chequeo de cupo para una sesión grupal ya creada (Class con class_type == "group"): ¿hay lugar para un alumno más? Complementa a can_book_slot, que ya valida antelación mínima y que ni el alumno ni el profesor tengan otro compromiso en ese horario.
-- `can_cancel_class(class_: Class, requesting_user_id: int, db: Session)` — L440
-- `can_reschedule_class(class_: Class, role: str, db: Session)` — L462
-- `resolve_status_after_reschedule(class_: Class)` — L502: Determina el status que debe quedar una clase tras reagendarla.
-- `update_enrollment_counter(enrollment_id: int, delta: int, db: Session)` — L526: Actualiza el contador de clases usadas en un enrollment. delta=1 cuando se completa una clase delta=-1 cuando se cancela una clase completada
-- `get_student_booking_stage(student_id: int, teacher_id: int, db: Session, *, heal: bool=True)` — L555: Determina la etapa de reserva del estudiante CON UN PROFESOR ESPECÍFICO. Cada relación estudiante-profesor es independiente: completar la prueba con un profesor no exime de la prueba con otro.
-- `release_stale_unpaid_enrollments(db: Session, older_than_hours: int=STALE_UNPAID_ENROLLMENT_HOURS)` — L699: Cancela los enrollments individuales activos que nunca se pagaron ni tienen un pago en revision y tienen mas de `older_than_hours` horas. Es lo que antes hacia, en un GET, `get_student_booking_stage`. Los de cohorte (grupales) no se tocan.
-- `notify_teachers_auto_no_show(db: Session, classes: list[Class])` — L735: Fase 13 (A9): avisa a cada profesor (campana «Avisos», sin correo) de las clases que pasaron solas a `no_show` por no marcarlas en 72 h. UNA notificacion por profesor y pasada del job, aunque sean varias clases (si el job estuvo caido no se le inunda). No hace commit: va en la misma transaccion que 
-- `finalize_past_classes(db: Session)` — L775: Marca como 'finalized' las clases confirmadas cuyo horario ya terminó, y como 'no_show' las que nunca se confirmaron/pagaron y ya pasó su hora. Actualiza también el contador de clases usadas del paquete, ya que estos estados cuentan contra el cupo del estudiante.
-- `class_counts_towards_package(class_status: str, start_time_utc: datetime, reference_time: datetime | None=None, apply_late_cancel_penalty: bool=True, min_cancel_hours: i)` — L843: Determina si una clase en este estado debe contarse contra el paquete del estudiante (classes_used).
-- `sync_student_lifetime_class_counter(class_: 'Class', old_status: str, new_status: str, db: Session)` — L886: Mantiene StudentProfile.total_completed_classes al día cada vez que el status de una Class entra o sale de LIFETIME_COUNTING_STATUSES.
-- `count_completed_classes_with_teacher(db: Session, teacher_id: int, student_id: int)` — L934: Cuántas clases completó un alumno con un profesor puntual (individuales + grupales, status 'completed'). A diferencia del contador de por vida de StudentProfile, este número es específico del par profesor-alumno y no incluye 'no_show' — usa el mismo criterio que la elegibilidad para dejar una reseña
-- `cancel_class_and_refund(class_: 'Class', db: Session, apply_late_cancel_penalty: bool)` — L961: Marca la clase como cancelada y devuelve el crédito al estudiante si corresponde. Centraliza la lógica que antes estaba duplicada en los 3 endpoints de cancelación (estudiante, profesor, admin).
+- `is_within_teacher_availability(teacher_id: int, start_utc: datetime, end_utc: datetime, db: Session)` — L27: Verifica que [start_utc, end_utc) caiga dentro de un bloque de disponibilidad declarado por el profesor (horario semanal recurrente + excepciones puntuales de disponibilidad extra), y que no choque con una excepción de bloqueo puntual (vacaciones, feriado, etc).
+- `validate_payment_method(payment_method: str, db: Session)` — L109: Correcciones Extra (informe D1-D14): el método de pago que indica el estudiante al notificar un pago tiene que ser uno de los métodos que el admin tiene efectivamente habilitados en ese momento (no alcanza con que sea una de las 4 claves conocidas -- si el admin apagó "bank_transfer", ya no es un mé
+- `get_price_per_class(package)` — L139: Correcciones Extra (informe D1-D14): precio de una clase suelta dentro de `package`. Usa el campo `price_per_class` guardado a mano por el profesor si existe; si es un paquete creado antes de que ese campo existiera (queda NULL), cae al cálculo derivado de siempre (price/classes_count) para no rompe
+- `get_business_rules(db: Session)` — L155: Lee las reglas de negocio configuradas por el superadmin desde PlatformConfig. Si no hay fila aún, cae a los defaults de arriba.
+- `validate_class_duration(duration_minutes: int, db: Session)` — L207: Valida una duración de clase REGULAR contra el subconjunto configurado por el superadmin. No aplica a trial (ver get_trial_duration_minutes, que no es una elección del usuario sino un valor fijo de config).
+- `validate_package_duration(duration_minutes: int, db: Session)` — L218: Valida la duración de clase de un PAQUETE contra el subconjunto configurado por el superadmin (allowed_package_durations) — catálogo independiente de allowed_class_durations, aunque hoy comparten el mismo pool fijo (CLASS_DURATION_OPTIONS).
+- `get_buffer_minutes_for_type(class_type, db: Session)` — L230: Minutos de margen que se descuentan del final real de una clase de este tipo, según la config vigente. `class_type` puede ser un ClassType o su valor string ("trial" | "regular" | "group").
+- `lock_booking_rows(db: Session, teacher_id: int, student_id: int | None=None)` — L247: Serializa las reservas concurrentes tomando un lock de fila (SELECT ... FOR UPDATE) sobre el alumno y luego el profesor (siempre en ese orden, para evitar deadlocks). Sin esto, dos requests simultaneos leen la agenda/creditos antes de que el otro haga commit y ambos pasan los chequeos (doble reserva
+- `lock_class_row(db: Session, class_id: int)` — L263: Recarga la clase con lock de fila para que dos cancelaciones simultaneas no devuelvan el credito dos veces.
+- `can_book_slot(start_time_utc: datetime, teacher_id: int, student_id: int, end_time_utc: datetime, db: Session, exclude_class_id: int=None, enforce_min_not)` — L268
+- `can_join_group_class(class_: Class, db: Session)` — L415: Chequeo de cupo para una sesión grupal ya creada (Class con class_type == "group"): ¿hay lugar para un alumno más? Complementa a can_book_slot, que ya valida antelación mínima y que ni el alumno ni el profesor tengan otro compromiso en ese horario.
+- `can_cancel_class(class_: Class, requesting_user_id: int, db: Session)` — L441
+- `can_reschedule_class(class_: Class, role: str, db: Session)` — L463
+- `resolve_status_after_reschedule(class_: Class)` — L503: Determina el status que debe quedar una clase tras reagendarla.
+- `update_enrollment_counter(enrollment_id: int, delta: int, db: Session)` — L527: Actualiza el contador de clases usadas en un enrollment. delta=1 cuando se completa una clase delta=-1 cuando se cancela una clase completada
+- `get_student_booking_stage(student_id: int, teacher_id: int, db: Session, *, heal: bool=True)` — L556: Determina la etapa de reserva del estudiante CON UN PROFESOR ESPECÍFICO. Cada relación estudiante-profesor es independiente: completar la prueba con un profesor no exime de la prueba con otro.
+- `release_stale_unpaid_enrollments(db: Session, older_than_hours: int=STALE_UNPAID_ENROLLMENT_HOURS)` — L695: Cancela los enrollments individuales activos que nunca se pagaron ni tienen un pago en revision y tienen mas de `older_than_hours` horas. Es lo que antes hacia, en un GET, `get_student_booking_stage`. Los de cohorte (grupales) no se tocan.
+- `notify_teachers_auto_no_show(db: Session, classes: list[Class])` — L731: Fase 13 (A9): avisa a cada profesor (campana «Avisos», sin correo) de las clases que pasaron solas a `no_show` por no marcarlas en 72 h. UNA notificacion por profesor y pasada del job, aunque sean varias clases (si el job estuvo caido no se le inunda). No hace commit: va en la misma transaccion que 
+- `finalize_past_classes(db: Session)` — L771: Marca como 'finalized' las clases confirmadas cuyo horario ya terminó, y como 'no_show' las que nunca se confirmaron/pagaron y ya pasó su hora. Actualiza también el contador de clases usadas del paquete, ya que estos estados cuentan contra el cupo del estudiante.
+- `class_counts_towards_package(class_status: str, start_time_utc: datetime, reference_time: datetime | None=None, apply_late_cancel_penalty: bool=True, min_cancel_hours: i)` — L839: Determina si una clase en este estado debe contarse contra el paquete del estudiante (classes_used).
+- `sync_student_lifetime_class_counter(class_: 'Class', old_status: str, new_status: str, db: Session)` — L882: Mantiene StudentProfile.total_completed_classes al día cada vez que el status de una Class entra o sale de LIFETIME_COUNTING_STATUSES.
+- `count_completed_classes_with_teacher(db: Session, teacher_id: int, student_id: int)` — L930: Cuántas clases completó un alumno con un profesor puntual (individuales + grupales, status 'completed'). A diferencia del contador de por vida de StudentProfile, este número es específico del par profesor-alumno y no incluye 'no_show' — usa el mismo criterio que la elegibilidad para dejar una reseña
+- `cancel_class_and_refund(class_: 'Class', db: Session, apply_late_cancel_penalty: bool)` — L957: Marca la clase como cancelada y devuelve el crédito al estudiante si corresponde. Centraliza la lógica que antes estaba duplicada en los 3 endpoints de cancelación (estudiante, profesor, admin).
 
 ## app/core/config.py
 
@@ -94,60 +94,63 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/email.py
 
-- `_detail_row(label: str, value: str)` — L29
-- `_detail_table(rows: list[str])` — L37
-- `_cta_button(text: str, url: str)` — L44
-- `_badge(text: str, color: str)` — L57
-- `_base_template(preheader: str, badge_html: str, heading: str, body_html: str)` — L66
-- `_send(to_email: str, subject: str, html: str, category: str='essential')` — L119: Unico punto de salida de correos. Antes de enviar consulta el control de la Fase 7 (core/email_settings.py): categoria apagada, limite diario o modo ahorro -> se omite y se anota. Si el control o el contador fallan, el correo SALE igual (nunca se pierde un correo por un fallo de conteo).
-- `send_password_reset_email(to_email: str, user_name: str, reset_token: str)` — L169
-- `send_verification_email(to_email: str, user_name: str, verify_token: str)` — L181
-- `send_username_recovery_email(to_email: str, user_name: str, username: str)` — L193
-- `send_welcome_email(to_email: str, user_name: str, role: str)` — L207
-- `_duration_and_buffer_rows(duration_minutes: int, buffer_minutes: int=0)` — L230
-- `send_class_booking_confirmation(to_email: str, student_name: str, teacher_name: str, subject: str, class_start_local: str, duration_minutes: int, is_trial: bool=False, buff)` — L241
-- `send_class_rescheduled_student_email(to_email: str, student_name: str, teacher_name: str, old_start_local: str, new_start_local: str, changed_by: str)` — L262
-- `send_class_reminder_email(to_email: str, student_name: str, teacher_name: str, subject: str, class_start_local: str, hours_before: int=24)` — L279
-- `send_cohort_ended_email(to_email: str, student_name: str, package_name: str, reason: str, credit_returned: bool | None=None)` — L298: Para cuando una cohorte grupal termina y el alumno queda libre de elegir un nuevo paquete — a diferencia de una clase cancelada (que tiene una fecha/hora puntual), acá lo que se cancela es la cohorte completa, así que esta plantilla NO reutiliza el campo "Fecha y hora" de send_class_cancelled_email 
-- `send_class_cancelled_email(to_email: str, student_name: str, class_start_local: str, cancelled_by: str, reason: str | None=None, credit_returned: bool | None=None)` — L328
-- `send_class_no_show_email(to_email: str, student_name: str, class_start_local: str)` — L349
-- `send_homework_graded_email(to_email: str, student_name: str, homework_title: str, score: float, feedback: str | None)` — L360
-- `send_material_assigned_email(to_email: str, student_name: str, teacher_name: str, material_title: str, category: str)` — L376
-- `send_payment_receipt_email(to_email: str, student_name: str, concept: str, amount: float, payment_method: str, transaction_reference: str | None=None)` — L391
-- `send_payment_failed_email(to_email: str, student_name: str, concept: str, amount: float, rejection_reason: str)` — L410
-- `send_teacher_status_update_email(to_email: str, teacher_name: str, new_status: str, reason: str | None=None)` — L430
-- `send_support_ticket_response_email(to_email: str, user_name: str, subject: str, admin_response: str, portal_path: str)` — L451
-- `send_new_booking_teacher_email(to_email: str, teacher_name: str, student_first_name: str, student_last_name: str, student_nationality: str | None, student_phone: str | Non)` — L464
-- `send_class_rescheduled_teacher_email(to_email: str, teacher_name: str, student_name: str, old_start_local: str, new_start_local: str, changed_by: str)` — L487
-- `send_class_reminder_teacher_email(to_email: str, teacher_name: str, student_name: str, subject: str, class_start_local: str, hours_before: int=24)` — L504
-- `send_class_reminders_teacher_digest_email(to_email: str, teacher_name: str, items: list[tuple[str, str, str]], hours_before: int=24)` — L522: Un solo correo con TODAS las clases que el profesor tiene en la ventana de recordatorio, en vez de uno por clase. `items`: (alumno, materia, fecha y hora local).
-- `send_chat_digest_teacher_email(to_email: str, teacher_name: str, items: list[tuple[str, int, str]], conversation_url: str)` — L540: Un solo correo con los mensajes nuevos de varias conversaciones, en vez de uno por alumno. `items`: (alumno, mensajes sin leer, vista previa del ultimo).
-- `send_class_cancelled_teacher_email(to_email: str, teacher_name: str, student_name: str, class_start_local: str, cancelled_by: str, reason: str | None=None)` — L559
-- `send_homework_submitted_email(to_email: str, teacher_name: str, student_name: str, homework_title: str, submitted_at_local: str)` — L577
-- `send_new_review_received_email(to_email: str, teacher_name: str, student_name: str, rating: float, comment: str | None)` — L592
-- `send_withdrawal_requested_teacher_email(to_email: str, teacher_name: str, amount: float, destination_method: str)` — L606
-- `send_withdrawal_processed_email(to_email: str, teacher_name: str, status: str, amount: float, reference: str | None=None, rejection_reason: str | None=None)` — L622
-- `send_admin_new_support_ticket_email(to_email: str, user_name: str, user_role_label: str, category_label: str, subject: str, message: str)` — L646
-- `send_admin_new_teacher_pending_email(to_email: str, teacher_name: str, teacher_email: str, subjects_or_languages: list[str])` — L662
-- `send_admin_payment_pending_email(to_email: str, student_name: str, amount: float, concept: str, payment_method: str, transaction_reference: str | None=None)` — L678
-- `send_admin_withdrawal_requested_email(to_email: str, teacher_name: str, amount: float, destination_details: str)` — L699
-- `send_package_expiring_email(to_email: str, student_name: str, package_name: str, classes_remaining: int)` — L714
-- `send_new_chat_message_teacher_email(to_email: str, teacher_name: str, student_name: str, message_preview: str, conversation_url: str)` — L731
-- `send_class_confirmed_email(to_email: str, student_name: str, teacher_name: str, subject: str, class_start_local: str, duration_minutes: int, buffer_minutes: int=0)` — L745
-- `send_class_confirmed_teacher_email(to_email: str, teacher_name: str, student_name: str, subject: str, class_start_local: str, duration_minutes: int)` — L762
+- `_detail_row(label: str, value: str)` — L31
+- `_detail_table(rows: list[str])` — L39
+- `_cta_button(text: str, url: str)` — L46
+- `_badge(text: str, color: str)` — L59
+- `_base_template(preheader: str, badge_html: str, heading: str, body_html: str)` — L68
+- `_get_email_executor()` — L125
+- `shutdown_email_queue(wait: bool=True)` — L133: Al apagar el servidor: deja salir los correos que estaban en cola (main.py::lifespan).
+- `_send(to_email: str, subject: str, html: str, category: str='essential')` — L142: Pone el correo en cola y vuelve al instante (Fase 14, E1): la peticion ya no espera a Resend. Devuelve True si quedo en cola; si sale, se omite o falla se anota igual en email_log desde el hilo de envio. Ningun llamador usa el valor devuelto. Con EMAIL_ASYNC=false se envia en linea y devuelve el res
+- `_send_now(to_email: str, subject: str, html: str, category: str='essential')` — L158: Unico punto de salida de correos. Antes de enviar consulta el control de la Fase 7 (core/email_settings.py): categoria apagada, limite diario o modo ahorro -> se omite y se anota. Si el control o el contador fallan, el correo SALE igual (nunca se pierde un correo por un fallo de conteo).
+- `send_password_reset_email(to_email: str, user_name: str, reset_token: str)` — L208
+- `send_verification_email(to_email: str, user_name: str, verify_token: str)` — L220
+- `send_username_recovery_email(to_email: str, user_name: str, username: str)` — L232
+- `send_welcome_email(to_email: str, user_name: str, role: str)` — L246
+- `_duration_and_buffer_rows(duration_minutes: int, buffer_minutes: int=0)` — L269
+- `send_class_booking_confirmation(to_email: str, student_name: str, teacher_name: str, subject: str, class_start_local: str, duration_minutes: int, is_trial: bool=False, buff)` — L280
+- `send_class_rescheduled_student_email(to_email: str, student_name: str, teacher_name: str, old_start_local: str, new_start_local: str, changed_by: str)` — L301
+- `send_class_reminder_email(to_email: str, student_name: str, teacher_name: str, subject: str, class_start_local: str, hours_before: int=24)` — L318
+- `send_cohort_ended_email(to_email: str, student_name: str, package_name: str, reason: str, credit_returned: bool | None=None)` — L337: Para cuando una cohorte grupal termina y el alumno queda libre de elegir un nuevo paquete — a diferencia de una clase cancelada (que tiene una fecha/hora puntual), acá lo que se cancela es la cohorte completa, así que esta plantilla NO reutiliza el campo "Fecha y hora" de send_class_cancelled_email 
+- `send_class_cancelled_email(to_email: str, student_name: str, class_start_local: str, cancelled_by: str, reason: str | None=None, credit_returned: bool | None=None)` — L367
+- `send_class_no_show_email(to_email: str, student_name: str, class_start_local: str)` — L388
+- `send_homework_graded_email(to_email: str, student_name: str, homework_title: str, score: float, feedback: str | None)` — L399
+- `send_material_assigned_email(to_email: str, student_name: str, teacher_name: str, material_title: str, category: str)` — L415
+- `send_payment_receipt_email(to_email: str, student_name: str, concept: str, amount: float, payment_method: str, transaction_reference: str | None=None)` — L430
+- `send_payment_failed_email(to_email: str, student_name: str, concept: str, amount: float, rejection_reason: str)` — L449
+- `send_teacher_status_update_email(to_email: str, teacher_name: str, new_status: str, reason: str | None=None)` — L469
+- `send_support_ticket_response_email(to_email: str, user_name: str, subject: str, admin_response: str, portal_path: str)` — L490
+- `send_new_booking_teacher_email(to_email: str, teacher_name: str, student_first_name: str, student_last_name: str, student_nationality: str | None, student_phone: str | Non)` — L503
+- `send_class_rescheduled_teacher_email(to_email: str, teacher_name: str, student_name: str, old_start_local: str, new_start_local: str, changed_by: str)` — L526
+- `send_class_reminder_teacher_email(to_email: str, teacher_name: str, student_name: str, subject: str, class_start_local: str, hours_before: int=24)` — L543
+- `send_class_reminders_teacher_digest_email(to_email: str, teacher_name: str, items: list[tuple[str, str, str]], hours_before: int=24)` — L561: Un solo correo con TODAS las clases que el profesor tiene en la ventana de recordatorio, en vez de uno por clase. `items`: (alumno, materia, fecha y hora local).
+- `send_chat_digest_teacher_email(to_email: str, teacher_name: str, items: list[tuple[str, int, str]], conversation_url: str)` — L579: Un solo correo con los mensajes nuevos de varias conversaciones, en vez de uno por alumno. `items`: (alumno, mensajes sin leer, vista previa del ultimo).
+- `send_class_cancelled_teacher_email(to_email: str, teacher_name: str, student_name: str, class_start_local: str, cancelled_by: str, reason: str | None=None)` — L598
+- `send_homework_submitted_email(to_email: str, teacher_name: str, student_name: str, homework_title: str, submitted_at_local: str)` — L616
+- `send_new_review_received_email(to_email: str, teacher_name: str, student_name: str, rating: float, comment: str | None)` — L631
+- `send_withdrawal_requested_teacher_email(to_email: str, teacher_name: str, amount: float, destination_method: str)` — L645
+- `send_withdrawal_processed_email(to_email: str, teacher_name: str, status: str, amount: float, reference: str | None=None, rejection_reason: str | None=None)` — L661
+- `send_admin_new_support_ticket_email(to_email: str, user_name: str, user_role_label: str, category_label: str, subject: str, message: str)` — L685
+- `send_admin_new_teacher_pending_email(to_email: str, teacher_name: str, teacher_email: str, subjects_or_languages: list[str])` — L701
+- `send_admin_payment_pending_email(to_email: str, student_name: str, amount: float, concept: str, payment_method: str, transaction_reference: str | None=None)` — L717
+- `send_admin_withdrawal_requested_email(to_email: str, teacher_name: str, amount: float, destination_details: str)` — L738
+- `send_package_expiring_email(to_email: str, student_name: str, package_name: str, classes_remaining: int)` — L753
+- `send_new_chat_message_teacher_email(to_email: str, teacher_name: str, student_name: str, message_preview: str, conversation_url: str)` — L770
+- `send_class_confirmed_email(to_email: str, student_name: str, teacher_name: str, subject: str, class_start_local: str, duration_minutes: int, buffer_minutes: int=0)` — L784
+- `send_class_confirmed_teacher_email(to_email: str, teacher_name: str, student_name: str, subject: str, class_start_local: str, duration_minutes: int)` — L801
 
 ## app/core/email_settings.py
 
-- `today()` — L88
-- `_config(db: Session)` — L92
-- `get_limit(cfg: PlatformConfig | None)` — L96
-- `get_saver_percent(cfg: PlatformConfig | None)` — L101
-- `is_category_enabled(cfg: PlatformConfig | None, category: str)` — L106
-- `usage_today(db: Session)` — L113: {categoria: {sent, skipped, failed}} de hoy (UTC).
-- `sent_today(db: Session)` — L127
-- `saver_active(cfg: PlatformConfig | None, sent: int)` — L131: El modo ahorro esta pausando categorias ahora mismo.
-- `decide(db: Session, category: str)` — L138: (enviar?, motivo si se omite). Las esenciales siempre salen.
-- `record(db: Session, category: str, outcome: str, reason: str | None=None)` — L154
+- `today()` — L89
+- `_config(db: Session)` — L93
+- `get_limit(cfg: PlatformConfig | None)` — L97
+- `get_saver_percent(cfg: PlatformConfig | None)` — L102
+- `is_category_enabled(cfg: PlatformConfig | None, category: str)` — L107
+- `usage_today(db: Session)` — L114: {categoria: {sent, skipped, failed}} de hoy (UTC).
+- `sent_today(db: Session)` — L128
+- `saver_active(cfg: PlatformConfig | None, sent: int)` — L132: El modo ahorro esta pausando categorias ahora mismo.
+- `decide(db: Session, category: str)` — L139: (enviar?, motivo si se omite). Las esenciales siempre salen.
+- `record(db: Session, category: str, outcome: str, reason: str | None=None)` — L155
 
 ## app/core/error_log.py
 
@@ -194,6 +197,10 @@ Las que empiezan por `_` son privadas del módulo.
 - `cancel_future_cohort_sessions(cohort_id: int, db: Session)` — L120: Cancela las sesiones (Class) FUTURAS que ya estaban agendadas para una cohorte que se acaba de cancelar o completar bajo el mínimo.
 - `cancel_cohort(cohort: GroupCohort, db: Session)` — L147: Cancela una cohorte que no se llenó (o que el profesor decide abortar antes de que arrancara). Libera el cupo de TODOS sus enrollments activos y además CANCELA cada enrollment por completo (antes solo se liberaba el cupo y el enrollment quedaba "activo" pero sin cohorte — un estado inconsistente: el
 
+## app/core/http_cache.py
+
+- `set_public_cache(response: Response)` — L27
+
 ## app/core/notifications.py
 
 - `create_notification(db: Session, type: str, title: str, message: Optional[str]=None, related_teacher_id: Optional[int]=None, related_support_ticket_id: Optional)` — L6: Crea una notificación persistente para el panel de staff. No hace commit — el caller decide cuándo confirmar la transacción (normalmente junto con el resto de cambios de la operación).
@@ -211,9 +218,12 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/platform_config.py
 
-- `get_landing_content(config: PlatformConfig)` — L69: Defaults + lo que el admin haya sobreescrito en config.landing_content. Nunca falta ninguna clave (aunque el admin solo haya guardado un subconjunto, o la fila sea vieja y landing_content sea None).
-- `get_or_create_platform_config(db: Session)` — L81: Devuelve la fila (única) de configuración de plataforma, creándola con valores default si todavía no existe.
-- `serialize_platform_config(db: Session, config: PlatformConfig)` — L93: Convierte PlatformConfig al dict público que ya consumía el frontend desde /admin/platform-config. Extraído para poder reutilizarlo también en el endpoint agregado de landing.
+- `get_landing_content(config: PlatformConfig)` — L71: Defaults + lo que el admin haya sobreescrito en config.landing_content. Nunca falta ninguna clave (aunque el admin solo haya guardado un subconjunto, o la fila sea vieja y landing_content sea None).
+- `get_platform_config(db: Session)` — L86: La fila única de PlatformConfig, leída UNA vez por sesión (= por petición) (Fase 14, E9).
+- `get_or_create_platform_config(db: Session)` — L105: Devuelve la fila (única) de configuración de plataforma, creándola con valores default si todavía no existe.
+- `serialize_platform_config(db: Session, config: PlatformConfig)` — L118: Convierte PlatformConfig al dict público que ya consumía el frontend desde /admin/platform-config. Extraído para poder reutilizarlo también en el endpoint agregado de landing.
+- `resolve_featured_teacher(db: Session, config: Optional[PlatformConfig]=None)` — L152: La profesora destacada: la guardada en PlatformConfig o, si no hay, FEATURED_TEACHER_USERNAME del entorno.
+- `ensure_featured_teacher_in_single_tenant(db: Session, teacher_id: int)` — L171: En single-tenant solo se agenda, compra o inscribe con la destacada (400 si es otro profesor).
 
 ## app/core/rate_limit.py
 
@@ -269,6 +279,18 @@ Las que empiezan por `_` son privadas del módulo.
 - `install_session_hooks()` — L655
 - `start_scheduler()` — L666
 - `stop_scheduler()` — L680: Para el scheduler al apagar la aplicación
+
+## app/core/slots_cache.py
+
+- `slots_key(teacher_id: int, date: str, duration: int, occupancy: int)` — L45
+- `cached_slot_grid(teacher_id: int, date: str, duration: int, occupancy: int, loader: Callable[[], Any])` — L49
+- `invalidate_teacher_slots(teacher_id: int)` — L58
+- `invalidate_all_slots()` — L62
+- `_pending(session: Session)` — L66
+- `_teacher_ids(obj: Any)` — L70: teacher_id actual y, si cambió (sustitución de profesor), también el anterior. Si no está cargado (no se lanza SQL dentro del flush), se invalida todo.
+- `_collect_after_flush(session: Session, _flush_context)` — L79
+- `_collect_bulk(orm_execute_state)` — L87
+- `_invalidate_after_commit(session: Session)` — L96
 
 ## app/core/spoken_languages.py
 

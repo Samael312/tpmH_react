@@ -4,7 +4,7 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, UploadFile, File
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.core.phone import normalize_phone
 from app.db.base import get_db
 from app.core.rate_limit import limiter
@@ -30,6 +30,7 @@ from app.core.spoken_languages import (
     SpokenLanguagesError, get_catalog as get_spoken_catalog, normalize_spoken_languages,
 )
 from app.models.package import Enrollment, EnrollmentStatus
+from app.core.platform_config import get_platform_config  # Fase 14, E9: una lectura por petición
 
 logger = logging.getLogger(__name__)
 
@@ -625,7 +626,7 @@ def get_my_teachers(
     el frontend use la misma forma de respuesta en ambos modos.
     """
 
-    config = db.query(PlatformConfig).first()
+    config = get_platform_config(db)
     student_id = current_user.student_profile.id
 
     if config and config.is_single_tenant:
@@ -640,12 +641,13 @@ def get_my_teachers(
 
     result = []
     for tid in teacher_ids:
-        teacher = db.query(TeacherProfile).filter(TeacherProfile.id == tid).first()
+        # joinedload: nombre y apellido salen de teacher.user; sin esto, una consulta más por profesor (Fase 14, E9).
+        teacher = db.query(TeacherProfile).options(joinedload(TeacherProfile.user)).filter(TeacherProfile.id == tid).first()
         if not teacher:
             continue
         # GET: no debe escribir (heal=False); el barrido diario limpia los enrollments sin pagar.
         stage = get_student_booking_stage(student_id, tid, db, heal=False)
-        active_enrollment = db.query(Enrollment).filter(
+        active_enrollment = db.query(Enrollment).options(joinedload(Enrollment.package)).filter(
             Enrollment.student_id == student_id,
             Enrollment.teacher_id == tid,
             Enrollment.status.in_([EnrollmentStatus.active, EnrollmentStatus.pending_package_change]),
@@ -702,7 +704,7 @@ def link_teacher(
     from app.models.payment_config import PlatformConfig
     from app.models.student_teacher_link import StudentTeacherLink
 
-    config = db.query(PlatformConfig).first()
+    config = get_platform_config(db)
     if not config or config.is_single_tenant:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -745,7 +747,7 @@ def unlink_teacher(
     from app.models.student_teacher_link import StudentTeacherLink
     from app.models.package import Enrollment, EnrollmentStatus
 
-    config = db.query(PlatformConfig).first()
+    config = get_platform_config(db)
     if not config or config.is_single_tenant:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

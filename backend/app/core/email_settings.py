@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.timezone import utc_now
 from app.models.email_log import EmailLog
 from app.models.payment_config import PlatformConfig
+from app.core.platform_config import get_platform_config  # Fase 14, E9: una lectura por petición
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +91,7 @@ def today() -> date:
 
 
 def _config(db: Session) -> PlatformConfig | None:
-    return db.query(PlatformConfig).first()
+    return get_platform_config(db)
 
 
 def get_limit(cfg: PlatformConfig | None) -> int:

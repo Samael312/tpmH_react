@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { fetchAllPages } from "@/lib/pagination";
+import { useLoadMoreList } from "@/hooks/useLoadMoreList";
 import { useVisiblePolling } from "@/lib/polling";
 import type { BusinessRules } from './useBusinessRules'
 
@@ -110,47 +111,51 @@ export interface PaymentHistoryItem extends PendingPayment {
   rejection_reason?: string | null
 }
 
-export function usePaymentsHistory() {
-  const query = useQuery({
-    queryKey: ["admin", "payments", "history"],
-    queryFn: async () => {
-      return (await fetchAllPages<PaymentHistoryItem>('/payments/history')).rows
-    },
-  })
+// Fase 14, E6: los listados del admin que crecen sin límite se paginan en el servidor con «Cargar más»; filtros y
+// contadores vienen del backend. Antes descargaban todas las páginas (fetchAllPages) para filtrar en el navegador.
 
+/** Historial de pagos resueltos. `enabled`: solo se pide al abrir la pestaña. */
+export function usePaymentsHistory(enabled = true) {
+  const list = useLoadMoreList<PaymentHistoryItem>(["admin", "payments", "history"], '/payments/history', { enabled })
   return {
-    history: query.data ?? [],
-    loading: query.isLoading,
-    isFetching: query.isFetching,
-    isError: query.isError,
-    refetch: query.refetch,
+    history: list.rows,
+    total: list.total,
+    loading: list.loading,
+    isFetching: list.isFetching,
+    isError: list.isError,
+    refetch: list.refetch,
+    hasMore: list.hasMore,
+    loadMore: list.loadMore,
+    loadingMore: list.loadingMore,
+  }
+}
+
+type UsersPage = { total: number; active_count?: number | null; users: Student[] }
+
+/** `/admin/users` responde `{ total, active_count, users }` y pagina con `skip`. */
+function useAdminUsers(key: string, params: Record<string, string | undefined>) {
+  const list = useLoadMoreList<Student, UsersPage>(["admin", "students", key, params], '/admin/users', {
+    params,
+    rows: (b) => b.users,
+    totalOf: (b) => b.total,
+    offsetParam: 'skip',
+  })
+  return {
+    students: list.rows,
+    total: list.total,
+    activeCount: list.firstBody?.active_count ?? null,
+    loading: list.loading,
+    isFetching: list.isFetching,
+    isError: list.isError,
+    refetch: list.refetch,
+    hasMore: list.hasMore,
+    loadMore: list.loadMore,
+    loadingMore: list.loadingMore,
   }
 }
 
 export function useStudents(search?: string) {
-  const query = useQuery({
-    queryKey: ["admin", "students", search ?? ""],
-    queryFn: async () => {
-      // /admin/users devuelve { total, users } y pagina con `skip`/`limit` (50 por defecto, 200 como máximo): sin
-      // pedir todas las páginas, la pantalla mostraba solo los 50 primeros aunque el contador dijera más.
-      const { rows, total } = await fetchAllPages<Student, { total: number; users: Student[] }>('/admin/users', {
-        params: { role: 'student', is_banned: 'false', search: search || undefined },
-        rows: (b) => b.users,
-        totalOf: (b) => b.total,
-        offsetParam: 'skip',
-      })
-      return { total, users: rows }
-    },
-  })
-
-  return {
-    students: query.data?.users ?? [],
-    total: query.data?.total ?? 0,
-    loading: query.isLoading,
-    isFetching: query.isFetching,
-    isError: query.isError,
-    refetch: query.refetch,
-  }
+  return useAdminUsers("list", { role: 'student', is_banned: 'false', search: search || undefined })
 }
 
 export function useStudentDetail(studentId: number, enabled: boolean) {
@@ -224,21 +229,32 @@ export function usePendingPayments() {
   }
 }
 
-export function useTeachers(statusFilter?: string) {
+/** Directorio de profesores paginado; `hasVideo` filtra en el servidor. */
+export function useTeachers(statusFilter?: string, { hasVideo }: { hasVideo?: boolean } = {}) {
+  const params = { status_filter: statusFilter, has_video: hasVideo ? 'true' : undefined }
+  const list = useLoadMoreList<Teacher>(["admin", "teachers", "list", params], '/admin/teachers', { params })
+  return {
+    teachers: list.rows,
+    total: list.total,
+    loading: list.loading,
+    isFetching: list.isFetching,
+    isError: list.isError,
+    refetch: list.refetch,
+    hasMore: list.hasMore,
+    loadMore: list.loadMore,
+    loadingMore: list.loadingMore,
+  }
+}
+
+/** TODOS los profesores de un estado, para selectores (p. ej. profesor destacado). Son pocos: sí se pide todo. */
+export function useAllTeachers(statusFilter?: string) {
   const query = useQuery({
-    queryKey: ["admin", "teachers", statusFilter ?? null],
+    queryKey: ["admin", "teachers", "all", statusFilter ?? null],
     queryFn: async () => {
       return (await fetchAllPages<Teacher>('/admin/teachers', { params: { status_filter: statusFilter } })).rows
     },
   })
-
-  return {
-    teachers: query.data ?? [],
-    loading: query.isLoading,
-    isFetching: query.isFetching,
-    isError: query.isError,
-    refetch: query.refetch,
-  }
+  return { teachers: query.data ?? [], loading: query.isLoading }
 }
 
 // ─── Notificaciones del panel de staff ───────────────────────────────────────
@@ -349,47 +365,24 @@ export interface SupportTicketWithUser {
 }
 
 export function useSupportTickets(statusFilter?: string, categoryFilter?: string) {
-  const query = useQuery({
-    queryKey: ['admin', 'support-tickets', statusFilter, categoryFilter],
-    queryFn: async () => {
-      return (await fetchAllPages<SupportTicketWithUser>('/admin/support-tickets', {
-        params: { status_filter: statusFilter || undefined, category_filter: categoryFilter || undefined },
-      })).rows
-    },
-  })
-
+  const params = { status_filter: statusFilter || undefined, category_filter: categoryFilter || undefined }
+  const list = useLoadMoreList<SupportTicketWithUser>(['admin', 'support-tickets', params], '/admin/support-tickets', { params })
   return {
-    tickets: query.data ?? [],
-    loading: query.isLoading,
-    isFetching: query.isFetching,
-    isError: query.isError,
-    refetch: query.refetch,
+    tickets: list.rows,
+    total: list.total,
+    loading: list.loading,
+    isFetching: list.isFetching,
+    isError: list.isError,
+    refetch: list.refetch,
+    hasMore: list.hasMore,
+    loadMore: list.loadMore,
+    loadingMore: list.loadingMore,
   }
 }
 
 // ─── Estudiantes baneados ─────────────────────────────────────────────────────
 export function useBannedStudents() {
-  const query = useQuery({
-    queryKey: ["admin", "students", "banned"],
-    queryFn: async () => {
-      const { rows, total } = await fetchAllPages<Student, { total: number; users: Student[] }>('/admin/users', {
-        params: { role: 'student', is_banned: 'true' },
-        rows: (b) => b.users,
-        totalOf: (b) => b.total,
-        offsetParam: 'skip',
-      })
-      return { total, users: rows }
-    },
-  })
-
-  return {
-    students: query.data?.users ?? [],
-    total: query.data?.total ?? 0,
-    loading: query.isLoading,
-    isFetching: query.isFetching,
-    isError: query.isError,
-    refetch: query.refetch,
-  }
+  return useAdminUsers("banned", { role: 'student', is_banned: 'true' })
 }
 
 // ─── Detalle de un estudiante (bajo demanda, para el desplegable) ────────────

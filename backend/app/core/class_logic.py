@@ -12,6 +12,7 @@ from app.models.teacher import TeacherProfile
 from app.core.timezone import utc_now, UTC
 import logging
 from app.schemas.classes import CLASS_DURATION_OPTIONS, DEFAULT_BUFFER_MINUTES
+from app.core.platform_config import get_platform_config  # Fase 14, E9: una lectura por petición
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +157,7 @@ def get_business_rules(db: Session) -> dict:
     Lee las reglas de negocio configuradas por el superadmin desde
     PlatformConfig. Si no hay fila aún, cae a los defaults de arriba.
     """
-    config = db.query(PlatformConfig).first()
+    config = get_platform_config(db)
     if not config:
         return {
             "min_booking_hours": MIN_BOOKING_HOURS,
@@ -571,33 +572,40 @@ def get_student_booking_stage(student_id: int, teacher_id: int, db: Session, *, 
     misma etapa pero NO escriben (una lectura no debe mutar la BD); el barrido diario
     `release_stale_unpaid_enrollments` limpia esos enrollments.
     """
-    trial_pending = db.query(Class).filter(
-        Class.student_id == student_id,
-        Class.teacher_id == teacher_id,
-        Class.class_type == ClassType.trial,
-        # `finalized`: la prueba ya paso pero el profesor aun no la marco. Sigue en curso: antes caia en
-        # "needs_trial" y el alumno podia reservar otra prueba gratis mientras tanto.
-        Class.status.in_(["pending", "pending_trial", "pending_payment", "confirmed", "finalized"])
-    ).first()
-    if trial_pending:
-        return "trial_in_progress"
-
+    # Fase 14, E9: una sola consulta para las dos preguntas sobre la prueba (antes, dos). El dashboard
+    # calcula esta etapa en cada carga (/users/me/teachers y /payments/booking-status).
+    # `finalized`: la prueba ya paso pero el profesor aun no la marco. Sigue en curso: antes caia en
+    # "needs_trial" y el alumno podia reservar otra prueba gratis mientras tanto.
     # Una prueba `no_show` (el alumno falto, o pasaron 72 h sin marcarla) cuenta como prueba usada:
     # no da derecho a otra prueba gratis (decision del dueno, 2026-11-17).
-    trial_completed = db.query(Class).filter(
-        Class.student_id == student_id,
-        Class.teacher_id == teacher_id,
-        Class.class_type == ClassType.trial,
-        Class.status.in_(["completed", "no_show"])
-    ).first()
-    if not trial_completed:
+    trial_in_progress_statuses = {"pending", "pending_trial", "pending_payment", "confirmed", "finalized"}
+    trial_used_statuses = {"completed", "no_show"}
+    trial_statuses = {
+        status for (status,) in db.query(Class.status).filter(
+            Class.student_id == student_id,
+            Class.teacher_id == teacher_id,
+            Class.class_type == ClassType.trial,
+            Class.status.in_(trial_in_progress_statuses | trial_used_statuses),
+        ).distinct().all()
+    }
+    if trial_statuses & trial_in_progress_statuses:
+        return "trial_in_progress"
+    if not trial_statuses & trial_used_statuses:
         return "needs_trial"
 
-    active_enrollment = db.query(Enrollment).filter(
+    # Fase 14, E9: los enrollments no cancelados de esta pareja, de una vez (antes, hasta 4 consultas:
+    # activo, cambio de paquete, renovación y "alguno alguna vez"). Las comprobaciones de abajo van en
+    # el mismo orden que antes. Son pocas filas por pareja.
+    open_enrollments = db.query(Enrollment).filter(
         Enrollment.student_id == student_id,
         Enrollment.teacher_id == teacher_id,
-        Enrollment.status == EnrollmentStatus.active
-    ).first()
+        Enrollment.status != EnrollmentStatus.cancelled,
+    ).order_by(Enrollment.id).all()
+
+    def _first_with(status):
+        return next((e for e in open_enrollments if e.status == status), None)
+
+    active_enrollment = _first_with(EnrollmentStatus.active)
 
     if active_enrollment:
         # BUG-19 fix: este chequeo antes era exclusivo de paquetes finitos
@@ -623,21 +631,13 @@ def get_student_booking_stage(student_id: int, teacher_id: int, db: Session, *, 
             return "needs_package"
         return "ready"
 
-    package_change_pending = db.query(Enrollment).filter(
-        Enrollment.student_id == student_id,
-        Enrollment.teacher_id == teacher_id,
-        Enrollment.status == EnrollmentStatus.pending_package_change
-    ).first()
+    package_change_pending = _first_with(EnrollmentStatus.pending_package_change)
     if package_change_pending:
         # El paquete actual sigue siendo utilizable mientras se aprueba
         # el cambio — el estudiante puede seguir agendando normalmente.
         return "ready"
 
-    pending_renewal = db.query(Enrollment).filter(
-        Enrollment.student_id == student_id,
-        Enrollment.teacher_id == teacher_id,
-        Enrollment.status == EnrollmentStatus.pending_renewal
-    ).first()
+    pending_renewal = _first_with(EnrollmentStatus.pending_renewal)
     if pending_renewal:
         return "renewal_pending"
 
@@ -683,11 +683,7 @@ def get_student_booking_stage(student_id: int, teacher_id: int, db: Session, *, 
     # a needs_renewal con un enrollment que nunca fue active/completed,
     # y el backend terminaba rechazando la "renovación" con "Solo puedes
     # renovar un paquete activo o completado".
-    any_enrollment_ever = db.query(Enrollment).filter(
-        Enrollment.student_id == student_id,
-        Enrollment.teacher_id == teacher_id,
-        Enrollment.status != EnrollmentStatus.cancelled,
-    ).first()
+    any_enrollment_ever = bool(open_enrollments)
     if any_enrollment_ever:
         return "needs_renewal"
 

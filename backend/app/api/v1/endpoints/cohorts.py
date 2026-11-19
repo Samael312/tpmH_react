@@ -16,6 +16,7 @@ from app.core.group_cohort_logic import (
     release_and_cancel_all_cohort_enrollments,
     release_cohort_seat,
 )
+from app.core.platform_config import ensure_featured_teacher_in_single_tenant
 from app.core.timezone import utc_now
 from app.db.base import get_db
 from app.models.class_ import Class, ClassType
@@ -1091,6 +1092,8 @@ def enroll_in_cohort(
     if not cohort:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Grupo no encontrado o ya no acepta inscripciones")
 
+    # Single-tenant: solo los grupos de la profesora destacada.
+    ensure_featured_teacher_in_single_tenant(db, cohort.teacher_id)
     package = db.query(Package).filter(Package.id == cohort.package_id).first()
     teacher = db.query(TeacherProfile).filter(TeacherProfile.id == cohort.teacher_id).first()
 

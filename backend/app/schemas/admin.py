@@ -106,6 +106,9 @@ class PaginatedUsersResponse(BaseModel):
     poder paginar de verdad en la UI de edición masiva del admin."""
     total: int
     users: List[UserAdminResponse]
+    # Fase 14, E6: cuántos del total (mismos filtros) están activos, para que la pantalla no tenga que
+    # descargarlos todos para contarlos.
+    active_count: Optional[int] = None
 
 
 class UpdateUserStatusRequest(BaseModel):

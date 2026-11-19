@@ -8,7 +8,7 @@ import EmailSettingsPanel from '@/components/admin/EmailSettingsPanel'
 import { useAuthStore } from '@/store/authStore'
 
 import {
-  useAdminPaymentConfig, useAdminPlatformConfig, useAdminBusinessRules, useTeachers,
+  useAdminPaymentConfig, useAdminPlatformConfig, useAdminBusinessRules, useAllTeachers,
   AdminPaymentConfig, AdminPlatformConfig,
 } from '@/hooks/useAdminData'
 import type { BusinessRules } from '@/hooks/useBusinessRules'
@@ -430,7 +430,7 @@ export default function SettingsPage() {
   const { platformConfig: remotePlatformConfig, isFetching: plFetching, isError: plError, refetch: refetchPlatformConfig } = useAdminPlatformConfig()
     const { catalogs, loading: catLoading, isFetching: catFetching, isError: catError, refetch: refetchCatalogs } = useSystemCatalogs()
   const { businessRules: remoteBusinessRules, isFetching: brFetching, isError: brError, refetch: refetchBusinessRules } = useAdminBusinessRules()
-  const { teachers: approvedTeachers } = useTeachers('approved')
+  const { teachers: approvedTeachers } = useAllTeachers('approved')
   
   const [paymentConfig, setPaymentConfig] = useState<AdminPaymentConfig | null>(null)
   const [platformConfig, setPlatformConfig] = useState<AdminPlatformConfig | null>(null)

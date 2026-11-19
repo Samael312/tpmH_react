@@ -44,9 +44,12 @@ from app.schemas.support import (
     SupportTicketWithUserResponse,
 )
 from app.models.payment_config import PlatformConfig
-from app.core.platform_config import get_or_create_platform_config, serialize_platform_config
+from app.core.platform_config import get_or_create_platform_config, resolve_featured_teacher, serialize_platform_config
 from app.api.v1.endpoints.public import invalidate_landing_cache
 from app.core.chat import invalidate_chat_settings
+# Fase 14, E9: una lectura por petición. Con alias: el endpoint GET /admin/platform-config de este módulo
+# también se llama get_platform_config y taparía el import (el PATCH recibía el dict del endpoint).
+from app.core.platform_config import get_platform_config as load_platform_config
 
 
 def _get_teacher_wallet_balance(teacher_id: int, db: Session) -> float:
@@ -211,14 +214,22 @@ def list_all_teachers(
     response: Response,
     page: Pagination = Depends(),
     status_filter: Optional[str] = Query(None),
+    has_video: Optional[bool] = Query(None, description="true = solo los que ya subieron el video de presentación"),
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db)
 ):
     """
     Lista todos los profesores con sus métricas.
-    Filtrable por estado: pending, approved, rejected, suspended.
+    Filtrable por estado: pending, approved, rejected, suspended, y por
+    has_video (Fase 14, E6: antes ese filtro se hacía en el navegador
+    sobre la lista completa).
     """
     query = db.query(TeacherProfile)
+
+    if has_video is True:
+        query = query.filter(TeacherProfile.video_url.isnot(None), TeacherProfile.video_url != "")
+    elif has_video is False:
+        query = query.filter((TeacherProfile.video_url.is_(None)) | (TeacherProfile.video_url == ""))
 
     if status_filter:
         try:
@@ -835,6 +846,9 @@ def list_all_users(
         )
 
     total = query.count()
+    active_count = total if is_active is True else (
+        0 if is_active is False else query.filter(User.is_active.is_(True)).count()
+    )
     users = query.order_by(
         User.created_at.desc()
     ).offset(skip).limit(limit).all()
@@ -843,7 +857,7 @@ def list_all_users(
     # response_model era una lista plana). Ahora se envuelve la respuesta
     # para que el frontend pueda paginar de verdad en vez de truncar
     # silenciosamente en 'limit'.
-    return {"total": total, "users": users}
+    return {"total": total, "active_count": active_count, "users": users}
 
 
 @router.patch(
@@ -1062,14 +1076,17 @@ def update_platform_config(
 ):
     """El superadmin (o teacher_admin, como staff) configura el modo de la plataforma"""
 
-    config = db.query(PlatformConfig).first()
+    config = load_platform_config(db)
     if not config:
         config = PlatformConfig()
         db.add(config)
         db.flush()
 
     was_single_tenant = config.is_single_tenant
-    previous_featured_id = config.featured_teacher_id
+    # La destacada que estaba en uso, resuelta igual que al reservar (BD o FEATURED_TEACHER_USERNAME): si venía
+    # del entorno, featured_teacher_id es NULL y antes nadie quedaba vinculado al pasar a multi.
+    previous_featured = resolve_featured_teacher(db, config) if was_single_tenant else None
+    previous_featured_id = previous_featured.id if previous_featured else None
 
     if data.featured_teacher_username:
         teacher = db.query(TeacherProfile).filter(

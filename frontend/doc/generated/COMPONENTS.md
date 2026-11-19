@@ -55,7 +55,7 @@
 - `components/ui/DesktopOnly.tsx` (3 líneas, referenciado en 27 archivos) — exports: DesktopOnly
 - `components/ui/FullScreenModal.tsx` (56 líneas, referenciado en 7 archivos) — exports: FullScreenModal
 - `components/ui/LoadError.tsx` (34 líneas, referenciado en 5 archivos) — exports: LoadError
-- `components/ui/LoadMoreButton.tsx` (26 líneas, referenciado en 3 archivos) — exports: LoadMoreButton
+- `components/ui/LoadMoreButton.tsx` (26 líneas, referenciado en 8 archivos) — exports: LoadMoreButton
 - `components/ui/MobileOnly.tsx` (3 líneas, referenciado en 1 archivos) — exports: MobileOnly
 - `components/ui/RefreshButton.tsx` (29 líneas, referenciado en 37 archivos) — exports: RefreshButton
 - `components/ui/RejectReasonModal.tsx` (128 líneas, referenciado en 4 archivos) — exports: RejectReasonModal
@@ -67,20 +67,20 @@
 
 ## hooks/
 
-- `hooks/useAdminData.ts` (569 líneas, referenciado en 9 archivos) — exports: PendingPayment, Teacher, Student, WithdrawalRecord, PaymentHistoryItem, usePaymentsHistory, useStudents, useStudentDetail, useWithdrawals, useAdminStats, usePendingPayments, useTeachers
+- `hooks/useAdminData.ts` (559 líneas, referenciado en 9 archivos) — exports: PendingPayment, Teacher, Student, WithdrawalRecord, PaymentHistoryItem, usePaymentsHistory, useStudents, useStudentDetail, useWithdrawals, useAdminStats, usePendingPayments, useTeachers
 - `hooks/useBusinessRules.ts` (66 líneas, referenciado en 9 archivos) — exports: BusinessRules, CLASS_DURATION_OPTIONS, useBusinessRules
 - `hooks/useChat.ts` (269 líneas, referenciado en 13 archivos) — exports: ChatConversation, ChatMessage, markConversationRead, CONNECTED_SAFETY_POLL_MS, fallbackPollInterval, useChatConversations, useUnreadChatCount, openDirectConversation, openGroupConversation, useChatSocketBootstrap, useChatThread
 - `hooks/useChatAdmin.ts` (88 líneas, referenciado en 1 archivos) — exports: ChatConversationAdmin, useChatAdminConversations, useChatAdminMessages — hooks/useChatAdmin.ts N5: panel de auditoría de chats para superadmin/teacher_admin — ver backend/app/api/v1/endpoints/chat.py (sección "N5: Auditoría"). Listar
 - `hooks/useDebouncedValue.ts` (18 líneas, referenciado en 1 archivos) — exports: useDebouncedValue
 - `hooks/useEmailSettings.ts` (32 líneas, referenciado en 2 archivos) — exports: EMAIL_SETTINGS_KEY, useEmailSettings
-- `hooks/useErrorLogs.ts` (109 líneas, referenciado en 1 archivos) — exports: ErrorLogEntry, ErrorLogStats, ErrorLogUserOption, ErrorLogFilters, useErrorLogs, useErrorLogStats, useErrorLogUsers
+- `hooks/useErrorLogs.ts` (110 líneas, referenciado en 1 archivos) — exports: ErrorLogEntry, ErrorLogStats, ErrorLogUserOption, ErrorLogFilters, useErrorLogs, useErrorLogStats, useErrorLogUsers
 - `hooks/useGodMode.ts` (300 líneas, referenciado en 4 archivos) — exports: GodModeAuditLogEntry, useGodModeAuditLog, useGodModeEntityHistory, GodModeLookupTeacher, GodModeLookupStudent, GodModeLookupEnrollment, GodModeLookupClass, useGodModeTeachers, useGodModeTeacherStudents, useGodModeStudentEnrollments, useGodModePairClasses, GodModeLookupPackage
 - `hooks/useLandingData.ts` (215 líneas, referenciado en 14 archivos) — exports: LandingTeacher, LandingReview, LandingPackage, LandingGroupStep, TitleGradientMap, LandingContent, LANDING_CONTENT_DEFAULTS, useLandingData
-- `hooks/useLoadMoreList.ts` (30 líneas, referenciado en 2 archivos) — exports: useLoadMoreList
+- `hooks/useLoadMoreList.ts` (47 líneas, referenciado en 3 archivos) — exports: useLoadMoreList
 - `hooks/useRevealOnScroll.ts` (45 líneas, referenciado en 1 archivos) — exports: useRevealOnScroll
 - `hooks/useSpokenLanguages.ts` (53 líneas, referenciado en 2 archivos) — exports: MY_SPOKEN_LANGUAGES_KEY, useMySpokenLanguages
 - `hooks/useStudentData.ts` (714 líneas, referenciado en 25 archivos) — exports: AVAILABLE_SLOTS_QUERY_PREFIX, invalidateAvailableSlots, BookingStage, RejectedPaymentInfo, PendingRechargeInfo, StudentClass, AvailableSlot, PackageInfo, StudentEnrollment, StudentMaterial, StudentHomework, TeacherResolution
-- `hooks/useSupport.ts` (95 líneas, referenciado en 3 archivos) — exports: SupportCategory, SupportTicketStatus, SupportTicket, useMySupportTickets, createSupportTicket, markSupportTicketSeen, useUnreadSupportCount, useSupportQueryInvalidation
+- `hooks/useSupport.ts` (89 líneas, referenciado en 3 archivos) — exports: SupportCategory, SupportTicketStatus, SupportTicket, useMySupportTickets, createSupportTicket, markSupportTicketSeen, useUnreadSupportCount, useSupportQueryInvalidation
 - `hooks/useSystemCatalogs.ts` (56 líneas, referenciado en 9 archivos) — exports: StudentGoal, PaymentMethodOption, ThemePreset, SubjectTheme, GoalCategoryKey, StudentGoalsCatalog, SystemCatalogs, SYSTEM_CATALOGS_QUERY_KEY, useSystemCatalogs
 - `hooks/useTeacherData.ts` (679 líneas, referenciado en 12 archivos) — exports: TeacherClass, TeacherProfile, WeeklySlot, WalletData, CalendarStatus, StudentEnrollmentSummary, StudentMaterialSummary, TeacherStudentFull, WithdrawalHistoryItem, IncomeHistoryItem, TeacherMaterial, TeacherPaymentEntry
 - `hooks/useTeacherNotifications.ts` (47 líneas, referenciado en 2 archivos) — exports: TeacherNotification, useTeacherUnreadNotificationCount, useTeacherNotifications
@@ -109,13 +109,14 @@
 - `lib/gradientTitle.tsx` (94 líneas, referenciado en 3 archivos) — exports: GradientPreset, GRADIENT_PRESETS, getGradientPreset, renderGradientTitle, stripGradientMarkers — frontend/lib/gradientTitle.tsx Soporte para "títulos con color" en el landing (config del superadmin): el admin escribe el texto normal y envuelve las palabras 
 - `lib/imageLoader.ts` (14 líneas, referenciado en 1 archivos) — exports: imageLoader
 - `lib/landingServer.ts` (107 líneas, referenciado en 4 archivos) — exports: getLandingDataServer, buildDefaultSiteTitle
-- `lib/loadMore.ts` (32 líneas, referenciado en 6 archivos) — exports: LOAD_MORE_PAGE_SIZE, LoadMorePage, fetchPage, nextOffset
+- `lib/loadMore.ts` (49 líneas, referenciado en 12 archivos) — exports: LOAD_MORE_PAGE_SIZE, LoadMorePage, PageShape, fetchPage, nextOffset
 - `lib/me.ts` (20 líneas, referenciado en 27 archivos) — exports: ME_QUERY_KEY, fetchMe
 - `lib/mobileTopBar.tsx` (67 líneas, referenciado en 37 archivos) — exports: MobileTopBarProvider, useMobileTopBar, usePageTopBar
 - `lib/nationalities.ts` (43 líneas, referenciado en 12 archivos) — exports: countryCodeToFlag, NationalityOption, NATIONALITIES, getFlagForNationality — Lista de nacionalidades con bandera generada por código ISO 3166-1 alpha-2. Se guarda el NOMBRE del país (no el código) en la BD, para que sea legible directame
 - `lib/packageThemes.ts` (47 líneas, referenciado en 4 archivos) — exports: PackageTheme, SUBJECT_THEME_MAP, DEFAULT_PACKAGE_THEME, getSuggestedTheme, ICON_PICKER_OPTIONS, priceLabelSuffix
 - `lib/pagination.ts` (61 líneas, referenciado en 10 archivos) — exports: PAGE_SIZE, MAX_ITEMS, AllPages, fetchAllPages
 - `lib/platformTenantMode.ts` (34 líneas, referenciado en 2 archivos) — exports: usePlatformTenantMode
+- `lib/polling.ts` (37 líneas, referenciado en 8 archivos) — exports: isPageHidden, visiblePoll, useVisiblePolling
 - `lib/scheduleUtc.ts` (29 líneas, referenciado en 3 archivos) — exports: getNextWeekdayDate, utcTimeToLocal — Utilidades para convertir horarios semanales recurrentes (guardados como "HH:MM" UTC + day_of_week) a la hora local del navegador, de forma consistente con la l
 - `lib/spokenLanguages.ts` (123 líneas, referenciado en 13 archivos) — exports: MAX_SPOKEN_LANGUAGES, SpokenLevel, SPOKEN_LEVELS, LEVEL_LABELS, SpokenLanguage, languageKey, parseSpoken, outsideCatalog, toggleLanguage, setLevel, isSelected, levelOf — Fases 8 y 10: idiomas que HABLA el usuario y su nivel. Lógica pura (sin React) para poder testearla con Vitest. No confundir con `TeacherProfile.languages` (los
 - `lib/teacherOptions.ts` (86 líneas, referenciado en 8 archivos) — exports: SUBJECTS, LANGUAGES, SKILL_SUGGESTIONS, GOAL_CATEGORIES, GoalCategoryKey, GOALS, normalizeGoalsCatalog, flattenGoals, PAYMENT_METHODS, TOPICS, LEVELS — Opciones compartidas de perfil de profesor. Fuente única de verdad — se usa en onboarding, edición de perfil y creación de paquetes, para no duplicar estas list

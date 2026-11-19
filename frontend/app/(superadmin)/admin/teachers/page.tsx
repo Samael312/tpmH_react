@@ -11,6 +11,7 @@ import { X, Video as VideoIcon, MessageSquare, Check, AlertTriangle, Loader2, Re
 import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
+import LoadMoreButton from '@/components/ui/LoadMoreButton'
 import RejectReasonModal from '@/components/ui/RejectReasonModal'
 import { usePageTopBar } from '@/lib/mobileTopBar'
 import { useToast } from '@/hooks/useToast'
@@ -326,8 +327,9 @@ export default function TeachersPage() {
   const [onlyWithVideo, setOnlyWithVideo] = useState(
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('video') === '1'
   )
-  const { teachers: rawTeachers, loading, isFetching, isError, refetch } = useTeachers(activeTab)
-  const teachers = onlyWithVideo ? rawTeachers.filter(t => !!t.video_url) : rawTeachers
+  // «Solo con vídeo» filtra en el servidor (Fase 14, E6): con la lista de 50 en 50, filtrar lo cargado ocultaría profesores.
+  const videoFilterOn = onlyWithVideo && (activeTab === 'pending' || activeTab === undefined)
+  const { teachers, loading, isFetching, isError, refetch, hasMore, loadMore, loadingMore } = useTeachers(activeTab, { hasVideo: videoFilterOn })
   const toast = useToast()
 
   usePageTopBar({
@@ -620,6 +622,7 @@ export default function TeachersPage() {
                   </div>
                 </Card>
               ))}
+              <LoadMoreButton hasMore={hasMore} loading={loadingMore} onClick={loadMore} />
             </div>
           )}
         </div>

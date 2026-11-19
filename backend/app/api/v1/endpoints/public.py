@@ -1,7 +1,7 @@
 import os
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -16,6 +16,7 @@ from app.schemas.reviews import ReviewResponse
 from app.schemas.packages import PackageResponse
 from app.core.platform_config import get_or_create_platform_config, serialize_platform_config
 from app.core.cache import cached, cache_invalidate
+from app.core.http_cache import set_public_cache
 from app.api.v1.endpoints.teachers import _to_public
 
 router = APIRouter()
@@ -72,7 +73,7 @@ def _display_name(t: TeacherProfile) -> str:
 
 
 @router.get("/landing", response_model=LandingResponse)
-def get_landing_data(db: Session = Depends(get_db)):
+def get_landing_data(response: Response, db: Session = Depends(get_db)):
     """
     Toda la data que necesita la landing page en una sola respuesta:
     configuración de plataforma, profesores, reseñas y paquetes.
@@ -84,8 +85,10 @@ def get_landing_data(db: Session = Depends(get_db)):
     en memoria por LANDING_CACHE_TTL_SECONDS para no repetir ni esas
     3 queries en cada visita.
 
-    Endpoint público — no requiere autenticación.
+    Endpoint público — no requiere autenticación. Lleva Cache-Control
+    público (Fase 14, E4, ver core/http_cache.py).
     """
+    set_public_cache(response)
     return cached(LANDING_CACHE_KEY, LANDING_CACHE_TTL_SECONDS, lambda: _build_landing_response(db))
 
 

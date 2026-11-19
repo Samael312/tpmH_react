@@ -48,13 +48,15 @@ Cuenta de prueba sin tocar la BD real: `python -m tests.audit.run_server` (SQLit
 | `COOKIE_DOMAIN` | vacío | prod | dominio de las cookies de sesión | `.tuprofemaria.com` en producción |
 | `COOKIE_SAMESITE` | `lax` | no | SameSite de las cookies | `none` solo si front y API son de sitios distintos |
 | `ENVIRONMENT` | `development` | no | `production` oculta `/docs` y bloquea `flow_tests` | ver ⚠4 |
-| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` / `DB_POOL_RECYCLE` | no definidas (5 / 5 / 240) | no | `db/base.py`: pool del engine principal | bajar `DB_POOL_SIZE` con el endpoint *pooled* de Neon |
+| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` / `DB_POOL_RECYCLE` | no definidas (5 / 5 / 240) | no | `db/base.py`: pool del engine principal | con la red lenta hasta Neon es el cuello: en la prueba de carga (E5, `tests/load/README.md`) 20 usuarios saturan 10 conexiones; con 20/10 la latencia vuelve a la de un usuario |
 | `FRONTEND_URL` | `http://localhost:3000` (antes `https://tuprofemaria.com`) | no | CORS (`main.py`), enlaces en emails | CORS permite además `http://localhost:3000` |
 | `BACKEND_URL` | `http://localhost:8000` (antes `https://api.tuprofemaria.com`) | no | enlaces absolutos | |
 | `OPENAI_API_KEY` | definida | **sí de facto** | Chipi (`gpt-4o-mini`) y TTS; sin ella la app no arranca | facturación por uso |
 | `GEMINI_API_KEY` | definida | no | `ai_debug.py` | se envía en la URL (SEC-06) |
 | `RESEND_API_KEY` | definida | para emails | `core/email.py` | sin ella los envíos fallan en silencio (se capturan) |
 | `EMAIL_FROM` | `soporte@mail.tuprofemaria.com` | no | remitente | el dominio debe estar verificado en Resend |
+| `PUBLIC_CACHE_MAX_AGE` / `PUBLIC_CACHE_SWR` | `60` / `300` | no | `Cache-Control` de landing, lista y perfil público de profesores (Fase 14, E4, `core/http_cache.py`) | `0` = `no-cache`; afecta al navegador y a la CDN, no a la caché en memoria |
+| `SLOTS_CACHE_TTL_SECONDS` | `45` | no | caché de la rejilla de huecos por profesor (Fase 14, E3, `core/slots_cache.py`) | `0` = sin caché; se invalida al hacer commit de clases o disponibilidad |
 | `EMAIL_ASYNC` / `EMAIL_WORKERS` | `true` / `2` | no | envío de correos en segundo plano (Fase 14, E1): la petición no espera a Resend | `false` = envío en línea (tests); la cola vive en memoria |
 | `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | definidas | para archivos | `core/storage.py`, TTS | |
 | `MAX_VIDEO_UPLOAD_MB` | `100` | no | tope de vídeo (`storage.py`) | desde la Fase 5 se sube por streaming (no se carga entero en RAM) |

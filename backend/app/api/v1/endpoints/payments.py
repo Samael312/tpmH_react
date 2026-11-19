@@ -50,6 +50,8 @@ from app.models.payment import Payment, TeacherWallet, Withdrawal
 from app.models.payment_config import PaymentConfig
 from app.models.teacher import TeacherProfile, TeacherStatus
 from app.models.user import User, UserRole
+from app.core.platform_config import get_platform_config  # Fase 14, E9: una lectura por petición
+from app.core.platform_config import ensure_featured_teacher_in_single_tenant, resolve_featured_teacher
 from app.schemas.payments import (
     BookAndPayRequest,
     NotifyPaymentRequest,
@@ -89,19 +91,8 @@ PACKAGE_CHANGE_BLOCKING_STATUSES = ["completed", "no_show", "confirmed", "pendin
 # ─── HELPER FUNCTIONS ─────────────────────────────────────────────────────────
 
 def _get_featured_teacher(db: Session):
-    from app.core.config import settings
-    from app.models.payment_config import PlatformConfig
-
-    config = db.query(PlatformConfig).first()
-    username = None
-    if config and config.featured_teacher_id:
-        t = db.query(TeacherProfile).filter(TeacherProfile.id == config.featured_teacher_id).first()
-        if t:
-            username = t.user_username
-    username = username or settings.FEATURED_TEACHER_USERNAME
-    if not username:
-        return None
-    return db.query(TeacherProfile).filter(TeacherProfile.user_username == username).first()
+    # La destacada guardada o, si no hay, FEATURED_TEACHER_USERNAME (misma resolución en todo el backend).
+    return resolve_featured_teacher(db)
 
 
 def _apply_commission(amount_total: float, teacher: TeacherProfile) -> tuple[float, float]:
@@ -362,7 +353,7 @@ def _sync_student_teacher_username(current_user: User, teacher: TeacherProfile, 
     """
     from app.models.payment_config import PlatformConfig
 
-    config = db.query(PlatformConfig).first()
+    config = get_platform_config(db)
     if not config or not config.is_single_tenant:
         return
 
@@ -381,10 +372,16 @@ def _resolve_booking_teacher(current_user: User, teacher_username: Optional[str]
     """
     from app.models.payment_config import PlatformConfig
 
-    config = db.query(PlatformConfig).first()
+    config = get_platform_config(db)
 
     if not config or config.is_single_tenant:
-        return _get_featured_teacher(db)
+        featured = _get_featured_teacher(db)
+        if featured and featured.status != TeacherStatus.approved:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La profesora no está disponible en este momento; no se pueden agendar clases.",
+            )
+        return featured
 
     if not teacher_username:
         raise HTTPException(
@@ -400,14 +397,13 @@ def _resolve_booking_teacher(current_user: User, teacher_username: Optional[str]
 
 def _ensure_teacher_linked(current_user: User, teacher: TeacherProfile, db: Session):
     """
-    Garantiza el vínculo estudiante-profesor de forma idempotente en multi-tenant.
-    """
-    from app.models.payment_config import PlatformConfig
-    from app.models.student_teacher_link import StudentTeacherLink
+    Garantiza el vínculo estudiante-profesor de forma idempotente, en los dos modos.
 
-    config = db.query(PlatformConfig).first()
-    if not config or config.is_single_tenant:
-        return
+    En single-tenant el vínculo no se muestra (los alumnos solo ven a la destacada), pero se guarda para que, si
+    la plataforma pasa a multi, cada alumno siga con su profesora aunque la destacada haya cambiado entre medias
+    o viniera de FEATURED_TEACHER_USERNAME.
+    """
+    from app.models.student_teacher_link import StudentTeacherLink
 
     profile = current_user.student_profile
     existing = db.query(StudentTeacherLink).filter(
@@ -502,6 +498,8 @@ def book_class(
         teacher = db.query(TeacherProfile).filter(
             TeacherProfile.id == enrollment_for_teacher.teacher_id
         ).first()
+        # Single-tenant: un paquete de otro profesor (de una etapa multi) no sirve para agendar.
+        ensure_featured_teacher_in_single_tenant(db, enrollment_for_teacher.teacher_id)
     else:
         teacher = _resolve_booking_teacher(current_user, data.teacher_username, db)
 
@@ -1561,7 +1559,7 @@ def get_booking_status(
     from app.models.payment_config import PlatformConfig
     from app.models.student_teacher_link import StudentTeacherLink
 
-    config = db.query(PlatformConfig).first()
+    config = get_platform_config(db)
     student_id = current_user.student_profile.id
 
     teacher = None
@@ -1680,6 +1678,7 @@ def notify_payment(
         ).first()
         if not enrollment or enrollment.package.classes_count is not None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este enrollment no es de tipo ilimitado")
+        ensure_featured_teacher_in_single_tenant(db, enrollment.teacher_id)
 
         amount = round(enrollment.package.price * data.credits_requested, 2)
 
@@ -1725,6 +1724,8 @@ def notify_payment(
             package = db.query(Package).filter(Package.id == enrollment.package_id).first()
             if not package:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Paquete no encontrado")
+            # Single-tenant: renovar o cambiar un paquete de otro profesor tampoco.
+            ensure_featured_teacher_in_single_tenant(db, package.teacher_id)
         else:
             if not data.package_id:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "package_id es requerido")
@@ -1738,6 +1739,8 @@ def notify_payment(
                     status.HTTP_400_BAD_REQUEST,
                     "No puedes unirte a un paquete grupal por esta vía. Inscríbete a un grupo disponible."
                 )
+            # Single-tenant: solo paquetes de la profesora destacada.
+            ensure_featured_teacher_in_single_tenant(db, package.teacher_id)
 
             stage = get_student_booking_stage(student_id, package.teacher_id, db)
             if stage != "needs_package":

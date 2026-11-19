@@ -14,6 +14,15 @@ Verificado con `tests/audit` salvo donde se indica. Los bugs conocidos que contr
 Registro (`POST /auth/register`) solo admite `student`/`teacher`; los roles privilegiados se rechazan. Un profesor nace `pending` y necesita aprobación staff (`approved`; también `suspended`, etc.).
 Un usuario `is_active=False` o `is_banned` recibe 403 (login y con token existente). Token de usuario borrado -> 401.
 
+## Modo de plataforma: single-tenant y multi-tenant (`PlatformConfig.is_single_tenant`)
+
+- **Single-tenant:** la plataforma gestiona solo las clases de la profesora destacada (`featured_teacher_id`; si está vacío, `FEATURED_TEACHER_USERNAME` del entorno, resuelto por `core/platform_config.py::resolve_featured_teacher`). El alumno no elige profesor: `POST /payments/book` sin enrollment agenda siempre con ella (se ignora `teacher_username`), `/users/me/teachers` devuelve solo a ella y elegir o dejar profesor da 400. Si la destacada no está aprobada, reservar da 400.
+- **Single-tenant, nada con otro profesor** (`ensure_featured_teacher_in_single_tenant`, 400 «La plataforma solo gestiona las clases de…»): reservar con un enrollment de otro profesor, comprar/renovar/cambiar su paquete, recargar su ilimitado o inscribirse a su grupo. Son créditos de una etapa multi anterior: quedan para cuando vuelva multi (o para un reembolso).
+- **El vínculo alumno–profesor (`StudentTeacherLink`) se guarda en los dos modos** al reservar. En single no se ve, pero así, al pasar a multi, cada alumno sigue con su profesora aunque la destacada haya cambiado durante la etapa single.
+- **Single → multi** (`PATCH /admin/platform-config`): además, se vincula a la destacada que estaba en uso (BD o entorno) a todo alumno con enrollment o clase con ella que no tuviera fila (datos de antes de guardar el vínculo), y se sincroniza `TeacherProfile.students` y la conversación de chat. Es idempotente y respeta los vínculos con otros profesores.
+- **Multi → single** no borra vínculos ni enrollments: al volver a multi todo sigue igual.
+- Verificado en `tests/audit/test_f15_tenant_modes.py`.
+
 ## Etapas de reserva (por pareja alumno–profesor) — `get_student_booking_stage`
 
 `needs_trial` -> `trial_in_progress` -> `needs_package` -> `package_pending_payment` -> `ready`;

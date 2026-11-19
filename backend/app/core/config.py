@@ -27,6 +27,15 @@ class Settings(BaseSettings):
     EMAIL_ASYNC: bool = os.getenv("EMAIL_ASYNC", "true").lower() not in ("0", "false", "no")
     EMAIL_WORKERS: int = int(os.getenv("EMAIL_WORKERS", 2))
 
+    # Cache de la rejilla de huecos por profesor (Fase 14, E3). Se invalida al hacer commit de clases,
+    # disponibilidad, excepciones o token de Google; el TTL cubre cambios en Google Calendar. 0 = sin cache.
+    SLOTS_CACHE_TTL_SECONDS: int = int(os.getenv("SLOTS_CACHE_TTL_SECONDS", 45))
+
+    # Cache-Control de lo publico (Fase 14, E4): landing, lista y perfil publico de profesores. El navegador (y una
+    # CDN) reutiliza la respuesta max-age segundos y luego sirve la vieja mientras pide la nueva. 0 = no-cache.
+    PUBLIC_CACHE_MAX_AGE: int = int(os.getenv("PUBLIC_CACHE_MAX_AGE", 60))
+    PUBLIC_CACHE_SWR: int = int(os.getenv("PUBLIC_CACHE_SWR", 300))
+
     # Cookies de sesion (SEC-05). Produccion mismo sitio: COOKIE_DOMAIN=.tuprofemaria.com, SameSite=lax.
     # Si frontend y API estuvieran en sitios distintos habria que usar COOKIE_SAMESITE=none (exige Secure).
     COOKIE_DOMAIN: Optional[str] = os.getenv("COOKIE_DOMAIN") or None

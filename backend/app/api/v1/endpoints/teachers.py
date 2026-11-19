@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, logger, Response, status, Query, UploadFile, File
 from app.core.pagination import Pagination, paginate
+from app.core.http_cache import set_public_cache
 from sqlalchemy.orm import Session, contains_eager
 from typing import List, Optional 
 from app.db.base import get_db
@@ -47,6 +48,7 @@ def _to_public(t: TeacherProfile, hide_whatsapp: bool = False) -> TeacherPublicR
 # Dejamos solo esta versión de la ruta raíz ("/") que ya maneja los filtros opcionales
 @router.get("/", response_model=List[TeacherPublicResponse])
 def list_approved_teachers(
+    response: Response,
     subject: Optional[str] = Query(None, description="Filtrar por materia"),
     language: Optional[str] = Query(None, description="Filtrar por idioma que ENSEÑA"),
     speaks: Optional[str] = Query(None, max_length=40, description="Filtrar por idioma que HABLA (Fase 10)"),
@@ -88,11 +90,12 @@ def list_approved_teachers(
         teachers = [t for t in teachers if t.user and speaks_language(t.user.spoken_languages, speaks)]
 
     hide_whatsapp = not get_or_create_platform_config(db).show_teacher_whatsapp  # una sola consulta, no una por profesor
+    set_public_cache(response)  # Fase 14, E4: misma respuesta para cualquiera (ver core/http_cache.py)
     return [_to_public(t, hide_whatsapp=hide_whatsapp) for t in teachers]
 
 
 @router.get("/{username}", response_model=TeacherPublicResponse)
-def get_teacher_profile(username: str, db: Session = Depends(get_db)):
+def get_teacher_profile(username: str, response: Response, db: Session = Depends(get_db)):
     """
     Perfil público de un profesor específico.
     Endpoint público — no requiere autenticación.
@@ -113,6 +116,7 @@ def get_teacher_profile(username: str, db: Session = Depends(get_db)):
             detail="Profesor no disponible"
         )
 
+    set_public_cache(response)  # solo en el 200: un 404 no se cachea (Fase 14, E4)
     return _to_public(teacher, hide_whatsapp=not get_or_create_platform_config(db).show_teacher_whatsapp)
 
 
