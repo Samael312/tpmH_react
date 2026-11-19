@@ -38,6 +38,7 @@ Mitigación: `def` normales (APScheduler los lanza en un pool de hilos) o `await
 Costes: +30–150 ms de latencia por consulta fría, CPU de handshake TLS en Neon, presión sobre el límite de conexiones y de compute. Solo el chat tiene pool propio (`pool_size=5`, `max_overflow=5`). Cada endpoint que hace varios `commit()` (reservar, validar pago, cancelar) multiplica el coste.
 Mitigación: usar el endpoint *pooled* de Neon (PgBouncer) y un pool normal (`pool_size` 5–10, `pool_pre_ping`, `pool_recycle`), o `QueuePool` también en el engine principal.
 **Resuelto:** `app/db/base.py` ya usa un pool normal (`pool_size`/`max_overflow` por entorno, `pool_pre_ping`, `pool_recycle=240`); el chat mantiene su propio pool. Lo de arriba describe el estado anterior.
+**Medido (Fase 14, E5, `tests/load/README.md`):** el pool por defecto (5 + 5) es ahora el cuello con red lenta hasta Neon: con 20 usuarios simulados la mediana sube de 1,7 s a 2,9 s, y con 20 + 10 conexiones vuelve a 1,3 s. Consultas por petición: reservar 29, dashboard del alumno ~43 entre 8 peticiones.
 
 ### 4. ⏱🔌 `finalize_past_classes(db)` en CADA lectura de agenda
 `GET /classes/my-classes` (`classes.py:286`) y `GET /classes/teacher/classes` llaman a `finalize_past_classes`, que escanea y **escribe** (UPDATE + commit) además del job de 10 min. Cada alumno/profesor que abre la agenda dispara un barrido global (no filtrado por usuario) → N usuarios = N barridos de toda la tabla `classes` con escritura. Son las pantallas más visitadas. Además es redundante con el job.
@@ -71,7 +72,7 @@ Mitigación: paginación obligatoria con tope (`limit ≤ 100`), índices por fi
 **Resuelto en parte (Fases 5 y 9):** `limit`/`offset` + `X-Total-Count` (200 por defecto, 500 máximo) en los listados principales y job diario de purga (`error_logs` 30 d, `email_log` 60 d). Queda `god_mode` y los listados de admin.
 
 ### 10. 💰⏱ Sincronización con Google Calendar
-Cada 30 min y por cada profesor conectado: lectura de busy/eventos (`list_calendar_events`, `get_busy_ranges`), push de clases propias y creación de Meet; reintentos (`_with_retries`). Cuota Google Calendar (peticiones/min/proyecto) y CPU (ver punto 2). Además `GET /availability/slots` puede consultar el busy de Google en cada petición de slots (sin caché persistente: `core/cache.py` es en memoria y por proceso).
+Cada 30 min y por cada profesor conectado: lectura de busy/eventos (`list_calendar_events`, `get_busy_ranges`), push de clases propias y creación de Meet; reintentos (`_with_retries`). Cuota Google Calendar (peticiones/min/proyecto) y CPU (ver punto 2). Además `GET /availability/slots` consulta el busy de Google al calcular la rejilla de huecos; desde la Fase 14 (E3) se reutiliza 45 s por profesor y fecha (`core/slots_cache.py`, en memoria del proceso).
 Mitigación: sync por *webhooks* (push notifications) o solo para profesores con actividad/clases próximas; cachear busy 2–5 min.
 
 **Mitigado en la Fase 9:** la sincronización ya no corre cada 30 min siempre: solo con clase en curso o en las próximas 3 h; si no, cada 6 h; y nada si ningún profesor tiene Calendar.
@@ -93,7 +94,7 @@ Mitigación: el WS ya notifica eventos; subir a 60–120 s o eliminar el polling
 Mitigación: `BackgroundTasks`/cola, agrupar, preferencias de notificación.
 
 ### 14. ⏱ Disponibilidad, slots y recálculo de zona horaria
-`GET /availability/slots` calcula en cada petición rangos × clases ocupadas × excepciones × (opcional) Google busy; coste CPU moderado, crece con ventana y nº de clases del profesor. El cambio de zona horaria recalcula toda la disponibilidad y preferencias (puntual, barato). Sin caché por profesor/día.
+`GET /availability/slots` calcula en cada petición rangos × clases ocupadas × excepciones × (opcional) Google busy; coste CPU moderado, crece con ventana y nº de clases del profesor. El cambio de zona horaria recalcula toda la disponibilidad y preferencias (puntual, barato). Desde la Fase 14 (E3) la rejilla se cachea 45 s por profesor, fecha, duración y bloque (`SLOTS_CACHE_TTL_SECONDS`) y se invalida al hacer commit de clases, disponibilidad, excepciones o token de Google de ese profesor.
 
 ### 15. 💰 Almacenamiento en BD (crecimiento sostenido)
 `error_logs` (anónimo sin tope), `chat_messages` (retención 90 días por defecto; si el admin pone 0 = infinito), `god_mode_audit`, `notifications`, clases históricas. Neon factura almacenamiento y la copia de seguridad (*history*) de cambios. Los jobs de purga de 24 h pueden no ejecutarse si hay despliegues frecuentes (IntervalTrigger no persistente).
@@ -101,7 +102,7 @@ Mitigación: `BackgroundTasks`/cola, agrupar, preferencias de notificación.
 ### 16. 🔌 Otros costes menores
 - Rate limiter en memoria (`slowapi`): sin Redis no escala, pero tampoco cuesta; el riesgo es el de SEC-01.
 - Landing 3D (`three.js`) y vídeos: coste en el cliente y egress de Railway (frontend) por bundle; `next build` standalone ya optimiza.
-- `GET /public/landing` tiene caché (`LANDING_CACHE_TTL_SECONDS`) en memoria: correcto.
+- `GET /public/landing` tiene caché (`LANDING_CACHE_TTL_SECONDS`) en memoria: correcto. Desde la Fase 14 (E4) la landing, `GET /teachers/` y `GET /teachers/{username}` además llevan `Cache-Control: public, max-age=60, stale-while-revalidate=300`: el navegador (y la CDN, B4) no repite la petición en ese margen.
 - Reservas/pagos: pocas escrituras y consultas, pero con NullPool cada `commit()` reabre conexión (ver punto 3).
 
 ## Resumen de impacto económico (estimado, de mayor a menor)

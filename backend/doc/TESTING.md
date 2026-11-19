@@ -22,6 +22,9 @@ Cuentas semilla (contraseña `Password123`): `admin` (superadmin), `profe` (teac
 ## Suite de integración `tests/flow/` (requiere entorno real)
 PostgreSQL local + `.env` (`DATABASE_URL`, `SECRET_KEY`, `ENVIRONMENT=development`, claves dummy) + `alembic upgrade head`, luego `pytest tests/flow --run-flow-tests`. Ver `tests/flow/README.md`. **Nunca contra producción.** No se ha ejecutado en esta auditoría.
 
+## Prueba de carga `tests/load/` (Locust, escribe en la BD del `.env`)
+Usuarios `lt_` sembrados por el flujo real, servidor como en Railway sin correos y con recuento de consultas por ruta, alumnos y visitantes simulados, y limpieza. Exige `LOADTEST_DB_HOST` igual al host del `.env` (usar una rama `dev` de Neon). Resultados y conclusiones del 2026-11-19 en `tests/load/README.md`.
+
 ## Regenerar documentación
 `python doc/generate_docs.py` (ver `README.md`).
 

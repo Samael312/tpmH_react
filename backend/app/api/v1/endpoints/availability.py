@@ -30,6 +30,8 @@ from app.core.timezone import (
     validate_timezone,
 )
 from app.core.google_calendar import get_teacher_busy_ranges
+from app.core.slots_cache import cached_slot_grid
+from app.core.platform_config import get_platform_config  # Fase 14, E9: una lectura por petición
 
 router = APIRouter()
 
@@ -282,7 +284,7 @@ def _resolve_featured_teacher_username(db: Session) -> Optional[str]:
     from app.models.payment_config import PlatformConfig
     from app.core.config import settings
 
-    config = db.query(PlatformConfig).first()
+    config = get_platform_config(db)
 
     teacher_username = None
     if config and config.featured_teacher_id:
@@ -414,73 +416,6 @@ def get_teacher_available_slots(
 
     day_of_week = dt.weekday()  # 0=Lunes, 6=Domingo (ISO)
 
-    # 3. Obtener disponibilidad base (horario semanal)
-    weekly_slots = db.query(TeacherAvailability).filter(
-        TeacherAvailability.teacher_id == teacher.id,
-        TeacherAvailability.day_of_week == day_of_week,
-        TeacherAvailability.is_available == True
-    ).all()
-
-    # Construir rangos UTC para esta fecha concreta
-    availability_ranges = []
-    for slot in weekly_slots:
-        try:
-            start_utc, end_utc = build_weekly_range_utc(
-                date,
-                slot.start_time_utc,
-                slot.end_time_utc
-            )
-            availability_ranges.append((start_utc, end_utc))
-        except ValueError:
-            continue
-
-    # 4. Obtener excepciones para esta fecha
-    day_start = dt
-    day_end = dt + timedelta(days=1)
-
-    exceptions = db.query(TeacherAvailabilityException).filter(
-        TeacherAvailabilityException.teacher_id == teacher.id,
-        TeacherAvailabilityException.start_time_utc < day_end,
-        TeacherAvailabilityException.end_time_utc > day_start,
-    ).all()
-
-    # Separar excepciones de bloqueo y de disponibilidad extra
-    extra_availability = []
-    busy_from_exceptions = []
-
-    for exc in exceptions:
-        if exc.is_available:
-            extra_availability.append((exc.start_time_utc, exc.end_time_utc))
-        else:
-            busy_from_exceptions.append((exc.start_time_utc, exc.end_time_utc))
-
-    # Añadir disponibilidad extra si existe
-    availability_ranges.extend(extra_availability)
-
-    # 5. Obtener clases ya agendadas del profesor ese día
-    # BUG-04 fix: "expired" se trata igual que "cancelled" (no ocupa el slot).
-    booked = db.query(Class).filter(
-        Class.teacher_id == teacher.id,
-        Class.start_time_utc >= day_start,
-        Class.start_time_utc < day_end,
-        Class.status.notin_(["cancelled", "expired"])
-    ).all()
-
-    # El bloque que cada clase existente ocupa en la agenda incluye su
-    # propio margen de preparación (Class.buffer_minutes), no solo su
-    # horario real — así el siguiente slot ofrecido ya deja ese hueco.
-    busy_from_classes = [
-        (c.start_time_utc, c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0))
-        for c in booked
-    ]
-
-    busy_from_google = get_teacher_busy_ranges(
-        teacher_id=teacher.id,
-        time_min=day_start,
-        time_max=day_end,
-        db=db,
-    )
-
     # 6. Margen de preparación según el tipo de clase, y bloque real que
     # ocupa la agenda del profesor (duración real + margen).
     from app.core.class_logic import get_business_rules, get_buffer_minutes_for_type
@@ -488,18 +423,91 @@ def get_teacher_available_slots(
     prep_buffer_minutes = get_buffer_minutes_for_type(class_type, db)
     occupancy_minutes = duration + prep_buffer_minutes
 
-    # 7. Calcular slots libres en UTC. busy_from_classes ya incluye, para
-    # cada clase existente, su propio margen de preparación (ver más
-    # abajo), así que el choque se detecta correctamente contra el
-    # bloque real ocupado por cada clase, no solo su horario "visible".
-    all_busy = busy_from_exceptions + busy_from_classes + busy_from_google
+    # 3-7. Rejilla (inicio, ocupado): igual para cualquier visitante, se cachea unos
+    # segundos por profesor/fecha/duración/bloque (Fase 14, E3, ver core/slots_cache.py).
+    # Lo que depende de quién mira o de la hora (preferencias, is_past, too_soon) va después.
+    def load_slot_grid():
+        # 3. Obtener disponibilidad base (horario semanal)
+        weekly_slots = db.query(TeacherAvailability).filter(
+            TeacherAvailability.teacher_id == teacher.id,
+            TeacherAvailability.day_of_week == day_of_week,
+            TeacherAvailability.is_available == True
+        ).all()
 
-    all_slots = get_all_slots_utc(
-        availability_ranges=availability_ranges,
-        busy_ranges=all_busy,
-        duration_minutes=duration,
-        occupancy_minutes=occupancy_minutes,
-    )
+        # Construir rangos UTC para esta fecha concreta
+        availability_ranges = []
+        for slot in weekly_slots:
+            try:
+                start_utc, end_utc = build_weekly_range_utc(
+                    date,
+                    slot.start_time_utc,
+                    slot.end_time_utc
+                )
+                availability_ranges.append((start_utc, end_utc))
+            except ValueError:
+                continue
+
+        # 4. Obtener excepciones para esta fecha
+        day_start = dt
+        day_end = dt + timedelta(days=1)
+
+        exceptions = db.query(TeacherAvailabilityException).filter(
+            TeacherAvailabilityException.teacher_id == teacher.id,
+            TeacherAvailabilityException.start_time_utc < day_end,
+            TeacherAvailabilityException.end_time_utc > day_start,
+        ).all()
+
+        # Separar excepciones de bloqueo y de disponibilidad extra
+        extra_availability = []
+        busy_from_exceptions = []
+
+        for exc in exceptions:
+            if exc.is_available:
+                extra_availability.append((exc.start_time_utc, exc.end_time_utc))
+            else:
+                busy_from_exceptions.append((exc.start_time_utc, exc.end_time_utc))
+
+        # Añadir disponibilidad extra si existe
+        availability_ranges.extend(extra_availability)
+
+        # 5. Obtener clases ya agendadas del profesor ese día
+        # BUG-04 fix: "expired" se trata igual que "cancelled" (no ocupa el slot).
+        booked = db.query(Class).filter(
+            Class.teacher_id == teacher.id,
+            Class.start_time_utc >= day_start,
+            Class.start_time_utc < day_end,
+            Class.status.notin_(["cancelled", "expired"])
+        ).all()
+
+        # El bloque que cada clase existente ocupa en la agenda incluye su
+        # propio margen de preparación (Class.buffer_minutes), no solo su
+        # horario real — así el siguiente slot ofrecido ya deja ese hueco.
+        busy_from_classes = [
+            (c.start_time_utc, c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0))
+            for c in booked
+        ]
+
+        busy_from_google = get_teacher_busy_ranges(
+            teacher_id=teacher.id,
+            time_min=day_start,
+            time_max=day_end,
+            db=db,
+        )
+
+        # 7. Calcular slots libres en UTC. busy_from_classes ya incluye, para
+        # cada clase existente, su propio margen de preparación (ver más
+        # abajo), así que el choque se detecta correctamente contra el
+        # bloque real ocupado por cada clase, no solo su horario "visible".
+        all_busy = busy_from_exceptions + busy_from_classes + busy_from_google
+
+        return get_all_slots_utc(
+            availability_ranges=availability_ranges,
+            busy_ranges=all_busy,
+            duration_minutes=duration,
+            occupancy_minutes=occupancy_minutes,
+        )
+
+    all_slots = cached_slot_grid(teacher.id, date, duration, occupancy_minutes, load_slot_grid)
 
     if not all_slots:
         return []

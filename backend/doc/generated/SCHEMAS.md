@@ -10,7 +10,7 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 - **UpdateTeacherStatusRequest** — status: str; reason: Optional[str] = None
 - **UpdateCommissionRequest** — commission_rate: float
 - **UserAdminResponse** — id: int; username: str; email: str; name: str; surname: str; phone_number: Optional[str] = None; nationality: Optional[str] = None; role: str; is_active: bool; is_verified: bool; is_banned: bool = False; ban_reason: Optional[str] = None; banned_at: Optional[datetime] = None; created_at: datetime
-- **PaginatedUsersResponse** — total: int; users: List[UserAdminResponse]
+- **PaginatedUsersResponse** — total: int; users: List[UserAdminResponse]; active_count: Optional[int] = None
 - **UpdateUserStatusRequest** — is_active: bool; reason: Optional[str] = None
 - **AdminUserUpdate** — role: Optional[str] = None; is_active: Optional[bool] = None; phone_number: Optional[str] = None; nationality: Optional[str] = None
 - **BanStudentRequest** — reason: str  _(validadores: validate_reason)_

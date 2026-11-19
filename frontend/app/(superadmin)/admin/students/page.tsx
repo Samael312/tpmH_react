@@ -15,6 +15,7 @@ import { getFlagForNationality } from '@/lib/nationalities'
 import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
+import LoadMoreButton from '@/components/ui/LoadMoreButton'
 import { usePageTopBar } from '@/lib/mobileTopBar'
 import { useToast } from '@/hooks/useToast'
 import { getErrorMessage } from '@/lib/errorMessage'
@@ -290,7 +291,7 @@ export default function StudentsPage() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [banTarget, setBanTarget] = useState<Student | null>(null)
-  const { students, loading, isFetching, isError, total, refetch } = useStudents(debouncedSearch)
+  const { students, loading, isFetching, isError, total, activeCount: serverActiveCount, refetch, hasMore, loadMore, loadingMore } = useStudents(debouncedSearch)
 
   // Debounce del buscador (400ms)
   useEffect(() => {
@@ -304,9 +305,9 @@ export default function StudentsPage() {
     isFetching,
   })
 
-  // Métricas rápidas
-  const activeCount = students.filter((s) => s.is_active !== false).length
-  const inactiveCount = students.length - activeCount
+  // Métricas rápidas: del servidor (Fase 14, E6). La lista llega de 50 en 50, así que contar lo cargado daría menos.
+  const activeCount = serverActiveCount ?? students.filter((s) => s.is_active !== false).length
+  const inactiveCount = Math.max(0, total - activeCount)
 
   return (
     <>
@@ -453,6 +454,7 @@ export default function StudentsPage() {
               {students.map((student) => (
                 <StudentRow key={student.id} student={student} onBanTarget={setBanTarget} />
               ))}
+              <LoadMoreButton hasMore={hasMore} loading={loadingMore} onClick={loadMore} />
             </div>
           )}
         </Card>

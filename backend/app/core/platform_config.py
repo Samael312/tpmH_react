@@ -1,3 +1,5 @@
+from typing import Optional
+
 from sqlalchemy.orm import Session
 from app.models.payment_config import PlatformConfig
 from app.models.teacher import TeacherProfile
@@ -78,15 +80,38 @@ def get_landing_content(config: PlatformConfig) -> dict:
     return merged
 
 
+_SESSION_KEY = "platform_config"
+
+
+def get_platform_config(db: Session) -> Optional[PlatformConfig]:
+    """
+    La fila única de PlatformConfig, leída UNA vez por sesión (= por petición) (Fase 14, E9).
+
+    `db.query(PlatformConfig).first()` no usa el identity map (no es por clave primaria), así
+    que cada llamada era una consulta: una reserva la leía 5 veces. Se guarda en `db.info` y se
+    reutiliza mientras el objeto siga en esa sesión. Tras un commit sus atributos caducan y el
+    siguiente acceso los recarga por clave primaria, así que nunca se lee un valor viejo de otra
+    petición. No se memoriza el "no hay fila" (BD recién creada): se vuelve a mirar.
+    """
+    cached = db.info.get(_SESSION_KEY)
+    if cached is not None and cached in db:
+        return cached
+    config = db.query(PlatformConfig).first()
+    if config is not None:
+        db.info[_SESSION_KEY] = config
+    return config
+
+
 def get_or_create_platform_config(db: Session) -> PlatformConfig:
     """Devuelve la fila (única) de configuración de plataforma, creándola
     con valores default si todavía no existe."""
-    config = db.query(PlatformConfig).first()
+    config = get_platform_config(db)
     if not config:
         config = PlatformConfig()
         db.add(config)
         db.commit()
         db.refresh(config)
+        db.info[_SESSION_KEY] = config
     return config
 
 
@@ -120,3 +145,44 @@ def serialize_platform_config(db: Session, config: PlatformConfig) -> dict:
         "chat_reactivation_hours": config.chat_reactivation_hours,
         "landing_content": get_landing_content(config),
     }
+
+
+# ─── Single-tenant: la plataforma gestiona solo las clases de la profesora destacada ───
+
+def resolve_featured_teacher(db: Session, config: Optional[PlatformConfig] = None) -> Optional[TeacherProfile]:
+    """La profesora destacada: la guardada en PlatformConfig o, si no hay, FEATURED_TEACHER_USERNAME del entorno.
+
+    Es la misma resolución que usan la reserva, el estado de reserva y la landing; el cambio de modo la usa
+    también para no perder a los alumnos cuando la destacada venía del entorno.
+    """
+    from app.core.config import settings
+
+    config = config if config is not None else get_platform_config(db)
+    if config and config.featured_teacher_id:
+        teacher = db.get(TeacherProfile, config.featured_teacher_id)
+        if teacher:
+            return teacher
+    username = settings.FEATURED_TEACHER_USERNAME
+    if not username:
+        return None
+    return db.query(TeacherProfile).filter(TeacherProfile.user_username == username).first()
+
+
+def ensure_featured_teacher_in_single_tenant(db: Session, teacher_id: int) -> None:
+    """En single-tenant solo se agenda, compra o inscribe con la destacada (400 si es otro profesor).
+
+    Sirve para lo que llega con un enrollment, paquete o grupo de otro profesor (p. ej. de una etapa multi
+    anterior): esos créditos quedan para cuando la plataforma vuelva a multi o para un reembolso.
+    """
+    from fastapi import HTTPException, status
+
+    config = get_platform_config(db)
+    if not config or not config.is_single_tenant:
+        return
+    featured = resolve_featured_teacher(db, config)
+    if featured is None or featured.id != teacher_id:
+        name = (featured.user.name if featured and featured.user and featured.user.name else None) or "la profesora principal"
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"La plataforma solo gestiona las clases de {name}; no se puede agendar ni comprar con otro profesor.",
+        )

@@ -8,6 +8,7 @@ import ChipiWidget from '@/components/chipi/ChipiWidget'
 import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
+import LoadMoreButton from '@/components/ui/LoadMoreButton'
 import { usePageTopBar } from '@/lib/mobileTopBar'
 import { useToast } from '@/hooks/useToast'
 import { getErrorMessage } from '@/lib/errorMessage'
@@ -171,7 +172,7 @@ function ResolveModal({
 export default function AdminSupportPage() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>('pending')
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined)
-  const { tickets, loading, isFetching, refetch } = useSupportTickets(statusFilter, categoryFilter)
+  const { tickets, loading, isFetching, refetch, hasMore, loadMore, loadingMore } = useSupportTickets(statusFilter, categoryFilter)
   const [selected, setSelected] = useState<SupportTicketWithUser | null>(null)
 
   usePageTopBar({ title: 'Soporte', onRefresh: refetch, isFetching })
@@ -262,6 +263,7 @@ export default function AdminSupportPage() {
             )
           })
         )}
+        <LoadMoreButton hasMore={hasMore} loading={loadingMore} onClick={loadMore} />
       </div>
 
       {selected && (

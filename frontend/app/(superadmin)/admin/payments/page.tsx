@@ -10,6 +10,7 @@ import { ChevronRight, Clock, User, Package as PackageIcon, RefreshCw, AlertTria
 import Skeleton from '@/components/ui/Skeleton'
 import RefreshButton from '@/components/ui/RefreshButton'
 import DesktopOnly from '@/components/ui/DesktopOnly'
+import LoadMoreButton from '@/components/ui/LoadMoreButton'
 import { usePageTopBar } from '@/lib/mobileTopBar'
 import { useToast } from '@/hooks/useToast'
 import { getErrorMessage } from '@/lib/errorMessage'
@@ -98,8 +99,9 @@ export default function PaymentsPage() {
 
   const { payments, loading: paymentsLoading, isFetching: paymentsFetching, isError: paymentsError, refetch: refetchPayments } = usePendingPayments()
   const { withdrawals, loading: withdrawalsLoading, isFetching: withdrawalsFetching, isError: withdrawalsError, refetch: refetchWithdrawals } = useWithdrawals()
-  const { teachers: pendingTeachers, loading: teachersLoading, isFetching: teachersFetching, isError: teachersError, refetch: refetchTeachers } = useTeachers('pending')
-  const { history, loading: historyLoading, isFetching: historyFetching, isError: historyError, refetch: refetchHistory } = usePaymentsHistory()
+  const { teachers: pendingTeachers, total: pendingTeachersTotal, loading: teachersLoading, isFetching: teachersFetching, isError: teachersError, refetch: refetchTeachers } = useTeachers('pending')
+  // El historial crece sin límite: se pide al abrir su pestaña y de 50 en 50 (Fase 14, E6).
+  const { history, loading: historyLoading, isFetching: historyFetching, isError: historyError, refetch: refetchHistory, hasMore: historyHasMore, loadMore: loadMoreHistory, loadingMore: historyLoadingMore } = usePaymentsHistory(activeTab === 'history')
 
   const isFetching = paymentsFetching || withdrawalsFetching || teachersFetching || historyFetching
 
@@ -217,7 +219,7 @@ export default function PaymentsPage() {
           {[
             { key: 'payments',    label: `Pagos por confirmar (${payments?.length || 0})` },
             { key: 'withdrawals', label: `Retiros (${withdrawals?.length || 0})` },
-            { key: 'teachers',    label: `Profesores por validar (${pendingTeachers?.length || 0})` },
+            { key: 'teachers',    label: `Profesores por validar (${pendingTeachersTotal || 0})` },
             { key: 'history',     label: 'Historial' },
           ].map(tab => (
             <button
@@ -563,6 +565,7 @@ export default function PaymentsPage() {
                 )
               })
             )}
+            <LoadMoreButton hasMore={historyHasMore} loading={historyLoadingMore} onClick={loadMoreHistory} />
           </div>
         )}
       </div>

@@ -1,0 +1,34 @@
+{
+  "name": "tpm-promo-video",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Vídeo promocional de TuProfeMaria (TikTok 9:16 y 16:9) hecho con Remotion",
+  "scripts": {
+    "studio": "remotion studio",
+    "render:tiktok": "remotion render PromoVertical out/tuprofemaria-tiktok.mp4",
+    "render:wide": "remotion render PromoWide out/tuprofemaria-16x9.mp4",
+    "render": "npm run render:tiktok && npm run render:wide",
+    "render:maria-tiktok": "remotion render MariaVertical out/maria-tiktok.mp4",
+    "render:maria-wide": "remotion render MariaWide out/maria-16x9.mp4",
+    "render:maria": "npm run render:maria-tiktok && npm run render:maria-wide",
+    "render:all": "npm run render && npm run render:maria",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-three/fiber": "9.8.2",
+    "@remotion/cli": "4.0.545",
+    "@remotion/google-fonts": "4.0.545",
+    "@remotion/three": "4.0.545",
+    "@remotion/transitions": "4.0.545",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "remotion": "4.0.545",
+    "three": "0.185.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "@types/three": "0.185.0",
+    "typescript": "5.9.3"
+  }
+}
