@@ -239,11 +239,15 @@ export default function LoginPage() {
           <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl shadow-slate-200/50 p-6 sm:p-8">
             <form onSubmit={handleSubmit} className="space-y-3">
               <div className="group">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Usuario o email</label>
+                <label htmlFor="login-identifier" className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Usuario o email</label>
                 <div className="relative">
                   <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-pink-500 transition-colors pointer-events-none" />
                   <input
+                    id="login-identifier"
+                    name="username"
                     type="text"
+                    autoComplete="username"
+                    aria-invalid={!!error}
                     value={form.login}
                     maxLength={255}
                     onChange={(e) => setForm({ ...form, login: e.target.value.toLowerCase().replace(/\s/g, "") })}
@@ -255,12 +259,16 @@ export default function LoginPage() {
 
               <div className="group">
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contraseña</label>
+                  <label htmlFor="login-password" className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contraseña</label>
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-pink-500 transition-colors pointer-events-none" />
                   <input
+                    id="login-password"
+                    name="password"
                     type={showPw ? "text" : "password"}
+                    autoComplete="current-password"
+                    aria-invalid={!!error}
                     value={form.password}
                     maxLength={128}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
@@ -280,8 +288,8 @@ export default function LoginPage() {
 
               {/* Error - persiste hasta nuevo intento */}
               {error && (
-                <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-2">
-                  <span className="text-rose-500">⚠️</span> {error}
+                <div role="alert" className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-2">
+                  <span className="text-rose-500" aria-hidden="true">⚠️</span> {error}
                 </div>
               )}
 

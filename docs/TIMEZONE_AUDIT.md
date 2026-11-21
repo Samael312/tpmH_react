@@ -60,14 +60,16 @@ carga clases, excepciones y Google **solo dentro del día UTC D**. `is_within_te
 
 | # | Sev | Hallazgo | Orig. | Evidencia |
 |---|---|---|---|---|
-| C1 | 🔴 | **Se ofrece y no se reserva.** Bogotá 18-22 → huecos 19:00-22:00 locales con `is_available:true`; reservarlos da **409** "fuera de disponibilidad" (23:00Z sí da 201). Todas las zonas UTC-3…UTC-8 con tarde, y Asia/Oceanía por la mañana. | P1, D6, V1 | VIVO + SONDA |
-| C2 | 🔴 | **Clase reservada tras medianoche UTC no ocupa el hueco** al consultar el día anterior (clase 677 a 01:00Z → 01:00 sigue libre). Hoy C1 lo tapa; **si se arregla C1 solo, habrá doble reserva.** | P1, D7, V2 | VIVO + SONDA |
-| C3 | 🔴 | **Bloqueo parcial tras medianoche UTC no se aplica** (3 huecos de más el martes 1-dic). | P1, V3 | VIVO + SONDA |
-| C4 | 🟠 | **Google busy cortado a medianoche UTC:** un evento de Google 00:00-01:00Z no bloquea esos huecos. | G4 | SONDA |
-| C5 | 🔴 | **El front pide el día local como día UTC** (`?date=YYYY-MM-DD` sin zona, `useStudentData.ts:317`, backend `availability.py:403`). Caracas: el "lunes" muestra dom 20:00 → lun 20:00 y le falta lun 20:00-24:00. Madrid: el "lunes 30" muestra martes 00-03. Mismo en reagendar, God Mode y cohortes. | U1, V4 | VIVO + CÓDIGO |
-| C6 | 🟠 | **`is_preferred` nunca marca preferencias que cruzan medianoche UTC** (comparación de cadenas `"23:30" <= t < "01:00"`). | D8, P15, V8 | VIVO + SONDA |
+| C1 | ~~🔴~~ | **Corregido (Fase 24).** ~~Se ofrece y no se reserva.~~ Bogotá 18-22 → huecos 19:00-22:00 locales con `is_available:true`; reservarlos da **409** "fuera de disponibilidad" (23:00Z sí da 201). Todas las zonas UTC-3…UTC-8 con tarde, y Asia/Oceanía por la mañana. | P1, D6, V1 | VIVO + SONDA |
+| C2 | ~~🔴~~ | **Corregido (Fase 24, junto con C1).** ~~Clase reservada tras medianoche UTC no ocupa el hueco** al consultar el día anterior (clase 677 a 01:00Z → 01:00 sigue libre). Hoy C1 lo tapa; **si se arregla C1 solo, habrá doble reserva.** | P1, D7, V2 | VIVO + SONDA |
+| C3 | ~~🔴~~ | **Corregido (Fase 24).** ~~Bloqueo parcial tras medianoche UTC no se aplica~~ (3 huecos de más el martes 1-dic). | P1, V3 | VIVO + SONDA |
+| C4 | ~~🟠~~ | **Corregido (Fase 17), verificado en la Fase 24** (ahora Google se pide para la ventana local pedida + bloque): el busy de Google cubre todo el rango ofrecido (día UTC + rangos que cruzan medianoche + margen), no solo `[D 00:00, D+1 00:00)`. Un evento 00:00-01:00Z ya bloquea esos huecos. | G4 | SONDA invertida |
+| C5 | ~~🔴~~ | **Corregido (Fase 24): `/slots` acepta `tz` y `end_date`; el hook del front manda la zona.** ~~El front pide el día local como día UTC~~ (`?date=YYYY-MM-DD` sin zona, `useStudentData.ts:317`, backend `availability.py:403`). Caracas: el "lunes" muestra dom 20:00 → lun 20:00 y le falta lun 20:00-24:00. Madrid: el "lunes 30" muestra martes 00-03. Mismo en reagendar, God Mode y cohortes. | U1, V4 | VIVO + CÓDIGO |
+| C6 | ~~🟠~~ | **Corregido (Fase 24, intervalos UTC concretos).** ~~`is_preferred` nunca marca preferencias que cruzan medianoche UTC** (comparación de cadenas `"23:30" <= t < "01:00"`). | D8, P15, V8 | VIVO + SONDA |
 
-**Arreglo:** generar huecos y validar sobre las **fechas locales del profesor** que cubren el rango pedido;
+**Hecho en la Fase 24:** motor único `app/core/slot_availability.py` (rejilla y validación de reservas), ventana por días locales (`tz`), clases/excepciones/Google por solape. **Pendiente: DST (§3)**: el horario sigue guardado como `HH:MM` UTC fijo; no se rediseñó el almacenamiento.
+
+**Arreglo original:** generar huecos y validar sobre las **fechas locales del profesor** que cubren el rango pedido;
 el endpoint recibe `date` + `tz` del que mira y devuelve `[00:00, 24:00)` local. Cargar clases, excepciones
 y Google para `[min(inicio de rango), max(fin de rango))`. Preferencias como intervalos, no cadenas.
 C1 y C2 se arreglan **juntos**.
@@ -82,16 +84,16 @@ cualquier fecha.
 
 | # | Sev | Hallazgo | Orig. | Evidencia |
 |---|---|---|---|---|
-| H1 | 🔴 | **El horario se corre 1 h con el cambio de verano.** Madrid 09-12 guardado en invierno → 10:00-13:00 desde el 29-mar-2027 (31/52 semanas; Nueva York 34/52). El calendario del alumno ya permite llegar a esas fechas. Alumnos sin DST (LatAm) no lo notan; el profesor sí. | D1, U11, V5 | VIVO + SONDA |
-| H2 | 🟠 | **Guardar cerca del cambio de hora mezcla desfases** en la misma semana (jueves a 08:00 y resto a 09:00). | D2 | SONDA |
-| H3 | 🟠 | **El recálculo al cambiar de zona usa el desfase de hoy** → el error de 1 h queda permanente en la hora local (Madrid verano → Bogotá invierno: 09:00 pasa a 08:00 para siempre). | P5, T3 | SONDA |
-| H4 | 🟠 | **Cohortes con horario fijo se rechazan enteras** si la serie cruza el cambio de hora (las fechas se calculan bien; la validación usa el UTC fijo). | D3 | SONDA |
-| H5 | 🟠 | **`utcTimeToLocal` del front no usa la misma fecha de referencia que el backend** (zona del navegador, combina hora UTC): en la semana del cambio se ve 1 h corrido y **re-guardar lo corrompe**. | U10 | SONDA |
+| H1 | ✅ | **CORREGIDO Fase 26: horario semanal en hora local, expandido por fecha (test_f26)** ~~**El horario se corre 1 h con el cambio de verano.** Madrid 09-12 guardado en invierno → 10:00-13:00 desde el 29-mar-2027 (31/52 semanas; Nueva York 34/52). El calendario del alumno ya permite llegar a esas fechas. Alumnos sin DST (LatAm) no lo notan; el profesor sí.~~ | D1, U11, V5 | VIVO + SONDA |
+| H2 | ✅ | **CORREGIDO Fase 26: sin UTC guardado no hay desfases mezclados** ~~**Guardar cerca del cambio de hora mezcla desfases** en la misma semana (jueves a 08:00 y resto a 09:00).~~ | D2 | SONDA |
+| H3 | ✅ | **CORREGIDO Fase 26: cambiar de zona conserva la hora local, sin recalculo** ~~**El recálculo al cambiar de zona usa el desfase de hoy** → el error de 1 h queda permanente en la hora local (Madrid verano → Bogotá invierno: 09:00 pasa a 08:00 para siempre).~~ | P5, T3 | SONDA |
+| H4 | ✅ | **CORREGIDO Fase 26: la validacion expande la disponibilidad por fecha** ~~**Cohortes con horario fijo se rechazan enteras** si la serie cruza el cambio de hora (las fechas se calculan bien; la validación usa el UTC fijo).~~ | D3 | SONDA |
+| H5 | ✅ | **CORREGIDO Fase 26: el editor del profesor ya no convierte UTC (lib/weeklyLocal.ts); utcTimeToLocal queda solo para preferencias del alumno** ~~**`utcTimeToLocal` del front no usa la misma fecha de referencia que el backend** (zona del navegador, combina hora UTC): en la semana del cambio se ve 1 h corrido y **re-guardar lo corrompe**.~~ | U10 | SONDA |
 | H6 | 🟠 | **Excepción en hora inexistente** (28-mar 02:30-03:00 Madrid) se guarda con fin antes que inicio y no bloquea nada. | D4 | SONDA |
 | H7 | 🔵 | **Día completo en día de 23 h sale `is_full_day=False`** (umbral 23h55). | D5, P14 | SONDA |
 | H8 | 🔵 | `localDateTimeToUtcIso` de una pasada (`ClassCard.tsx:104`) falla 1 h alrededor del cambio. Etiqueta "+Xh respecto a ti" usa el desfase de hoy. | U13, U15 | SONDA |
 
-**Arreglo de fondo:** guardar disponibilidad y preferencias en **hora local + `local_day_of_week` + zona**
+**Arreglo de fondo (HECHO en la Fase 26 para la disponibilidad del profesor; las preferencias del alumno siguen en UTC):** guardar disponibilidad y preferencias en **hora local + `local_day_of_week` + zona**
 y calcular el UTC para cada fecha concreta (como ya hacen excepciones y `_generate_recurring_dates`).
 La API devuelve también la hora local guardada y el front deja de reconvertir. Migración: rellenar los
 campos locales con la zona actual; avisar a profesores con DST para que revisen su horario.
@@ -103,13 +105,13 @@ campos locales con la zona actual; avisar a profesores con DST para que revisen 
 
 | # | Sev | Hallazgo | Orig. | Evidencia |
 |---|---|---|---|---|
-| Z1 | 🔴 | **`PATCH /teachers/me/profile` con zona inválida → 500** (`ZoneInfoNotFoundError` sin capturar, `schedule_recalc.py:96`). Si la zona vieja estaba vacía, **guarda la basura** con 200 y luego rompe cohortes. | P2, T2, V6 | VIVO + SONDA |
+| Z1 | ✅ | **CORREGIDO Fase 21 (menor 7): ahora 422 y no se guarda (sonda `test_fixed_profile_invalid_tz_*`).** ~~`PATCH /teachers/me/profile` con zona inválida → 500~~ (`ZoneInfoNotFoundError` sin capturar, `schedule_recalc.py:96`). Si la zona vieja estaba vacía, **guarda la basura** con 200 y luego rompe cohortes. | P2, T2, V6 | VIVO + SONDA |
 | Z2 | 🟠 | **`PATCH /users/me/student-profile` guarda cualquier zona** (`"Mars/Olympus"`, `""`) con 200. Probable `RangeError` en el front; correos caen a UTC. | T1, V7 | VIVO + SONDA |
-| Z3 | 🟠 | **`""`/`null` en el profesor desactivan el siguiente recálculo** → la disponibilidad queda con el UTC viejo (09-11 Bogotá pasa a 23-01 Tokio). | P3 | SONDA |
-| Z4 | 🟠 | **La zona del cuerpo de `PUT /me/weekly` y `POST /me/exceptions` no se compara con la del perfil**; el recálculo posterior parte de la del perfil y corre el horario N horas. | P4 | SONDA |
+| Z3 | 🟠 | **CORREGIDO (Fase 27):** `timezone: null`/vacío/solo espacios en el PATCH del perfil de profesor da 422 (omitir el campo sigue valiendo); el PATCH `/users/me/student-profile` también valida (antes aceptaba cualquier cosa, incluso zonas inválidas) y `/users/me` rechaza `null`. Las filas antiguas con zona NULL se siguen leyendo igual (fallback sin cambios). Sonda invertida: `test_fixed_profile_null_tz_rejected`; tests en `tests/audit/test_f27_tz_null_reminders.py`. | P3 | CORREGIDO |
+| Z4 | ✅ | **CORREGIDO Fase 26: PUT /me/weekly con otra zona pasa a ser la zona del perfil; ya no hay recalculo que corra el horario (POST /me/exceptions sigue sin comparar zona)** ~~**La zona del cuerpo de `PUT /me/weekly` y `POST /me/exceptions` no se compara con la del perfil**; el recálculo posterior parte de la del perfil y corre el horario N horas.~~ | P4 | SONDA |
 | Z5 | 🔴 | **Front: el alumno cambia de zona y el store no se entera** hasta recargar (`dashboard/profile/page.tsx:325` no pasa `timezone`); la rejilla de preferencias **guarda con la zona vieja**. `getMyDisplayTimezone()` no es reactiva y las queries no se invalidan. | U8, U18 | CÓDIGO |
 | Z6 | 🟠 | **Cambiar de zona (o crear un bloqueo) deja clases reservadas fuera de la disponibilidad o dentro del bloqueo sin avisar.** El resumen del recálculo se descarta (`teachers.py:169`). | P7, P8, V11 | VIVO + SONDA |
-| Z7 | 🟠 | **Filas antiguas sin `local_day_of_week`** se corren de día al recalcular. | P6 | SONDA |
+| Z7 | ✅ | **CORREGIDO Fase 26: el dia local ya no se recalcula; la columna local_day_of_week desaparece** ~~**Filas antiguas sin `local_day_of_week`** se corren de día al recalcular.~~ | P6 | SONDA |
 | Z8 | 🔵 | Recálculo reescribe excepciones **pasadas**. | P9 | SONDA |
 | Z9 | 🔵 | `PATCH /users/me` acepta `timezone`, responde 200 y no hace nada. | P10 | SONDA |
 | Z10 | 🔵 | Alias legados aceptados (`EST` sin DST, `Etc/GMT+3` = UTC−3). `TIMEZONE_OPTIONS` corto (16), con alias `America/Buenos_Aires`, distinta lista en perfil del alumno; zona fuera de lista se envía pero se ve "Seleccionar…". | P11, U17 | SONDA |
@@ -133,7 +135,7 @@ solape, pasado, demasiado pronto 409 ✔ · duración ≠ paquete 400 ✔ · des
 | R1 | 🔴 | **Fechas sin zona → 500** en `/classes/trial` (staff), God Mode crear/reagendar y sesiones grupales (sin `require_timezone`). | B1 | SONDA |
 | R2 | 🟠 | Con desfase (+05:30) en esos endpoints, `day_of_week` se guarda con el día local. | B2 | SONDA |
 | R3 | 🟠 | **Sesiones grupales**: aceptan fecha pasada, ignoran `pending_trial` y no comprueban otras clases de los alumnos. | B3 | SONDA |
-| R4 | 🟠 | **La reserva no consulta Google busy** (solo la lista de huecos): una reserva por API o un evento nuevo en Google entre listar y reservar pisa la cita. | G3 | SONDA |
+| R4 | ~~🟠~~ | **Corregido (Fase 17):** `can_book_slot` consulta freebusy del hueco exacto si el profesor tiene Calendar activo (falla abierto con log si Google no responde; al reagendar ignora el evento de la propia clase). | G3 | SONDA invertida |
 | R5 | 🔵 | Reserva fuera de la rejilla de 30 min (09:07 → 201, fragmenta la agenda). | B4, V9 | VIVO + SONDA |
 | R6 | 🔵 | Sin antelación máxima (se reserva a 3 años). | B5 | SONDA |
 | R7 | 🔵 | Sin `lock_booking_rows` en God Mode, prueba de staff y grupales; sin restricción de exclusión en BD. | B6 | CÓDIGO |
@@ -152,14 +154,14 @@ y conflictos por participante; `lock_booking_rows` en todas las rutas que crean 
 
 | # | Sev | Hallazgo | Orig. | Evidencia |
 |---|---|---|---|---|
-| G1 | 🔴 | **La sync reescribe los eventos de Preply** (no excluye `ClassType.external`, `google_calendar.py:745-803`): fuerza `timeZone: UTC` y pisa `location`. | G1 | SONDA |
-| G2 | 🔴 | **Si Google da 403 (profesor invitado), bucle de duplicados:** cada sync crea un evento basura «Clase: … Preply» y otra fila `Class`, y cancela la anterior. | G1b | SONDA |
-| G3 | 🟠 | **Evento de Preply en curso se reimporta en cada sync** (busca existentes con `start >= now`, Google devuelve por fin). | G2 | SONDA |
+| G1 | ~~🔴~~ | **Corregido (Fase 17):** la sync excluye `ClassType.external`; el evento de Preply nunca se toca. | G1 | SONDA invertida |
+| G2 | ~~🔴~~ | **Corregido (Fase 17):** sin push de externas no hay bucle; además un error 403/5xx al editar un evento propio ya no se interpreta como «no existe» (no se recrea). | G1b | SONDA invertida |
+| G3 | ~~🟠~~ | **Corregido (Fase 17):** existentes por `google_event_id IN (ids)` sin filtro de inicio + índice único `(teacher_id, google_event_id)` (migración `e4a1b2c3d4f5`, limpia duplicados) + `IntegrityError` ignorado. | G2 | SONDA invertida |
 | G4 | 🔵 | Eventos de Preply rechazados o "libres" se importan y bloquean (freebusy los ignora). | G6 | SONDA |
-| G5 | 🔵 | freebusy falla abierto sin registro; 1 llamada por `GET /slots` sin caché; borrado fallido en Google bloquea el hueco hasta la siguiente sync; el import no normaliza a UTC (`astimezone`). | G5, G7-G9 | SONDA / CÓDIGO |
-| G6 | 🔵 | Las clases Preply cuentan como "clase cerca" y multiplican G1-G3 (sync cada 30 min). | J4 | CÓDIGO |
+| G5 | 🔵 | **Parcial (Fase 17):** el import normaliza a UTC (G7) y un freebusy fallido ya no se cachea en `/slots` (G5); sigue sin caché la llamada por `GET /slots` y el borrado fallido sigue bloqueando el hueco hasta la sync. Original: freebusy falla abierto sin registro; 1 llamada por `GET /slots` sin caché; borrado fallido en Google bloquea el hueco hasta la siguiente sync; el import no normaliza a UTC (`astimezone`). | G5, G7-G9 | SONDA / CÓDIGO |
+| G6 | ~~🔵~~ | **Corregido (Fase 17):** `_due_calendar_sync` ya no cuenta las `external` como «clase cerca». | J4 | CÓDIGO |
 | E1 | 🟠 | **Reagendar no reinicia `reminder_sent_at`**: el horario nuevo no recibe recordatorio. | E1 | SONDA |
-| E2 | 🟠 | Solo recordatorio de 24 h: reservas con < 23 h y pruebas `pending_trial` no reciben ninguno. | E2 | SONDA |
+| E2 | 🟠 | **CORREGIDO (Fase 27):** un único recordatorio para toda clase `confirmed`/`pending`/`pending_trial` no externa que empiece en las próximas 25 h y a más de 30 min; las reservas tardías lo reciben en el siguiente tick (`_due_reminders` vence ya). Idempotente con `reminder_sent_at`. Sin recordatorio de 1 h; con < 30 min no se avisa. Sonda invertida: `test_fixed_e2_short_notice_reminded`. | E2 | CORREGIDO |
 | E3 | 🟠 | **Los correos no dicen la zona** y una zona vacía/inválida cae a UTC en silencio. | E3 | SONDA |
 | E4 | 🔵 | Sin aviso de tarea por vencer. | E4 | CÓDIGO |
 | J1 | 🔵 | `AsyncIOScheduler()` sin `timezone`: los cron "03:00 UTC" corren en la zona del servidor. | J1 | SONDA |

@@ -80,7 +80,7 @@ def main(n_students: int, n_teachers: int) -> None:
         if not db.query(TeacherAvailability).filter(TeacherAvailability.teacher_id == tp.id).count():
             for dow in range(7):
                 db.add(TeacherAvailability(teacher_id=tp.id, day_of_week=dow, is_available=True,
-                                           start_time_utc="00:00", end_time_utc="00:00"))
+                                           start_time_local="00:00", end_time_local="00:00"))
         pkg = db.query(Package).filter(Package.teacher_id == tp.id, Package.name == "LT200").first()
         if pkg is None:
             pkg = Package(teacher_id=tp.id, name="LT200", subject="English", classes_count=200,

@@ -1052,10 +1052,10 @@ export default function TeacherOnboardingPage() {
             cuenta), tiene que poder volver al login sin quedar atrapado,
             ya que el onboarding no tiene ningún otro link de navegación. */}
         <button
-          onClick={() => { logout(); router.push("/login"); }}
+          onClick={async () => { await logout(); router.push("/login"); }}
           className="absolute top-6 left-6 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors z-50"
         >
-          ¿Quieres hacerlo después, {name}? Cerrar sesión
+          Cerrar sesión y continuar después
         </button>
 
         {/* Error global de la API */}

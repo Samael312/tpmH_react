@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload, selectinload
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.models.chat import ChatConversation, ChatConversationType, ChatMessage, ChatReadState
@@ -136,7 +136,7 @@ def get_direct_conversation_or_404(
     if current_user.role in (UserRole.teacher, UserRole.teacher_admin):
         teacher_profile: TeacherProfile = current_user.teacher_profile
         if not teacher_profile:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "No tenés perfil de profesor")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "No tienes perfil de profesor")
         student_user = db.query(User).filter(User.username == other_username).first()
         if not student_user or not student_user.student_profile:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Alumno no encontrado")
@@ -144,23 +144,23 @@ def get_direct_conversation_or_404(
         if not _teacher_has_student(teacher_profile, student_profile.id):
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
-                "Ese alumno no está asignado a vos.",
+                "Ese alumno no está asignado a ti.",
             )
         return _get_or_create_direct(db, student_profile.id, teacher_profile.id)
 
     raise HTTPException(status.HTTP_403_FORBIDDEN, "Rol sin acceso al chat interno")
 
 
-def ensure_direct_conversation(db: Session, student_id: int, teacher_id: int) -> ChatConversation:
+def ensure_direct_conversation(db: Session, student_id: int, teacher_id: int, commit: bool = True) -> ChatConversation:
     """
     Wrapper público de `_get_or_create_direct` para llamarse desde fuera de
     este módulo (ver core/teacher_students.py::link_student_to_teacher) sin
     tocar un nombre "privado". Idempotente: no crea duplicados si ya existe.
     """
-    return _get_or_create_direct(db, student_id, teacher_id)
+    return _get_or_create_direct(db, student_id, teacher_id, commit=commit)
 
 
-def _get_or_create_direct(db: Session, student_id: int, teacher_id: int) -> ChatConversation:
+def _get_or_create_direct(db: Session, student_id: int, teacher_id: int, commit: bool = True) -> ChatConversation:
     convo = db.query(ChatConversation).filter(
         ChatConversation.conversation_type == ChatConversationType.direct,
         ChatConversation.student_id == student_id,
@@ -174,8 +174,11 @@ def _get_or_create_direct(db: Session, student_id: int, teacher_id: int) -> Chat
         teacher_id=teacher_id,
     )
     db.add(convo)
-    db.commit()
-    db.refresh(convo)
+    if commit:
+        db.commit()
+        db.refresh(convo)
+    else:
+        db.flush()  # transacción del llamador (backfill atómico): no se confirma aquí
     return convo
 
 
@@ -238,17 +241,31 @@ def assert_participant(db: Session, current_user: User, convo: ChatConversation)
 
 
 def conversation_participant_user_ids(db: Session, convo: ChatConversation) -> set[int]:
-    """User.id de todos los participantes — para el broadcast por WS. Una sola consulta por conversación."""
-    teacher_user = select(TeacherProfile.user_id).where(TeacherProfile.id == convo.teacher_id)
+    """User.id de los participantes ACTIVOS — para el broadcast por WS (C5: una cuenta desactivada no recibe nada).
+    Una sola consulta por conversación."""
+    teacher_user = (
+        select(TeacherProfile.user_id)
+        .join(User, User.id == TeacherProfile.user_id)
+        .where(TeacherProfile.id == convo.teacher_id, User.is_active.is_(True))
+    )
     if convo.conversation_type == ChatConversationType.direct:
         rows = db.execute(
-            teacher_user.union_all(select(StudentProfile.user_id).where(StudentProfile.id == convo.student_id))
+            teacher_user.union_all(
+                select(StudentProfile.user_id)
+                .join(User, User.id == StudentProfile.user_id)
+                .where(StudentProfile.id == convo.student_id, User.is_active.is_(True))
+            )
         ).all()
     else:
         students = (
             select(StudentProfile.user_id)
+            .join(User, User.id == StudentProfile.user_id)
             .join(Enrollment, Enrollment.student_id == StudentProfile.id)
-            .where(Enrollment.cohort_id == convo.cohort_id, Enrollment.status.in_(ACTIVE_COHORT_STATUSES))
+            .where(
+                Enrollment.cohort_id == convo.cohort_id,
+                Enrollment.status.in_(ACTIVE_COHORT_STATUSES),
+                User.is_active.is_(True),
+            )
         )
         rows = db.execute(teacher_user.union_all(students)).all()
     return {r[0] for r in rows if r[0]}
@@ -560,5 +577,11 @@ def purge_old_messages(db: Session, retention_days: int) -> int:
     result = db.query(ChatMessage).filter(ChatMessage.created_at < cutoff).delete(
         synchronize_session=False
     )
+    # C6: la vista previa de la lista de conversaciones no puede seguir mostrando el texto de mensajes ya
+    # purgados: se borra en las conversaciones que se quedaron sin mensajes.
+    has_messages = exists().where(ChatMessage.conversation_id == ChatConversation.id)
+    db.query(ChatConversation).filter(
+        ChatConversation.last_message_preview.isnot(None), ~has_messages
+    ).update({"last_message_preview": None}, synchronize_session=False)
     db.commit()
     return result

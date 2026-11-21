@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -7,6 +7,7 @@ import os
 from datetime import datetime, timedelta, time
 from zoneinfo import ZoneInfo
 from app.db.base import get_db
+from app.core.rate_limit import limiter
 from app.auth.dependencies import get_current_user, get_current_teacher
 from app.models.user import User, UserRole
 from app.models.teacher import TeacherProfile, TeacherStatus
@@ -22,21 +23,45 @@ from app.schemas.availability import (
 from app.core.timezone import (
     UTC,
     utc_now,
-    convert_local_time_to_utc,
     build_weekly_range_utc,
     get_all_slots_utc,
     is_slot_in_past,
     is_slot_too_soon,
     validate_timezone,
 )
-from app.core.google_calendar import get_teacher_busy_ranges
-from app.core.slots_cache import cached_slot_grid
+from app.core.google_calendar import FreebusyError, get_teacher_busy_ranges
+from app.core.slot_availability import (
+    window_for_local_dates,
+    load_teacher_window,
+    compute_slot_grid,
+    preference_intervals_for_window,
+)
+from app.core.slots_cache import Uncacheable, cached_slot_grid
 from app.core.platform_config import get_platform_config  # Fase 14, E9: una lectura por petición
+
+# Slots es publico: tope por IP (los repetidos los absorbe la cache de rejilla). Subir si hay muchos alumnos tras una misma IP.
+SLOTS_RATE_LIMIT = "120/minute"
+
+# Fase 24: contrato de `date` en /slots. Con `tz`, `date` es el dia CALENDARIO en esa zona (la del
+# que mira) y se devuelven los huecos que EMPIEZAN en [00:00, 24:00) de ese dia en esa zona. Sin `tz`
+# (clientes antiguos) es el dia UTC, como siempre. `end_date` (opcional, inclusive, max 14 dias)
+# amplia la ventana a varios dias locales.
+TZ_PARAM_DESC = ("Zona IANA de quien mira (p. ej. America/Bogota). Con ella `date` es el dia local en esa zona; "
+                 "sin ella, el dia UTC (compatibilidad).")
+END_DATE_PARAM_DESC = "Ultimo dia local (YYYY-MM-DD, inclusive) de la ventana; por defecto igual a `date`. Maximo 14 dias."
+MAX_SLOTS_WINDOW_DAYS = 14
 
 router = APIRouter()
 
 
 # ─── ENDPOINTS DEL PROFESOR ─────────────────────────────────────────────────
+
+def _weekly_response(rows, tz_name: str) -> List[WeeklySlotResponse]:
+    return [WeeklySlotResponse(
+        id=r.id, teacher_id=r.teacher_id, day_of_week=r.day_of_week,
+        start_time_local=r.start_time_local, end_time_local=r.end_time_local,
+        is_available=bool(r.is_available), timezone=tz_name) for r in rows]
+
 
 @router.get(
     "/me/weekly",
@@ -46,13 +71,16 @@ def get_my_weekly_availability(
     current_user: User = Depends(get_current_teacher),
     db: Session = Depends(get_db)
 ):
-    """Devuelve la disponibilidad semanal del profesor en UTC"""
-    return db.query(TeacherAvailability).filter(
-        TeacherAvailability.teacher_id == current_user.teacher_profile.id
+    """Devuelve la disponibilidad semanal del profesor en su HORA LOCAL (Fase 26): `day_of_week` local,
+    `start_time_local`/`end_time_local` y la zona IANA (`timezone`) con la que se interpreta."""
+    profile = current_user.teacher_profile
+    rows = db.query(TeacherAvailability).filter(
+        TeacherAvailability.teacher_id == profile.id
     ).order_by(
         TeacherAvailability.day_of_week,
-        TeacherAvailability.start_time_utc
+        TeacherAvailability.start_time_local
     ).all()
+    return _weekly_response(rows, profile.timezone or "UTC")
 
 
 @router.put(
@@ -65,7 +93,10 @@ def set_my_weekly_availability(
     db: Session = Depends(get_db)
 ):
     """
-    Actualiza (reemplaza) la disponibilidad semanal del profesor vía PUT.
+    Reemplaza la disponibilidad semanal del profesor. Se guarda en HORA LOCAL (Fase 26, sin conversion a
+    UTC): el UTC de cada fecha se calcula al consultar, asi el horario de verano no la desplaza. La zona
+    en la que se escribe (`timezone`) es la del perfil: si difiere, el perfil pasa a esa zona (con el
+    mismo efecto que cambiarla en PATCH /teachers/me/profile).
     """
     if not validate_timezone(data.timezone):
         raise HTTPException(
@@ -73,7 +104,11 @@ def set_my_weekly_availability(
             detail=f"Zona horaria inválida: {data.timezone}"
         )
 
-    teacher_id = current_user.teacher_profile.id
+    profile = current_user.teacher_profile
+    teacher_id = profile.id
+    if data.timezone != profile.timezone:
+        from app.core.schedule_recalc import apply_teacher_timezone_change
+        apply_teacher_timezone_change(profile, data.timezone, db)
 
     db.query(TeacherAvailability).filter(
         TeacherAvailability.teacher_id == teacher_id
@@ -81,25 +116,11 @@ def set_my_weekly_availability(
 
     new_slots = []
     for slot in data.slots:
-        try:
-            start_utc, utc_day_of_week = convert_local_time_to_utc(
-                slot.start_time_local, data.timezone, slot.day_of_week
-            )
-            end_utc, _ = convert_local_time_to_utc(
-                slot.end_time_local, data.timezone, slot.day_of_week
-            )
-        except ValueError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(e)
-            )
-
         new_slot = TeacherAvailability(
             teacher_id=teacher_id,
-            day_of_week=utc_day_of_week,
-            local_day_of_week=slot.day_of_week,
-            start_time_utc=start_utc,
-            end_time_utc=end_utc,
+            day_of_week=slot.day_of_week,
+            start_time_local=slot.start_time_local,
+            end_time_local=slot.end_time_local,
             is_available=slot.is_available,
         )
         db.add(new_slot)
@@ -109,7 +130,7 @@ def set_my_weekly_availability(
     for slot in new_slots:
         db.refresh(slot)
 
-    return new_slots
+    return _weekly_response(new_slots, profile.timezone)
 
 
 @router.get(
@@ -321,10 +342,14 @@ def get_featured_teacher_username(db: Session = Depends(get_db)):
     "/featured-teacher/slots",
     response_model=List[AvailableSlotResponse]
 )
+@limiter.limit(SLOTS_RATE_LIMIT)
 def get_featured_teacher_slots(
+    request: Request,
     date: str = Query(...),
     duration: int = Query(60, ge=15, le=180),
     class_type: str = Query("regular"),
+    tz: Optional[str] = Query(None, description=TZ_PARAM_DESC),
+    end_date: Optional[str] = Query(None, description=END_DATE_PARAM_DESC),
     current_user: Optional[User] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -339,8 +364,8 @@ def get_featured_teacher_slots(
             detail="No hay profesora featured configurada"
         )
 
-    # 3. Reusar el endpoint existente
-    return get_teacher_available_slots(
+    # 3. Reusar la logica del endpoint existente (sin pasar dos veces por el rate limit)
+    return _teacher_available_slots(
         teacher_username=teacher_username,
         date=date,
         duration=duration,
@@ -348,6 +373,8 @@ def get_featured_teacher_slots(
         bypass_min_notice=False,  # llamada directa: sin esto recibía el objeto Query() (truthy)
         current_user=current_user,
         db=db,
+        tz=tz,
+        end_date=end_date,
     )
 
 
@@ -357,7 +384,9 @@ def get_featured_teacher_slots(
     "/{teacher_username}/slots",
     response_model=List[AvailableSlotResponse]
 )
+@limiter.limit(SLOTS_RATE_LIMIT)
 def get_teacher_available_slots(
+    request: Request,
     teacher_username: str,
     date: str = Query(..., description="Fecha en formato YYYY-MM-DD"),
     duration: int = Query(60, description="Duración REAL de la clase en minutos", ge=15, le=180),
@@ -371,11 +400,35 @@ def get_teacher_available_slots(
                      "antelación para reagendar/crear clases desde God Mode, sin afectar "
                      "el chequeo normal de choques ni de horarios ya ocurridos.",
     ),
+    tz: Optional[str] = Query(None, description=TZ_PARAM_DESC),
+    end_date: Optional[str] = Query(None, description=END_DATE_PARAM_DESC),
     current_user: Optional[User] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Devuelve los slots disponibles de un profesor para una fecha.
+    Slots disponibles de un profesor para un dia (local en `tz`, o UTC si no se indica `tz`).
+    Público, con límite por IP (SLOTS_RATE_LIMIT). La lógica vive en `_teacher_available_slots`.
+    """
+    return _teacher_available_slots(
+        teacher_username=teacher_username, date=date, duration=duration, class_type=class_type,
+        bypass_min_notice=bypass_min_notice, current_user=current_user, db=db, tz=tz, end_date=end_date,
+    )
+
+
+def _teacher_available_slots(
+    teacher_username: str,
+    date: str,
+    duration: int,
+    class_type: str,
+    bypass_min_notice: bool,
+    current_user: Optional[User],
+    db: Session,
+    tz: Optional[str] = None,
+    end_date: Optional[str] = None,
+):
+    """
+    Devuelve los slots disponibles de un profesor para un dia (o varios) LOCAL en `tz`
+    (sin `tz`: dia UTC); solo salen huecos cuyo INICIO cae en la ventana.
     Devuelve UTC. El frontend convierte a zona local del usuario.
 
     `duration` es la duración REAL de la clase (lo que ve el estudiante).
@@ -389,9 +442,10 @@ def get_teacher_available_slots(
     """
 
     # 1. Verificar que el profesor existe y está aprobado
-    teacher = db.query(TeacherProfile).filter(
+    teacher = db.query(TeacherProfile).join(User, TeacherProfile.user_id == User.id).filter(
         TeacherProfile.user_username == teacher_username,
-        TeacherProfile.status == TeacherStatus.approved
+        TeacherProfile.status == TeacherStatus.approved,
+        User.is_active.is_(True),  # Fase 21, S6
     ).first()
 
     if not teacher:
@@ -400,21 +454,29 @@ def get_teacher_available_slots(
             detail="Profesor no encontrado o no disponible"
         )
 
-    # 2. Parsear la fecha
+    # 2. Ventana UTC = dias LOCALES pedidos (Fase 24, C5). Sin `tz`, el dia UTC de siempre.
+    if tz is not None and not validate_timezone(tz):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Zona horaria inválida: {tz}")
     try:
-        dt = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=UTC)
+        first_day = datetime.strptime(date, "%Y-%m-%d").date()
+        last_day = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else first_day
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Formato de fecha inválido. Usa YYYY-MM-DD"
         )
+    n_days = (last_day - first_day).days + 1
+    if n_days < 1 or n_days > MAX_SLOTS_WINDOW_DAYS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"end_date debe ser igual o posterior a date y no pasar de {MAX_SLOTS_WINDOW_DAYS} días"
+        )
+    w0, w1 = window_for_local_dates(date, tz, n_days)
 
-    # No permitir fechas pasadas
-    today = utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
-    if dt < today:
+    # No permitir fechas pasadas (hoy, en la zona del que mira, sigue valiendo: sus huecos salen con is_past)
+    today_local = utc_now().astimezone(ZoneInfo(tz) if tz else UTC).date()
+    if w1 <= window_for_local_dates(today_local.isoformat(), tz, 1)[0]:
         return []
-
-    day_of_week = dt.weekday()  # 0=Lunes, 6=Domingo (ISO)
 
     # 6. Margen de preparación según el tipo de clase, y bloque real que
     # ocupa la agenda del profesor (duración real + margen).
@@ -424,90 +486,36 @@ def get_teacher_available_slots(
     occupancy_minutes = duration + prep_buffer_minutes
 
     # 3-7. Rejilla (inicio, ocupado): igual para cualquier visitante, se cachea unos
-    # segundos por profesor/fecha/duración/bloque (Fase 14, E3, ver core/slots_cache.py).
+    # segundos por profesor/ventana/duración/bloque (Fase 14, E3, ver core/slots_cache.py).
     # Lo que depende de quién mira o de la hora (preferencias, is_past, too_soon) va después.
+    # Motor compartido con la validación de reservas: core/slot_availability.py.
     def load_slot_grid():
-        # 3. Obtener disponibilidad base (horario semanal)
-        weekly_slots = db.query(TeacherAvailability).filter(
-            TeacherAvailability.teacher_id == teacher.id,
-            TeacherAvailability.day_of_week == day_of_week,
-            TeacherAvailability.is_available == True
-        ).all()
+        occ_td = timedelta(minutes=occupancy_minutes)
+        # Rangos semanales (incluida la cola de la fila UTC del dia anterior), excepciones y clases por SOLAPE.
+        tw = load_teacher_window(db, teacher.id, w0, w1, pad=occ_td)
 
-        # Construir rangos UTC para esta fecha concreta
-        availability_ranges = []
-        for slot in weekly_slots:
-            try:
-                start_utc, end_utc = build_weekly_range_utc(
-                    date,
-                    slot.start_time_utc,
-                    slot.end_time_utc
-                )
-                availability_ranges.append((start_utc, end_utc))
-            except ValueError:
-                continue
+        # G4/C4: Google se pide para toda la ventana de huecos + el bloque del ultimo (no por dia UTC).
+        google_failed = False
+        try:
+            busy_from_google = get_teacher_busy_ranges(
+                teacher_id=teacher.id,
+                time_min=w0,
+                time_max=w1 + occ_td,
+                db=db,
+                strict=True,
+            )
+        except FreebusyError:
+            # G5: Google fallo. Se ofrece la rejilla igual (falla abierto, no se rompen reservas) pero NO se
+            # cachea: la siguiente peticion vuelve a preguntar a Google en vez de servir huecos falsos unos segundos.
+            busy_from_google = []
+            google_failed = True
 
-        # 4. Obtener excepciones para esta fecha
-        day_start = dt
-        day_end = dt + timedelta(days=1)
+        grid = compute_slot_grid(tw, occupancy_minutes, google_busy=busy_from_google)
+        return Uncacheable(grid) if google_failed else grid
 
-        exceptions = db.query(TeacherAvailabilityException).filter(
-            TeacherAvailabilityException.teacher_id == teacher.id,
-            TeacherAvailabilityException.start_time_utc < day_end,
-            TeacherAvailabilityException.end_time_utc > day_start,
-        ).all()
-
-        # Separar excepciones de bloqueo y de disponibilidad extra
-        extra_availability = []
-        busy_from_exceptions = []
-
-        for exc in exceptions:
-            if exc.is_available:
-                extra_availability.append((exc.start_time_utc, exc.end_time_utc))
-            else:
-                busy_from_exceptions.append((exc.start_time_utc, exc.end_time_utc))
-
-        # Añadir disponibilidad extra si existe
-        availability_ranges.extend(extra_availability)
-
-        # 5. Obtener clases ya agendadas del profesor ese día
-        # BUG-04 fix: "expired" se trata igual que "cancelled" (no ocupa el slot).
-        booked = db.query(Class).filter(
-            Class.teacher_id == teacher.id,
-            Class.start_time_utc >= day_start,
-            Class.start_time_utc < day_end,
-            Class.status.notin_(["cancelled", "expired"])
-        ).all()
-
-        # El bloque que cada clase existente ocupa en la agenda incluye su
-        # propio margen de preparación (Class.buffer_minutes), no solo su
-        # horario real — así el siguiente slot ofrecido ya deja ese hueco.
-        busy_from_classes = [
-            (c.start_time_utc, c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0))
-            for c in booked
-        ]
-
-        busy_from_google = get_teacher_busy_ranges(
-            teacher_id=teacher.id,
-            time_min=day_start,
-            time_max=day_end,
-            db=db,
-        )
-
-        # 7. Calcular slots libres en UTC. busy_from_classes ya incluye, para
-        # cada clase existente, su propio margen de preparación (ver más
-        # abajo), así que el choque se detecta correctamente contra el
-        # bloque real ocupado por cada clase, no solo su horario "visible".
-        all_busy = busy_from_exceptions + busy_from_classes + busy_from_google
-
-        return get_all_slots_utc(
-            availability_ranges=availability_ranges,
-            busy_ranges=all_busy,
-            duration_minutes=duration,
-            occupancy_minutes=occupancy_minutes,
-        )
-
-    all_slots = cached_slot_grid(teacher.id, date, duration, occupancy_minutes, load_slot_grid)
+    # La clave incluye la ventana UTC exacta (dias locales + zona), no la fecha suelta.
+    window_key = f"{w0.strftime('%Y%m%dT%H%M')}-{w1.strftime('%Y%m%dT%H%M')}"
+    all_slots = cached_slot_grid(teacher.id, window_key, duration, occupancy_minutes, load_slot_grid)
 
     if not all_slots:
         return []
@@ -531,26 +539,17 @@ def get_teacher_available_slots(
     else:
         min_booking_buffer_minutes = business_rules["min_booking_hours"] * 60
 
-    # 7. Obtener preferencias del estudiante si está autenticado
-    student_preferences = []
+    # 7. Preferencias del estudiante (C6): intervalos UTC concretos, también los que cruzan medianoche UTC.
+    preferred_ranges = []
     if current_user and current_user.student_profile:
         from app.models.student_preferences import StudentSchedulePreference
         prefs = db.query(StudentSchedulePreference).filter(
             StudentSchedulePreference.student_id == current_user.student_profile.id,
-            StudentSchedulePreference.day_of_week == day_of_week
         ).all()
-        student_preferences = [
-            (p.start_time_utc, p.end_time_utc)
-            for p in prefs
-        ]
+        preferred_ranges = preference_intervals_for_window(prefs, w0, w1)
 
-    # Función interna para evaluar si el slot es preferido
-    def is_preferred_slot(slot_utc: datetime, preferences: list) -> bool:
-        slot_time_str = slot_utc.strftime("%H:%M")
-        for start_utc_str, end_utc_str in preferences:
-            if start_utc_str <= slot_time_str < end_utc_str:
-                return True
-        return False
+    def is_preferred_slot(slot_utc: datetime) -> bool:
+        return any(p_s <= slot_utc < p_e for p_s, p_e in preferred_ranges)
 
     # 8. Construir respuesta final. end_time_utc es el fin REAL de la clase
     # (start + duration); block_end_time_utc es informativo (hasta cuándo
@@ -566,7 +565,7 @@ def get_teacher_available_slots(
             duration_minutes=duration,
             is_past=is_slot_in_past(slot_start),
             too_soon=is_slot_too_soon(slot_start, buffer_minutes=min_booking_buffer_minutes),
-            is_preferred=is_preferred_slot(slot_start, student_preferences),
+            is_preferred=is_preferred_slot(slot_start),
             is_available=not is_busy,
             buffer_minutes=prep_buffer_minutes,
             block_end_time_utc=slot_start + occupancy_td,

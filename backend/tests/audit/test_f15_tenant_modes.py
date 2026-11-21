@@ -28,7 +28,7 @@ def _second_teacher(db, w, username="profe2"):
     db.flush()
     for dow in range(7):
         db.add(TeacherAvailability(teacher_id=tp.id, day_of_week=dow, is_available=True,
-                                   start_time_utc="00:00", end_time_utc="00:00"))
+                                   start_time_local="00:00", end_time_local="00:00"))
     pkg = Package(teacher_id=tp.id, name="P4-FR", subject="French", classes_count=4,
                   price=100.0, price_per_class=25.0, duration_minutes=50, is_active=True)
     db.add(pkg)
@@ -45,7 +45,7 @@ def _second_student(db, w, username="alumno2"):
 
 
 def _set_mode(client, w, single, featured=None):
-    body = {"is_single_tenant": single}
+    body = {"is_single_tenant": single, "force": True}  # Fase 18: multi->single pide confirmación (409) sin force
     if featured is not None:
         body["featured_teacher_username"] = featured
     r = client.patch(f"{API}/admin/platform-config", json=body, headers=hdr(w["admin"]))

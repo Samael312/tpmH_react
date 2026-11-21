@@ -2,6 +2,12 @@ from pydantic import BaseModel, field_validator
 from typing import Optional, List, Dict
 
 
+TTS_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+TTS_MIN_SPEED = 0.25
+TTS_MAX_SPEED = 2.0
+TTS_MAX_WORDS = 50  # tope por peticion (control de costes)
+
+
 class TTSWordRequest(BaseModel):
     """Generar audio para una sola palabra"""
     word: str
@@ -21,16 +27,15 @@ class TTSWordRequest(BaseModel):
     @field_validator("voice")
     @classmethod
     def validate_voice(cls, v):
-        allowed = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
-        if v not in allowed:
-            raise ValueError(f"Voz inválida. Opciones: {allowed}")
+        if v not in TTS_VOICES:
+            raise ValueError(f"Voz inválida. Opciones: {TTS_VOICES}")
         return v
 
     @field_validator("speed")
     @classmethod
     def validate_speed(cls, v):
-        if not 0.25 <= v <= 2.0:
-            raise ValueError("La velocidad debe estar entre 0.25 y 2.0")
+        if not TTS_MIN_SPEED <= v <= TTS_MAX_SPEED:
+            raise ValueError(f"La velocidad debe estar entre {TTS_MIN_SPEED} y {TTS_MAX_SPEED}")
         return v
 
 
@@ -55,8 +60,8 @@ class TTSBatchRequest(BaseModel):
     def validate_words(cls, v):
         if not v:
             raise ValueError("La lista de palabras no puede estar vacía")
-        if len(v) > 50:
-            raise ValueError("Máximo 50 palabras por request")
+        if len(v) > TTS_MAX_WORDS:
+            raise ValueError(f"Máximo {TTS_MAX_WORDS} palabras por request")
         words = [w.strip() for w in v if w.strip()]
         if not words:
             raise ValueError("La lista de palabras no puede estar vacía")

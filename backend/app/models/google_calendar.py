@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Index, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
@@ -11,6 +11,12 @@ class GoogleCalendarToken(Base):
     funciona igual sin sincronización.
     """
     __tablename__ = "google_google_calendar"
+    __table_args__ = (
+        # Una cuenta de Google solo puede estar conectada a UN profesor.
+        Index("uq_google_calendar_account_sub", "google_account_sub", unique=True,
+              postgresql_where=text("google_account_sub IS NOT NULL"),
+              sqlite_where=text("google_account_sub IS NOT NULL")),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
@@ -25,7 +31,11 @@ class GoogleCalendarToken(Base):
     refresh_token = Column(Text, nullable=True)
     token_expiry = Column(DateTime(timezone=True), nullable=True)
 
+    # Siempre "primary" (calendario principal de la cuenta conectada). Antes se guardaba el email de la plataforma.
     calendar_id = Column(String, default="primary")
+    # Identidad de la cuenta de Google conectada (claims `sub`/`email` del id_token del OAuth)
+    google_account_sub = Column(String, nullable=True)
+    google_account_email = Column(String, nullable=True)
 
     # El profesor puede desactivar la sync sin borrar el token
     is_active = Column(Boolean, default=True)

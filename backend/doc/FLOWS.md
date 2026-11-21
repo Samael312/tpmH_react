@@ -55,3 +55,7 @@ Profesor conecta Google Calendar (`calendar.py` OAuth; `state` firmado y con cad
 
 ## 13. Errores y logs
 Excepciones -> `error_logs` (`core/error_log.py`, purga a los 30 días); frontend reporta a `POST /logs/frontend` (anónimo, 30/min, stack ≤ 8000 y extra ≤ 4000: SEC-06); UI admin `/admin/logs`. Cada respuesta lleva `Server-Timing` y las peticiones lentas (`SLOW_REQUEST_MS`) se avisan en el log.
+
+## Estados de clase (Fase 22)
+
+`PATCH /classes/{id}/status`, `DELETE /classes/teacher/{id}` y `DELETE /classes/admin/{id}` pasan por `validate_class_status_transition`. Cancelar por PATCH usa la misma vía que DELETE (reembolso, avisos, Google). Los reagendados usan `apply_reschedule_status` (resta el crédito de un `no_show`). `pending_trial` terminada pasa a `finalized` (aviso) y a `no_show` a las 72 h sin marcar (como una confirmada). Los endpoints `/packages/request-renewal` y `/request-package-change` ya no existen.

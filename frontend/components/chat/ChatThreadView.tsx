@@ -48,7 +48,7 @@ export default function ChatThreadView({
   // usuario logueado sí viaja siempre en el JWT (`sub`, ver
   // auth/jwt.py::create_access_token), así que lo sacamos de ahí.
   const currentUserId = useAuthStore((s) => s.user?.id);
-  const { messages, loading, connected, sendError, send, retryMessage, markRead, refetch } = useChatThread(conversation.id);
+  const { messages, loading, connected, historyError, sendError, send, retryMessage, markRead, refetch } = useChatThread(conversation.id);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   // Con este hilo abierto (y leído) el total de no leídos son los OTROS
   // chats — se muestra junto a la flecha de volver.
@@ -108,15 +108,30 @@ export default function ChatThreadView({
           {conversation.subtitle && <p className="text-[11px] text-slate-400">{conversation.subtitle}</p>}
         </div>
         {!connected && (
-          <span title="Reconectando..." className="text-amber-400 flex-shrink-0">
+          <span title="Reconectando..." role="status" aria-label="Reconectando" className="text-amber-400 flex-shrink-0">
             <WifiOff size={16} />
           </span>
         )}
       </div>
 
       {/* Mensajes */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 min-h-0">
-        {loading ? (
+      <div
+        role="log"
+        aria-live="polite"
+        aria-label={`Mensajes de ${conversation.title}`}
+        className="flex-1 overflow-y-auto px-4 py-3 space-y-2 min-h-0"
+      >
+        {historyError && messages.length === 0 && !loading ? (
+          <div role="alert" className="text-center py-8 space-y-2">
+            <p className="text-xs text-rose-500 font-semibold">{historyError}</p>
+            <button
+              onClick={() => { void refetch(); }}
+              className="text-xs font-bold text-pink-500 underline underline-offset-2"
+            >
+              Reintentar
+            </button>
+          </div>
+        ) : loading ? (
           <div className="space-y-2">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-10 w-2/3 rounded-2xl bg-slate-100 animate-pulse" />
@@ -167,12 +182,13 @@ export default function ChatThreadView({
       </div>
 
       {sendError && (
-        <p className="px-4 text-[11px] text-rose-500 font-semibold">{sendError}</p>
+        <p role="alert" className="px-4 text-[11px] text-rose-500 font-semibold">{sendError}</p>
       )}
 
       {/* Input */}
       <div className="flex items-center gap-2 px-3 py-3 border-t border-slate-100 flex-shrink-0">
         <input
+          aria-label="Escribe un mensaje"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
@@ -184,6 +200,7 @@ export default function ChatThreadView({
         <button
           onClick={handleSend}
           disabled={!draft.trim()}
+          aria-label="Enviar mensaje"
           className="w-10 h-10 rounded-2xl flex-shrink-0 flex items-center justify-center
                      bg-gradient-to-br from-pink-500 to-rose-400 text-white disabled:opacity-40
                      transition-opacity"

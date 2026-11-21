@@ -5,6 +5,26 @@ from datetime import datetime
 
 # ─── Materiales ─────────────────────────────────────────────────────────────
 
+MATERIAL_CATEGORIES = ["grammar", "vocabulary", "reading", "exercises", "other"]
+MATERIAL_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"]
+MAX_TITLE = 200
+MAX_DESCRIPTION = 2000
+
+
+def check_material_category(v):
+    if v not in MATERIAL_CATEGORIES:
+        raise ValueError(f"Categoría inválida. Opciones: {MATERIAL_CATEGORIES}")
+    return v
+
+
+def check_material_level(v):
+    if v is None or v == "":
+        return None
+    if v not in MATERIAL_LEVELS:
+        raise ValueError(f"Nivel inválido. Opciones: {MATERIAL_LEVELS}")
+    return v
+
+
 class MaterialCreate(BaseModel):
     title: str
     description: Optional[str] = None
@@ -15,19 +35,26 @@ class MaterialCreate(BaseModel):
     @field_validator("category")
     @classmethod
     def validate_category(cls, v):
-        allowed = ["grammar", "vocabulary", "reading", "exercises", "other"]
-        if v not in allowed:
-            raise ValueError(f"Categoría inválida. Opciones: {allowed}")
-        return v
+        return check_material_category(v)
 
     @field_validator("level")
     @classmethod
     def validate_level(cls, v):
-        if v is None:
-            return v
-        allowed = ["A1", "A2", "B1", "B2", "C1", "C2"]
-        if v not in allowed:
-            raise ValueError(f"Nivel inválido. Opciones: {allowed}")
+        return check_material_level(v)
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, v):
+        v = v.strip()
+        if not v or len(v) > MAX_TITLE:
+            raise ValueError(f"El título es obligatorio (máx. {MAX_TITLE} caracteres)")
+        return v
+
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, v):
+        if v is not None and len(v) > MAX_DESCRIPTION:
+            raise ValueError(f"La descripción es demasiado larga (máx. {MAX_DESCRIPTION} caracteres)")
         return v
 
 
@@ -99,6 +126,23 @@ class MaterialUpdate(BaseModel):
     @field_validator("title")
     @classmethod
     def validate_title(cls, v):
-        if v is not None and not v.strip():
-            raise ValueError("El título no puede estar vacío")
+        if v is not None and (not v.strip() or len(v.strip()) > MAX_TITLE):
+            raise ValueError(f"El título no puede estar vacío ni pasar de {MAX_TITLE} caracteres")
+        return v.strip() if v is not None else v
+
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, v):
+        if v is not None and len(v) > MAX_DESCRIPTION:
+            raise ValueError(f"La descripción es demasiado larga (máx. {MAX_DESCRIPTION} caracteres)")
         return v
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v):
+        return None if v is None else check_material_category(v)
+
+    @field_validator("level")
+    @classmethod
+    def validate_level(cls, v):
+        return check_material_level(v)

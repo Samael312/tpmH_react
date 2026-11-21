@@ -113,8 +113,13 @@ def test_reminder_due_is_25h_before(db, world):
 
 def test_reminder_ignores_sent_and_too_close(db, world):
     _cls(db, world, future(48), reminder_sent_at=utc_now())
-    _cls(db, world, future(10))           # menos de 23 h: la ventana ya paso
+    _cls(db, world, utc_now() + timedelta(minutes=20))  # < 30 min: ya no se avisa (Fase 27)
     assert _due("class_reminders", db) is None
+
+
+def test_reminder_late_booking_is_due_now(db, world):
+    _cls(db, world, future(10))           # Fase 27: menos de 23 h se recuerda en el siguiente tick
+    assert _due("class_reminders", db) <= utc_now()
 
 
 def test_reminder_in_window_is_due_now(db, world):

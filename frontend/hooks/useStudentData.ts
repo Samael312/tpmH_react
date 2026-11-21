@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient, keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { fetchMe } from "@/lib/me";
+import { getMyDisplayTimezone } from "@/lib/tzFormat";
 
 import { fetchAllPages } from "@/lib/pagination";
 // Prefijo de queryKey compartido por useAvailableSlots. Se expone acá para
@@ -64,6 +65,10 @@ export interface StudentClass {
   cohort_id?: number | null;
   participant_count?: number | null;
   participant_names?: string[] | null;
+  /** Fase 25: reagendados que el alumno ya hizo / tope / restantes para esta clase */
+  student_reschedule_count?: number;
+  reschedule_limit?: number;
+  reschedules_remaining?: number;
 }
 
 export interface AvailableSlot {
@@ -300,6 +305,14 @@ export function useFeaturedTeacherUsername(enabled: boolean = true) {
   };
 }
 
+/** URL de /availability/{u}/slots: `date` = día calendario LOCAL en `tz` (Fase 24, C5). */
+export function buildSlotsUrl(
+  teacherUsername: string, date: string, duration: number, classType: string, tz: string, bypassMinNotice = false,
+): string {
+  return `/availability/${teacherUsername}/slots?date=${date}&duration=${duration}&class_type=${classType}` +
+    `&tz=${encodeURIComponent(tz)}` + (bypassMinNotice ? `&bypass_min_notice=true` : "");
+}
+
 export function useAvailableSlots(
   date: string,
   duration: number,
@@ -311,13 +324,15 @@ export function useAvailableSlots(
   // normal (ver GodModeAvailabilityPicker).
   bypassMinNotice: boolean = false,
 ) {
+  // Fase 24 (C5): `date` es el día del calendario LOCAL de quien mira (el que ve en el selector), así que se
+  // manda con su zona: el backend devuelve los huecos que empiezan entre 00:00 y 24:00 de ESE día en ESA zona
+  // (antes se interpretaba como día UTC y el "lunes" mostraba dom 20:00 -> lun 20:00 en Caracas).
+  // La zona va en la queryKey: cambiar de zona no reutiliza la rejilla de otra ventana.
+  const tz = getMyDisplayTimezone();
   const query = useQuery({
-    queryKey: [...AVAILABLE_SLOTS_QUERY_PREFIX, teacherUsername, date, duration, classType, bypassMinNotice],
+    queryKey: [...AVAILABLE_SLOTS_QUERY_PREFIX, teacherUsername, date, duration, classType, bypassMinNotice, tz],
     queryFn: async () => {
-      const res = await api.get(
-        `/availability/${teacherUsername}/slots?date=${date}&duration=${duration}&class_type=${classType}` +
-        (bypassMinNotice ? `&bypass_min_notice=true` : "")
-      );
+      const res = await api.get(buildSlotsUrl(teacherUsername as string, date, duration, classType, tz, bypassMinNotice));
       return res.data as AvailableSlot[];
     },
     enabled: !!date && !!teacherUsername,

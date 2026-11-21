@@ -94,7 +94,7 @@ Mitigación: el WS ya notifica eventos; subir a 60–120 s o eliminar el polling
 Mitigación: `BackgroundTasks`/cola, agrupar, preferencias de notificación.
 
 ### 14. ⏱ Disponibilidad, slots y recálculo de zona horaria
-`GET /availability/slots` calcula en cada petición rangos × clases ocupadas × excepciones × (opcional) Google busy; coste CPU moderado, crece con ventana y nº de clases del profesor. El cambio de zona horaria recalcula toda la disponibilidad y preferencias (puntual, barato). Desde la Fase 14 (E3) la rejilla se cachea 45 s por profesor, fecha, duración y bloque (`SLOTS_CACHE_TTL_SECONDS`) y se invalida al hacer commit de clases, disponibilidad, excepciones o token de Google de ese profesor.
+`GET /availability/slots` calcula en cada petición rangos × clases ocupadas × excepciones × (opcional) Google busy; coste CPU moderado, crece con ventana y nº de clases del profesor. El cambio de zona horaria del profesor ya no recalcula el horario semanal (hora local, Fase 26); solo sus excepciones y las preferencias del alumno (puntual, barato). Desde la Fase 14 (E3) la rejilla se cachea 45 s por profesor, fecha, duración y bloque (`SLOTS_CACHE_TTL_SECONDS`) y se invalida al hacer commit de clases, disponibilidad, excepciones o token de Google de ese profesor.
 
 ### 15. 💰 Almacenamiento en BD (crecimiento sostenido)
 `error_logs` (anónimo sin tope), `chat_messages` (retención 90 días por defecto; si el admin pone 0 = infinito), `god_mode_audit`, `notifications`, clases históricas. Neon factura almacenamiento y la copia de seguridad (*history*) de cambios. Los jobs de purga de 24 h pueden no ejecutarse si hay despliegues frecuentes (IntervalTrigger no persistente).

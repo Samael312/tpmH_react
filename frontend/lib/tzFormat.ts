@@ -109,3 +109,27 @@ export function formatCalendarDateHuman(dateKey: string): string {
 export function getDateKeyTz(utcIso: string, timeZone: string): string {
   return new Date(utcIso).toLocaleDateString("en-CA", { timeZone });
 }
+
+/** Desfase (ms) de `timeZone` respecto a UTC en el instante `utcMs` (positivo si va por delante de UTC). */
+function tzOffsetMs(utcMs: number, timeZone: string): number {
+  const p = new Intl.DateTimeFormat("en-US", {
+    timeZone, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric",
+    hour: "numeric", minute: "numeric", second: "numeric",
+  }).formatToParts(new Date(utcMs));
+  const g = (t: string) => parseInt(p.find((x) => x.type === t)?.value ?? "0", 10);
+  return Date.UTC(g("year"), g("month") - 1, g("day"), g("hour"), g("minute"), g("second")) - Math.floor(utcMs / 1000) * 1000;
+}
+
+/**
+ * Convierte una fecha/hora de pared "YYYY-MM-DDTHH:mm" elegida en `timeZone` al instante UTC (ISO con «Z»).
+ * Devuelve null si el texto no es válido. Se recalcula el desfase una vez para acertar en cambios de horario.
+ */
+export function zonedLocalToUtcIso(local: string, timeZone: string): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(local);
+  if (!m) return null;
+  const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+  let utc = wall - tzOffsetMs(wall, timeZone);
+  utc = wall - tzOffsetMs(utc, timeZone);
+  const d = new Date(utc);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}

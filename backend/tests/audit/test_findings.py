@@ -293,7 +293,7 @@ def test_teacher_admin_cannot_change_own_commission(client, world, db):
 def test_commission_bounds(client, world, db):
     r = client.patch(f"{API}/admin/teachers/{world['tp'].id}/commission", json={"commission_rate": 1.5},
                      headers=hdr(world["admin"]))
-    assert r.status_code == 400
+    assert r.status_code == 422  # Fase 20: el rango 0-1 ahora lo valida el schema (antes 400 desde el endpoint)
 
 
 def test_student_cannot_access_admin_or_teacher_routes(client, world, db):

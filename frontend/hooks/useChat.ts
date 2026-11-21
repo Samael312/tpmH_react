@@ -231,6 +231,7 @@ export function useChatThread(conversationId: number | null) {
   // efecto de abajo — ver store/chatStore.ts::ensureHistory.
   const fetching = useChatStore((s) => (conversationId ? !!s.fetchingByConversation[conversationId] : false));
   const historyLoaded = useChatStore((s) => (conversationId ? !!s.historyLoadedByConversation[conversationId] : false));
+  const historyError = useChatStore((s) => (conversationId ? s.historyErrorByConversation[conversationId] ?? null : null));
   const ensureHistory = useChatStore((s) => s.ensureHistory);
   const sendToStore = useChatStore((s) => s.sendMessage);
 
@@ -264,5 +265,5 @@ export function useChatThread(conversationId: number | null) {
     await markConversationRead(queryClient, conversationId);
   }, [conversationId, queryClient]);
 
-  return { messages, loading, isFetching: fetching, connected, sendError: storeSendError, send, retryMessage, markRead, refetch };
+  return { messages, loading, isFetching: fetching, connected, historyError, sendError: storeSendError, send, retryMessage, markRead, refetch };
 }

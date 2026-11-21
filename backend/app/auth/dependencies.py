@@ -95,6 +95,16 @@ def get_current_student(current_user: User = Depends(get_current_user)) -> User:
         )
     return current_user
 
+def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
+    """Solo superadmin (para dinero, modo de plataforma y acciones sobre otros profesores)."""
+    if current_user.role != UserRole.superadmin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requieren permisos de superadministrador"
+        )
+    return current_user
+
+
 def get_current_staff(
     current_user: User = Depends(get_current_user)
 ) -> User:

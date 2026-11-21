@@ -89,17 +89,27 @@ def clear_auth_cookies(response: Response) -> None:
     _delete_cookie(response, SESSION_COOKIE)
 
 
+def _hard_revoked_at() -> datetime:
+    """Instante de una revocación DEFINITIVA: se fecha fuera de la ventana de gracia de rotación, para que el token
+    revocado no se acepte durante REFRESH_REUSE_GRACE_SECONDS como si fuera una carrera entre pestañas (Fase 21)."""
+    return utc_now() - timedelta(seconds=REFRESH_REUSE_GRACE_SECONDS + 1)
+
+
 def _revoke_family(db: Session, family_id: str) -> None:
     db.query(RefreshToken).filter(
         RefreshToken.family_id == family_id, RefreshToken.revoked_at.is_(None)
-    ).update({"revoked_at": utc_now()}, synchronize_session=False)
+    ).update({"revoked_at": _hard_revoked_at()}, synchronize_session=False)
 
 
 def revoke_all_sessions(db: Session, user_id: int) -> None:
     """Cierra TODAS las sesiones del usuario (cambio/restablecimiento de contrasena, borrado de cuenta)."""
     db.query(RefreshToken).filter(
         RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None)
-    ).update({"revoked_at": utc_now()}, synchronize_session=False)
+    ).update({"revoked_at": _hard_revoked_at()}, synchronize_session=False)
+    # También los ya rotados hace instantes: siguen dentro de la ventana de gracia y valdrían unos segundos más.
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == user_id, RefreshToken.revoked_at > _hard_revoked_at()
+    ).update({"revoked_at": _hard_revoked_at()}, synchronize_session=False)
 
 
 def rotate_refresh_token(db: Session, raw: Optional[str]) -> Optional[tuple[User, str]]:

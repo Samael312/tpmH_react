@@ -5,6 +5,7 @@ import logging
 from app.models.google_calendar import GoogleCalendarToken
 from app.models.class_ import Class
 from app.core.google_calendar import (
+    calendar_id_for,
     get_calendar_service_for_token,
     create_calendar_event,
     create_calendar_event_with_meet,
@@ -36,7 +37,7 @@ def _get_teacher_calendar_service(teacher_id: int, db: Session):
     if not service:
         return None, None
 
-    return service, (token.calendar_id or "primary")
+    return service, calendar_id_for(token)
 
 
 def _teacher_attendee_emails(class_: Class) -> list[str]:

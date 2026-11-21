@@ -16,7 +16,7 @@ def second_teacher(db, w, username="profeb", status=TeacherStatus.approved):
     db.add(tp); db.flush()
     for dow in range(7):
         db.add(TeacherAvailability(teacher_id=tp.id, day_of_week=dow, is_available=True,
-                                   start_time_utc="00:00", end_time_utc="00:00"))
+                                   start_time_local="00:00", end_time_local="00:00"))
     pkg = Package(teacher_id=tp.id, name="PB", subject="French", classes_count=4, price=80.0,
                   price_per_class=20.0, duration_minutes=50, is_active=True)
     db.add(pkg); db.commit()
@@ -24,7 +24,7 @@ def second_teacher(db, w, username="profeb", status=TeacherStatus.approved):
 
 
 def set_mode(client, w, single, featured=None):
-    body = {"is_single_tenant": single}
+    body = {"is_single_tenant": single, "force": True}  # Fase 18: multi->single pide confirmación (409) sin force
     if featured is not None:
         body["featured_teacher_username"] = featured
     r = client.patch(f"{API}/admin/platform-config", json=body, headers=hdr(w["admin"]))
@@ -49,9 +49,9 @@ def test_single_creates_no_link_and_backfill_on_switch(client, world, db):
     set_mode(client, w, True, featured="profe")
     complete_trial(client, w)
     buy_package(client, w)
-    assert links(db, w["sp"].id) == []          # single no crea StudentTeacherLink
+    assert links(db, w["sp"].id) == [w["tp"].id]  # el vinculo se guarda tambien en single (F15)
     set_mode(client, w, False)
-    assert links(db, w["sp"].id) == [w["tp"].id]  # backfill del featured
+    assert links(db, w["sp"].id) == [w["tp"].id]  # y el backfill (F18) lo deja intacto/idempotente
     assert my_teachers(client, w) == ["profe"]
 
 
@@ -60,18 +60,18 @@ def test_single_with_env_featured_only_has_no_backfill(client, world, db, monkey
     from app.core.config import settings
     monkeypatch.setattr(settings, "FEATURED_TEACHER_USERNAME", "profe")
     w = world
-    set_mode(client, w, True)  # sin featured en BD
+    set_mode(client, w, True)  # sin featured en BD: el env la resuelve (F18: si no, 400)
     db.expire_all()
     assert db.query(PlatformConfig).first().featured_teacher_id is None
-    # /me/teachers en single lee SOLO featured_teacher_id -> lista vacia aunque se pueda reservar
-    assert my_teachers(client, w) == []
+    # F18: /me/teachers usa resolve_featured_teacher (env fallback)
+    assert my_teachers(client, w) == ["profe"]
     complete_trial(client, w)          # reserva va al profe del env
     buy_package(client, w)
     set_mode(client, w, False)
-    assert links(db, w["sp"].id) == []           # huerfano
-    assert my_teachers(client, w) == []
+    assert links(db, w["sp"].id) == [w["tp"].id]  # F18: ya no queda huerfano
+    assert my_teachers(client, w) == ["profe"]
     r = client.get(f"{API}/payments/booking-status", headers=hdr(w["s_user"]))
-    assert r.json()["stage"] == "needs_teacher", r.text
+    assert r.json()["stage"] != "needs_teacher", r.text
     r = client.get(f"{API}/packages/my-enrollments", headers=hdr(w["s_user"]))
     assert len(r.json()) == 1
 
@@ -86,13 +86,13 @@ def test_featured_change_in_single_then_multi_orphans_old_featured_students(clie
     assert my_teachers(client, w) == ["profeb"]   # A desaparece de "Tus profesores"
     r = client.get(f"{API}/payments/booking-status", headers=hdr(w["s_user"]))
     assert r.json()["stage"] == "needs_trial"     # paquete con A no cuenta
-    r = book(client, w, future(72), enrollment_id=eid_a)   # el backend aun deja usar creditos de A
-    assert r.status_code == 201, r.text
+    r = book(client, w, future(72), enrollment_id=eid_a)   # single: solo la destacada
+    assert r.status_code == 400, r.text
     r = book(client, wb, future(96))               # trial con B
     assert r.status_code == 201, r.text
     db.expire_all()
     a = db.get(TeacherProfile, w["tp"].id); b = db.get(TeacherProfile, wb["tp"].id)
-    assert w["sp"].id not in (a.students or [])
+    assert w["sp"].id in (a.students or [])        # F18: A conserva al alumno (paquete vivo)
     assert w["sp"].id in (b.students or [])
     r = client.get(f"{API}/teachers/me/students", headers=hdr(w["t_user"]))
     print("A /me/students:", r.status_code, r.text[:200])
@@ -100,12 +100,9 @@ def test_featured_change_in_single_then_multi_orphans_old_featured_students(clie
     print("A abre chat con alumno:", r.status_code, r.text[:200])
     r = client.get(f"{API}/classes/teacher/classes", headers=hdr(w["t_user"]))
     print("A ve sus clases:", r.status_code, r.json().get("total") if r.status_code == 200 else r.text[:100])
-    set_mode(client, w, False)                     # paso a multi: backfill solo de B
-    assert links(db, w["sp"].id) == [wb["tp"].id]
-    assert my_teachers(client, w) == ["profeb"]   # paquete activo con A invisible en multi
-    r = client.post(f"{API}/users/me/teachers/profe", headers=hdr(w["s_user"]))
-    assert r.status_code == 200                   # recuperable a mano re-vinculando
-    assert sorted(my_teachers(client, w)) == ["profe", "profeb"]
+    set_mode(client, w, False)                     # paso a multi: backfill de CUALQUIER profesor con historial (F18)
+    assert links(db, w["sp"].id) == sorted([w["tp"].id, wb["tp"].id])
+    assert sorted(my_teachers(client, w)) == ["profe", "profeb"]   # ya no hay huerfanos
 
 
 # -- multi -> single --------------------------------------------------------
@@ -124,7 +121,7 @@ def test_multi_to_single_hides_other_teachers_but_backend_still_allows(client, w
     r = client.get(f"{API}/classes/my-classes", headers=hdr(w["s_user"]))
     print("my-classes en single:", r.status_code, r.json().get("total") if r.status_code == 200 else r.text[:100])
     r = book(client, wb, future(120), enrollment_id=eid_b)   # reservar con B en single
-    assert r.status_code == 201, r.text
+    assert r.status_code == 400, r.text
     db.expire_all()
     sp = db.get(StudentProfile, w["sp"].id)
     a = db.get(TeacherProfile, w["tp"].id)
@@ -162,14 +159,12 @@ def test_single_student_can_chat_any_approved_teacher(client, world, db):
 
 
 # -- validaciones del cambio ------------------------------------------------
-def test_toggle_single_without_featured_is_accepted(client, world, db):
+def test_toggle_single_without_featured_is_rejected(client, world, db, monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "FEATURED_TEACHER_USERNAME", "")
     w = world
-    set_mode(client, w, True)
-    r = book(client, w, future(48))
-    print("book single sin featured:", r.status_code, r.text[:150])
-    assert r.status_code in (400, 404)
-    r = client.get(f"{API}/public/landing")
-    print("landing single sin featured:", r.status_code, [t.get("username") for t in r.json().get("teachers", [])])
+    r = client.patch(f"{API}/admin/platform-config", json={"is_single_tenant": True}, headers=hdr(w["admin"]))
+    assert r.status_code == 400, r.text   # F18
 
 
 def test_featured_can_be_unapproved_teacher(client, world, db):
@@ -184,13 +179,12 @@ def test_featured_can_be_unapproved_teacher(client, world, db):
     print("trial con featured suspendida:", r.status_code, r.text[:200])
 
 
-def test_teacher_admin_can_switch_mode(client, world, db):
+def test_teacher_admin_cannot_switch_mode(client, world, db):
     w = world
     u = _mk_user(db, "teacher_admin", "tadmin")
     db.commit()
     r = client.patch(f"{API}/admin/platform-config", json={"is_single_tenant": True}, headers=hdr(u))
-    print("teacher_admin cambia modo:", r.status_code)
-    assert r.status_code == 200
+    assert r.status_code == 403   # Fase 16: PATCH platform-config es solo superadmin
 
 
 def test_backfill_includes_cancelled_history(client, world, db):
@@ -217,11 +211,11 @@ def test_multi_to_single_flipflop_removes_student_from_other_teacher(client, wor
     complete_trial(client, w); eid_a, _ = buy_package(client, w)
     complete_trial(client, wb); eid_b, _ = buy_package(client, wb)
     set_mode(client, w, True, featured="profe")
-    assert book(client, wb, future(120), enrollment_id=eid_b).status_code == 201  # teacher_username := profeb
-    assert book(client, w, future(150), enrollment_id=eid_a).status_code == 201   # old=profeb -> lo saca de B
+    assert book(client, wb, future(120), enrollment_id=eid_b).status_code == 400  # single: solo la destacada
+    assert book(client, w, future(150), enrollment_id=eid_a).status_code == 201
     db.expire_all()
     b = db.get(TeacherProfile, wb["tp"].id)
-    assert w["sp"].id not in (b.students or [])
+    assert w["sp"].id in (b.students or [])   # F18: ya no se saca a B (tiene paquete vivo)
     r = client.get(f"{API}/chat/conversations/direct/alumno", headers=hdr(wb["t_user"]))
     print("B abre chat con alumno tras flip-flop:", r.status_code)
     r = client.get(f"{API}/teachers/me/students", headers=hdr(wb["t_user"]))

@@ -58,6 +58,7 @@ class TeacherAppealResponse(BaseModel):
     message: str
     status: str
     admin_response: Optional[str] = None
+    kind: str = "profile"
     created_at: datetime
     resolved_at: Optional[datetime] = None
 

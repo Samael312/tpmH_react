@@ -4,7 +4,7 @@ from typing import Optional
 from datetime import timedelta
 
 from app.db.base import get_db
-from app.auth.dependencies import get_current_staff
+from app.auth.dependencies import get_current_staff, require_superadmin
 from app.models.user import User, UserRole
 from app.models.god_mode_audit import GodModeAuditLog
 from app.models.package import Enrollment, Package, EnrollmentStatus
@@ -50,6 +50,7 @@ from app.schemas.payments import (
     PaymentResponse,
 )
 from app.api.v1.endpoints.payments import _apply_commission, _credit_wallet
+from app.core.wallet import wallet_apply
 from app.models.group_cohort import GroupCohort, CohortStatus
 from app.schemas.cohorts import (
     GodModeMoveCohortRequest,
@@ -1012,9 +1013,9 @@ def god_mode_force_class_status(
         class_.used_prepaid_credit = False
     elif class_.class_type == ClassType.regular and class_.enrollment_id:
         if new_counts and not old_counts:
-            update_enrollment_counter(class_.enrollment_id, delta=1, db=db)
+            update_enrollment_counter(class_.enrollment_id, delta=1, db=db, class_=class_)
         elif old_counts and not new_counts:
-            update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
+            update_enrollment_counter(class_.enrollment_id, delta=-1, db=db, class_=class_)
 
     after = _class_snapshot(class_)
 
@@ -1103,7 +1104,7 @@ def god_mode_hard_delete_class(
 @router.post("/payments", response_model=GodModeEditPaymentResponse, status_code=status.HTTP_201_CREATED)
 def god_mode_create_payment(
     data: GodModeCreatePaymentRequest,
-    current_user: User = Depends(get_current_staff),
+    current_user: User = Depends(require_superadmin),
     db: Session = Depends(get_db),
 ):
     """
@@ -1191,7 +1192,7 @@ def god_mode_create_payment(
 def god_mode_edit_payment(
     payment_id: int,
     data: GodModeEditPaymentRequest,
-    current_user: User = Depends(get_current_staff),
+    current_user: User = Depends(require_superadmin),
     db: Session = Depends(get_db),
 ):
     """
@@ -1225,30 +1226,52 @@ def god_mode_edit_payment(
                 "Como teacher_admin solo puedes editar pagos de tus propios alumnos.",
             )
 
+    # Fase 20 (M9): un reembolso movio la billetera al aprobarse (descuento negativo) y su monto fija lo que se
+    # devolvio al alumno: editarlo aqui lo dejaria descuadrado. Solo se admite anotar el transaction_id.
+    if payment.payment_type == "refund" and (data.amount_total is not None or data.status is not None):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Los reembolsos no se editan (monto ni estado): descuadrarían la billetera del profesor. "
+            "Solo se puede anotar el transaction_id.",
+        )
+
     moves_wallet = payment.payment_type != "refund" and not payment.is_manual_grant
 
     before = _payment_snapshot(payment)
 
+    def _debit_or_409(amount: float) -> None:
+        """Quita `amount` de la billetera (atomico); si el profesor ya retiro y no alcanza -> 409 (Fase 20, M8)."""
+        if amount and not wallet_apply(db, payment.teacher_id, balance=-amount, earned=-amount):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "El saldo del profesor no cubre este ajuste (ya retiró parte de ese dinero). "
+                "Resuélvelo con soporte antes de editar el pago.",
+            )
+
     # ── 1. Cambio de monto ──
     if data.amount_total is not None and data.amount_total != payment.amount_total:
         old_amount_teacher = payment.amount_teacher
+        old_amount_total = payment.amount_total
         payment.amount_total = data.amount_total
 
         if moves_wallet:
-            teacher = db.query(TeacherProfile).filter(TeacherProfile.id == payment.teacher_id).first()
-            new_amount_teacher, new_amount_platform = _apply_commission(data.amount_total, teacher)
+            if payment.status == "approved" and old_amount_total and old_amount_total > 0:
+                # Fase 20 (M9): se respeta la tasa CONGELADA al aprobar (amount_teacher / amount_total),
+                # no la comision actual del profesor, que pudo cambiar despues.
+                new_amount_teacher = round(data.amount_total * (old_amount_teacher / old_amount_total), 2)
+                new_amount_platform = round(data.amount_total - new_amount_teacher, 2)
+            else:
+                teacher = db.query(TeacherProfile).filter(TeacherProfile.id == payment.teacher_id).first()
+                new_amount_teacher, new_amount_platform = _apply_commission(data.amount_total, teacher)
             payment.amount_teacher = new_amount_teacher
             payment.amount_platform = new_amount_platform
 
             if payment.status == "approved":
-                delta = new_amount_teacher - old_amount_teacher
-                wallet = db.query(TeacherWallet).filter(TeacherWallet.teacher_id == payment.teacher_id).first()
-                if not wallet:
-                    wallet = TeacherWallet(teacher_id=payment.teacher_id, available_balance=0.0, total_earned=0.0, total_withdrawn=0.0)
-                    db.add(wallet)
-                    db.flush()
-                wallet.available_balance += delta
-                wallet.total_earned += delta
+                delta = round(new_amount_teacher - old_amount_teacher, 2)
+                if delta >= 0:
+                    wallet_apply(db, payment.teacher_id, balance=delta, earned=delta, allow_negative=True)
+                else:
+                    _debit_or_409(-delta)
 
     # ── 2. Cambio de status ──
     if data.status is not None and data.status != payment.status:
@@ -1258,10 +1281,7 @@ def god_mode_edit_payment(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Debes indicar rejection_reason al rechazar un pago.")
 
         if old_status == "approved" and data.status != "approved" and moves_wallet:
-            wallet = db.query(TeacherWallet).filter(TeacherWallet.teacher_id == payment.teacher_id).first()
-            if wallet:
-                wallet.available_balance -= payment.amount_teacher
-                wallet.total_earned -= payment.amount_teacher
+            _debit_or_409(payment.amount_teacher)
 
         elif data.status == "approved" and old_status != "approved":
             if moves_wallet:

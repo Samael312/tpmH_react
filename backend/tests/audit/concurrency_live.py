@@ -106,8 +106,8 @@ def setup_world(db):
     db.add(tp)
     db.flush()
     for d in range(7):
-        db.add(TeacherAvailability(teacher_id=tp.id, day_of_week=d, local_day_of_week=d, is_available=True,
-                                   start_time_utc="00:00", end_time_utc="23:59"))
+        db.add(TeacherAvailability(teacher_id=tp.id, day_of_week=d, is_available=True,
+                                   start_time_local="00:00", end_time_local="23:59"))
     pkg = Package(teacher_id=tp.id, name="CONC4", subject="English", classes_count=4, price=100.0,
                   price_per_class=25.0, duration_minutes=50, is_active=True)
     db.add(pkg)

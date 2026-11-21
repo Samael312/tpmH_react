@@ -261,7 +261,7 @@ def test_cohort_close_and_cancel(
     integrante -> 200, status pasa a "cancelled", y ese integrante
     desaparece de /cohorts/{id}/members y de current_students porque
     cancel_cohort cancela también su Enrollment (status="cancelled",
-    cohort_id=None vía release_cohort_seat) — a diferencia de close, que
+    conservando cohort_id desde la Fase 22 E5, para el reembolso) — a diferencia de close, que
     preserva los enrollments intactos.
     UX: en "Mis grupos" el profesor puede cerrar un grupo con los
     alumnos que ya tiene (sin esperar el mínimo) para arrancarlo, o
@@ -349,7 +349,10 @@ def test_cohort_close_and_cancel(
     r_my_enrollments = client.get("/api/v1/packages/my-enrollments", headers=auth_headers(student_token))
     cancelled_enrollment = next(e for e in r_my_enrollments.json() if e["id"] == enrollment_b_id)
     assert cancelled_enrollment["status"] == "cancelled"
-    assert cancelled_enrollment["cohort_id"] is None
+    # Fase 22 (E5): el enrollment CONSERVA cohort_id al cancelarse la cohorte (solo se liberan las
+    # participaciones futuras) para que el reembolso de cohorte cancelada pueda encontrarlo. El cupo
+    # queda libre igualmente: ya no es integrante (members vacío, current_students 0, arriba).
+    assert cancelled_enrollment["cohort_id"] == cohort_b_id
 
 
 def test_pending_group_enrollment_payment_rejection(

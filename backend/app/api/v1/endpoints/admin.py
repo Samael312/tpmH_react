@@ -1,14 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status, Query
 from app.core.pagination import Pagination, paginate
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session, joinedload
 from app.core.phone import normalize_phone
-from sqlalchemy import func
+from sqlalchemy import func, or_ as sa_or
 from typing import List, Optional
 from datetime import datetime, timedelta
 from app.schemas.admin import AdminUserUpdate, BanStudentRequest
 from app.db.base import get_db
-from app.auth.dependencies import get_current_user, get_current_staff
+from app.auth.dependencies import get_current_user, get_current_staff, require_superadmin
 from app.models.user import User, UserRole
 from app.models.teacher import TeacherProfile, TeacherStatus
 from app.models.student import StudentProfile
@@ -18,11 +18,14 @@ from app.models.package import Enrollment, EnrollmentStatus
 from app.models.teacher_appeal import TeacherAppeal
 from app.models.notification import Notification
 from app.models.support_ticket import SupportCategory, SupportTicket, SupportTicketStatus
-from app.core.email import send_teacher_status_update_email, send_support_ticket_response_email
+from app.core.email import send_teacher_status_update_email, send_support_ticket_response_email, send_teacher_video_review_email
+from app.core.storage import delete_file
+from app.core.chat_ws import chat_manager
 from app.core.timezone import utc_now, UTC
 from app.core.notifications import create_notification, get_unread_count
 from app.models.student_teacher_link import StudentTeacherLink
-from app.core.teacher_students import link_student_to_teacher
+from app.core.teacher_students import link_student_to_teacher, backfill_student_teacher_links
+from app.core.platform_config import resolve_featured_teacher
 from app.schemas.admin import (
     PlatformStatsResponse,
     TeacherAdminResponse,
@@ -85,18 +88,12 @@ class PlatformConfigUpdate(BaseModel):
     # (todas las claves de LANDING_CONTENT_DEFAULTS) — se guarda tal cual,
     # se completa contra los defaults recién al leer (ver get_landing_content).
     landing_content: Optional[dict] = None
+    # multi->single: confirma aun habiendo alumnos con profesores distintos de la destacada (si no, 409).
+    force: Optional[bool] = False
 
 
 # ─── DEPENDENCIES ───────────────────────────────────────────────────────────
 
-def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
-    """Verifica que el usuario sea superadmin"""
-    if current_user.role != UserRole.superadmin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requieren permisos de superadministrador"
-        )
-    return current_user
 
 
 # ─── MÉTRICAS GLOBALES ───────────────────────────────────────────────────────
@@ -157,10 +154,13 @@ def get_platform_stats(
     # BUG-01 fix: el ciclo de vida real de Payment.status es
     # pending_review -> approved | rejected. "completed" nunca existió,
     # por lo que estas métricas siempre daban 0.
+    # Fase 20 (M10): ingresos = lo cobrado de verdad: sin reembolsos (dinero que sale) ni otorgamientos manuales ($0 / cortesias).
     revenue_result = db.query(
         func.sum(Payment.amount_total)
     ).filter(
-        Payment.status == "approved"
+        Payment.status == "approved",
+        sa_or(Payment.payment_type.is_(None), Payment.payment_type != "refund"),
+        Payment.is_manual_grant.isnot(True),
     ).scalar()
     total_revenue = float(revenue_result or 0)
 
@@ -290,6 +290,8 @@ def list_all_teachers(
             total_students=total_students,
             created_at=teacher.created_at,
             video_url=teacher.video_url,
+            video_pending_url=teacher.video_pending_url,
+            video_pending_rejection_reason=teacher.video_pending_rejection_reason,
             theme_color=teacher.theme_color,
             profile_photo_url=teacher.profile_photo_url,
             phone_number=teacher.user.phone_number,
@@ -342,6 +344,8 @@ def get_teacher_detail(
         total_students=total_students,
         created_at=teacher.created_at,
         video_url=teacher.video_url,
+            video_pending_url=teacher.video_pending_url,
+            video_pending_rejection_reason=teacher.video_pending_rejection_reason,
         theme_color=teacher.theme_color,
         profile_photo_url=teacher.profile_photo_url,
         phone_number=teacher.user.phone_number,
@@ -446,6 +450,111 @@ def update_teacher_status(
     }
 
 
+class RejectPendingVideoRequest(BaseModel):
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def _reason(cls, v):
+        v = (v or "").strip()
+        if not v or len(v) > 500:
+            raise ValueError("El motivo es obligatorio (máx. 500 caracteres)")
+        return v
+
+
+def _promote_pending_video(teacher: TeacherProfile) -> Optional[str]:
+    """Pasa el video pendiente a publico y limpia rechazo/apelacion. Devuelve el public_id viejo a borrar."""
+    old_public_id = teacher.video_public_id
+    teacher.video_url = teacher.video_pending_url
+    teacher.video_public_id = teacher.video_pending_public_id
+    teacher.video_pending_url = None
+    teacher.video_pending_public_id = None
+    teacher.video_pending_rejection_reason = None
+    teacher.video_pending_appeal_used = False
+    return None if old_public_id == teacher.video_public_id else old_public_id
+
+
+def _drop_pending_video(teacher: TeacherProfile) -> Optional[str]:
+    """Descarta el video pendiente. Devuelve su public_id para borrarlo de Cloudinary tras el commit."""
+    pending_public_id = teacher.video_pending_public_id
+    teacher.video_pending_url = None
+    teacher.video_pending_public_id = None
+    teacher.video_pending_rejection_reason = None
+    teacher.video_pending_appeal_used = False
+    return pending_public_id
+
+
+def _delete_cloud_video(public_id: Optional[str]) -> None:
+    if public_id:
+        try:
+            delete_file(public_id, resource_type="video")
+        except Exception:
+            pass
+
+
+@router.patch(
+    "/teachers/{teacher_id}/pending-video/approve"
+)
+def approve_teacher_pending_video(
+    teacher_id: int,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """Fase 23: promueve el video pendiente a video publico y borra el anterior de Cloudinary."""
+    teacher = _pending_video_teacher_or_error(teacher_id, current_user, db)
+    to_delete = _promote_pending_video(teacher)
+    create_notification(
+        db, type="teacher_video_review", title="Video aprobado",
+        message="Tu video nuevo fue aprobado y ya es visible en tu perfil.",
+        related_teacher_id=teacher.id, recipient_role="teacher", recipient_user_id=teacher.user_id,
+    )
+    db.commit()
+    _delete_cloud_video(to_delete)
+    invalidate_landing_cache()
+    if teacher.user:
+        send_teacher_video_review_email(teacher.user.email, teacher.user.name, approved=True)
+    return {"message": "Video aprobado", "teacher_id": teacher_id, "video_url": teacher.video_url}
+
+
+@router.patch(
+    "/teachers/{teacher_id}/pending-video/reject"
+)
+def reject_teacher_pending_video(
+    teacher_id: int,
+    data: RejectPendingVideoRequest,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    """Fase 23: rechaza el video pendiente (con motivo). El profesor conserva el video anterior y puede apelar
+    una vez; el archivo pendiente se conserva hasta resolver la apelacion o hasta que suba otro video."""
+    teacher = _pending_video_teacher_or_error(teacher_id, current_user, db)
+    teacher.video_pending_rejection_reason = data.reason
+    teacher.video_pending_appeal_used = False
+    create_notification(
+        db, type="teacher_video_review", title="Video rechazado",
+        message=f"Tu video nuevo fue rechazado. Motivo: {data.reason}. Tu video anterior sigue visible; puedes apelar o subir otro.",
+        related_teacher_id=teacher.id, recipient_role="teacher", recipient_user_id=teacher.user_id,
+    )
+    db.commit()
+    if teacher.user:
+        send_teacher_video_review_email(teacher.user.email, teacher.user.name, approved=False, reason=data.reason)
+    return {"message": "Video rechazado", "teacher_id": teacher_id}
+
+
+def _pending_video_teacher_or_error(teacher_id: int, current_user: User, db: Session) -> TeacherProfile:
+    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == teacher_id).first()
+    if not teacher:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesor no encontrado")
+    # Separacion de funciones: un teacher_admin no aprueba/rechaza su propio video.
+    if current_user.role == UserRole.teacher_admin and teacher.user_id == current_user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes revisar tu propio video; lo hace otro miembro del staff")
+    if not teacher.video_pending_url:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "El profesor no tiene un video pendiente de revisión")
+    if teacher.video_pending_rejection_reason:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este video ya fue rechazado; solo se resuelve por apelación o con un video nuevo")
+    return teacher
+
+
 @router.patch(
     "/teachers/{teacher_id}/commission"
 )
@@ -527,6 +636,7 @@ def list_appeals(
             teacher_id=a.teacher_id,
             appeal_number=a.appeal_number,
             message=a.message,
+            kind=a.kind or "profile",
             status=a.status,
             admin_response=a.admin_response,
             created_at=a.created_at,
@@ -565,10 +675,39 @@ def resolve_appeal(
     if not teacher:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesor no encontrado")
 
+    # Separacion de funciones: un teacher_admin no resuelve apelaciones sobre su propio perfil.
+    if current_user.role == UserRole.teacher_admin and teacher.user_id == current_user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes resolver una apelación sobre tu propio perfil")
+
     now = utc_now()
     appeal.admin_response = data.admin_response
     appeal.resolved_at = now
     appeal.resolved_by = current_user.id
+
+    if appeal.kind == "video":
+        approved = data.action == "approve"
+        appeal.status = "approved" if approved else "rejected"
+        to_delete = None
+        if teacher.video_pending_url:
+            to_delete = _promote_pending_video(teacher) if approved else _drop_pending_video(teacher)
+        create_notification(
+            db, type="teacher_video_review",
+            title="Apelación de video aprobada" if approved else "Apelación de video rechazada",
+            message=("Tu video nuevo fue aprobado y ya es visible en tu perfil." if approved
+                     else "Tu apelación fue rechazada; se descartó el video nuevo y conservas el anterior."),
+            related_teacher_id=teacher.id, recipient_role="teacher", recipient_user_id=teacher.user_id,
+        )
+        db.commit()
+        _delete_cloud_video(to_delete)
+        if approved:
+            invalidate_landing_cache()
+        if teacher.user:
+            send_teacher_video_review_email(teacher.user.email, teacher.user.name, approved=approved,
+                                            reason=data.admin_response)
+        return {
+            "message": "Apelación aprobada" if approved else "Apelación rechazada",
+            "appeal_exhausted": False,
+        }
 
     if data.action == "approve":
         appeal.status = "approved"
@@ -775,7 +914,12 @@ def mark_notification_read(
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db),
 ):
-    notif = db.query(Notification).filter(Notification.id == notification_id).first()
+    # N1: solo las del panel de staff; los avisos dirigidos a un usuario (recipient_user_id) no son suyos.
+    notif = db.query(Notification).filter(
+        Notification.id == notification_id,
+        Notification.recipient_role == "staff",
+        Notification.recipient_user_id.is_(None),
+    ).first()
     if not notif:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Notificación no encontrada")
     notif.is_read = True
@@ -866,6 +1010,7 @@ def list_all_users(
 def update_user_status(
     user_id: int,
     data: UpdateUserStatusRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db)
 ):
@@ -895,6 +1040,8 @@ def update_user_status(
 
     user.is_active = data.is_active
     db.commit()
+    if not data.is_active:
+        background_tasks.add_task(chat_manager.close_user, user.id)  # corta sus websockets de chat ya
 
     action = "activado" if data.is_active else "desactivado"
     return {
@@ -911,6 +1058,7 @@ def update_user_status(
 def ban_student(
     user_id: int,
     data: BanStudentRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db),
 ):
@@ -953,6 +1101,8 @@ def ban_student(
         ).update({"status": "cancelled"}, synchronize_session=False)
 
     db.commit()
+    # Corta ya sus websockets de chat (una tarea async corre en el event loop tras responder).
+    background_tasks.add_task(chat_manager.close_user, user.id)
 
     return {"message": "Estudiante baneado correctamente", "user_id": user_id}
 
@@ -1068,10 +1218,48 @@ def get_platform_config(db: Session = Depends(get_db)):
     return serialize_platform_config(db, config)
 
 
+_LIVE_ENROLLMENT_STATUSES = [
+    EnrollmentStatus.active,
+    EnrollmentStatus.pending_renewal,
+    EnrollmentStatus.pending_package_change,
+]
+_FUTURE_CLASS_STATUSES = ["pending", "pending_trial", "pending_payment", "confirmed"]
+
+
+def _students_outside_featured(db: Session, featured_id: int) -> list:
+    """Alumnos con enrollment vivo o clase futura con un profesor distinto de `featured_id` (pre-check multi->single)."""
+    now = utc_now()
+    pairs = set()
+    for sid, tid in db.query(Enrollment.student_id, Enrollment.teacher_id).filter(
+        Enrollment.teacher_id != featured_id,
+        Enrollment.status.in_(_LIVE_ENROLLMENT_STATUSES),
+    ).distinct().all():
+        pairs.add((sid, tid))
+    for sid, tid in db.query(Class.student_id, Class.teacher_id).filter(
+        Class.student_id.isnot(None),
+        Class.teacher_id != featured_id,
+        Class.start_time_utc > now,
+        Class.status.in_(_FUTURE_CLASS_STATUSES),
+    ).distinct().all():
+        pairs.add((sid, tid))
+    students = sorted({sid for sid, _ in pairs})
+    names = {}
+    if students:
+        names = {sp.id: sp.user_username for sp in db.query(StudentProfile).filter(StudentProfile.id.in_(students)).all()}
+    teacher_ids = {tid for _, tid in pairs}
+    tnames = {}
+    if teacher_ids:
+        tnames = {t.id: t.user_username for t in db.query(TeacherProfile).filter(TeacherProfile.id.in_(teacher_ids)).all()}
+    by_student = {}
+    for sid, tid in sorted(pairs):
+        by_student.setdefault(sid, []).append(tnames.get(tid))
+    return [{"student_username": names.get(sid), "teachers": by_student[sid]} for sid in students]
+
+
 @router.patch("/platform-config")
 def update_platform_config(
     data: PlatformConfigUpdate,
-    current_user: User = Depends(get_current_staff),
+    current_user: User = Depends(require_superadmin),
     db: Session = Depends(get_db)
 ):
     """El superadmin (o teacher_admin, como staff) configura el modo de la plataforma"""
@@ -1081,6 +1269,9 @@ def update_platform_config(
         config = PlatformConfig()
         db.add(config)
         db.flush()
+    else:
+        # Bloquea la fila: dos PATCH concurrentes (o un backfill a medias) se serializan.
+        db.query(PlatformConfig).filter(PlatformConfig.id == config.id).with_for_update().populate_existing().first()
 
     was_single_tenant = config.is_single_tenant
     # La destacada que estaba en uso, resuelta igual que al reservar (BD o FEATURED_TEACHER_USERNAME): si venía
@@ -1128,58 +1319,35 @@ def update_platform_config(
     if data.landing_content is not None:
         config.landing_content = data.landing_content
 
-    switching_to_multi = (
-        was_single_tenant
-        and data.is_single_tenant is False
-        and previous_featured_id is not None
-    )
-    if switching_to_multi:
-        # Corrección QA: Class.student_id es NULL por diseño para clases de
-        # grupo (el alumno vive en ClassParticipant, no acá) y para clases
-        # externas importadas del Google Calendar del profesor (class_type
-        # == "external", que ni siquiera tienen student_id ni enrollment_id).
-        # Sin el filtro .isnot(None), ese NULL entraba al set de abajo y
-        # terminaba en un INSERT a student_teacher_links con student_id=None,
-        # violando el NOT NULL de la columna. Los alumnos de grupo ya quedan
-        # cubiertos igual por su propio Enrollment (se crea uno por cada
-        # inscripción a cohorte), así que este filtro no pierde cobertura.
-        student_ids_with_history = {
-            e.student_id for e in db.query(Enrollment).filter(
-                Enrollment.teacher_id == previous_featured_id
-            ).all()
-        } | {
-            c.student_id for c in db.query(Class).filter(
-                Class.teacher_id == previous_featured_id,
-                Class.student_id.isnot(None),
-            ).all()
-        }
+    new_single = config.is_single_tenant
+    if data.is_single_tenant is True:
+        featured_now = resolve_featured_teacher(db, config)
+        if featured_now is None:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se puede activar el modo single-tenant sin una profesora destacada "
+                       "(featured_teacher_username o FEATURED_TEACHER_USERNAME).",
+            )
+        if not was_single_tenant and not data.force:
+            affected = _students_outside_featured(db, featured_now.id)
+            if affected:
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "message": "Hay alumnos con paquetes vivos o clases futuras con profesores distintos de la "
+                                   "destacada. En single-tenant quedarán inutilizables en la UI. Reenvía con "
+                                   "force=true para confirmar (no se migra ni cancela nada).",
+                        "affected_students": len(affected),
+                        "sample": affected[:10],
+                    },
+                )
 
-        featured_teacher = db.query(TeacherProfile).filter(
-            TeacherProfile.id == previous_featured_id
-        ).first()
-
-        for student_id in student_ids_with_history:
-            existing_link = db.query(StudentTeacherLink).filter(
-                StudentTeacherLink.student_id == student_id,
-                StudentTeacherLink.teacher_id == previous_featured_id,
-            ).first()
-            if existing_link:
-                continue
-
-            db.add(StudentTeacherLink(
-                student_id=student_id,
-                teacher_id=previous_featured_id,
-            ))
-
-            if featured_teacher:
-                student_profile = db.query(StudentProfile).filter(
-                    StudentProfile.id == student_id
-                ).first()
-                if student_profile:
-                    link_student_to_teacher(
-                        db, student_profile, featured_teacher,
-                        old_teacher_username=None,
-                    )
+    if data.is_single_tenant is False and not new_single:
+        # Atómico: links + teacher.students + conversaciones en ESTA misma transacción que el cambio de modo.
+        # Corre siempre que se pida multi (no solo al venir de single), así un reintento tras un fallo repara.
+        backfill_student_teacher_links(db, commit=False)
 
     db.commit()
     invalidate_landing_cache()
@@ -1191,11 +1359,16 @@ def admin_update_user(
     user_id: int,
     data: AdminUserUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(get_current_staff),
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "Usuario no encontrado")
+
+    # Staff edita datos de usuarios, pero solo el superadmin cambia roles
+    # (promover a teacher_admin da poderes de staff).
+    if data.role is not None and data.role != user.role and current_user.role != UserRole.superadmin:
+        raise HTTPException(403, "Solo el superadmin puede cambiar roles")
 
     # BUG-08 (parte 2) fix: el cambio de rol vía este endpoint está pensado
     # únicamente para alternar entre 'teacher' y 'teacher_admin' (staff que

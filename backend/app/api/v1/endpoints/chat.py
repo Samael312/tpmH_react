@@ -13,7 +13,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from app.auth.dependencies import get_current_user, get_current_staff
+from app.auth.dependencies import get_current_user, require_superadmin
 from app.auth.jwt import decode_access_token
 from app.auth.session import ACCESS_COOKIE, allowed_origins
 from app.core import chat as chat_core
@@ -404,6 +404,19 @@ def _ws_open(user_id: int) -> tuple[Optional[int], dict[int, list[int]]]:
         db.close()
 
 
+# C5: cada cuanto se vuelve a comprobar que la cuenta sigue activa mientras el socket esta abierto.
+WS_ACTIVE_RECHECK_SECONDS = 20
+
+
+def _ws_still_allowed(user_id: int) -> bool:
+    db = ChatSessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        return _ws_close_code(db, user) is None
+    finally:
+        db.close()
+
+
 # SEC-06: topes por conexion (antes un cliente podia inundar el chat sin limite).
 WS_MAX_FRAME_CHARS = 20_000
 WS_SEND_WINDOW_SECONDS = 10
@@ -442,8 +455,16 @@ async def chat_websocket(websocket: WebSocket, token: Optional[str] = Query(None
                 await chat_manager.send_to_user(sender_id, {"type": "delivered", "id": message_id})
 
         send_times: deque = deque()  # SEC-06: ventana deslizante de envios de ESTA conexion
+        last_check = time.monotonic()
         while True:
             text = await websocket.receive_text()
+            # C5: un usuario baneado/desactivado con el socket abierto se desconecta en la siguiente comprobacion
+            # (el cliente envia un ping cada pocos segundos); sus envios ya se rechazan en _persist_message.
+            if time.monotonic() - last_check > WS_ACTIVE_RECHECK_SECONDS:
+                last_check = time.monotonic()
+                if not await run_in_threadpool(_ws_still_allowed, user_id):
+                    await websocket.close(code=4401)
+                    break
             if len(text) > WS_MAX_FRAME_CHARS:
                 await websocket.send_json({"type": "error", "detail": "Mensaje demasiado grande"})
                 continue
@@ -517,7 +538,7 @@ def admin_list_conversations(
     student_username: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    current_user: User = Depends(get_current_staff),
+    current_user: User = Depends(require_superadmin),
     db: Session = Depends(get_db),
 ):
     query = db.query(ChatConversation)
@@ -542,7 +563,7 @@ def admin_list_conversations(
 @router.get("/admin/conversations/{conversation_id}", response_model=ChatConversationAdminResponse)
 def admin_get_conversation(
     conversation_id: int,
-    current_user: User = Depends(get_current_staff),
+    current_user: User = Depends(require_superadmin),
     db: Session = Depends(get_db),
 ):
     convo = db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
@@ -557,7 +578,7 @@ def admin_get_conversation_messages(
     reason: str = Query(..., min_length=3, max_length=500, description="Motivo de la revisión — obligatorio, queda auditado."),
     before_id: Optional[int] = Query(None),
     limit: int = Query(50, ge=1, le=200),
-    current_user: User = Depends(get_current_staff),
+    current_user: User = Depends(require_superadmin),
     db: Session = Depends(get_db),
 ):
     convo = db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()

@@ -43,7 +43,7 @@ backend/
 
 `auth`, `users`, `teachers`, `packages`, `payments`, `classes`, `availability`, `cohorts`, `calendar`,
 `homework`, `materials`, `reviews`, `support`, `chat` (REST + WS), `chipi`, `tts`, `admin`, `god_mode`,
-`system_catalogs`, `public` (landing), `logs`, `ai_debug`, `flow_tests` (lanza pytest; bloqueado si `ENVIRONMENT=production`).
+`system_catalogs`, `public` (landing), `logs`, `ai_debug`, `flow_tests` (lanza pytest; solo superadmin, apagado salvo `FLOW_TESTS_ENABLED=true`, bloqueado si `ENVIRONMENT=production`).
 Detalle exacto por ruta: `generated/API_REFERENCE.md`. Endpoint sin prefijo: `GET /health`.
 
 ## Configuración (`app/core/config.py`, pydantic-settings + `.env`)

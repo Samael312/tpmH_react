@@ -113,7 +113,8 @@ def _check_recurring_slot_available(
         Class.teacher_id == teacher_id,
         Class.class_type != ClassType.group,
         Class.start_time_utc < occupied_end_time_utc,
-        Class.status.notin_(["cancelled", "expired", "pending_trial"]),
+        Class.start_time_utc > start_time_utc - timedelta(hours=3),
+        Class.status.notin_(["cancelled", "expired"]),
     ).all()
     conflicting = any(
         start_time_utc < (c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0))
@@ -126,7 +127,8 @@ def _check_recurring_slot_available(
         Class.teacher_id == teacher_id,
         Class.class_type == ClassType.group,
         Class.start_time_utc < occupied_end_time_utc,
-        Class.status.notin_(["cancelled"]),
+        Class.start_time_utc > start_time_utc - timedelta(hours=3),
+        Class.status.notin_(["cancelled", "expired"]),
     )
     if exclude_cohort_id is not None:
         group_query = group_query.filter(Class.cohort_id != exclude_cohort_id)
@@ -677,6 +679,7 @@ def _to_session_response(class_: Class) -> GroupSessionResponse:
         duration=class_.duration,
         status=class_.status,
         participant_count=len(active),
+        skipped_participants=getattr(class_, "skipped_participants", None) or [],
     )
 
 
@@ -734,6 +737,10 @@ def _create_group_session(
 
     end_time_utc = start_time_utc + timedelta(minutes=duration_minutes)
 
+    # Serializa con reservas individuales concurrentes del mismo profesor (doble reserva, caso 11b).
+    from app.core.class_logic import lock_booking_rows
+    lock_booking_rows(db, teacher_id)
+
     # Margen de preparación para clases grupales (mismo criterio que las
     # regulares, según confirmaste): se fija una sola vez al crear la
     # sesión y define el bloque real ocupado en la agenda del profesor.
@@ -766,7 +773,8 @@ def _create_group_session(
         Class.teacher_id == teacher_id,
         Class.class_type != ClassType.group,
         Class.start_time_utc < occupied_end_time_utc,
-        Class.status.notin_(["cancelled", "expired", "pending_trial"]),
+        Class.start_time_utc > start_time_utc - timedelta(hours=3),
+        Class.status.notin_(["cancelled", "expired"]),
     ).all()
     conflicting_individual_class = any(
         start_time_utc < (c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0))
@@ -784,7 +792,8 @@ def _create_group_session(
         Class.class_type == ClassType.group,
         Class.cohort_id != cohort.id,
         Class.start_time_utc < occupied_end_time_utc,
-        Class.status.notin_(["cancelled"]),
+        Class.start_time_utc > start_time_utc - timedelta(hours=3),
+        Class.status.notin_(["cancelled", "expired"]),
     ).all()
     conflicting_group_session = any(
         start_time_utc < (c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0))
@@ -812,7 +821,19 @@ def _create_group_session(
     db.add(new_class)
     db.flush()
 
+    # Un alumno no puede estar en dos clases a la vez (con cualquier profesor): si ya tiene otra
+    # clase o sesión grupal que se solapa, se omite y se informa al profesor.
+    from app.core.student_overlap import student_has_overlap
+    skipped_participants = []
     for enrollment in active_enrollments:
+        if student_has_overlap(db, enrollment.student_id, start_time_utc, end_time_utc, exclude_class_id=new_class.id):
+            su = enrollment.student.user if enrollment.student else None
+            skipped_participants.append({
+                "student_id": enrollment.student_id,
+                "student_name": f"{su.name} {su.surname}".strip() if su else None,
+                "reason": "overlap",
+            })
+            continue
         db.add(ClassParticipant(
             class_id=new_class.id,
             student_id=enrollment.student_id,
@@ -822,6 +843,8 @@ def _create_group_session(
 
     db.commit()
     db.refresh(new_class)
+    new_class.skipped_participants = skipped_participants  # transitorio, lo lee _to_session_response
+    skipped_ids = {sp["student_id"] for sp in skipped_participants}
 
     _sync_google_calendar_created(new_class, db)
 
@@ -831,6 +854,8 @@ def _create_group_session(
     from app.core.email import send_class_booking_confirmation
     from app.core.timezone import format_local_datetime
     for enrollment in active_enrollments:
+        if enrollment.student_id in skipped_ids:
+            continue
         student_profile = enrollment.student
         if student_profile and student_profile.user:
             send_class_booking_confirmation(
@@ -959,7 +984,7 @@ def get_cohort_sessions(
         ).first() is not None
 
     if not (is_owner_teacher or is_enrolled_student or current_user.role == UserRole.superadmin):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "No tenés acceso a este grupo")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "No tienes acceso a este grupo")
 
     sessions = db.query(Class).filter(
         Class.cohort_id == cohort_id,

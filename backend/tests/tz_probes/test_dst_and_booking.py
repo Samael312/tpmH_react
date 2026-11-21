@@ -1,5 +1,6 @@
 """Sondas de auditoria: DST en disponibilidad recurrente y precision de las reservas.
 
+Fase 26: D1-D3 (H1, H2, H4) corregidos -> `test_fixed_*`.
 Convencion (igual que tests/tenant_probes): cada `test_bug_*` afirma el
 comportamiento ACTUAL; si pasa, el hallazgo existe hoy. Los `test_ok_*` son
 controles: si pasan, esa parte funciona bien.
@@ -94,50 +95,48 @@ def _session(client, w, cohort, start_iso):
 
 # ═══ D: DST en disponibilidad recurrente ════════════════════════════════════
 
-# D1: Madrid guarda 09-12 en invierno -> en verano se ofrece 10-13 hora local.
-def test_bug_madrid_winter_schedule_shifts_one_hour_in_summer(client, world, db, monkeypatch):
+# D1 (CORREGIDO Fase 26, H1): Madrid 09-12 local es 09-12 local en invierno y en verano.
+def test_fixed_madrid_winter_schedule_stays_same_local_hour_in_summer(client, world, db, monkeypatch):
     _freeze(monkeypatch, "2026-11-19T10:00:00+00:00")
     rows = _put_weekly(client, world["t_user"], "Europe/Madrid", [(0, "09:00", "12:00")])
-    assert rows[0]["start_time_utc"] == "08:00"  # CET +1
-    winter = _slots(client, "2027-01-04", user=world["s_user"])  # lunes, CET
-    summer = _slots(client, "2027-04-05", user=world["s_user"])  # lunes, CEST
+    assert (rows[0]["start_time_local"], rows[0]["timezone"]) == ("09:00", "Europe/Madrid")  # se guarda local
+    r = lambda d: client.get(f"{API}/availability/profe/slots", params={
+        "date": d, "duration": 25, "class_type": "trial", "tz": "Europe/Madrid"}, headers=hdr(world["s_user"])).json()
+    winter, summer = r("2027-01-04"), r("2027-04-05")  # lunes CET / lunes CEST
     w_local = [_utc(s["start_time_utc"]).astimezone(MAD).strftime("%H:%M") for s in winter]
     s_local = [_utc(s["start_time_utc"]).astimezone(MAD).strftime("%H:%M") for s in summer]
-    assert w_local[0] == "09:00" and w_local[-1] == "11:30"
-    # el profesor dijo 09:00-12:00, pero en verano se reserva 10:00-12:30 local
-    assert s_local[0] == "10:00" and s_local[-1] == "12:30"
-    assert "09:00" not in s_local
+    assert w_local[0] == s_local[0] == "09:00" and w_local[-1] == s_local[-1] == "11:30"
 
 
-# D1b: Nueva York igual; un alumno de Caracas (sin DST) ve la misma hora todo el año.
-def test_bug_newyork_shift_while_caracas_student_sees_constant(client, world, db, monkeypatch):
+# D1b (CORREGIDO Fase 26): Nueva York igual; el alumno de Caracas (sin DST) ve la hora del profesor
+# desplazada 1 h entre invierno y verano (es lo correcto: el profesor mantiene su hora local).
+def test_fixed_newyork_constant_local_while_caracas_student_sees_dst_shift(client, world, db, monkeypatch):
     _freeze(monkeypatch, "2026-11-19T10:00:00+00:00")
     _put_weekly(client, world["t_user"], "America/New_York", [(0, "09:00", "12:00")])
-    winter = _slots(client, "2027-01-04", user=world["s_user"])
-    summer = _slots(client, "2027-04-05", user=world["s_user"])
-    first_w, first_s = _utc(winter[0]["start_time_utc"]), _utc(summer[0]["start_time_utc"])
-    assert first_w.astimezone(NY).hour == 9
-    assert first_s.astimezone(NY).hour == 10          # profesor: corrido 1 h
-    assert first_w.astimezone(CCS).hour == first_s.astimezone(CCS).hour == 10  # Caracas: fijo
+    r = lambda d: client.get(f"{API}/availability/profe/slots", params={
+        "date": d, "duration": 25, "class_type": "trial", "tz": "America/New_York"}, headers=hdr(world["s_user"])).json()
+    first_w, first_s = _utc(r("2027-01-04")[0]["start_time_utc"]), _utc(r("2027-04-05")[0]["start_time_utc"])
+    assert first_w.astimezone(NY).hour == first_s.astimezone(NY).hour == 9   # profesor: fijo
+    assert first_w.astimezone(CCS).hour == 10 and first_s.astimezone(CCS).hour == 9  # Caracas: sigue al profesor
 
 
-# D2: guardar justo antes del cambio de hora mezcla desfases dentro de la misma semana.
-def test_bug_saving_near_dst_mixes_offsets_in_same_week(client, world, db, monkeypatch):
+# D2 (CORREGIDO Fase 26, H2): guardar cerca del cambio de hora ya no mezcla desfases: no hay UTC guardado.
+def test_fixed_saving_near_dst_keeps_one_local_hour_all_week(client, world, db, monkeypatch):
     # jueves 22-oct-2026; Madrid pasa a CET el domingo 25
     _freeze(monkeypatch, "2026-10-22T10:00:00+00:00")
     _put_weekly(client, world["t_user"], "Europe/Madrid", [(d, "09:00", "12:00") for d in range(7)])
-    rows = {r.local_day_of_week: r.start_time_utc for r in
+    rows = {r.day_of_week: r.start_time_local for r in
             db.query(TeacherAvailability).filter(TeacherAvailability.teacher_id == world["tp"].id)}
-    assert {rows[3], rows[4], rows[5]} == {"07:00"}           # jue-sab con CEST (+2)
-    assert {rows[0], rows[1], rows[2], rows[6]} == {"08:00"}  # lun-mie y dom con CET (+1)
-    # en noviembre el jueves se ofrece a las 08:00 locales, no a las 09:00
-    th = _slots(client, "2026-11-26", user=world["s_user"])
-    assert _utc(th[0]["start_time_utc"]).astimezone(MAD).strftime("%H:%M") == "08:00"
+    assert set(rows.values()) == {"09:00"} and len(rows) == 7
+    # en noviembre el jueves se ofrece a las 09:00 locales (antes salia a las 08:00)
+    th = client.get(f"{API}/availability/profe/slots", params={
+        "date": "2026-11-26", "duration": 25, "class_type": "trial", "tz": "Europe/Madrid"},
+        headers=hdr(world["s_user"])).json()
+    assert _utc(th[0]["start_time_utc"]).astimezone(MAD).strftime("%H:%M") == "09:00"
 
 
-# D3: serie recurrente de cohorte: las fechas se calculan bien con DST,
-# pero se validan contra la disponibilidad congelada en UTC -> las de verano fallan.
-def test_bug_recurring_cohort_sessions_after_dst_rejected(client, world, db, monkeypatch):
+# D3 (CORREGIDO Fase 26, H4): serie recurrente de cohorte que cruza el cambio de hora: todas las fechas validan.
+def test_fixed_recurring_cohort_sessions_across_dst_accepted(client, world, db, monkeypatch):
     from app.api.v1.endpoints.cohorts import _generate_recurring_dates
     _freeze(monkeypatch, "2026-11-19T10:00:00+00:00")
     _put_weekly(client, world["t_user"], "Europe/Madrid", [(0, "09:00", "12:00")])
@@ -145,7 +144,7 @@ def test_bug_recurring_cohort_sessions_after_dst_rejected(client, world, db, mon
                                     _RealDT(2027, 3, 15, 8, 0, tzinfo=UTC), 4)
     assert [o.hour for o in occ] == [8, 8, 7, 7]  # control: 09:00 Madrid antes y despues del 28-mar
     ok = [is_within_teacher_availability(world["tp"].id, o, o + timedelta(minutes=60), db)[0] for o in occ]
-    assert ok == [True, True, False, False]
+    assert ok == [True, True, True, True]
 
 
 # D4: excepcion en la hora que no existe (28-mar-2027 02:30 Madrid) -> fin antes que inicio.
@@ -183,23 +182,23 @@ def test_ok_full_day_exception_on_25h_day(client, world, db):
 
 # ═══ Rangos que cruzan medianoche UTC (America: tardes) ═════════════════════
 
-# D6: Bogota 17-21 = 22:00-02:00 UTC. El listado del lunes ofrece 00:00-01:30 UTC
-# (martes), pero reservar ahi da 409: el validador mira el day_of_week del martes.
-def test_bug_evening_slots_after_midnight_utc_offered_but_rejected(client, world, db, monkeypatch):
+# D6 (CORREGIDO Fase 24): Bogota 17-21 = 22:00-02:00 UTC. Lo que se ofrece tras 00:00Z (martes) ahora se reserva:
+# la rejilla y la validacion comparten motor. Consulta por dia local (tz) del alumno en Bogota.
+def test_fixed_evening_slots_after_midnight_utc_offered_and_booked(client, world, db, monkeypatch):
     _freeze(monkeypatch, "2026-11-19T10:00:00+00:00")
     _put_weekly(client, world["t_user"], "America/Bogota", [(0, "17:00", "21:00")])
-    sl = _slots(client, "2026-11-30", user=world["s_user"])
-    starts = [s["start_time_utc"] for s in sl if s["is_available"]]
+    r = client.get(f"{API}/availability/profe/slots", params={
+        "date": "2026-11-30", "duration": 25, "class_type": "trial", "tz": "America/Bogota"},
+        headers=hdr(world["s_user"]))
+    starts = [s["start_time_utc"] for s in r.json() if s["is_available"]]
     tue = [s for s in starts if _utc(s).day == 1]
     assert len(tue) == 4  # 00:00, 00:30, 01:00, 01:30 UTC = 19:00-20:30 Bogota
     r = _book_trial(client, world, "2026-12-01T00:30:00Z")
-    assert r.status_code == 409 and "disponibilidad" in r.json()["detail"]
-    r_ok = _book_trial(client, world, "2026-11-30T22:30:00Z")
-    assert r_ok.status_code == 201, r_ok.text
+    assert r.status_code == 201, r.text
 
 
-# D7: en ese tramo tras medianoche, una clase ya reservada no marca el slot como ocupado.
-def test_bug_class_after_midnight_not_busy_in_previous_day_listing(client, world, db, monkeypatch):
+# D7 (CORREGIDO Fase 24): una clase tras medianoche UTC marca ocupado el slot en la consulta del dia anterior.
+def test_fixed_class_after_midnight_busy_in_previous_day_listing(client, world, db, monkeypatch):
     _freeze(monkeypatch, "2026-11-19T10:00:00+00:00")
     _put_weekly(client, world["t_user"], "America/Bogota", [(0, "17:00", "21:00")])
     s = _RealDT(2026, 12, 1, 1, 0, tzinfo=UTC)
@@ -207,38 +206,47 @@ def test_bug_class_after_midnight_not_busy_in_previous_day_listing(client, world
                  start_time_utc=s, end_time_utc=s + timedelta(minutes=50), duration=50,
                  buffer_minutes=10, status="confirmed"))
     db.commit()
-    sl = {s["start_time_utc"]: s["is_available"] for s in _slots(client, "2026-11-30", user=world["s_user"])}
+    sl = {s["start_time_utc"]: s["is_available"] for s in client.get(
+        f"{API}/availability/profe/slots", params={"date": "2026-11-30", "duration": 25, "class_type": "trial",
+                                                    "tz": "America/Bogota"}, headers=hdr(world["s_user"])).json()}
     k = next(k for k in sl if _utc(k) == s)
-    assert sl[k] is True
+    assert sl[k] is False
 
 
-# D8: preferencias del alumno que cruzan medianoche UTC nunca marcan is_preferred.
-def test_bug_preference_crossing_midnight_utc_never_preferred(client, world, db, monkeypatch):
+# D8 (CORREGIDO Fase 24): preferencias que cruzan medianoche UTC marcan is_preferred a ambos lados de 00:00Z.
+def test_fixed_preference_crossing_midnight_utc_is_preferred(client, world, db, monkeypatch):
     _freeze(monkeypatch, "2026-11-19T10:00:00+00:00")
     r = client.put(f"{API}/users/me/preferences", json={"timezone": "America/Caracas", "slots": [
         {"day_of_week": 0, "start_time_local": "19:00", "end_time_local": "21:00"}]},
         headers=hdr(world["s_user"]))
     assert r.status_code == 200, r.text
     assert (r.json()[0]["start_time_utc"], r.json()[0]["end_time_utc"]) == ("23:00", "01:00")
-    sl = _slots(client, "2026-11-30", user=world["s_user"])
+    sl = client.get(f"{API}/availability/profe/slots", params={
+        "date": "2026-11-30", "duration": 25, "class_type": "trial", "tz": "America/Caracas"},
+        headers=hdr(world["s_user"])).json()
     at23 = [s for s in sl if _utc(s["start_time_utc"]).hour == 23]
-    assert at23 and not any(s["is_preferred"] for s in at23)
+    assert at23 and all(s["is_preferred"] for s in at23)
+    at00 = [s for s in sl if _utc(s["start_time_utc"]).day == 1 and _utc(s["start_time_utc"]).hour == 0]
+    assert at00 and all(s["is_preferred"] for s in at00)
 
 
 # ═══ T: zona horaria del alumno ═════════════════════════════════════════════
 
-def test_bug_student_invalid_timezone_accepted(client, world, db):
+def test_fixed_student_invalid_timezone_422(client, world, db):
+    """CORREGIDO Fase 27: zona invalida del alumno -> 422 y no se guarda (antes 200)."""
+    before = db.get(StudentProfile, world["sp"].id).timezone
     r = client.patch(f"{API}/users/me/student-profile", json={"timezone": "Mars/Olympus"},
                      headers=hdr(world["s_user"]))
-    assert r.status_code == 200, r.text
+    assert r.status_code == 422, r.text
     db.expire_all()
-    assert db.get(StudentProfile, world["sp"].id).timezone == "Mars/Olympus"
+    assert db.get(StudentProfile, world["sp"].id).timezone == before
 
 
-def test_bug_teacher_invalid_timezone_500(client, world, db):
+def test_fixed_teacher_invalid_timezone_422(client, world, db):
+    """CORREGIDO Fase 21 (menor 7): zona invalida -> 422 (antes 500)."""
     r = client.patch(f"{API}/teachers/me/profile", json={"timezone": "Mars/Olympus"},
                      headers=hdr(world["t_user"]))
-    assert r.status_code == 500
+    assert r.status_code == 422
 
 
 # ═══ B: precision de las reservas ═══════════════════════════════════════════
@@ -315,7 +323,8 @@ def test_bug_group_session_in_past_accepted(client, world, db):
     assert r.status_code == 201, r.text
 
 
-def test_bug_group_session_overlaps_pending_trial(client, world, db):
+def test_fixed_group_session_overlaps_pending_trial(client, world, db):
+    """Corregido en Fase 19: una sesion grupal ya no se solapa con una clase de prueba pendiente."""
     c = _confirmed_cohort(db, world)
     other = _mk_user(db, "student", "otro")
     sp2 = StudentProfile(user_id=other.id, user_username="otro", timezone="UTC")
@@ -326,7 +335,7 @@ def test_bug_group_session_overlaps_pending_trial(client, world, db):
                  buffer_minutes=5, status="pending_trial"))
     db.commit()
     r = _session(client, world, c, s.isoformat())
-    assert r.status_code == 201, r.text
+    assert r.status_code == 409, r.text
 
 
 def test_bug_group_session_ignores_participant_other_class(client, world, db):

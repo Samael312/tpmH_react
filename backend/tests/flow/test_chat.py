@@ -338,19 +338,26 @@ def test_chat_toggle_blocks_backend_not_just_ui(
     assert r_list_unblocked.status_code == 200
 
 
-def test_teacher_admin_can_toggle_and_configure_chat_settings(
-    client, teacher_admin_token, chat_config_restorer,
+def test_only_superadmin_can_toggle_and_configure_chat_settings(
+    client, teacher_admin_token, superadmin_token, chat_config_restorer,
 ):
     """
-    Técnico: teacher_admin (no solo superadmin) puede togglear
-    chat_enabled y ajustar chat_retention_days / chat_reactivation_hours
-    desde el mismo PATCH /admin/platform-config.
-    UX: confirmado explícitamente por el dueño del producto — "superadmin
-    y teacher_admin" deben poder tocar este toggle.
+    Técnico: desde la Fase 16 PATCH /admin/platform-config es solo del
+    superadmin (la configuración de la plataforma, incluido el chat, ya
+    no la toca el teacher_admin): teacher_admin -> 403; superadmin puede
+    togglear chat_enabled y ajustar chat_retention_days /
+    chat_reactivation_hours.
+    UX: la decisión de producto cambió respecto a la original ("superadmin
+    y teacher_admin"): configurar el chat es del dueño de la plataforma.
     """
-    r = client.patch("/api/v1/admin/platform-config", json={
+    r_denied = client.patch("/api/v1/admin/platform-config", json={
         "chat_enabled": True, "chat_retention_days": 45, "chat_reactivation_hours": 12,
     }, headers=auth_headers(teacher_admin_token))
+    assert r_denied.status_code == 403, r_denied.text
+
+    r = client.patch("/api/v1/admin/platform-config", json={
+        "chat_enabled": True, "chat_retention_days": 45, "chat_reactivation_hours": 12,
+    }, headers=auth_headers(superadmin_token))
     assert r.status_code == 200, r.text
 
     r_config = client.get("/api/v1/admin/platform-config")

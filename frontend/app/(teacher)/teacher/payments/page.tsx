@@ -1,5 +1,8 @@
 "use client";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import RejectReasonModal from "@/components/ui/RejectReasonModal";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 import { Check, X, Clock, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
@@ -50,7 +53,15 @@ export default function TeacherPaymentsPage() {
   } = useTeacherPaymentsHistory(!isPendingTab);
 
   const [processing, setProcessing] = useState<number | null>(null);
+  const [approveTarget, setApproveTarget] = useState<TeacherPaymentEntry | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<TeacherPaymentEntry | null>(null);
   const toast = useToast();
+  const qc = useQueryClient();
+  const refreshMoney = () => {
+    qc.invalidateQueries({ queryKey: ["teacher", "payments"] });
+    qc.invalidateQueries({ queryKey: ["teacher", "wallet"] });
+    qc.invalidateQueries({ queryKey: ["admin"] });
+  };
 
   // Datos/estado de la tab activa
   const list = isPendingTab ? payments : history;
@@ -74,20 +85,20 @@ export default function TeacherPaymentsPage() {
       await api.patch(`/payments/${p.payment_id}/validate`, {
         action: "approve",
       });
-      refetchPending();
+      refreshMoney();
+      setApproveTarget(null);
       toast.success("Pago aprobado correctamente");
     } catch (e) {
       toast.error(getErrorMessage(e, "Error aprobando el pago"));
     } finally { setProcessing(null); }
   };
 
-  const reject = async (p: TeacherPaymentEntry) => {
-    const reason = prompt("Motivo del rechazo:");
-    if (!reason) return;
+  const reject = async (p: TeacherPaymentEntry, reason: string) => {
     setProcessing(p.payment_id);
     try {
       await api.patch(`/payments/${p.payment_id}/validate`, { action: "reject", rejection_reason: reason });
-      refetchPending();
+      refreshMoney();
+      setRejectTarget(null);
       toast.success("Pago rechazado correctamente");
     } catch (e) {
       toast.error(getErrorMessage(e, "Error rechazando el pago"));
@@ -191,12 +202,12 @@ export default function TeacherPaymentsPage() {
                   ) : (
                     <div className="flex gap-2">
                       <button
-                        onClick={() => approve(p)}
+                        onClick={() => setApproveTarget(p)}
                         disabled={processing === p.payment_id}
                         className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-xl disabled:opacity-50">
                         {processing === p.payment_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Confirmar pago
                       </button>
-                      <button onClick={() => reject(p)} disabled={processing === p.payment_id}
+                      <button onClick={() => setRejectTarget(p)} disabled={processing === p.payment_id}
                         className="flex items-center gap-1.5 px-4 py-2 bg-rose-50 text-rose-600 text-xs font-bold rounded-xl">
                         <X className="w-3.5 h-3.5" /> Rechazar
                       </button>
@@ -224,6 +235,23 @@ export default function TeacherPaymentsPage() {
           {!isPendingTab && <LoadMoreButton hasMore={historyHasMore} loading={historyLoadingMore} onClick={loadMoreHistory} />}
         </div>
       )}
+      <ConfirmModal
+        open={!!approveTarget}
+        title="Confirmar pago"
+        description={approveTarget ? `Vas a aprobar el pago de ${approveTarget.student_name} por $${Number(approveTarget.amount).toFixed(2)}.` : ""}
+        confirmLabel="Aprobar pago"
+        loading={processing === approveTarget?.payment_id}
+        onClose={() => { if (processing === null) setApproveTarget(null); }}
+        onConfirm={async () => { if (approveTarget) await approve(approveTarget) }}
+      />
+      <RejectReasonModal
+        open={!!rejectTarget}
+        title="Rechazar pago"
+        description={rejectTarget ? `${rejectTarget.student_name} · $${Number(rejectTarget.amount).toFixed(2)}` : undefined}
+        loading={processing !== null}
+        onClose={() => { if (processing === null) setRejectTarget(null); }}
+        onConfirm={(reason) => rejectTarget ? reject(rejectTarget, reason) : undefined}
+      />
       <ChipiWidget screenName="teacher_payments" />
     </div>
     </>

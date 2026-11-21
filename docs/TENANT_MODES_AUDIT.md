@@ -113,6 +113,8 @@ excluye cuentas de test.
 
 ## 5. Transición entre modos
 
+> **Fase 18 (2026-11-21): T2, T3 (parte de `_sync`), T4 (validación/confirmación en backend + panel) y T5 corregidos**; ver `backend/doc/BUSINESS_RULES.md`. Pendientes: T1 (`legacy` en `/me/teachers`) y pre-check de A->B. La tabla siguiente describe el estado previo.
+
 Hoy el `PATCH` no valida nada. Única migración: al pasar single→multi, crea links para alumnos con
 historial con el **`featured_teacher_id` anterior** si no era NULL (`admin.py:1114-1165`, commit por
 fila, incluye historial cancelado). multi→single y cambio de destacado: **nada**.
@@ -153,13 +155,15 @@ fila, incluye historial cancelado). multi→single y cambio de destacado: **nada
 
 | # | Sev | Hallazgo | Evidencia |
 |---|---|---|---|
-| A1 | 🔴 | Cambia modo y se pone de destacado (`admin.py:1060`, `get_current_staff`). | VIVO (200) |
-| A2 | 🔴 | Cambia `PaymentConfig` global → todos los alumnos le pagan a él (`payments.py:457`). | VIVO (200) |
-| A3 | 🔴 | Modo Dios: se crea pagos `approved` a sí mismo, aprueba pagos propios que `validate` le niega (NEG-01) y procesa su propio retiro (`god_mode.py:1104-1307`, `payments.py:1509`). | SONDA |
-| A4 | 🟠 | Fuera de Modo Dios: lee chats de otros profesores, suspende profesores, banea alumnos ajenos (cancela paquetes con todos), reagenda/cancela clases ajenas, descarga materiales ajenos. | SONDA / CÓDIGO |
-| A5 | 🟠 | Crea/edita/borra reseñas propias en Modo Dios (`god_mode.py:1311-1448`). | CÓDIGO |
+| A1 | 🔴 ✅ corregido 2026-11-21 | Cambia modo y se pone de destacado (`admin.py:1060`, `get_current_staff`). | VIVO (200) |
+| A2 | 🔴 ↩ revertido por decisión del propietario 2026-11-21 (el `teacher_admin` SÍ edita los datos de pago) | Cambia `PaymentConfig` global → todos los alumnos le pagan a él (`payments.py:457`). | VIVO (200) |
+| A3 | 🔴 ✅ corregido 2026-11-21 | Modo Dios: se crea pagos `approved` a sí mismo, aprueba pagos propios que `validate` le niega (NEG-01) y procesa su propio retiro (`god_mode.py:1104-1307`, `payments.py:1509`). | SONDA |
+| A4 | 🟠 ✅ corregido 2026-11-21 | Fuera de Modo Dios: lee chats de otros profesores, suspende profesores, banea alumnos ajenos (cancela paquetes con todos), reagenda/cancela clases ajenas, descarga materiales ajenos. | SONDA / CÓDIGO |
+| A5 | 🟠 no es bug, decisión del propietario | Crea/edita/borra reseñas propias en Modo Dios (`god_mode.py:1311-1448`). | CÓDIGO |
 
-**Arreglo:** `require_superadmin` en modo/destacado, `payments/config`, retiros y todo lo que mueve
+**Estado (2026-11-21):** A1, A3 y A4 corregidos con `require_superadmin` (Fase 16 en `CORRECCIONES.md`; en A4 banear/desbanear, estado de profesores y edición de usuarios quedan abiertos al `teacher_admin`, solo el rol es del superadmin); A2 se revirtió: `PATCH /payments/config` vuelve a ser de staff por decisión del propietario; A5 se deja como está, no es bug, decisión del propietario.
+
+**Arreglo (aplicado):** `require_superadmin` en modo/destacado, `payments/config`, retiros y todo lo que mueve
 dinero o reseñas; o aplicar el `_require_*_scope` del Modo Dios a las rutas de staff.
 
 ---

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -50,6 +50,8 @@ class TeacherAdminResponse(BaseModel):
     total_students: int
     created_at: datetime
     video_url: Optional[str] = None
+    video_pending_url: Optional[str] = None
+    video_pending_rejection_reason: Optional[str] = None
     theme_color: Optional[str] = None
     profile_photo_url: Optional[str] = None
     phone_number: Optional[str] = None
@@ -69,13 +71,7 @@ class UpdateTeacherStatusRequest(BaseModel):
 
 
 class UpdateCommissionRequest(BaseModel):
-    commission_rate: float
-
-    @classmethod
-    def validate_rate(cls, v):
-        if not 0.0 <= v <= 1.0:
-            raise ValueError("La comisión debe estar entre 0.0 y 1.0 (0% - 100%)")
-        return v
+    commission_rate: float = Field(..., allow_inf_nan=False, ge=0.0, le=1.0)
 
 
 # ─── Gestión de usuarios ─────────────────────────────────────────────────────

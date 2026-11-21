@@ -2,6 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from typing import Optional
 import json
@@ -27,6 +28,33 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _build_system_prompt(current_user: Optional[User], screen: Optional[str], db: Session) -> str:
+    role = None
+    user_data = None
+
+    if current_user:
+        role = current_user.role.value
+
+        if role == "student":
+            user_data = get_student_data_for_chipi(current_user, db)
+        elif role == "teacher":
+            user_data = get_teacher_data_for_chipi(current_user, db)
+        elif role == "teacher_admin":
+            user_data = get_teacher_data_for_chipi(current_user, db, is_admin=True)
+        elif role == "superadmin":
+            user_data = get_staff_data_for_chipi(current_user, db)
+
+    # Datos de configuración de plataforma (single/multi-tenant) — siempre se agregan, sin importar el rol.
+    platform_data = get_platform_context_for_chipi(db)
+
+    return build_system_prompt(
+        role=role,
+        screen=screen,
+        user_data=user_data,
+        platform_data=platform_data,
+    )
+
+
 @router.post("/chat")
 @limiter.limit("20/minute;300/day", key_func=user_or_ip_key)  # SEC-02: cada llamada cuesta OpenAI + consultas a BD
 async def chat_with_chipi(
@@ -48,33 +76,9 @@ async def chat_with_chipi(
     del usuario desde la BD y llama a OpenAI.
     """
 
-    # 1. Obtener datos del usuario para enriquecer el prompt
-    role = None
-    user_data = None
-
-    if current_user:
-        role = current_user.role.value
-
-        if role == "student":
-            user_data = get_student_data_for_chipi(current_user, db)
-        elif role == "teacher":
-            user_data = get_teacher_data_for_chipi(current_user, db)
-        elif role == "teacher_admin":
-            user_data = get_teacher_data_for_chipi(current_user, db, is_admin=True)
-        elif role == "superadmin":
-            user_data = get_staff_data_for_chipi(current_user, db)
-
-    # 2. Datos de configuración de plataforma (single/multi-tenant) —
-    # siempre se agregan, sin importar el rol.
-    platform_data = get_platform_context_for_chipi(db)
-
-    # 3. Construir el prompt del sistema
-    system_prompt = build_system_prompt(
-        role=role,
-        screen=data.screen,
-        user_data=user_data,
-        platform_data=platform_data,
-    )
+    # 1-3. Datos del usuario, contexto de plataforma y prompt: consultas SINCRONAS a la BD (varias por mensaje).
+    # En un hilo para no bloquear el bucle de eventos mientras otros usuarios chatean (Fase 21, menores 4).
+    system_prompt = await run_in_threadpool(_build_system_prompt, current_user, data.screen, db)
 
     # 4. Convertir historial al formato de OpenAI
     history = [

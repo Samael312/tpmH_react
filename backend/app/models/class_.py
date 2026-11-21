@@ -1,8 +1,13 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Boolean, Index
 from sqlalchemy.orm import relationship
+from sqlalchemy import text
 from sqlalchemy.sql import func
 from app.db.base import Base
 import enum
+
+# Fase 25 (m2): veces que el ALUMNO puede reagendar una misma clase. El profesor y el admin no cuentan.
+# Al llegar al tope, el alumno debe pedirselo al profesor o cancelar (regla de >= 12 h).
+MAX_STUDENT_RESCHEDULES = 2
 
 
 class ClassType(str, enum.Enum):
@@ -18,6 +23,15 @@ class ClassType(str, enum.Enum):
 
 class Class(Base):
     __tablename__ = "classes"
+    __table_args__ = (
+        # G2: un mismo evento de Google no puede estar dos veces para el mismo profesor
+        # (evita reimportar la clase de Preply en cada sync).
+        Index(
+            "uq_classes_teacher_google_event", "teacher_id", "google_event_id", unique=True,
+            postgresql_where=text("google_event_id IS NOT NULL"),
+            sqlite_where=text("google_event_id IS NOT NULL"),
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     enrollment_id = Column(Integer, ForeignKey("enrollments.id"), nullable=True)
@@ -43,6 +57,8 @@ class Class(Base):
     # [start_time_utc, end_time_utc + buffer_minutes).
     buffer_minutes = Column(Integer, nullable=False, default=10)
     google_event_id = Column(String, nullable=True)  # Para sync con Calendar
+    # Huella (hash corto) de lo ultimo empujado a Google para este evento: si no cambia, la sync no llama a update.
+    google_sync_hash = Column(String(32), nullable=True)
     # Origen de una clase class_type=="external" (ej. "preply"). NULL para
     # cualquier otra clase (creada normalmente en la plataforma).
     external_source = Column(String, nullable=True)
@@ -65,6 +81,8 @@ class Class(Base):
     payment_expires_at = Column(DateTime(timezone=True), nullable=True)
     used_prepaid_credit = Column(Boolean, default=False)  # para saber si hay que devolver crédito al cancelar
     reminder_sent_at = Column(DateTime(timezone=True), nullable=True)  # evita reenviar el recordatorio de 24h
+    # Fase 25 (m2): reagendados hechos por el alumno (tope MAX_STUDENT_RESCHEDULES)
+    student_reschedule_count = Column(Integer, nullable=False, default=0, server_default="0")
 
     enrollment = relationship("Enrollment", back_populates="classes")
 

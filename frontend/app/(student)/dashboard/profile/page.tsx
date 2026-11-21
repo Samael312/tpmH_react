@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, useId, Children, cloneElement, isValidElement } from "react";
 import Image from "next/image";
 import axios from "axios";
 import {
@@ -88,9 +88,20 @@ function Section({
 function Field({
   label, icon, children,
 }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
+  // Asocia la etiqueta con el primer control del campo (htmlFor/id) para lectores de pantalla y clic en la etiqueta.
+  const fieldId = useId();
+  const items = Children.toArray(children);
+  const firstControl = items.findIndex(
+    (child) => isValidElement(child) && ["input", "select", "textarea"].includes(child.type as string),
+  );
+  const wired = items.map((child, i) =>
+    i === firstControl && isValidElement<{ id?: string }>(child)
+      ? cloneElement(child, { id: child.props.id ?? fieldId })
+      : child,
+  );
   return (
     <div>
-      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+      <label htmlFor={fieldId} className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
         {label}
       </label>
       <div className="relative group">
@@ -99,7 +110,7 @@ function Field({
             {icon}
           </div>
         )}
-        {children}
+        {wired}
       </div>
     </div>
   );
@@ -121,7 +132,7 @@ function Toast({ msg, type }: { msg: React.ReactNode; type: "success" | "error" 
   const displayMsg = typeof msg === "string" ? msg : (msg ? String(msg) : "");
 
   return (
-    <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold animate-in fade-in slide-in-from-top-2 duration-300 ${
+    <div role={type === "error" ? "alert" : "status"} className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold animate-in fade-in slide-in-from-top-2 duration-300 ${
       type === "success"
         ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
         : "bg-rose-50 text-rose-600 border border-rose-100"
@@ -587,21 +598,21 @@ export default function StudentProfilePage() {
               ) : (
                 <div className="space-y-4 animate-in fade-in duration-300">
                   <Field label="Nombre de usuario" icon={<AtSign className="w-5 h-5" />}>
-                    <input value={username} onChange={e => setUsername(e.target.value)} className={inputCls()} placeholder="usuario123" disabled={savingInfo} />
+                    <input autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} className={inputCls()} placeholder="usuario123" disabled={savingInfo} />
                   </Field>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <Field label="Nombre" icon={<User className="w-5 h-5" />}>
-                      <input value={name} onChange={e => setName(e.target.value)} className={inputCls()} placeholder="Tu nombre" disabled={savingInfo} />
+                      <input autoComplete="given-name" value={name} onChange={e => setName(e.target.value)} className={inputCls()} placeholder="Tu nombre" disabled={savingInfo} />
                     </Field>
                     <Field label="Apellido" icon={<User className="w-5 h-5" />}>
-                      <input value={surname} onChange={e => setSurname(e.target.value)} className={inputCls()} placeholder="Tu apellido" disabled={savingInfo} />
+                      <input autoComplete="family-name" value={surname} onChange={e => setSurname(e.target.value)} className={inputCls()} placeholder="Tu apellido" disabled={savingInfo} />
                     </Field>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <Field label="Correo electrónico" icon={<Mail className="w-5 h-5" />}>
-                      <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputCls()} placeholder="correo@ejemplo.com" disabled={savingInfo || isGoogleAccount} />
+                      <input type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} className={inputCls()} placeholder="correo@ejemplo.com" disabled={savingInfo || isGoogleAccount} />
                     </Field>
                   </div>
                   {isGoogleAccount && (
@@ -837,15 +848,15 @@ export default function StudentProfilePage() {
               ) : (
               <div className="space-y-4">
                 <Field label="Contraseña actual" icon={<Lock className="w-5 h-5" />}>
-                  <input type={showOld ? "text" : "password"} value={oldPw} onChange={e => setOldPw(e.target.value)} className={inputCls()} placeholder="••••••••" disabled={savingPw} />
-                  <button type="button" onClick={() => setShowOld(p => !p)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500 transition-colors">
+                  <input type={showOld ? "text" : "password"} autoComplete="current-password" value={oldPw} onChange={e => setOldPw(e.target.value)} className={inputCls()} placeholder="••••••••" disabled={savingPw} />
+                  <button type="button" aria-label={showOld ? "Ocultar contraseña" : "Mostrar contraseña"} onClick={() => setShowOld(p => !p)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500 transition-colors">
                     {showOld ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </Field>
 
                 <Field label="Nueva contraseña" icon={<Lock className="w-5 h-5" />}>
-                  <input type={showNew ? "text" : "password"} value={newPw} onChange={e => setNewPw(e.target.value)} className={inputCls()} placeholder="Mínimo 8 caracteres" disabled={savingPw} />
-                  <button type="button" onClick={() => setShowNew(p => !p)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500 transition-colors">
+                  <input type={showNew ? "text" : "password"} autoComplete="new-password" value={newPw} onChange={e => setNewPw(e.target.value)} className={inputCls()} placeholder="Mínimo 8 caracteres" disabled={savingPw} />
+                  <button type="button" aria-label={showNew ? "Ocultar contraseña" : "Mostrar contraseña"} onClick={() => setShowNew(p => !p)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500 transition-colors">
                     {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </Field>
@@ -853,6 +864,8 @@ export default function StudentProfilePage() {
                 <Field label="Confirmar nueva contraseña" icon={<Lock className="w-5 h-5" />}>
                   <input
                     type="password"
+                    autoComplete="new-password"
+                    aria-invalid={!!confirmPw && confirmPw !== newPw}
                     value={confirmPw}
                     onChange={e => setConfirm(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && savePw()}

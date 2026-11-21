@@ -18,6 +18,7 @@ from app.core.email import (
 from app.auth.dependencies import (
     get_current_student,
     get_current_staff,
+    require_superadmin,
     get_current_teacher_or_teacher_admin,
 )
 from app.core.calendar_sync import (
@@ -32,6 +33,8 @@ from app.core.class_logic import (
     can_cancel_class,
     can_reschedule_class,
     resolve_status_after_reschedule,
+    apply_reschedule_status,
+    validate_class_status_transition,
     update_enrollment_counter,
     class_counts_towards_package,
     cancel_class_and_refund,
@@ -41,7 +44,7 @@ from app.core.class_logic import (
 )
 from app.core.timezone import UTC, utc_now, format_local_datetime
 from app.db.base import get_db
-from app.models.class_ import Class, ClassType
+from app.models.class_ import Class, ClassType, MAX_STUDENT_RESCHEDULES
 from app.models.package import Enrollment, EnrollmentStatus
 from app.models.student import StudentProfile
 from app.models.teacher import TeacherProfile
@@ -443,12 +446,24 @@ def reschedule_class_student(
 ):
     student_id = current_user.student_profile.id
     class_ = _get_class_or_404(db, class_id, student_id=student_id)
+    class_ = lock_class_row(db, class_id)  # Fase 22: leer el estado fresco y serializar contra cancelar/marcar
 
     can_reschedule, error_msg = can_reschedule_class(class_, role="student", db=db)
     if not can_reschedule:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error_msg
+        )
+
+    # Fase 25 (m2): tope de reagendados del alumno por clase (el profesor/admin no cuentan)
+    if (class_.student_reschedule_count or 0) >= MAX_STUDENT_RESCHEDULES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Ya reagendaste esta clase {MAX_STUDENT_RESCHEDULES} veces (el máximo). "
+                "Contacta a tu profesor para moverla o cancélala con al menos "
+                "12 h de antelación."
+            ),
         )
 
     lock_booking_rows(db, class_.teacher_id, student_id)
@@ -472,6 +487,7 @@ def reschedule_class_student(
 
     old_start = class_.start_time_utc
 
+    class_.student_reschedule_count = (class_.student_reschedule_count or 0) + 1
     class_.start_time_utc = data.start_time_utc
     class_.end_time_utc = data.start_time_utc + timedelta(minutes=class_.duration)
     class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
@@ -486,9 +502,7 @@ def reschedule_class_student(
     # tal cual estaba; can_reschedule_class ya validó que es reagendable.
     # Excepción: 'finalized' → 'confirmed' (ver resolve_status_after_reschedule),
     # para que la clase reagendada a futuro vuelva a aparecer en "Próximas".
-    new_status = resolve_status_after_reschedule(class_)
-    sync_student_lifetime_class_counter(class_, class_.status, new_status, db=db)
-    class_.status = new_status
+    apply_reschedule_status(class_, db)  # Fase 22 (TE-02): un no_show reagendado devuelve el credito ya contado
     db.commit()
     db.refresh(class_)
     
@@ -652,25 +666,23 @@ def update_class_status(
 ):
     class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
     _reject_if_external(class_)
+    # Fase 22 (E2): bloqueo de fila y relectura del estado ANTES de validar la transicion (dos cambios
+    # simultaneos no pueden contar el credito dos veces ni reabrir una clase recien cancelada).
+    class_ = lock_class_row(db, class_id)
 
-    # BUG-05/17 fix: el profesor puede cambiar libremente el estado de una
-    # clase a completed/no_show/finalized, sin importar cuál era el estado
-    # de origen, pero solo dentro de una ventana de 72h desde que la clase
-    # terminó. Pasado ese plazo, el estado queda bloqueado.
-    ALLOWED_MANUAL_TARGETS = {"completed", "no_show", "finalized"}
-    if data.status in ALLOWED_MANUAL_TARGETS:
-        if utc_now() - class_.end_time_utc > timedelta(hours=72):
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "Ya pasaron 72h desde el fin de la clase; el estado quedó bloqueado."
-            )
+    # Matriz unica de transiciones (core/class_logic.py): sin reabrir canceladas, sin cancelar clases
+    # dadas o pasadas, ventana de 72 h para cualquier cambio sobre clases terminadas (BUG-05/17, AUD-04).
+    ok, error_msg = validate_class_status_transition(class_, data.status)
+    if not ok:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, error_msg)
 
-    # AUD-04: no se puede completar ni marcar como no asistida una clase que aun no empezo.
-    if data.status in ("completed", "no_show") and class_.start_time_utc > utc_now():
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "No puedes marcar como completada o no asistida una clase que aún no ha empezado."
-        )
+    if data.status == "cancelled" and class_.status != "cancelled":
+        # Cancelar por aqui = cancelar por la via normal (participantes, Google, correos), tambien en grupales.
+        if data.notes:
+            class_.notes = data.notes
+        _cancel_class_by_teacher(class_, db)
+        db.refresh(class_)
+        return _build_class_response(class_, db)
 
     min_cancel_hours = get_business_rules(db)["min_cancel_hours"]
 
@@ -703,9 +715,9 @@ def update_class_status(
         class_.used_prepaid_credit = False
     elif class_.class_type == ClassType.regular and class_.enrollment_id:
         if new_counts and not old_counts:
-            update_enrollment_counter(class_.enrollment_id, delta=1, db=db)
+            update_enrollment_counter(class_.enrollment_id, delta=1, db=db, class_=class_)
         elif old_counts and not new_counts:
-            update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
+            update_enrollment_counter(class_.enrollment_id, delta=-1, db=db, class_=class_)
 
     db.commit()
     db.refresh(class_)
@@ -774,7 +786,17 @@ def cancel_class_teacher(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="La clase ya se encuentra cancelada"
         )
+    ok, error_msg = validate_class_status_transition(class_, "cancelled")
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
 
+    _cancel_class_by_teacher(class_, db)
+    return {"message": "Clase cancelada por el profesor. El crédito ha sido reembolsado al estudiante."}
+
+
+def _cancel_class_by_teacher(class_: Class, db: Session) -> None:
+    """Cancelacion por el profesor (DELETE /teacher/{id} y PATCH status=cancelled): reembolsa el credito,
+    avisa a los participantes y borra el evento de Google. Hace commit."""
     cancel_class_and_refund(class_, db, apply_late_cancel_penalty=False)
     db.commit()
 
@@ -808,7 +830,6 @@ def cancel_class_teacher(
             )
 
     _sync_google_calendar_cancelled(class_.teacher_id, class_.google_event_id, db)
-    return {"message": "Clase cancelada por el profesor. El crédito ha sido reembolsado al estudiante."}
 
 
 @router.patch("/teacher/{class_id}/reschedule", response_model=ClassResponse)
@@ -820,6 +841,7 @@ def reschedule_class_teacher(
 ):
     class_ = _get_class_or_404(db, class_id, teacher_id=current_user.teacher_profile.id)
     _reject_if_external(class_)
+    class_ = lock_class_row(db, class_id)  # Fase 22: leer el estado fresco
 
     can_reschedule, error_msg = can_reschedule_class(class_, role="teacher", db=db)
     if not can_reschedule:
@@ -853,9 +875,7 @@ def reschedule_class_teacher(
     # BUG fix: ver comentario equivalente en reschedule_class_student. El
     # profesor tampoco debe poder "desconfirmar" una clase ya paga/confirmada
     # por el simple hecho de reagendarla. Excepción: 'finalized' → 'confirmed'.
-    new_status = resolve_status_after_reschedule(class_)
-    sync_student_lifetime_class_counter(class_, class_.status, new_status, db=db)
-    class_.status = new_status
+    apply_reschedule_status(class_, db)  # Fase 22 (TE-02): un no_show reagendado devuelve el credito ya contado
     db.commit()
     db.refresh(class_)
 
@@ -865,15 +885,69 @@ def reschedule_class_teacher(
     return _build_class_response(class_, db)
 
 
+@router.get("/admin/list", response_model=ClassListResponse)
+def list_classes_admin(
+    response: Response,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    teacher_id: Optional[int] = Query(None),
+    student_id: Optional[int] = Query(None),
+    student_q: Optional[str] = Query(None, max_length=100),
+    date_from: Optional[str] = Query(None, description="YYYY-MM-DD (UTC, inclusive)"),
+    date_to: Optional[str] = Query(None, description="YYYY-MM-DD (UTC, inclusive)"),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    current_user: User = Depends(require_superadmin),
+    db: Session = Depends(get_db),
+):
+    """Superadmin: busca clases de cualquier profesor/alumno para reagendar o cancelar."""
+    query = db.query(Class)
+    if teacher_id is not None:
+        query = query.filter(Class.teacher_id == teacher_id)
+    if student_id is not None:
+        query = query.filter(Class.student_id == student_id)
+    if student_q and student_q.strip():
+        like = f"%{student_q.strip()}%"
+        query = query.filter(Class.student_id.in_(
+            db.query(StudentProfile.id).join(User, StudentProfile.user_id == User.id).filter(
+                or_(User.name.ilike(like), User.surname.ilike(like), User.username.ilike(like))
+            )
+        ))
+    try:
+        if date_from:
+            query = query.filter(Class.start_time_utc >= datetime.strptime(date_from, "%Y-%m-%d").replace(tzinfo=UTC))
+        if date_to:
+            query = query.filter(
+                Class.start_time_utc < datetime.strptime(date_to, "%Y-%m-%d").replace(tzinfo=UTC) + timedelta(days=1)
+            )
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Formato de fecha inválido (debe ser YYYY-MM-DD)")
+    if status_filter:
+        query = query.filter(Class.status == status_filter)
+
+    total, upcoming, completed = _class_counters(query, utc_now(), ("completed",))
+    rows = query.order_by(Class.start_time_utc.desc(), Class.id).offset(offset).limit(limit).all()
+    response.headers["X-Total-Count"] = str(total)
+    return ClassListResponse(
+        classes=_build_class_responses(rows, db), total=total, upcoming=upcoming, completed=completed
+    )
+
+
 @router.patch("/admin/{class_id}/reschedule", response_model=ClassResponse)
 def reschedule_class_admin(
     class_id: int,
     data: RescheduleClassRequest,
-    current_user: User = Depends(get_current_staff),
+    current_user: User = Depends(require_superadmin),
     db: Session = Depends(get_db)
 ):
     class_ = _get_class_or_404(db, class_id)
     _reject_if_external(class_)
+    class_ = lock_class_row(db, class_id)
+    # Fase 22 (E2): el admin solo reagenda clases reagendables (las canceladas/completadas no se reabren).
+    if class_.status not in ("pending", "pending_trial", "pending_payment", "confirmed", "finalized", "no_show"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No se puede reagendar una clase con estado '{class_.status}'",
+        )
     lock_booking_rows(db, class_.teacher_id, class_.student_id)
 
     can_book, error_msg = can_book_slot(
@@ -899,9 +973,7 @@ def reschedule_class_admin(
     class_.day_of_week = DAYS_ES[data.start_time_utc.weekday()]
     # BUG fix: ver comentario equivalente en reschedule_class_student.
     # Excepción: 'finalized' → 'confirmed'.
-    new_status = resolve_status_after_reschedule(class_)
-    sync_student_lifetime_class_counter(class_, class_.status, new_status, db=db)
-    class_.status = new_status
+    apply_reschedule_status(class_, db)  # Fase 22 (TE-02): un no_show reagendado devuelve el credito ya contado
     db.commit()
     db.refresh(class_)
 
@@ -916,7 +988,7 @@ def reschedule_class_admin(
 @router.delete("/admin/{class_id}")
 def cancel_class_admin(
     class_id: int,
-    current_user: User = Depends(get_current_staff),
+    current_user: User = Depends(require_superadmin),
     db: Session = Depends(get_db)
 ):
     """
@@ -925,12 +997,16 @@ def cancel_class_admin(
     """
     class_ = _get_class_or_404(db, class_id)
     _reject_if_external(class_)
+    class_ = lock_class_row(db, class_id)
 
     if class_.status == "cancelled":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="La clase ya se encuentra cancelada"
         )
+    ok, error_msg = validate_class_status_transition(class_, "cancelled")
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
 
     cancel_class_and_refund(class_, db, apply_late_cancel_penalty=False)
     db.commit()

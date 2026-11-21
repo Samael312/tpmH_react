@@ -58,7 +58,7 @@ def get_enrollment_group_occupied_slots(enrollment: Enrollment, db: Session) -> 
     )
 
 
-def release_cohort_seat(enrollment: Enrollment, db: Session) -> None:
+def release_cohort_seat(enrollment: Enrollment, db: Session, keep_cohort_id: bool = False) -> None:
     """
     Libera el cupo de un alumno que migra de grupal a individual (o cuyo
     enrollment grupal se cancela). No hace commit — el caller decide cuándo.
@@ -68,7 +68,11 @@ def release_cohort_seat(enrollment: Enrollment, db: Session) -> None:
     - Conserva su participación en sesiones ya pasadas (historial de
       asistencia intacto).
     - Limpia enrollment.cohort_id para que el enrollment quede como
-      puramente individual de ahí en adelante.
+      puramente individual de ahí en adelante, SALVO `keep_cohort_id=True`
+      (Fase 22, E5): cuando la cohorte se cancela/termina, el enrollment
+      conserva su cohort_id para que el reembolso por cohorte cancelada
+      (request-refund-cohort-cancelled) y la etapa `needs_group_refund`
+      puedan encontrarlo.
     """
     if not enrollment.cohort_id:
         return
@@ -86,7 +90,8 @@ def release_cohort_seat(enrollment: Enrollment, db: Session) -> None:
     for p in future_participations:
         p.attendance_status = "cancelled"
 
-    enrollment.cohort_id = None
+    if not keep_cohort_id:
+        enrollment.cohort_id = None
 
 
 def close_cohort(cohort: GroupCohort, start_date, db: Session) -> None:
@@ -112,7 +117,7 @@ def release_and_cancel_all_cohort_enrollments(cohort_id: int, db: Session) -> li
         Enrollment.status.notin_(["cancelled"]),
     ).all()
     for enrollment in affected:
-        release_cohort_seat(enrollment, db)
+        release_cohort_seat(enrollment, db, keep_cohort_id=True)
         enrollment.status = EnrollmentStatus.cancelled
     return affected
 

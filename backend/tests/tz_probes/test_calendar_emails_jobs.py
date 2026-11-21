@@ -136,48 +136,41 @@ def _externals(db, tid):
 
 # ═══ G — Google Calendar ═════════════════════════════════════════════════════
 
-# G1: la sync empuja las clases externas (Preply) como si fueran propias: reescribe el evento de Preply.
-def test_bug_g1_sync_rewrites_imported_preply_event(db, world, monkeypatch):
+# G1 (CORREGIDO Fase 17): la sync ya NO empuja las clases externas (Preply): no toca su evento.
+def test_fixed_g1_sync_does_not_rewrite_imported_preply_event(db, world, monkeypatch):
     start = future(72)
     cal = _connect(db, world, monkeypatch, FakeCalendar(events=[_preply("preply-1", start)]))
     r = gc.sync_calendar_logic(world["tp"].id, db)
     assert r["imported_new_count"] == 1
-    # El bucle de push incluye la clase external y hace update() sobre el evento ORIGINAL de Preply
-    assert any(c[0] == "update" and c[1] == "preply-1" for c in cal.calls)
-    assert r["updated_count"] == 1  # cuenta como "clase propia actualizada"
+    assert not any(c[0] in ("update", "insert", "delete") for c in cal.calls)
+    assert r["updated_count"] == 0
 
 
-# G1b: si Google no deja editar el evento de Preply (403), se crea un evento propio duplicado y en la
-# siguiente sync la clase external se duplica (la vieja queda "cancelled"). Bucle en cada sync.
-def test_bug_g1b_preply_update_forbidden_duplicates_every_sync(db, world, monkeypatch):
+# G1b (CORREGIDO Fase 17): aunque Google no deje editar el evento (403), no hay duplicados ni eventos basura.
+def test_fixed_g1b_preply_update_forbidden_no_duplicates(db, world, monkeypatch):
     start = future(72)
     cal = _connect(db, world, monkeypatch,
                    FakeCalendar(events=[_preply("preply-1", start)], update_error=403))
-    gc.sync_calendar_logic(world["tp"].id, db)
+    for _ in range(3):
+        gc.sync_calendar_logic(world["tp"].id, db)
     ext = _externals(db, world["tp"].id)
-    assert len(ext) == 1 and ext[0].google_event_id == "own-1"   # perdio el id de Preply
-    assert any(c[0] == "insert" for c in cal.calls)              # evento "Clase: Estudiante — Preply…" creado
-    gc.sync_calendar_logic(world["tp"].id, db)
-    ext = _externals(db, world["tp"].id)
-    assert len(ext) == 2                                          # misma clase de Preply, 2 filas
-    assert sorted(c.status for c in ext) == ["cancelled", "confirmed"]
-    assert sum(1 for c in cal.calls if c[0] == "insert") == 2     # un evento propio nuevo por sync
+    assert len(ext) == 1 and ext[0].google_event_id == "preply-1" and ext[0].status == "confirmed"
+    assert not any(c[0] == "insert" for c in cal.calls)
 
 
-# G2: un evento de Preply EN CURSO se reimporta como clase nueva en cada sync (la consulta de
-# existentes filtra start >= now, pero Google devuelve los eventos cuyo FIN es > now).
-def test_bug_g2_ongoing_external_event_duplicated(db, world):
+# G2 (CORREGIDO Fase 17): un evento de Preply en curso se importa una sola vez.
+def test_fixed_g2_ongoing_external_event_not_duplicated(db, world):
     now = utc_now()
     cal = FakeCalendar(events=[_preply("preply-live", now - timedelta(minutes=10))])
     for _ in range(3):
         gc.import_external_classes_for_teacher(world["tp"].id, cal, "primary", db, now, now + timedelta(days=30))
         db.commit()
     ext = _externals(db, world["tp"].id)
-    assert len(ext) == 3 and {c.google_event_id for c in ext} == {"preply-live"}
+    assert len(ext) == 1 and ext[0].google_event_id == "preply-live"
 
 
-# G3: la validacion de reserva (can_book_slot) ignora el busy de Google: solo la lista de slots lo respeta.
-def test_bug_g3_booking_ignores_google_busy(client, db, world, monkeypatch):
+# G3 (CORREGIDO Fase 17): can_book_slot consulta el busy de Google para el hueco exacto.
+def test_fixed_g3_booking_respects_google_busy(client, db, world, monkeypatch):
     d = (utc_now() + timedelta(days=3)).date()
     s = datetime(d.year, d.month, d.day, 15, 0, tzinfo=UTC)
     _connect(db, world, monkeypatch, FakeCalendar(busy=[(s, s + timedelta(hours=1))]))
@@ -187,21 +180,20 @@ def test_bug_g3_booking_ignores_google_busy(client, db, world, monkeypatch):
     assert at15 and at15[0]["is_available"] is False          # la UI lo muestra ocupado ...
     ok, _ = can_book_slot(s, world["tp"].id, world["sp"].id, s + timedelta(minutes=60), db,
                           enforce_availability=True)
-    assert ok is True                                         # ... pero reservar por API pasa
+    assert ok is False                                        # ... y reservar por API ahora tambien se rechaza
 
 
-# G4: el busy de Google se pide solo para el dia UTC [D 00:00, D+1 00:00): un slot que cruza la
-# medianoche UTC no ve el evento de Google que empieza a las 00:00 del dia siguiente.
-def test_bug_g4_google_busy_window_cut_at_utc_midnight(client, db, world, monkeypatch):
+# G4 (CORREGIDO Fase 17): el busy de Google cubre todo el rango ofrecido, aunque cruce la medianoche UTC.
+def test_fixed_g4_google_busy_window_covers_midnight_crossing(client, db, world, monkeypatch):
     d = (utc_now() + timedelta(days=3)).date()
     u = _mk_user(db, "teacher", "noche")
     tp = TeacherProfile(user_id=u.id, user_username="noche", status=TeacherStatus.approved,
                         timezone="America/Bogota", languages=["English"], subjects=["English"], video_url="v")
     db.add(tp)
     db.flush()
-    # 17:00-21:00 en Bogota = 22:00-02:00 UTC (cruza la medianoche UTC)
+    # 17:00-21:00 en Bogota = 22:00-02:00 UTC (cruza la medianoche UTC); Fase 26: se guarda en hora local
     db.add(TeacherAvailability(teacher_id=tp.id, day_of_week=d.weekday(), is_available=True,
-                               start_time_utc="22:00", end_time_utc="02:00"))
+                               start_time_local="17:00", end_time_local="21:00"))
     db.add(GoogleCalendarToken(user_id=u.id, teacher_id=tp.id, access_token="x", is_active=True,
                                needs_reauth=False))
     db.commit()
@@ -209,12 +201,13 @@ def test_bug_g4_google_busy_window_cut_at_utc_midnight(client, db, world, monkey
     cal = FakeCalendar(busy=[(midnight, midnight + timedelta(hours=1))])   # dentista 19:00-20:00 Bogota
     monkeypatch.setattr(gc, "get_calendar_service_for_token", lambda token, d_: cal)
     slots = client.get("/api/v1/availability/noche/slots",
-                       params={"date": d.isoformat(), "duration": 50}, headers=hdr(world["s_user"])).json()
+                       params={"date": d.isoformat(), "end_date": (d + timedelta(days=1)).isoformat(),
+                               "duration": 50}, headers=hdr(world["s_user"])).json()
     late = {_parse(x["start_time_utc"]): x["is_available"] for x in slots}
     s2330 = midnight - timedelta(minutes=30)
     s0030 = midnight + timedelta(minutes=30)
-    assert late[s2330] is True and late[s0030] is True            # ambos chocan con el evento de Google
-    assert cal.calls[0][2].startswith(midnight.isoformat()[:19])  # timeMax = D+1 00:00 UTC
+    assert late[s2330] is False and late[s0030] is False          # ambos chocan con el evento de Google
+    assert _parse(cal.calls[0][2]) > midnight + timedelta(hours=1)  # timeMax ya no se corta en D+1 00:00 UTC
 
 
 # G5: freebusy falla abierto: un error del calendario (notFound/403 dentro de la respuesta) o un
@@ -252,10 +245,11 @@ def test_ok_import_respects_event_offset_and_skips_all_day_and_own(db, world):
     now = datetime(2027, 3, 1, tzinfo=UTC)
     cal = FakeCalendar(events=[ev])
     gc.import_external_classes_for_teacher(world["tp"].id, cal, "primary", db, now, now + timedelta(days=30))
-    # En memoria el instante es correcto (+02:00 == 09:00 UTC). Ojo: no se normaliza a UTC; en Postgres
-    # (timestamptz) se guarda bien, en SQLite se perderia el offset (11:00 "UTC").
-    (c,) = [o for o in db.new if isinstance(o, Class)]
-    assert c.start_time_utc == s and c.start_time_utc.utcoffset() == timedelta(hours=2) and c.duration == 50
+    # Fase 17 (G7): el import normaliza a UTC; el instante guardado (releido de la BD) es el correcto.
+    db.commit()
+    db.expire_all()
+    (c,) = db.query(Class).filter(Class.google_event_id == "p-tz").all()
+    assert c.start_time_utc == s and c.start_time_utc.utcoffset() == timedelta(0) and c.duration == 50
     db.rollback()
 
 
@@ -304,13 +298,27 @@ def test_bug_e1_reschedule_keeps_reminder_sent(client, db, world, mails):
     assert sch._due_reminders(sch._JOBS_BY_ID["class_reminders"], db, utc_now()) is None
 
 
-# E2: solo hay recordatorio de 24 h (ventana 23-25 h): una clase reservada con < 23 h no recibe
-# ninguno, no existe recordatorio de 1 h, y las pruebas pending_trial nunca reciben recordatorio.
-def test_bug_e2_short_notice_and_trial_never_reminded(db, world, mails):
-    _cls(db, world, future(12))
-    _cls(db, world, future(24, minute=30), status="pending_trial", minutes=25)
+# E2: solo hay recordatorio de 24 h (ventana 23-25 h). CORREGIDO Fase 22 (E6): las pruebas pending_trial
+# ya entran en el recordatorio. CORREGIDO Fase 27: una clase reservada con < 23 h recibe
+# un recordatorio al siguiente tick (no hay recordatorio de 1 h).
+def test_fixed_e2_pending_trial_is_reminded(db, world, mails):
+    c = _cls(db, world, future(24, minute=30), status="pending_trial", minutes=25)
+    assert sch._due_reminders(sch._JOBS_BY_ID["class_reminders"], db, utc_now()) is not None
     sch.send_class_reminders()
-    assert mails == []
+    assert [n for n, _ in mails].count("send_class_reminder_email") == 1
+    db.expire_all()
+    assert db.get(Class, c.id).reminder_sent_at is not None
+
+
+def test_fixed_e2_short_notice_reminded(db, world, mails):
+    """CORREGIDO Fase 27: una reserva con < 23 h recibe UN recordatorio en el siguiente tick."""
+    c = _cls(db, world, future(12))
+    due = sch._due_reminders(sch._JOBS_BY_ID["class_reminders"], db, utc_now())
+    assert due is not None and due <= utc_now()
+    sch.send_class_reminders()
+    assert [n for n, _ in mails].count("send_class_reminder_email") == 1
+    db.expire_all()
+    assert db.get(Class, c.id).reminder_sent_at is not None
     assert sch._due_reminders(sch._JOBS_BY_ID["class_reminders"], db, utc_now()) is None
 
 

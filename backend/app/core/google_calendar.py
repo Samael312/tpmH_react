@@ -16,6 +16,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -105,11 +106,41 @@ def exchange_code_for_tokens(code: str, code_verifier: Optional[str] = None) -> 
 
     flow.fetch_token(code=code, timeout=15)
     credentials = flow.credentials
+    sub, email = _identity_from_id_token(getattr(credentials, "id_token", None))
     return {
         "access_token": credentials.token,
         "refresh_token": credentials.refresh_token,
         "token_expiry": credentials.expiry,
+        # Identidad de la cuenta de Google conectada (None si Google no devolvio id_token)
+        "google_sub": sub,
+        "google_email": email,
     }
+
+
+def _identity_from_id_token(id_token: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    """(sub, email) del id_token que Google devuelve en el canje del codigo (scope openid/email).
+    Llega directo del endpoint de tokens de Google por TLS, por eso no se re-verifica la firma."""
+    if not id_token:
+        return None, None
+    try:
+        import jwt
+        claims = jwt.decode(id_token, options={"verify_signature": False, "verify_aud": False,
+                                               "verify_exp": False, "verify_iat": False, "verify_nbf": False})
+        sub = claims.get("sub")
+        email = claims.get("email")
+        return (str(sub) if sub else None), (str(email).lower() if email else None)
+    except Exception as e:
+        logger.warning(f"No se pudo leer el id_token de Google: {e}")
+        return None, None
+
+
+def calendar_id_for(token: GoogleCalendarToken) -> str:
+    """Calendario a usar: siempre el principal de la cuenta conectada. Las filas antiguas guardaban
+    el email de la plataforma en calendar_id (puede no ser la cuenta de Google conectada): se tratan como "primary"."""
+    cid = token.calendar_id
+    if not cid or "@" in cid:
+        return "primary"
+    return cid
 
 
 def revoke_token(token: str):
@@ -157,10 +188,14 @@ def get_calendar_service_for_token(token: GoogleCalendarToken, db: Session):
 
     except RefreshError as e:
         logger.warning(f"Refresh token inválido/revocado para teacher_id={token.teacher_id}: {e}")
+        first_time = not token.needs_reauth
         token.needs_reauth = True
         token.is_active = False
         token.last_error = "Token revocado o expirado. Reconexión requerida."
+        # Regla del dueno: perder el acceso NO cancela nada (ni clases ni eventos); solo se detiene la sync.
         db.commit()
+        if first_time:
+            notify_calendar_reauth(token, db)
         return None
 
     except Exception as e:
@@ -170,6 +205,99 @@ def get_calendar_service_for_token(token: GoogleCalendarToken, db: Session):
         return None
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# Ciclo de vida de la conexion (desconexion / reautenticacion)
+# ─────────────────────────────────────────────────────────────────────────
+
+def reset_platform_sync_state(teacher_id: int, db: Session, clear_event_ids: bool) -> int:
+    """Prepara las clases PROPIAS (no external) de un profesor para re-publicarse en un calendario de Google
+    distinto/desconocido. NUNCA cancela clases ni borra nada en Google.
+    - Siempre limpia google_sync_hash: la proxima sync consulta el evento (update); si no existe en ese
+      calendario (404) lo crea de nuevo, y si existe (misma cuenta) lo reutiliza sin duplicar.
+    - clear_event_ids=True (cambio de cuenta confirmado) tambien suelta google_event_id: se crearan eventos
+      nuevos en el calendario nuevo; los del viejo se quedan donde estan.
+    Las clases `external` (Preply) no se tocan: se deduplican por google_event_id al importar."""
+    rows = db.query(Class).filter(
+        Class.teacher_id == teacher_id,
+        Class.class_type != ClassType.external,
+        Class.google_event_id.isnot(None),
+    ).all()
+    for c in rows:
+        c.google_sync_hash = None
+        if clear_event_ids:
+            c.google_event_id = None
+    return len(rows)
+
+
+def notify_calendar_reauth(token: GoogleCalendarToken, db: Session) -> None:
+    """Avisa al profesor (campana + correo) de que debe reconectar Google Calendar. Nunca lanza."""
+    try:
+        from app.core.notifications import create_notification
+        from app.models.user import User
+        user = db.get(User, token.user_id)
+        create_notification(
+            db, type="calendar_reauth_required",
+            title="Reconecta tu Google Calendar",
+            message=("Google rechazó el acceso a tu calendario (token revocado o expirado). Mientras tanto la sincronización "
+                     "está detenida (tus clases no se tocan). Reconéctalo desde tu perfil."),
+            recipient_role="teacher", recipient_user_id=token.user_id,
+        )
+        db.commit()
+        if user and user.email:
+            from app.core.email import send_calendar_reauth_teacher_email
+            send_calendar_reauth_teacher_email(user.email, f"{user.name or ''}".strip() or "profesor")
+    except Exception as e:
+        logger.warning(f"No se pudo avisar al profesor {token.teacher_id} de la reconexión de Calendar: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
+def run_calendar_sync_background(teacher_id: int) -> None:
+    """Sync de un profesor con su PROPIA sesion de BD (para BackgroundTasks: la de la peticion ya se cerro)."""
+    from app.db.base import SessionLocal
+    db = SessionLocal()
+    try:
+        sync_calendar_logic(teacher_id, db)
+    except Exception as e:
+        logger.error(f"Sync en segundo plano falló (teacher_id={teacher_id}): {e}")
+    finally:
+        db.close()
+
+
+_QUOTA_REASONS = {"rateLimitExceeded", "userRateLimitExceeded", "quotaExceeded", "dailyLimitExceeded", "limitExceeded"}
+
+
+def http_error_kind(e: HttpError) -> str:
+    """Clasifica un HttpError de Google: "quota" (429 o 403 por limite/cuota: reintentable mas tarde),
+    "permission" (403/401 real: el profesor no tiene permiso sobre ese evento/calendario),
+    "gone" (404/410) u "other"."""
+    status = getattr(e.resp, "status", None)
+    try:
+        status = int(status)
+    except (TypeError, ValueError):
+        pass
+    if status == 429:
+        return "quota"
+    if status in (403, 401):
+        reasons = set()
+        try:
+            import json
+            data = json.loads((e.content or b"{}").decode("utf-8", "ignore") or "{}")
+            for err in (data.get("error", {}) or {}).get("errors", []) or []:
+                if err.get("reason"):
+                    reasons.add(err["reason"])
+            if (data.get("error", {}) or {}).get("status") == "RESOURCE_EXHAUSTED":
+                reasons.add("quotaExceeded")
+        except Exception:
+            pass
+        return "quota" if reasons & _QUOTA_REASONS else "permission"
+    if status in (404, 410):
+        return "gone"
+    return "other"
+
+
 def _with_retries(fn, *args, **kwargs):
     last_exc = None
     for attempt in range(1, MAX_RETRIES + 1):
@@ -177,7 +305,7 @@ def _with_retries(fn, *args, **kwargs):
             return fn(*args, **kwargs)
         except HttpError as e:
             status = getattr(e.resp, "status", None)
-            retriable = status in (429, 500, 502, 503)
+            retriable = status in (429, 500, 502, 503) or (status == 403 and http_error_kind(e) == "quota")
             last_exc = e
             if not retriable or attempt == MAX_RETRIES:
                 raise
@@ -191,12 +319,20 @@ def _with_retries(fn, *args, **kwargs):
 # Lectura — bloques ocupados externos
 # ─────────────────────────────────────────────────────────────────────────
 
+class FreebusyError(Exception):
+    """freebusy fallo (HttpError, error dentro del calendario o token invalido). Solo se lanza con strict=True."""
+
+
 def get_busy_ranges(
     service,
     calendar_id: str,
     time_min: datetime,
     time_max: datetime,
+    strict: bool = False,
 ) -> List[Tuple[datetime, datetime]]:
+    """Rangos ocupados del calendario. Por defecto falla ABIERTO (devuelve [] si Google falla, para no
+    romper reservas); con strict=True lanza FreebusyError para que el llamador sepa que el resultado NO es
+    fiable (p. ej. para no cachearlo)."""
     if time_min.tzinfo is None:
         time_min = time_min.replace(tzinfo=UTC)
     if time_max.tzinfo is None:
@@ -211,11 +347,21 @@ def get_busy_ranges(
     try:
         result = _with_retries(service.freebusy().query(body=body).execute)
     except HttpError as e:
-        logger.warning(f"Error consultando freebusy en {calendar_id}: {e}")
+        kind = http_error_kind(e)
+        logger.warning(f"Error consultando freebusy en {calendar_id} ({kind}): {e}")
+        if strict:
+            raise FreebusyError(kind) from e
         return []
 
     calendars = result.get("calendars", {})
-    cal_data = calendars.get(calendar_id, {})
+    cal_data = calendars.get(calendar_id)
+    if cal_data is None and len(calendars) == 1:
+        cal_data = next(iter(calendars.values()))   # Google puede devolver el email real en vez de "primary"
+    cal_data = cal_data or {}
+    if cal_data.get("errors"):
+        logger.warning(f"freebusy de {calendar_id} devolvió errores: {cal_data['errors']}")
+        if strict:
+            raise FreebusyError("calendar_errors")
     busy_raw = cal_data.get("busy", [])
 
     ranges = []
@@ -234,6 +380,7 @@ def get_teacher_busy_ranges(
     time_min: datetime,
     time_max: datetime,
     db: Session,
+    strict: bool = False,
 ) -> List[Tuple[datetime, datetime]]:
     token = db.query(GoogleCalendarToken).filter(
         GoogleCalendarToken.teacher_id == teacher_id,
@@ -246,9 +393,11 @@ def get_teacher_busy_ranges(
 
     service = get_calendar_service_for_token(token, db)
     if not service:
+        if strict:
+            raise FreebusyError("no_service")
         return []
 
-    return get_busy_ranges(service, token.calendar_id or "primary", time_min, time_max)
+    return get_busy_ranges(service, calendar_id_for(token), time_min, time_max, strict=strict)
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -360,14 +509,28 @@ def import_external_classes_for_teacher(
     """
     events = list_calendar_events(service, calendar_id, time_min, time_max)
 
-    existing = db.query(Class).filter(
+    # G2: las existentes se buscan por google_event_id (ids que devolvio Google)
+    # SIN filtrar por start_time_utc: Google devuelve los eventos cuyo FIN es
+    # > time_min, asi que un evento en curso empezo antes de time_min. Ademas
+    # se incluyen las externas aun abiertas de la ventana para poder cancelar
+    # las que desaparecieron de Google.
+    returned_ids = [e["id"] for e in events if e.get("id")]
+    existing_by_event_id: dict[str, Class] = {}
+    for i in range(0, len(returned_ids), 500):
+        for c in db.query(Class).filter(
+            Class.teacher_id == teacher_id,
+            Class.class_type == ClassType.external,
+            Class.google_event_id.in_(returned_ids[i:i + 500]),
+        ).all():
+            existing_by_event_id[c.google_event_id] = c
+    for c in db.query(Class).filter(
         Class.teacher_id == teacher_id,
         Class.class_type == ClassType.external,
         Class.google_event_id.isnot(None),
-        Class.start_time_utc >= time_min,
+        Class.end_time_utc > time_min,
         Class.start_time_utc <= time_max,
-    ).all()
-    existing_by_event_id = {c.google_event_id: c for c in existing}
+    ).all():
+        existing_by_event_id.setdefault(c.google_event_id, c)
 
     seen_event_ids: set[str] = set()
     new_count = 0
@@ -385,8 +548,9 @@ def import_external_classes_for_teacher(
 
         seen_event_ids.add(event_id)
         title = event.get("summary") or "Clase externa"
-        start_dt = datetime.fromisoformat(event["start"]["dateTime"].replace("Z", "+00:00"))
-        end_dt = datetime.fromisoformat(event["end"]["dateTime"].replace("Z", "+00:00"))
+        # G7: se normaliza a UTC (en SQLite el offset del evento se perdia)
+        start_dt = datetime.fromisoformat(event["start"]["dateTime"].replace("Z", "+00:00")).astimezone(UTC)
+        end_dt = datetime.fromisoformat(event["end"]["dateTime"].replace("Z", "+00:00")).astimezone(UTC)
         duration_minutes = max(int((end_dt - start_dt).total_seconds() // 60), 1)
         # Si el evento de Preply ya trae su propio link de videollamada
         # (Meet, o cualquier URL en "location"), lo reflejamos para que
@@ -416,7 +580,7 @@ def import_external_classes_for_teacher(
                     class_.status = "confirmed"
                 updated_count += 1
         else:
-            db.add(Class(
+            new_class = Class(
                 teacher_id=teacher_id,
                 student_id=None,
                 class_type=ClassType.external,
@@ -430,8 +594,17 @@ def import_external_classes_for_teacher(
                 meet_link=meet_link,
                 google_event_id=event_id,
                 notes=f"Importada automáticamente desde Google Calendar ({source}).",
-            ))
-            new_count += 1
+            )
+            # G2: el indice unico (teacher_id, google_event_id) evita duplicados
+            # aunque dos syncs corran a la vez; el perdedor se ignora sin romper el resto.
+            try:
+                with db.begin_nested():
+                    db.add(new_class)
+                    db.flush()
+                existing_by_event_id[event_id] = new_class
+                new_count += 1
+            except IntegrityError:
+                logger.info(f"Evento externo {event_id} ya importado por otra sync (teacher_id={teacher_id})")
 
     # Eventos que ya habíamos importado pero que ya no aparecen (se
     # borraron o dejaron de matchear en Google) -> se cancelan, nunca se
@@ -464,6 +637,22 @@ def _build_attendees(attendee_emails: Optional[List[str]]) -> Optional[List[dict
     if not attendee_emails:
         return None
     return [{"email": email, "responseStatus": "accepted"} for email in attendee_emails]
+
+
+def _teacher_attendees(class_: Class) -> List[str]:
+    """El profesor como invitado explicito (igual que los hooks de calendar_sync._teacher_attendee_emails)."""
+    email = class_.teacher.user.email if class_.teacher and class_.teacher.user else None
+    return [email] if email else []
+
+
+def _event_fingerprint(title: str, description: str, class_: Class, attendees: List[str]) -> str:
+    """Huella corta de lo que la sync empuja a Google para esta clase."""
+    import hashlib
+    raw = "|".join([
+        title, description, class_.start_time_utc.isoformat(), class_.end_time_utc.isoformat(),
+        class_.meet_link or "", ",".join(attendees),
+    ])
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:32]
 
 
 def create_calendar_event(
@@ -499,7 +688,7 @@ def create_calendar_event(
         )
         return event.get("id")
     except HttpError as e:
-        logger.error(f"Error creando evento en Google Calendar: {e}")
+        logger.error(f"Error creando evento en Google Calendar ({http_error_kind(e)}): {e}")
         return None
 
 
@@ -628,11 +817,12 @@ def update_calendar_event(
             service.events().get(calendarId=calendar_id, eventId=event_id).execute
         )
     except HttpError as e:
-        if getattr(e.resp, "status", None) == 404:
+        if http_error_kind(e) == "gone":
             logger.info(f"Evento {event_id} ya no existe en Google (borrado externamente)")
-        else:
-            logger.warning(f"Error obteniendo evento {event_id}: {e}")
-        return False
+            return False
+        # Error transitorio / permiso / cuota: NO es "el evento no existe" (el llamador no debe recrearlo).
+        logger.warning(f"Error obteniendo evento {event_id} ({http_error_kind(e)}): {e}")
+        raise
 
     # FIX: Si el evento está en la papelera de Google (status == "cancelled"), 
     # lo tratamos como inexistente para forzar su recreación en sync_calendar_logic.
@@ -669,8 +859,10 @@ def update_calendar_event(
         )
         return True
     except HttpError as e:
-        logger.warning(f"Error actualizando evento {event_id}: {e}")
-        return False
+        if http_error_kind(e) == "gone":
+            return False
+        logger.warning(f"Error actualizando evento {event_id} ({http_error_kind(e)}): {e}")
+        raise
 
 
 def delete_calendar_event(service, calendar_id: str, event_id: str) -> bool:
@@ -707,7 +899,7 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
     if not service:
         return {"ok": False, "message": token.last_error or "No se pudo conectar con Google Calendar"}
 
-    calendar_id = token.calendar_id or "primary"
+    calendar_id = calendar_id_for(token)
     now = utc_now()
     window_end = now + timedelta(days=SYNC_WINDOW_DAYS)
 
@@ -742,12 +934,16 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
     deleted_count = 0
     error_count = 0
 
+    # G1: las clases `external` (Preply) son de solo lectura: NUNCA se empujan
+    # (ni update/create/delete) sobre el evento original de Preply.
     classes_in_window = db.query(Class).filter(
         Class.teacher_id == teacher_id,
+        Class.class_type != ClassType.external,
         Class.start_time_utc >= now,
         Class.start_time_utc <= window_end,
     ).all()
 
+    skipped_count = 0
     for class_ in classes_in_window:
         try:
             is_cancelled = class_.status == "cancelled"
@@ -756,6 +952,7 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
                 if class_.google_event_id:
                     if delete_calendar_event(service, calendar_id, class_.google_event_id):
                         class_.google_event_id = None
+                        class_.google_sync_hash = None
                         deleted_count += 1
                 continue
 
@@ -768,48 +965,50 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
             )
             title = f"Clase: {student_name} — {class_.subject or 'General'}"
             description = f"Clase de {class_.subject or 'General'}\nDuración: {class_.duration} minutos"
+            attendees = _teacher_attendees(class_)
+            fingerprint = _event_fingerprint(title, description, class_, attendees)
 
-            if not class_.google_event_id:
-                event_id = create_calendar_event(
-                    service, calendar_id, title,
-                    class_.start_time_utc, class_.end_time_utc,
-                    description=description, meet_link=class_.meet_link,
-                )
-                if event_id:
-                    class_.google_event_id = event_id
-                    new_count += 1
-                else:
-                    error_count += 1
+            if class_.google_event_id and class_.google_sync_hash == fingerprint:
+                skipped_count += 1   # nada cambio desde el ultimo push: cero llamadas a Google
                 continue
 
-            updated = update_calendar_event(
-                service, calendar_id, class_.google_event_id,
-                start_utc=class_.start_time_utc, end_utc=class_.end_time_utc,
-                meet_link=class_.meet_link,
-            )
-            if updated:
-                updated_count += 1
-            else:
-                class_.google_event_id = None
-                event_id = create_calendar_event(
-                    service, calendar_id, title,
-                    class_.start_time_utc, class_.end_time_utc,
-                    description=description, meet_link=class_.meet_link,
+            if class_.google_event_id:
+                updated = update_calendar_event(
+                    service, calendar_id, class_.google_event_id,
+                    start_utc=class_.start_time_utc, end_utc=class_.end_time_utc,
+                    meet_link=class_.meet_link, attendee_emails=attendees,
                 )
-                if event_id:
-                    class_.google_event_id = event_id
-                    new_count += 1
-                else:
-                    error_count += 1
+                if updated:
+                    class_.google_sync_hash = fingerprint
+                    updated_count += 1
+                    continue
+                class_.google_event_id = None   # el evento ya no existe en Google: se recrea abajo
+                class_.google_sync_hash = None
+
+            event_id = create_calendar_event(
+                service, calendar_id, title,
+                class_.start_time_utc, class_.end_time_utc,
+                description=description, meet_link=class_.meet_link, attendee_emails=attendees,
+            )
+            if event_id:
+                class_.google_event_id = event_id
+                class_.google_sync_hash = fingerprint
+                new_count += 1
+            else:
+                error_count += 1
 
         except HttpError as e:
-            status = getattr(e.resp, "status", None)
-            if status in (403, 429):
-                logger.warning(f"Cuota/permiso excedido sincronizando teacher_id={teacher_id}: {e}")
-                token.last_error = f"Límite de la API de Google alcanzado (status {status})"
+            kind = http_error_kind(e)
+            if kind == "quota":
+                logger.warning(f"Cuota de la API de Google agotada sincronizando teacher_id={teacher_id}: {e}")
+                token.last_error = "Límite de cuota de la API de Google alcanzado; se reintenta en la próxima sync"
                 db.commit()
                 break
-            logger.error(f"Error sincronizando clase {class_.id}: {e}")
+            if kind == "permission":
+                logger.error(f"Google denegó el permiso sincronizando la clase {class_.id} (teacher_id={teacher_id}): {e}")
+                token.last_error = "Google denegó el permiso sobre el calendario (403); reconecta Google Calendar"
+            else:
+                logger.error(f"Error sincronizando clase {class_.id}: {e}")
             error_count += 1
         except Exception as e:
             logger.error(f"Error inesperado sincronizando clase {class_.id}: {e}")
@@ -832,6 +1031,7 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
         "message": msg,
         "new_count": new_count,
         "updated_count": updated_count,
+        "skipped_count": skipped_count,
         "deleted_count": deleted_count,
         "error_count": error_count,
         "external_busy_count": external_busy_count,
@@ -841,20 +1041,57 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
     }
 
 
+# Ventana "activa" y espera ociosa (mismos valores que core/scheduler.py: CALENDAR_ACTIVE_WINDOW / CALENDAR_IDLE_GAP)
+ACTIVE_WINDOW = timedelta(hours=3)
+IDLE_RESYNC_AFTER = timedelta(hours=5, minutes=30)
+
+
+def _teachers_needing_sync(db: Session, tokens: List[GoogleCalendarToken], now: datetime) -> List[GoogleCalendarToken]:
+    """Solo los profesores con una clase propia (no Preply) en curso o en la ventana activa, o cuya ultima sync
+    es antigua (ciclo ocioso: importar Preply / refrescar). El resto se salta: cero llamadas a Google."""
+    if not tokens:
+        return []
+    active_ids = {
+        r[0] for r in db.query(Class.teacher_id).filter(
+            Class.teacher_id.in_([t.teacher_id for t in tokens]),
+            Class.class_type != ClassType.external,
+            Class.status.in_(["pending", "pending_trial", "confirmed", "cancelled"]),
+            Class.end_time_utc > now,
+            Class.start_time_utc <= now + ACTIVE_WINDOW,
+        ).distinct().all()
+    }
+    out = []
+    for t in tokens:
+        last = t.last_synced_at
+        if last is not None and last.tzinfo is None:
+            last = last.replace(tzinfo=UTC)
+        if t.teacher_id in active_ids or last is None or now - last >= IDLE_RESYNC_AFTER:
+            out.append(t)
+    return out
+
+
 def run_calendar_sync_for_all_teachers(db: Session) -> dict:
     tokens = db.query(GoogleCalendarToken).filter(
         GoogleCalendarToken.is_active == True,
         GoogleCalendarToken.needs_reauth == False,
     ).all()
+    total = len(tokens)
+    tokens = _teachers_needing_sync(db, tokens, utc_now())
+    teacher_ids = [t.teacher_id for t in tokens]
 
     results = []
-    for token in tokens:
+    for teacher_id in teacher_ids:
         try:
-            result = sync_calendar_logic(token.teacher_id, db)
-            results.append({"teacher_id": token.teacher_id, **result})
+            result = sync_calendar_logic(teacher_id, db)
+            results.append({"teacher_id": teacher_id, **result})
         except Exception as e:
-            logger.error(f"Fallo sincronizando teacher_id={token.teacher_id}: {e}")
-            results.append({"teacher_id": token.teacher_id, "ok": False, "message": str(e)})
+            # Un profesor que falla no frena a los demas: se limpia la sesion y se sigue.
+            logger.error(f"Fallo sincronizando teacher_id={teacher_id}: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            results.append({"teacher_id": teacher_id, "ok": False, "message": str(e)})
 
-    logger.info(f"[calendar_sync] Corrida completa: {len(results)} profesores procesados")
-    return {"teachers_synced": len(results), "results": results}
+    logger.info(f"[calendar_sync] Corrida completa: {len(results)} de {total} profesores procesados")
+    return {"teachers_synced": len(results), "teachers_skipped": total - len(results), "results": results}

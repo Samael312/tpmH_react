@@ -4,14 +4,16 @@ import logging
 from datetime import timedelta, timezone
 from typing import List, Optional
 from app.core.timezone import format_local_datetime
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from app.core.pagination import Pagination, paginate
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 import math
 from app.auth.dependencies import (
+    get_current_user,
     require_verified_email,
     get_current_staff,
+    require_superadmin,
     get_current_staff_or_teacher,
     get_current_student,
     get_current_teacher_or_teacher_admin,
@@ -43,10 +45,16 @@ from app.core.teacher_students import link_student_to_teacher
 from app.core.timezone import utc_now
 from app.core.calendar_sync import sync_class_created
 from app.core.class_logic import lock_booking_rows
+from app.core.wallet import wallet_apply
 from app.db.base import get_db
 from app.models.class_ import Class, ClassType
 from app.models.package import Enrollment, EnrollmentStatus, Package
 from app.models.payment import Payment, TeacherWallet, Withdrawal
+from app.models.manual_grant_request import ManualGrantRequest
+from app.models.student import StudentProfile
+from app.core.god_mode_audit import log_god_mode_action
+from app.core.notifications import create_notification
+from app.core.grant_emails import send_admin_manual_grant_requested_email, send_manual_grant_resolved_email
 from app.models.payment_config import PaymentConfig
 from app.models.teacher import TeacherProfile, TeacherStatus
 from app.models.user import User, UserRole
@@ -66,6 +74,9 @@ from app.schemas.payments import (
     WithdrawalRequest,
     WithdrawalRequestV2,
     WithdrawalResponse,
+    CreateManualGrantRequest,
+    ResolveManualGrantRequest,
+    ManualGrantRequestResponse,
 )
 
 router = APIRouter()
@@ -104,13 +115,45 @@ def _apply_commission(amount_total: float, teacher: TeacherProfile) -> tuple[flo
 
 
 def _credit_wallet(teacher_id: int, amount_teacher: float, db: Session):
-    wallet = db.query(TeacherWallet).filter(TeacherWallet.teacher_id == teacher_id).first()
-    if not wallet:
-        wallet = TeacherWallet(teacher_id=teacher_id, available_balance=0.0, total_earned=0.0, total_withdrawn=0.0)
-        db.add(wallet)
-        db.flush()
-    wallet.available_balance += amount_teacher
-    wallet.total_earned += amount_teacher
+    # Fase 20 (D4): UPDATE atomico (col = col + x), no leer-modificar-escribir sobre el objeto ORM.
+    wallet_apply(db, teacher_id, balance=amount_teacher, earned=amount_teacher, allow_negative=True)
+
+
+def _enrollment_paid_and_refunded(enrollment_id: Optional[int], db: Session, exclude_payment_id: Optional[int] = None) -> tuple[float, float]:
+    """(pagado, ya reembolsado) del enrollment: pagos reales aprobados (sin otorgamientos manuales) y reembolsos
+    aprobados o en revision. Es lo que realmente se cobro, no el precio actual del paquete (Fase 20, D2)."""
+    if enrollment_id is None:
+        return 0.0, 0.0
+    paid = db.query(func.coalesce(func.sum(Payment.amount_total), 0)).filter(
+        Payment.enrollment_id == enrollment_id,
+        Payment.status == "approved",
+        Payment.payment_type.in_(_REFUNDABLE_PAYMENT_TYPES),
+        Payment.is_manual_grant.isnot(True),
+    ).scalar()
+    refunded_q = db.query(func.coalesce(func.sum(Payment.amount_total), 0)).filter(
+        Payment.enrollment_id == enrollment_id,
+        Payment.payment_type == "refund",
+        Payment.status.in_(["approved", "pending_review"]),
+    )
+    if exclude_payment_id is not None:
+        refunded_q = refunded_q.filter(Payment.id != exclude_payment_id)
+    return round(float(paid or 0), 2), round(float(refunded_q.scalar() or 0), 2)
+
+
+def _enrollment_refundable(enrollment_id: Optional[int], db: Session, exclude_payment_id: Optional[int] = None) -> float:
+    paid, refunded = _enrollment_paid_and_refunded(enrollment_id, db, exclude_payment_id)
+    return round(max(paid - refunded, 0.0), 2)
+
+
+def _cap_refund_amount(amount: float, enrollment_id: Optional[int], db: Session) -> float:
+    """Ningun reembolso supera lo pagado menos lo ya reembolsado. Sin nada reembolsable -> 400."""
+    refundable = _enrollment_refundable(enrollment_id, db)
+    if refundable <= 0:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "No hay ningún pago aprobado pendiente de reembolsar en este paquete.",
+        )
+    return round(min(amount, refundable), 2)
 
 
 REFUND_WINDOW_DAYS = 7
@@ -276,6 +319,7 @@ def _apply_instant_package_change(
     occupied_now = _get_enrollment_occupied_slots(enrollment, db)
     enrollment.unlocked_credits = occupied_now + new_package.classes_count
     enrollment.classes_used = 0
+    enrollment.activated_at = utc_now()  # Fase 22 (E1): inicio del ciclo nuevo
     enrollment.status = EnrollmentStatus.active
     db.commit()
 
@@ -362,7 +406,9 @@ def _sync_student_teacher_username(current_user: User, teacher: TeacherProfile, 
         old_teacher_username = student_profile.teacher_username
         student_profile.teacher_username = teacher.user_username
         db.commit()
-        link_student_to_teacher(db, student_profile, teacher, old_teacher_username=old_teacher_username)
+        # No se pasa old_teacher_username: el alumno sigue en `.students` del profesor anterior (puede tener
+        # paquete vivo o clases futuras con él tras un multi->single; T3/S1).
+        link_student_to_teacher(db, student_profile, teacher, old_teacher_username=None)
 
 
 def _resolve_booking_teacher(current_user: User, teacher_username: Optional[str], db: Session):
@@ -403,15 +449,11 @@ def _ensure_teacher_linked(current_user: User, teacher: TeacherProfile, db: Sess
     la plataforma pasa a multi, cada alumno siga con su profesora aunque la destacada haya cambiado entre medias
     o viniera de FEATURED_TEACHER_USERNAME.
     """
-    from app.models.student_teacher_link import StudentTeacherLink
+    from app.core.teacher_students import ensure_student_teacher_link
 
     profile = current_user.student_profile
-    existing = db.query(StudentTeacherLink).filter(
-        StudentTeacherLink.student_id == profile.id,
-        StudentTeacherLink.teacher_id == teacher.id,
-    ).first()
-    if not existing:
-        db.add(StudentTeacherLink(student_id=profile.id, teacher_id=teacher.id))
+    # Tolera la carrera con otra petición (restricción única): nunca 500.
+    if ensure_student_teacher_link(db, profile.id, teacher.id):
         db.commit()
         link_student_to_teacher(db, profile, teacher, old_teacher_username=None)
 
@@ -419,13 +461,19 @@ def _ensure_teacher_linked(current_user: User, teacher: TeacherProfile, db: Sess
 # ─── CONFIGURACIÓN DE PAGOS ──────────────────────────────────────────────────
 
 @router.get("/config", response_model=PaymentConfigResponse)
-def get_payment_config(db: Session = Depends(get_db)):
+def get_payment_config(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Fase 20 (S5): ya no es publico. Requiere sesion; la comision por defecto solo la ve el staff;
+    el GET no crea la fila (sin configuracion devuelve los valores por defecto sin escribir)."""
     config = db.query(PaymentConfig).first()
     if not config:
-        config = PaymentConfig()
-        db.add(config)
-        db.commit()
-        db.refresh(config)
+        config = PaymentConfig(
+            paypal_enabled=True, binance_enabled=True, bank_transfer_enabled=False,
+            mobile_payment_enabled=False, binance_network="USDT TRC20", default_commission_rate=0.15,
+        )
+    is_staff = current_user.role in (UserRole.superadmin, UserRole.teacher_admin)
 
     has_any = (
         config.paypal_enabled
@@ -445,8 +493,8 @@ def get_payment_config(db: Session = Depends(get_db)):
         bank_transfer_details=config.bank_transfer_details if config.bank_transfer_enabled else None,
         mobile_payment_details=config.mobile_payment_details if config.mobile_payment_enabled else None,
         whatsapp_number=config.whatsapp_number,
-        default_commission_rate=config.default_commission_rate or 0.15,
-        has_any_method=has_any,
+        default_commission_rate=(config.default_commission_rate or 0.15) if is_staff else None,
+        has_any_method=bool(has_any),
     )
 
 
@@ -623,11 +671,23 @@ def book_class(
     enrollment = db.query(Enrollment).filter(
         Enrollment.id == data.enrollment_id,
         Enrollment.student_id == student_id,
-        Enrollment.status.in_(["active", "pending_package_change"]),
     ).populate_existing().first()  # tras el lock: leer creditos frescos, no la copia cacheada
 
     if not enrollment:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado o no activo")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado")
+
+    # Fase 22 (E3): 'pending_renewal' / 'pending_package_change' siguen siendo utilizables (los creditos ya
+    # pagados que sobran se pueden agendar mientras se aprueba la renovacion/cambio). Mensajes especificos.
+    _enr_status = getattr(enrollment.status, "value", enrollment.status)
+    if _enr_status not in ("active", "pending_package_change", "pending_renewal"):
+        _msgs = {
+            "completed": "Tu paquete ya está completado: renuévalo o elige uno nuevo para seguir agendando.",
+            "cancelled": "Este paquete fue cancelado: elige un paquete nuevo para seguir agendando.",
+        }
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            _msgs.get(_enr_status, "Este paquete no está activo en este momento."),
+        )
 
     # Profesor suspendido/rechazado: el enrollment puede seguir "active" o
     # "pending_package_change" (ninguno de los dos estados bloquea por sí
@@ -1067,9 +1127,17 @@ def validate_payment(
         wallet, teacher_share = _ensure_teacher_can_cover_refund(
             payment.enrollment_id, payment.teacher_id, payment.amount_total, db, lock=True,
         )
-        if wallet is not None and teacher_share:
-            wallet.available_balance = round(wallet.available_balance - teacher_share, 2)
-            wallet.total_earned = round((wallet.total_earned or 0.0) - teacher_share, 2)
+        # El reembolso nunca puede superar lo cobrado (Fase 20, D2) y se descuenta de forma atomica.
+        if payment.amount_total > _enrollment_refundable(payment.enrollment_id, db, exclude_payment_id=payment.id) + 0.001:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "El reembolso supera lo realmente pagado en este paquete (menos lo ya reembolsado). Recházalo o ajústalo en Modo Dios.",
+            )
+        if teacher_share and not wallet_apply(db, payment.teacher_id, balance=-teacher_share, earned=-teacher_share):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "El saldo del profesor no cubre este reembolso en este momento. Contacta con soporte para procesarlo.",
+            )
         payment.amount_teacher = -teacher_share
         payment.amount_platform = -round(payment.amount_total - teacher_share, 2)
         amount_teacher = -teacher_share
@@ -1082,6 +1150,16 @@ def validate_payment(
         payment.amount_teacher = 0
         payment.amount_platform = 0
         amount_teacher = 0
+
+    # Fase 22 (E4): un pago de cambio de paquete solo se aprueba si el enrollment sigue con el cambio solicitado
+    # (si el alumno lo cancelo, `change_requested_package_id` es NULL y aprobarlo cobraria sin aplicar nada).
+    if payment.payment_type == "package_change":
+        _chg_enrollment = db.query(Enrollment).filter(Enrollment.id == payment.enrollment_id).first()
+        if _chg_enrollment is None or _chg_enrollment.change_requested_package_id is None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Este cambio de paquete ya no está solicitado (el alumno lo canceló). Rechaza el pago.",
+            )
 
     payment.status = "approved"
     payment.validated_by = current_user.id
@@ -1181,6 +1259,7 @@ def validate_payment(
                     if target_package.classes_count is not None:
                         enrollment.prepaid_unlimited_credits = 0
                     enrollment.classes_used = 0  # ciclo nuevo (renovación o cambio)
+                    enrollment.activated_at = now  # Fase 22 (E1): inicio del ciclo; las clases anteriores no suman al contador nuevo
                     enrollment.status = EnrollmentStatus.active
                     enrollment.renewal_requested_package_id = None
                     enrollment.change_requested_package_id = None
@@ -1297,6 +1376,10 @@ def validate_payment(
                 active_count = len([p for p in session.participants if p.attendance_status != "cancelled"])
                 if max_students is not None and active_count >= max_students:
                     continue  # sesión ya llena — no forzar sobrecupo
+                from app.core.student_overlap import student_has_overlap
+                if student_has_overlap(db, enrollment_after.student_id, session.start_time_utc, session.end_time_utc,
+                                       exclude_class_id=session.id):
+                    continue  # ya tiene otra clase a esa hora: no se le duplica
                 db.add(ClassParticipant(
                     class_id=session.id,
                     student_id=enrollment_after.student_id,
@@ -1319,64 +1402,265 @@ def validate_payment(
     return {"message": "Pago aprobado correctamente", "amount_credited": amount_teacher}
 
 
+def _apply_manual_grant(enrollment: Enrollment, actor_id: int, db: Session) -> Payment:
+    """
+    Otorga el paquete gratis (Payment manual de $0, sin comision ni billetera). No hace commit.
+    Fase 20 (D5): bloquea la fila, no reactiva enrollments cancelados, tolera paquete inexistente y suma los
+    creditos con la misma logica que la aprobacion de un pago (sobrantes en renovacion, creditos completos en
+    cambio, nunca pisa unlocked_credits a ciegas).
+    """
+    db.query(Enrollment).filter(Enrollment.id == enrollment.id).with_for_update().first()
+    db.refresh(enrollment)
+    if enrollment.status == EnrollmentStatus.cancelled:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "El paquete está cancelado: no se reactiva con un otorgamiento manual.")
+
+    target_package_id = enrollment.renewal_requested_package_id or enrollment.change_requested_package_id or enrollment.package_id
+    package = db.query(Package).filter(Package.id == target_package_id).first() if target_package_id else None
+    if package is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "El paquete de este enrollment ya no existe.")
+
+    is_renewal = enrollment.status == EnrollmentStatus.pending_renewal
+    is_change = enrollment.status == EnrollmentStatus.pending_package_change
+    if not (is_renewal or is_change) and enrollment.payment_status == "paid":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este paquete ya está pagado: no hay nada que otorgar.")
+
+    now = utc_now()
+    payment = Payment(
+        enrollment_id=enrollment.id, student_id=enrollment.student_id, teacher_id=enrollment.teacher_id,
+        amount_total=0, amount_teacher=0, amount_platform=0,
+        payment_method="manual_grant", status="approved", payment_type="package", is_manual_grant=True,
+        validated_by=actor_id, validated_at=now,
+    )
+    db.add(payment)
+
+    if is_renewal or is_change:
+        old_was_finite = bool(enrollment.package and enrollment.package.classes_count is not None)
+        occupied = _get_enrollment_occupied_slots(enrollment, db)
+        if old_was_finite:
+            prev_available = max((enrollment.unlocked_credits or 0) - occupied, 0)
+        else:
+            prev_available = enrollment.prepaid_unlimited_credits or 0
+        carried = prev_available if is_renewal else 0
+
+        enrollment.package_id = package.id
+        enrollment.classes_total = package.classes_count
+        enrollment.classes_used = 0
+        enrollment.activated_at = now  # Fase 22 (E1): inicio del ciclo nuevo
+        enrollment.status = EnrollmentStatus.active
+        enrollment.renewal_requested_package_id = None
+        enrollment.change_requested_package_id = None
+        if enrollment.cohort_id and not package.is_group:
+            from app.core.group_cohort_logic import release_cohort_seat
+            release_cohort_seat(enrollment, db)
+        if package.classes_count is not None:
+            enrollment.prepaid_unlimited_credits = 0
+            enrollment.unlocked_credits = occupied + carried + package.classes_count
+        else:
+            enrollment.unlocked_credits = 0
+            if old_was_finite:
+                enrollment.prepaid_unlimited_credits = (enrollment.prepaid_unlimited_credits or 0) + carried
+    elif package.classes_count is not None:
+        target_credits = enrollment.classes_total if (enrollment.cohort_id and enrollment.classes_total) else package.classes_count
+        enrollment.unlocked_credits = max(enrollment.unlocked_credits or 0, target_credits)
+
+    enrollment.paid_via_installments = False
+    enrollment.installments_paid = package.installment_count or 1
+    enrollment.payment_status = "paid"
+    if enrollment.activated_at is None:
+        enrollment.activated_at = now
+    db.flush()
+    return payment
+
+
 @router.post("/manual-grant")
 def manual_grant_payment(
     data: NotifyPaymentRequest,
-    current_user: User = Depends(get_current_staff_or_teacher),
+    current_user: User = Depends(get_current_staff),
     db: Session = Depends(get_db),
 ):
+    """Otorgamiento directo: SOLO staff. Los profesores lo piden con POST /manual-grant-requests (Fase 20, D5)."""
     if data.type != "package" or not data.enrollment_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "manual-grant solo aplica a paquetes por ahora")
 
     enrollment = db.query(Enrollment).filter(Enrollment.id == data.enrollment_id).first()
     if not enrollment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado")
-    if current_user.role == "teacher" and enrollment.teacher_id != current_user.teacher_profile.id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "No autorizado")
+    if current_user.role == UserRole.teacher_admin:
+        own = current_user.teacher_profile
+        if own and enrollment.teacher_id == own.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes otorgarte paquetes gratis a ti mismo: lo resuelve el superadmin")
 
-    target_package_id = enrollment.renewal_requested_package_id or enrollment.change_requested_package_id or enrollment.package_id
-    package = db.query(Package).filter(Package.id == target_package_id).first()
-
-    payment = Payment(
-        enrollment_id=enrollment.id, student_id=enrollment.student_id, teacher_id=enrollment.teacher_id,
-        amount_total=0, amount_teacher=0, amount_platform=0,
-        payment_method="manual_grant", status="pending_review",
-        payment_type="package", is_manual_grant=True,
+    payment = _apply_manual_grant(enrollment, current_user.id, db)
+    log_god_mode_action(
+        db, actor=current_user, action="manual_grant.direct", entity_type="enrollment", entity_id=enrollment.id,
+        reason="Otorgamiento manual directo del staff", before=None, after={"payment_id": payment.id},
     )
-    db.add(payment)
-    db.flush()
-
-    payment.status = "approved"
-    payment.validated_by = current_user.id
-    payment.validated_at = utc_now()
-
-    is_renewal = enrollment.status == EnrollmentStatus.pending_renewal
-    is_change = enrollment.status == EnrollmentStatus.pending_package_change
-    if is_renewal or is_change:
-        enrollment.package_id = package.id
-        enrollment.classes_total = package.classes_count
-        if is_renewal:
-            enrollment.classes_used = 0
-        enrollment.status = EnrollmentStatus.active
-        enrollment.renewal_requested_package_id = None
-        enrollment.change_requested_package_id = None
-        # Mismo fix que en notify_payment/_apply_instant_*: si este
-        # otorgamiento manual resuelve una migración grupal -> individual
-        # (enrollment.cohort_id seteado y el paquete destino ya no es
-        # grupal), hay que liberar el cupo de la cohorte acá también —
-        # este endpoint es otra vía por la que un enrollment
-        # 'pending_package_change' puede terminar confirmado.
-        if enrollment.cohort_id and not package.is_group:
-            from app.core.group_cohort_logic import release_cohort_seat
-            release_cohort_seat(enrollment, db)
-
-    enrollment.installments_paid = package.installment_count or 1
-    enrollment.unlocked_credits = package.classes_count if package.classes_count is not None else 0
-    enrollment.payment_status = "paid"
-    enrollment.activated_at = utc_now()
-
     db.commit()
     return {"message": "Acceso otorgado manualmente"}
+
+
+# ─── SOLICITUDES DE OTORGAMIENTO MANUAL (profesor pide, staff resuelve) ─────
+
+def _grant_request_response(r: ManualGrantRequest, db: Session) -> ManualGrantRequestResponse:
+    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == r.teacher_id).first()
+    student = db.query(StudentProfile).filter(StudentProfile.id == r.student_id).first()
+    package = db.query(Package).filter(Package.id == r.package_id).first() if r.package_id else None
+    out = ManualGrantRequestResponse.model_validate(r)
+    if teacher and teacher.user:
+        out.teacher_name = f"{teacher.user.name} {teacher.user.surname}"
+    if student and student.user:
+        out.student_name = f"{student.user.name} {student.user.surname}"
+    out.package_name = package.name if package else None
+    return out
+
+
+@router.post("/manual-grant-requests", response_model=ManualGrantRequestResponse, status_code=status.HTTP_201_CREATED)
+def create_manual_grant_request(
+    data: CreateManualGrantRequest,
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    teacher = current_user.teacher_profile
+    if not teacher:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Perfil de profesor no encontrado")
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.id == data.enrollment_id, Enrollment.teacher_id == teacher.id,
+    ).with_for_update().first()
+    if not enrollment:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado")
+    if enrollment.status == EnrollmentStatus.cancelled:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "El paquete está cancelado.")
+    target_package_id = enrollment.renewal_requested_package_id or enrollment.change_requested_package_id or enrollment.package_id
+    package = db.query(Package).filter(Package.id == target_package_id).first() if target_package_id else None
+    if package is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "El paquete de este enrollment ya no existe.")
+    awaiting = enrollment.status in (EnrollmentStatus.pending_renewal, EnrollmentStatus.pending_package_change)
+    if not awaiting and enrollment.payment_status == "paid":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este paquete ya está pagado: no hay nada que otorgar.")
+    if db.query(ManualGrantRequest.id).filter(
+        ManualGrantRequest.enrollment_id == enrollment.id, ManualGrantRequest.status == "pending",
+    ).first():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay una solicitud pendiente para este alumno.")
+
+    req = ManualGrantRequest(
+        teacher_id=teacher.id, student_id=enrollment.student_id, enrollment_id=enrollment.id,
+        package_id=package.id, reason=data.reason, status="pending",
+    )
+    db.add(req)
+    student_user = enrollment.student.user if enrollment.student else None
+    student_name = f"{student_user.name} {student_user.surname}" if student_user else "alumno"
+    create_notification(
+        db, type="manual_grant_request", title="Solicitud de paquete gratis",
+        message=f"{current_user.name} {current_user.surname} pide dar «{package.name}» gratis a {student_name}.",
+        related_teacher_id=teacher.id,
+    )
+    db.commit()
+    db.refresh(req)
+
+    for a in db.query(User).filter(User.role == UserRole.superadmin, User.is_active == True).all():  # noqa: E712
+        send_admin_manual_grant_requested_email(
+            to_email=a.email, teacher_name=f"{current_user.name} {current_user.surname}",
+            student_name=student_name, package_name=package.name, reason=data.reason,
+        )
+    return _grant_request_response(req, db)
+
+
+@router.get("/my-manual-grant-requests", response_model=List[ManualGrantRequestResponse])
+def get_my_manual_grant_requests(
+    response: Response,
+    page: Pagination = Depends(),
+    current_user: User = Depends(get_current_teacher_or_teacher_admin),
+    db: Session = Depends(get_db),
+):
+    q = db.query(ManualGrantRequest).filter(
+        ManualGrantRequest.teacher_id == current_user.teacher_profile.id
+    ).order_by(ManualGrantRequest.created_at.desc(), ManualGrantRequest.id.desc())
+    return [_grant_request_response(r, db) for r in paginate(q, page, response).all()]
+
+
+@router.get("/manual-grant-requests", response_model=List[ManualGrantRequestResponse])
+def list_manual_grant_requests(
+    response: Response,
+    page: Pagination = Depends(),
+    status_filter: Optional[str] = Query(None, alias="status", description="pending | approved | rejected"),
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    q = db.query(ManualGrantRequest)
+    if status_filter:
+        q = q.filter(ManualGrantRequest.status == status_filter)
+    order = ManualGrantRequest.created_at.asc() if status_filter == "pending" else ManualGrantRequest.created_at.desc()
+    q = q.order_by(order, ManualGrantRequest.id.desc())
+    return [_grant_request_response(r, db) for r in paginate(q, page, response).all()]
+
+
+@router.patch("/manual-grant-requests/{request_id}/resolve")
+def resolve_manual_grant_request(
+    request_id: int,
+    data: ResolveManualGrantRequest,
+    current_user: User = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+):
+    req = db.query(ManualGrantRequest).filter(
+        ManualGrantRequest.id == request_id, ManualGrantRequest.status == "pending",
+    ).with_for_update().first()
+    if not req:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Solicitud no encontrada o ya resuelta")
+
+    # Mismo criterio que validate_payment: un teacher_admin no resuelve lo de su propio perfil.
+    if current_user.role == UserRole.teacher_admin:
+        own = current_user.teacher_profile
+        if own and req.teacher_id == own.id:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "No puedes resolver tus propias solicitudes: las resuelve el superadmin",
+            )
+
+    now = utc_now()
+    teacher = db.query(TeacherProfile).filter(TeacherProfile.id == req.teacher_id).first()
+    student = db.query(StudentProfile).filter(StudentProfile.id == req.student_id).first()
+    student_name = f"{student.user.name} {student.user.surname}" if student and student.user else "el alumno"
+
+    if data.action == "reject":
+        if not (data.rejection_reason or "").strip():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Debes indicar el motivo del rechazo")
+        req.status = "rejected"
+        req.rejection_reason = data.rejection_reason.strip()
+    else:
+        enrollment = db.query(Enrollment).filter(Enrollment.id == req.enrollment_id).first()
+        if not enrollment:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado")
+        before = {"payment_status": enrollment.payment_status, "unlocked_credits": enrollment.unlocked_credits,
+                  "status": enrollment.status.value if hasattr(enrollment.status, "value") else enrollment.status}
+        payment = _apply_manual_grant(enrollment, current_user.id, db)
+        req.status = "approved"
+        req.payment_id = payment.id
+        log_god_mode_action(
+            db, actor=current_user, action="manual_grant.approve", entity_type="enrollment", entity_id=enrollment.id,
+            reason=req.reason, before=before,
+            after={"payment_status": enrollment.payment_status, "unlocked_credits": enrollment.unlocked_credits,
+                   "request_id": req.id, "payment_id": payment.id},
+        )
+    req.resolved_at = now
+    req.resolved_by = current_user.id
+
+    approved = data.action == "approve"
+    if teacher and teacher.user:
+        create_notification(
+            db, type="manual_grant_resolved",
+            title="Solicitud de paquete gratis " + ("aprobada" if approved else "rechazada"),
+            message=(f"Tu solicitud para {student_name} fue aprobada." if approved
+                     else f"Tu solicitud para {student_name} fue rechazada: {req.rejection_reason}"),
+            related_teacher_id=teacher.id, recipient_role="teacher", recipient_user_id=teacher.user.id,
+        )
+    db.commit()
+
+    if teacher and teacher.user:
+        send_manual_grant_resolved_email(
+            to_email=teacher.user.email, teacher_name=teacher.user.name, student_name=student_name,
+            approved=approved, rejection_reason=req.rejection_reason,
+        )
+    return {"message": "Solicitud aprobada: paquete otorgado" if approved else "Solicitud rechazada"}
 
 
 # ─── CONSULTAS ESTUDIANTE Y PROFESOR ─────────────────────────────────────────
@@ -1478,12 +1762,15 @@ def request_withdrawal_v2(
     if pending:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya tienes un retiro pendiente de procesar")
 
-    wallet.available_balance -= data.amount
+    # Descuento atomico con guarda de saldo en el propio UPDATE (Fase 20, D4).
+    if not wallet_apply(db, teacher.id, balance=-data.amount):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Saldo insuficiente.")
 
     withdrawal = Withdrawal(
         teacher_id=teacher.id,
         amount=data.amount,
         destination_details=data.payment_info,
+        destination_method=(data.destination_method or None),
         status="pending",
     )
     db.add(withdrawal)
@@ -1517,7 +1804,15 @@ def process_withdrawal_v2(
     if not withdrawal:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Retiro no encontrado o ya procesado")
 
-    wallet = db.query(TeacherWallet).filter(TeacherWallet.teacher_id == withdrawal.teacher_id).first()
+    # Un teacher_admin no procesa su propio retiro: lo resuelve el superadmin.
+    if current_user.role == UserRole.teacher_admin:
+        own = current_user.teacher_profile
+        if own and withdrawal.teacher_id == own.id:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "No puedes procesar tus propios retiros: los resuelve el superadmin",
+            )
+
     now = utc_now()
 
     if data.action == "complete":
@@ -1525,8 +1820,7 @@ def process_withdrawal_v2(
         withdrawal.reference = data.reference
         withdrawal.processed_by = current_user.id
         withdrawal.processed_at = now
-        if wallet:
-            wallet.total_withdrawn += withdrawal.amount
+        wallet_apply(db, withdrawal.teacher_id, withdrawn=withdrawal.amount)
     else:
         if not data.rejection_reason:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Debes indicar el motivo del rechazo")
@@ -1534,8 +1828,7 @@ def process_withdrawal_v2(
         withdrawal.rejection_reason = data.rejection_reason
         withdrawal.processed_by = current_user.id
         withdrawal.processed_at = now
-        if wallet:
-            wallet.available_balance += withdrawal.amount
+        wallet_apply(db, withdrawal.teacher_id, balance=withdrawal.amount)
 
     db.commit()
 
@@ -1774,6 +2067,13 @@ def notify_payment(
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment no encontrado")
         if current_enrollment.status not in [EnrollmentStatus.active, EnrollmentStatus.completed]:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Solo puedes renovar un paquete activo o completado")
+        # Fase 22 (m1): igual que el cambio de paquete, no se renueva con cuotas del paquete actual sin pagar
+        # (renovar reinicia installments_paid y dejaba las cuotas pendientes sin cobrar).
+        if current_enrollment.payment_status != "paid":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Debes completar el pago de las cuotas de tu paquete actual antes de poder renovarlo."
+            )
 
         new_package = db.query(Package).filter(
             Package.id == data.package_id,
@@ -1952,6 +2252,15 @@ def notify_payment(
                     if diff > 0 else
                     f"Se generó una nota de reembolso de ${amount:.2f} (valor restante a tu favor). En espera de aprobación."
                 )
+
+        if payment_type == "refund":
+            # Fase 20 (D2): ningun reembolso supera lo realmente pagado (menos lo ya reembolsado),
+            # aunque el precio actual del paquete sea otro.
+            _ensure_refund_within_window(current_enrollment.id, db)
+            capped = _cap_refund_amount(amount, current_enrollment.id, db)
+            if capped != amount:
+                notify_msg = notify_msg.replace(f"${amount:.2f}", f"${capped:.2f}")
+                amount = capped
 
         duplicate = _find_recent_duplicate_payment(
             db, student_id, payment_type, amount, enrollment_id=current_enrollment.id,
@@ -2191,6 +2500,15 @@ def request_refund_teacher_suspended(
     old_total = enrollment.classes_total or 1
     old_price = enrollment.package.price
     occupied_slots = _get_enrollment_occupied_slots(enrollment, db)
+    # Fase 20 (D2/D3): se reembolsa lo REALMENTE pagado (pagos aprobados menos reembolsos previos), no el precio
+    # actual del paquete; sin pago aprobado no hay nada que devolver.
+    paid_total, _already_refunded = _enrollment_paid_and_refunded(enrollment.id, db)
+    refundable = _enrollment_refundable(enrollment.id, db)
+    if paid_total <= 0 or refundable <= 0:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "No hay ningún pago aprobado pendiente de reembolsar en este paquete. Si crees que corresponde, contacta con soporte.",
+        )
 
     # Monto del reembolso según cuánto del paquete ya se usó:
     # - Si no usó ningún crédito todavía, se reembolsa el 100% de lo que
@@ -2199,15 +2517,19 @@ def request_refund_teacher_suspended(
     #   quedaban disponibles (prorrateado sobre el precio del paquete), no
     #   el total pagado — ya consumió parte del servicio.
     if occupied_slots == 0:
-        amount = round(old_price, 2)
+        amount = refundable
         notify_msg = (
             f"Se generó una solicitud de reembolso completo de ${amount:.2f} porque tu profesor "
             "no está disponible. Tu paquete quedará cancelado una vez que el staff procese la "
             "devolución; podrás elegir un profesor nuevo cuando quieras."
         )
     else:
-        price_per_class = get_price_per_class(enrollment.package) or (old_price / old_total)
-        amount = round(price_per_class * (old_total - occupied_slots), 2)
+        # El valor por clase sale de lo pagado; si el precio actual es menor se toma el menor (nunca se supera
+        # lo pagado, y el tope final es lo reembolsable).
+        price_per_class = min(
+            paid_total / old_total, get_price_per_class(enrollment.package) or (old_price / old_total)
+        )
+        amount = round(min(price_per_class * (old_total - occupied_slots), refundable), 2)
         if amount <= 0:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -2304,7 +2626,8 @@ def request_refund_cohort_cancelled(
     ).first():
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya hay una solicitud de reembolso en curso para este grupo")
 
-    amount = round(enrollment.package.price, 2)
+    # Fase 20 (D2): el 100 % de lo realmente pagado (no el precio actual del paquete).
+    amount = _cap_refund_amount(float("inf"), enrollment.id, db)  # = todo lo reembolsable (400 si no hay nada)
     notify_msg = (
         f"Se generó una solicitud de reembolso de ${amount:.2f} porque el grupo fue cancelado. "
         "En cuanto el staff la procese, vas a poder elegir un paquete o grupo nuevo."

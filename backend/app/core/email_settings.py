@@ -77,6 +77,8 @@ EMAIL_CATEGORY: dict[str, str] = {
     "send_new_review_received_email": "reviews",
     "send_teacher_status_update_email": "teacher_status_support",
     "send_support_ticket_response_email": "teacher_status_support",
+    "send_calendar_reauth_teacher_email": "teacher_status_support",
+    "send_teacher_video_review_email": "teacher_status_support",
     "send_verification_email": ESSENTIAL,
     "send_password_reset_email": ESSENTIAL,
     "send_username_recovery_email": ESSENTIAL,

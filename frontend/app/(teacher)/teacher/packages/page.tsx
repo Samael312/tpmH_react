@@ -28,6 +28,7 @@ import { useBusinessRules } from "@/hooks/useBusinessRules";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 import LoadError from "@/components/ui/LoadError";
+import RejectReasonModal from "@/components/ui/RejectReasonModal";
 
 const emptyForm = {
   name: "", subject: "", description: "",
@@ -128,6 +129,8 @@ export default function TeacherPackagesPage() {
   const [savedOk, setSavedOk] = useState(false);
   const [saving, setSaving] = useState(false);
   const [approvingId, setApprovingId] = useState<number | null>(null);
+  // Fase 20: el profesor ya no otorga directo, PIDE el paquete gratis y el staff aprueba o rechaza.
+  const [grantTarget, setGrantTarget] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [descItemInput, setDescItemInput] = useState("");
   const [themeTouched, setThemeTouched] = useState(false);
@@ -297,15 +300,14 @@ export default function TeacherPackagesPage() {
     }
   };
 
-  const grantManually = async (enrollmentId: number) => {
-    if (!confirm("¿Otorgar este paquete sin registrar un cobro? Se usará para becas o pagos ya recibidos fuera de la plataforma.")) return;
+  const requestGrant = async (enrollmentId: number, reason: string) => {
     setApprovingId(enrollmentId);
     try {
-      await api.post("/payments/manual-grant", { type: "package", enrollment_id: enrollmentId });
-      fetchAll();
-      toast.success("Acceso otorgado correctamente");
+      await api.post("/payments/manual-grant-requests", { enrollment_id: enrollmentId, reason });
+      setGrantTarget(null);
+      toast.success("Solicitud enviada: el staff la revisará y te avisaremos");
     } catch (e) {
-      toast.error(getErrorMessage(e, "Error otorgando acceso"));
+      toast.error(getErrorMessage(e, "Error enviando la solicitud"));
     } finally {
       setApprovingId(null);
     }
@@ -1095,11 +1097,11 @@ export default function TeacherPackagesPage() {
                               Esperando pago inicial
                             </span>
                             <button
-                              onClick={() => grantManually(e.id)}
+                              onClick={() => setGrantTarget(e.id)}
                               disabled={approvingId === e.id}
                               className="text-[10px] font-bold text-slate-400 hover:text-pink-600 underline underline-offset-2"
                             >
-                              Otorgar manualmente (sin cobro)
+                              Pedir paquete gratis (requiere aprobación)
                             </button>
                           </div>
                         )}
@@ -1114,11 +1116,11 @@ export default function TeacherPackagesPage() {
                               Esperando que el estudiante notifique su pago
                             </span>
                             <button
-                              onClick={() => grantManually(e.id)}
+                              onClick={() => setGrantTarget(e.id)}
                               disabled={approvingId === e.id}
                               className="text-[10px] font-bold text-slate-400 hover:text-pink-600 underline underline-offset-2"
                             >
-                              Otorgar manualmente (sin cobro)
+                              Pedir paquete gratis (requiere aprobación)
                             </button>
                           </div>
                         )}
@@ -1133,11 +1135,11 @@ export default function TeacherPackagesPage() {
                               Esperando que el estudiante notifique su pago
                             </span>
                             <button
-                              onClick={() => grantManually(e.id)}
+                              onClick={() => setGrantTarget(e.id)}
                               disabled={approvingId === e.id}
                               className="text-[10px] font-bold text-slate-400 hover:text-pink-600 underline underline-offset-2"
                             >
-                              Otorgar manualmente (sin cobro)
+                              Pedir paquete gratis (requiere aprobación)
                             </button>
                           </div>
                         )}
@@ -1151,6 +1153,18 @@ export default function TeacherPackagesPage() {
 
         </div>
       </div>
+      <RejectReasonModal
+        open={grantTarget !== null}
+        title="Pedir paquete gratis"
+        description="El staff revisará tu solicitud (becas o pagos recibidos fuera de la plataforma). Recibirás un aviso con la respuesta."
+        fieldLabel="Motivo de la solicitud"
+        placeholder="Ej.: beca acordada / pago recibido por transferencia directa..."
+        confirmLabel="Enviar solicitud"
+        confirmVariant="primary"
+        loading={approvingId !== null}
+        onClose={() => { if (approvingId === null) setGrantTarget(null); }}
+        onConfirm={(reason) => grantTarget !== null ? requestGrant(grantTarget, reason) : undefined}
+      />
       <ChipiWidget screenName="teacher_packages" />
     </>
   );

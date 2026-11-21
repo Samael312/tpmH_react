@@ -87,8 +87,10 @@ def test_no_show_and_completed_count_toward_package(client, world, db):
     set_status(client, world, b, "completed", age=True)
     db.expire_all()
     assert db.get(Enrollment, eid).classes_used == 2
-    # revertir un completed baja el contador
-    set_status(client, world, b, "confirmed")
+    # Fase 22 (E2): una clase terminada ya no vuelve a 'confirmed' por estado (solo reagendando); quitarle la marca
+    # (finalized) si baja el contador
+    assert set_status(client, world, b, "confirmed").status_code == 400
+    set_status(client, world, b, "finalized")
     db.expire_all()
     assert db.get(Enrollment, eid).classes_used == 1
 
@@ -117,13 +119,14 @@ def test_login_injection_and_oversize(client, world, login):
     assert r.status_code in (401, 422)
 
 
-def test_register_html_in_name_is_stored_verbatim_not_executed(client):
+def test_register_html_in_name_is_rejected_and_not_stored(client, db):
+    # Fase 21: el registro rechaza HTML en el nombre (422) y no crea nada.
+    from app.models.user import User
     r = client.post(f"{API}/auth/register", json={
         "email": "xss@x.com", "username": "xssuser", "password": "Password123",
         "name": "<script>alert(1)</script>", "surname": "S", "role": "student"})
-    assert r.status_code == 200
-    # El backend devuelve JSON (no HTML): el escape es responsabilidad de React.
-    assert r.headers["content-type"].startswith("application/json")
+    assert r.status_code == 422
+    assert db.query(User).filter(User.email == "xss@x.com").count() == 0
 
 
 def test_register_username_edge_lengths(client):

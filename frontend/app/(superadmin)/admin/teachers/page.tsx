@@ -16,6 +16,7 @@ import RejectReasonModal from '@/components/ui/RejectReasonModal'
 import { usePageTopBar } from '@/lib/mobileTopBar'
 import { useToast } from '@/hooks/useToast'
 import { getErrorMessage } from '@/lib/errorMessage'
+import { useAuthStore } from '@/store/authStore'
 
 const STATUS_TABS = [
   { key: undefined,   label: 'Todos' },
@@ -54,7 +55,26 @@ function TeacherDetailModal({
   const [resolvingAppealId, setResolvingAppealId] = useState<number | null>(null)
   const [adminResponse, setAdminResponse] = useState('')
   const [showRejectModal, setShowRejectModal] = useState(false)
+  const [showRejectVideoModal, setShowRejectVideoModal] = useState(false)
   const toast = useToast()
+  const authUser = useAuthStore((s) => s.user)
+  // Separación de funciones: un teacher_admin no revisa su propio video (el backend responde 403).
+  const isOwnProfile = authUser?.role === 'teacher_admin' && authUser?.username === teacher.username
+
+  const reviewPendingVideo = async (action: 'approve' | 'reject', reason?: string) => {
+    setActioning(true)
+    try {
+      await api.patch(`/admin/teachers/${teacher.id}/pending-video/${action}`, action === 'reject' ? { reason } : undefined)
+      toast.success(action === 'approve' ? 'Video nuevo aprobado' : 'Video nuevo rechazado')
+      onActioned()
+      onClose()
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudo revisar el video nuevo'))
+    } finally {
+      setActioning(false)
+      setShowRejectVideoModal(false)
+    }
+  }
 
   const updateStatus = async (newStatus: string, reason?: string) => {
     setActioning(true)
@@ -165,6 +185,32 @@ function TeacherDetailModal({
           )}
         </div>
 
+        {teacher.video_pending_url && (
+          <div className="mb-6 bg-amber-50 border border-amber-100 rounded-2xl p-4">
+            <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <VideoIcon className="w-3.5 h-3.5" /> Video nuevo pendiente
+            </p>
+            <div className="rounded-2xl overflow-hidden bg-slate-900 aspect-video w-full mb-3">
+              <video src={teacher.video_pending_url} controls preload="metadata" className="w-full h-full object-contain" />
+            </div>
+            <p className="text-xs text-amber-700 font-medium mb-3">
+              El video actual sigue visible para los estudiantes hasta que apruebes este.
+            </p>
+            {teacher.video_pending_rejection_reason ? (
+              <p className="text-xs font-bold text-rose-600">
+                Rechazado ({teacher.video_pending_rejection_reason}). El profesor puede apelar; se resuelve en Apelaciones.
+              </p>
+            ) : isOwnProfile ? (
+              <p className="text-xs font-bold text-amber-700">No puedes revisar tu propio video; lo revisa otro miembro del staff.</p>
+            ) : (
+              <div className="flex gap-2">
+                <Button size="sm" loading={actioning} onClick={() => reviewPendingVideo('approve')}>Aprobar video</Button>
+                <Button size="sm" variant="danger" disabled={actioning} onClick={() => setShowRejectVideoModal(true)}>Rechazar video</Button>
+              </div>
+            )}
+          </div>
+        )}
+
         {videoExpanded && teacher.video_url && !videoError && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-8" onClick={() => setVideoExpanded(false)}>
             <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm" />
@@ -221,7 +267,7 @@ function TeacherDetailModal({
                 <div key={a.id} className="bg-slate-50 rounded-xl p-4 border border-slate-100">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
-                      Apelación {a.appeal_number}/2
+                      {a.kind === 'video' ? 'Apelación de video nuevo' : `Apelación ${a.appeal_number}/2`}
                     </span>
                     <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${
                       a.status === 'pending' ? 'bg-amber-100 text-amber-700'
@@ -299,6 +345,14 @@ function TeacherDetailModal({
       </div>
     </div>
 
+    <RejectReasonModal
+      open={showRejectVideoModal}
+      title="Rechazar video nuevo"
+      description={`El video nuevo de ${teacher.name} ${teacher.surname} se descartará; conserva el video actual.`}
+      onClose={() => setShowRejectVideoModal(false)}
+      onConfirm={(reason) => reviewPendingVideo('reject', reason)}
+      loading={actioning}
+    />
     <RejectReasonModal
       open={showRejectModal}
       title="Rechazar profesor"

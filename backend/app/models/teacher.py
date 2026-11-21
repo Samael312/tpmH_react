@@ -4,6 +4,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB
 import enum
 from app.db.base import Base
+from app.db.types import Money
 
 class TeacherStatus(str, enum.Enum):
     pending = "pending"
@@ -29,7 +30,7 @@ class TeacherProfile(Base):
     social_links = Column(JSONB, default=dict)
     status = Column(Enum(TeacherStatus), default=TeacherStatus.pending, server_default="pending")
     commission_rate = Column(Float, default=0.15, server_default="0.15")  # 15% por defecto
-    balance = Column(Float, default=0.0, server_default="0.0")           # Ganancias acumuladas
+    balance = Column(Money, default=0.0, server_default="0.0")           # Ganancias acumuladas
     stripe_account_id = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -39,6 +40,14 @@ class TeacherProfile(Base):
     # ─── Video de presentación (obligatorio para aprobación) ───
     video_url = Column(String, nullable=True)
     video_public_id = Column(String, nullable=True)
+    # Fase 23: video de reemplazo de un profesor ya aprobado. El publico sigue viendo `video_url` hasta que el
+    # staff apruebe este; nunca se expone en endpoints publicos.
+    video_pending_url = Column(String, nullable=True)
+    video_pending_public_id = Column(String, nullable=True)
+    # Si no es None, el staff rechazo el video pendiente: se conserva (el profesor puede apelar una vez) hasta
+    # que se resuelva la apelacion o suba otro video.
+    video_pending_rejection_reason = Column(String, nullable=True)
+    video_pending_appeal_used = Column(Boolean, nullable=False, default=False, server_default="false")
 
     # ─── Personalización visual del perfil público ───
     theme_color = Column(String, nullable=True, default="#ec4899")

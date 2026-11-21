@@ -2,6 +2,9 @@
 'use client'
 
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import RejectReasonModal from '@/components/ui/RejectReasonModal'
+import ConfirmModal from '@/components/ui/ConfirmModal'
 import { useAdminStats, usePendingPayments, useNotifications, type PendingPayment } from '@/hooks/useAdminData'
 import api from '@/lib/api'
 import Link from 'next/link'
@@ -27,6 +30,7 @@ const NOTIF_ICON: Record<string, React.ReactNode> = {
   teacher_pending: <Video className="w-4 h-4" />,
   teacher_appeal: <MessageSquare className="w-4 h-4" />,
   support_ticket: <Bell className="w-4 h-4" />,
+  manual_grant_request: <CreditCard className="w-4 h-4" />,
 }
 
 // A qué pantalla lleva "Revisar" según el tipo de notificación — antes
@@ -35,6 +39,7 @@ const NOTIF_TARGET: Record<string, string> = {
   teacher_pending: "/admin/teachers?tab=pending&video=1",
   teacher_appeal: "/admin/teachers?tab=pending",
   support_ticket: "/admin/support",
+  manual_grant_request: "/admin/payments",
 }
 
 // ─── Sección de notificaciones (independiente, arriba de todo) ─────────────
@@ -152,7 +157,15 @@ function NotificationsSection() {
 function PendingPaymentsSection() {
   const { payments, loading, isError, refetch } = usePendingPayments()
   const [validating, setValidating] = useState<number | null>(null)
+  const [approveTarget, setApproveTarget] = useState<PendingPayment | null>(null)
+  const [rejectTarget, setRejectTarget] = useState<PendingPayment | null>(null)
   const toast = useToast()
+  const qc = useQueryClient()
+  const refreshMoney = () => {
+    qc.invalidateQueries({ queryKey: ['admin'] })
+    qc.invalidateQueries({ queryKey: ['teacher', 'payments'] })
+    qc.invalidateQueries({ queryKey: ['teacher', 'wallet'] })
+  }
 
   // BUG-04/12 fix: se eliminó "single_class" y el requisito de link de Meet
   // al aprobar (antes este widget ni siquiera dejaba aprobar sin meetLink,
@@ -161,7 +174,8 @@ function PendingPaymentsSection() {
     setValidating(paymentId)
     try {
       await api.patch(`/payments/${paymentId}/validate`, { action: 'approve' })
-      refetch()
+      refreshMoney()
+      setApproveTarget(null)
       toast.success('Pago aprobado correctamente')
     } catch (e) {
       toast.error(getErrorMessage(e, 'No se pudo aprobar el pago'))
@@ -170,13 +184,12 @@ function PendingPaymentsSection() {
     }
   }
 
-  const handleReject = async (paymentId: number) => {
-    const reason = prompt('Motivo del rechazo:')
-    if (!reason) return
+  const handleReject = async (paymentId: number, reason: string) => {
     setValidating(paymentId)
     try {
       await api.patch(`/payments/${paymentId}/validate`, { action: 'reject', rejection_reason: reason })
-      refetch()
+      refreshMoney()
+      setRejectTarget(null)
       toast.success('Pago rechazado correctamente')
     } catch (e) {
       toast.error(getErrorMessage(e, 'No se pudo rechazar el pago'))
@@ -237,11 +250,11 @@ function PendingPaymentsSection() {
               <div className="flex gap-2">
                 <Button
                   size="sm" variant="primary" loading={validating === p.payment_id}
-                  onClick={() => handleApprove(p.payment_id)}
+                  onClick={() => setApproveTarget(p)}
                 >
                   Confirmar
                 </Button>
-                <Button size="sm" variant="danger" loading={validating === p.payment_id} onClick={() => handleReject(p.payment_id)}>
+                <Button size="sm" variant="danger" loading={validating === p.payment_id} onClick={() => setRejectTarget(p)}>
                   Rechazar
                 </Button>
               </div>
@@ -252,6 +265,23 @@ function PendingPaymentsSection() {
           </Link>
         </div>
       )}
+      <ConfirmModal
+        open={!!approveTarget}
+        title="Confirmar pago"
+        description={approveTarget ? `Vas a aprobar ${approveTarget.student_name} · $${Number(approveTarget.amount).toFixed(2)}.` : ''}
+        confirmLabel="Aprobar pago"
+        loading={validating === approveTarget?.payment_id}
+        onClose={() => { if (validating === null) setApproveTarget(null) }}
+        onConfirm={async () => { if (approveTarget) await handleApprove(approveTarget.payment_id) }}
+      />
+      <RejectReasonModal
+        open={!!rejectTarget}
+        title="Rechazar pago"
+        description={rejectTarget ? `${rejectTarget.student_name} · $${Number(rejectTarget.amount).toFixed(2)}` : undefined}
+        loading={validating !== null}
+        onClose={() => { if (validating === null) setRejectTarget(null) }}
+        onConfirm={(reason) => rejectTarget ? handleReject(rejectTarget.payment_id, reason) : undefined}
+      />
     </Card>
   )
 }

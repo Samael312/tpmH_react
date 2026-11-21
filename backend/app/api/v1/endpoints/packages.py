@@ -118,6 +118,39 @@ def get_my_packages(
     ).all()
 
 
+_FROZEN_PACKAGE_FIELDS = (
+    "price", "price_per_class", "duration_minutes", "is_group", "classes_count",
+    "allow_installments", "installment_count", "installment_amount",
+)
+
+
+def _differs(new, old) -> bool:
+    if isinstance(new, (int, float)) and isinstance(old, (int, float)) and not isinstance(new, bool):
+        return abs(float(new) - float(old)) > 0.001
+    return new != old
+
+
+def _package_in_use(package_id: int, db: Session) -> bool:
+    """Hay enrollments vivos (activos o con renovacion/cambio pendiente hacia este paquete) o cohortes abiertas."""
+    from app.models.group_cohort import GroupCohort, CohortStatus
+    from sqlalchemy import or_
+
+    live = [EnrollmentStatus.active, EnrollmentStatus.pending_renewal, EnrollmentStatus.pending_package_change]
+    if db.query(Enrollment.id).filter(
+        Enrollment.status.in_(live),
+        or_(
+            Enrollment.package_id == package_id,
+            Enrollment.renewal_requested_package_id == package_id,
+            Enrollment.change_requested_package_id == package_id,
+        ),
+    ).first():
+        return True
+    return db.query(GroupCohort.id).filter(
+        GroupCohort.package_id == package_id,
+        GroupCohort.status.in_([CohortStatus.filling, CohortStatus.confirmed, CohortStatus.in_progress]),
+    ).first() is not None
+
+
 @router.patch("/{package_id}", response_model=PackageResponse)
 def update_package(
     package_id: int,
@@ -161,6 +194,19 @@ def update_package(
             update_data["installment_amount"] = round(price / inst_count, 2)
     else:
         update_data["installment_amount"] = None
+
+    # Fase 20 (D2): con alumnos activos o grupos abiertos, precio / duracion / nº de clases / modo grupal /
+    # cuotas son intocables: los reembolsos, las cuotas y los cambios de paquete se calculan sobre ellos.
+    changed = [
+        f for f in _FROZEN_PACKAGE_FIELDS
+        if f in update_data and _differs(update_data[f], getattr(package, f))
+    ]
+    if changed and _package_in_use(package.id, db):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Este paquete tiene alumnos activos o grupos abiertos, así que no puedes cambiar "
+            f"({', '.join(changed)}). Crea un paquete nuevo con las condiciones nuevas y desactiva este.",
+        )
 
     for field, value in update_data.items():
         setattr(package, field, value)
@@ -416,172 +462,9 @@ def get_my_enrollments(
     return result
 
 
-@router.post("/request-renewal")
-def request_renewal(
-    data: RenewalRequest,
-    current_user: User = Depends(get_current_student),
-    db: Session = Depends(get_db)
-):
-    """
-    El estudiante solicita renovar su paquete (mismo u otro del mismo
-    profesor). El enrollment pasa a 'pending_renewal' y se guarda cuál
-    paquete pidió.
-    """
-    current_enrollment = db.query(Enrollment).filter(
-        Enrollment.id == data.current_enrollment_id,
-        Enrollment.student_id == current_user.student_profile.id
-    ).first()
-
-    if not current_enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Enrollment no encontrado"
-        )
-
-    if current_enrollment.status not in [
-        EnrollmentStatus.active,
-        EnrollmentStatus.completed
-    ]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Solo puedes renovar un paquete activo o completado"
-        )
-
-    new_package = db.query(Package).filter(
-        Package.id == data.new_package_id,
-        Package.teacher_id == current_enrollment.teacher_id,
-        Package.is_active == True
-    ).first()
-
-    if not new_package:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Paquete no encontrado o no disponible"
-        )
-
-    existing_renewal = db.query(Enrollment).filter(
-        Enrollment.student_id == current_user.student_profile.id,
-        Enrollment.teacher_id == current_enrollment.teacher_id,
-        Enrollment.status == EnrollmentStatus.pending_renewal
-    ).first()
-
-    if existing_renewal:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ya tienes una solicitud de renovación pendiente"
-        )
-
-    current_enrollment.status = EnrollmentStatus.pending_renewal
-    current_enrollment.renewal_requested_package_id = new_package.id
-    current_enrollment.installments_paid = 0  # arranca limpio: cuotas del ciclo anterior no aplican al nuevo
-    db.commit()
-
-    return {
-        "message": "Solicitud de renovación enviada. Tu profesor(a) la activará al confirmar tu pago.",
-        "enrollment_id": current_enrollment.id,
-        "requested_package": new_package.name,
-        "price": new_package.price,
-    }
-
-
-# ─── ESTUDIANTE — Cambio de paquete ──────────────────────────────────────────
-
-@router.post("/request-package-change")
-def request_package_change(
-    data: PackageChangeRequest,
-    current_user: User = Depends(get_current_student),
-    db: Session = Depends(get_db)
-):
-    """
-    El estudiante solicita cambiar de paquete manteniendo la relación activa.
-    """
-    current_enrollment = db.query(Enrollment).filter(
-        Enrollment.id == data.current_enrollment_id,
-        Enrollment.student_id == current_user.student_profile.id,
-    ).first()
-
-    if not current_enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Enrollment no encontrado"
-        )
-
-    if current_enrollment.status != EnrollmentStatus.active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Solo puedes solicitar un cambio de paquete si tu paquete actual está activo. Si ya lo agotaste, usa la opción de renovar."
-        )
-
-    # Regla de negocio 3.2: bloquear el cambio mientras haya cuotas (o
-    # cualquier saldo) pendiente de pago en el paquete actual. Ver el
-    # mismo chequeo en notify_payment() (payments.py), fuente de verdad
-    # del flujo que realmente usa el frontend.
-    if current_enrollment.payment_status != "paid":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Debes completar el pago de tu paquete actual antes de poder cambiarlo."
-        )
-
-    # Los enrollments grupales tienen su propio flujo de migración
-    # (POST /cohorts/migrate-to-individual), que calcula la equivalencia
-    # vía ClassParticipant en vez de Class.enrollment_id (siempre 0 para
-    # un enrollment grupal) y libera el cupo de la cohorte al aprobarse.
-    if current_enrollment.cohort_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Este es un paquete grupal. Usa la opción 'Cambiar a clases individuales' de tu panel de espera."
-        )
-
-    new_package = db.query(Package).filter(
-        Package.id == data.new_package_id,
-        Package.teacher_id == current_enrollment.teacher_id,
-        Package.is_active == True
-    ).first()
-
-    if not new_package:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Paquete no encontrado, no disponible, o no pertenece a tu profesor actual."
-        )
-
-    if new_package.is_group:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No puedes cambiarte a un paquete grupal por esta vía. Inscríbete a un grupo disponible desde el perfil del profesor."
-        )
-
-    if new_package.id == current_enrollment.package_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ya tienes este paquete activo"
-        )
-
-    if new_package.classes_count is not None:
-        occupied_slots = db.query(Class).filter(
-            Class.enrollment_id == current_enrollment.id,
-            Class.status.in_(PACKAGE_CHANGE_BLOCKING_STATUSES)
-        ).count()
-
-        if occupied_slots > new_package.classes_count:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"No puedes cambiar a este paquete: tienes {occupied_slots} clases "
-                    f"usadas o agendadas y el nuevo paquete solo permite {new_package.classes_count}. "
-                    "Cancela algunas clases futuras primero o elige un paquete con más clases."
-                )
-            )
-
-    current_enrollment.status = EnrollmentStatus.pending_package_change
-    current_enrollment.change_requested_package_id = new_package.id
-    db.commit()
-
-    return {
-        "message": "Solicitud de cambio de paquete enviada. Tu profesor(a) o el staff la aprobará en breve.",
-        "enrollment_id": current_enrollment.id,
-        "requested_package": new_package.name,
-        "price": new_package.price,
-    }
+# Fase 22 (E4): se eliminaron los endpoints heredados POST /packages/request-renewal y
+# POST /packages/request-package-change. Renovar y cambiar de paquete van por POST /payments/notify-payment
+# (payment_type renewal / package_change), que valida cuotas, grupal, diferencia de precio y crea el pago.
 
 
 @router.post("/{enrollment_id}/cancel-package-change")
@@ -605,6 +488,17 @@ def cancel_package_change(
             detail="No tienes una solicitud de cambio de paquete pendiente para este enrollment"
         )
 
+    # Fase 22 (E4): anular el pago pendiente de revision que creo notify-payment; si no, el staff podria aprobarlo
+    # despues y aplicar un cambio que el alumno ya cancelo.
+    pending = db.query(Payment).filter(
+        Payment.enrollment_id == enrollment.id,
+        Payment.payment_type.in_(["package_change", "refund"]),
+        Payment.status == "pending_review",
+    ).all()
+    for p in pending:
+        p.status = "rejected"
+        p.rejection_reason = "Cancelado por el alumno"
+        p.validated_at = utc_now()
     enrollment.status = EnrollmentStatus.active
     enrollment.change_requested_package_id = None
     db.commit()

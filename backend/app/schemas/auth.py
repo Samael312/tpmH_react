@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
+from app.schemas.validators import clean_person_name, clean_username
 
 class GoogleAuthResponse(BaseModel):
     """Respuesta de /auth/google — puede ser un login exitoso o una señal de que falta completar el registro"""
@@ -31,10 +32,7 @@ class GoogleRegisterRequest(BaseModel):
     @field_validator("username")
     @classmethod
     def validate_username(cls, v):
-        v = v.strip().lower()
-        if not v:
-            raise ValueError("El usuario no puede estar vacío")
-        return v
+        return clean_username(v)
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -53,10 +51,7 @@ class RegisterRequest(BaseModel):
     @field_validator("username")
     @classmethod
     def validate_username(cls, v):
-        v = v.strip().lower()
-        if not v:
-            raise ValueError("El usuario no puede estar vacío")
-        return v
+        return clean_username(v)
 
     @field_validator("password")
     @classmethod
@@ -68,10 +63,7 @@ class RegisterRequest(BaseModel):
     @field_validator("name", "surname")
     @classmethod
     def validate_not_blank(cls, v):
-        v = v.strip()
-        if not v:
-            raise ValueError("Este campo no puede estar vacío")
-        return v
+        return clean_person_name(v)
 
     @field_validator("role")
     @classmethod

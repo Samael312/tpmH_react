@@ -1,9 +1,10 @@
 # models/payment.py
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, CheckConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
+from app.db.types import Money
 
 
 class Payment(Base):
@@ -20,9 +21,9 @@ class Payment(Base):
     teacher_id = Column(Integer, ForeignKey("teacher_profiles.id"), nullable=False)
 
     # Montos
-    amount_total = Column(Float, nullable=False)
-    amount_teacher = Column(Float, nullable=False)   # después de comisión
-    amount_platform = Column(Float, nullable=False)  # comisión
+    amount_total = Column(Money, nullable=False)
+    amount_teacher = Column(Money, nullable=False)   # después de comisión
+    amount_platform = Column(Money, nullable=False)  # comisión
 
     # Método de pago usado
     payment_method = Column(String, nullable=False)
@@ -65,13 +66,15 @@ class TeacherWallet(Base):
     Un registro por profesor — se actualiza con cada pago validado.
     """
     __tablename__ = "teacher_wallets"
+    # Fase 20 (D1): el saldo nunca puede quedar negativo (ni NaN: NaN no pasa la comparacion en Postgres).
+    __table_args__ = (CheckConstraint("available_balance >= 0", name="ck_teacher_wallets_balance_nonneg"),)
 
     id = Column(Integer, primary_key=True, index=True)
     teacher_id = Column(Integer, ForeignKey("teacher_profiles.id"), unique=True)
 
-    available_balance = Column(Float, default=0.0)
-    total_earned = Column(Float, default=0.0)
-    total_withdrawn = Column(Float, default=0.0)
+    available_balance = Column(Money, default=0.0)
+    total_earned = Column(Money, default=0.0)
+    total_withdrawn = Column(Money, default=0.0)
 
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -88,7 +91,7 @@ class Withdrawal(Base):
     id = Column(Integer, primary_key=True, index=True)
     teacher_id = Column(Integer, ForeignKey("teacher_profiles.id"), nullable=False)
 
-    amount = Column(Float, nullable=False)
+    amount = Column(Money, nullable=False)
     status = Column(String, default="pending")
     # pending → processing → completed → rejected
 

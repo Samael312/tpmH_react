@@ -15,16 +15,16 @@ class PackageCreate(BaseModel):
     icon: Optional[str] = "📦"
     color: Optional[str] = "#ec4899"
     classes_count: Optional[int] = None
-    price: float
+    price: float = Field(..., allow_inf_nan=False)
     # Correcciones Extra (informe D1-D14, decisión de negocio confirmada):
     # precio de una clase suelta, obligatorio para paquetes finitos y
     # validado contra `price` (ver validate_price_per_class más abajo).
     # No aplica a paquetes ilimitados (classes_count=None).
-    price_per_class: Optional[float] = None
+    price_per_class: Optional[float] = Field(None, allow_inf_nan=False)
     duration_minutes: int = 50
     allow_installments: bool = False
     installment_count: Optional[int] = None
-    installment_amount: Optional[float] = None
+    installment_amount: Optional[float] = Field(None, allow_inf_nan=False)
     # BUG: estos 3 campos nunca estuvieron declarados acá, así que Pydantic
     # los descartaba en silencio del payload — el toggle "grupal" del
     # formulario nunca llegaba a guardarse, el paquete quedaba is_group=False

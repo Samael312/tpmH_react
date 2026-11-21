@@ -18,6 +18,9 @@ class TeacherAppeal(Base):
     appeal_number = Column(Integer, nullable=False)  # 1 o 2 dentro del ciclo actual
     message = Column(Text, nullable=False)
 
+    # "profile" = rechazo del perfil; "video" = rechazo de un video nuevo pendiente (Fase 23)
+    kind = Column(String, nullable=False, default="profile", server_default="profile")
+
     status = Column(String, default="pending")  # "pending" | "approved" | "rejected"
     admin_response = Column(String, nullable=True)
 

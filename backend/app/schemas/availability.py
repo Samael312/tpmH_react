@@ -8,8 +8,8 @@ from datetime import datetime
 class WeeklySlotCreate(BaseModel):
     """
     Un bloque de disponibilidad semanal.
-    El profesor envía su hora LOCAL y el backend
-    la convierte a UTC antes de guardar.
+    El profesor envía su hora LOCAL y el backend la guarda tal cual (Fase 26): se expande a UTC por
+    fecha al calcular huecos, así el horario de verano no la desplaza.
     """
     day_of_week: int           # 0=Lunes ... 6=Domingo
     start_time_local: str      # "09:00" en zona del profesor
@@ -36,7 +36,8 @@ class WeeklySlotCreate(BaseModel):
 class SetWeeklyAvailabilityRequest(BaseModel):
     """
     Reemplaza toda la disponibilidad semanal.
-    Se envía la zona horaria del profesor para la conversión.
+    `timezone` es la zona IANA en la que el profesor escribe su horario; si difiere de la de su perfil,
+    pasa a ser la zona del perfil (el horario semanal siempre se interpreta en la zona del perfil).
     """
     timezone: str
     slots: List[WeeklySlotCreate]
@@ -45,11 +46,11 @@ class SetWeeklyAvailabilityRequest(BaseModel):
 class WeeklySlotResponse(BaseModel):
     id: int
     teacher_id: int
-    day_of_week: int          # día real en UTC (para lógica de reservas)
-    local_day_of_week: int    # día que el profesor eligió en su calendario (para mostrar en UI)
-    start_time_utc: str    # "13:00" UTC
-    end_time_utc: str      # "22:00" UTC
+    day_of_week: int          # día LOCAL del profesor (0=Lunes ... 6=Domingo)
+    start_time_local: str     # "18:00" hora local del profesor
+    end_time_local: str       # "20:00"; si <= inicio cruza la medianoche local
     is_available: bool
+    timezone: str             # zona IANA con la que se interpreta (la actual del perfil del profesor)
 
     class Config:
         from_attributes = True

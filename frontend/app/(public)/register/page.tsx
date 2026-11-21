@@ -27,6 +27,10 @@ import { getErrorMessage } from "@/lib/errorMessage";
 import { capitalizeWords } from "@/lib/textFormat";
 import { useLandingData } from "@/hooks/useLandingData";
 
+// Mismas reglas que el backend (schemas/validators.py).
+const USERNAME_RE = /^[a-z0-9_.-]{3,30}$/;
+const NAME_RE = /^[\p{L}]+(?:[ '\u2019-][\p{L}]+)*\.?$/u;
+
 function StepIndicator({ current, total }: { current: number; total: number }) {
   return (
     <div className="flex items-center justify-center gap-2 mb-2">
@@ -104,23 +108,47 @@ export default function RegisterPage() {
   const markTouched = (field: string) =>
     setTouched((prev) => ({ ...prev, [field]: true }));
 
-  const fieldError = (field: string, value: string) => {
-    if (!touched[field]) return false;
-    if (field === "email") return !value.trim() || !value.includes("@");
-    if (field === "username") return value.trim().length < 3 || value.trim().length > 50;
-    if (field === "name" || field === "surname") return !value.trim() || value.trim().length > 100;
-    if (field === "password") return value.length < 8;
-    if (field === "confirmPw") return value !== password;
-    return !value.trim();
+  // Mensaje de error por campo (U12-U14): se muestra bajo el campo, se enlaza con aria-describedby y marca aria-invalid.
+  const fieldErrorMessage = (field: string, value: string): string | null => {
+    if (!touched[field]) return null;
+    if (field === "email") return !value.trim() || !value.includes("@") ? "Escribe un email válido." : null;
+    if (field === "username") {
+      return USERNAME_RE.test(value.trim())
+        ? null
+        : "De 3 a 30 caracteres: minúsculas, números, punto, guion o guion bajo.";
+    }
+    if (field === "name" || field === "surname") {
+      const v = value.trim();
+      if (!v) return "Este campo es obligatorio.";
+      if (v.length > 60 || !NAME_RE.test(v)) return "Solo letras, espacios, guiones y apóstrofes (máx. 60).";
+      return null;
+    }
+    if (field === "password") return value.length < 8 ? "Mínimo 8 caracteres." : null;
+    if (field === "confirmPw") return value !== password ? "Las contraseñas no coinciden." : null;
+    return !value.trim() ? "Este campo es obligatorio." : null;
   };
+  const fieldError = (field: string, value: string) => fieldErrorMessage(field, value) !== null;
+  const fieldErrorText = (id: string, field: string, value: string) => {
+    const msg = fieldErrorMessage(field, value);
+    return msg ? (
+      <p id={`${id}-error`} role="alert" className="text-[10px] font-semibold text-rose-500 px-0.5">
+        {msg}
+      </p>
+    ) : null;
+  };
+  const a11y = (id: string, field: string, value: string) => ({
+    "aria-invalid": fieldError(field, value),
+    "aria-describedby": fieldError(field, value) ? `${id}-error` : undefined,
+  });
 
   const step1Valid = Boolean(
     name.trim() &&
-      name.trim().length <= 100 &&
+      name.trim().length <= 60 &&
+      NAME_RE.test(name.trim()) &&
       surname.trim() &&
-      surname.trim().length <= 100 &&
-      username.trim().length >= 3 &&
-      username.trim().length <= 50 &&
+      surname.trim().length <= 60 &&
+      NAME_RE.test(surname.trim()) &&
+      USERNAME_RE.test(username.trim()) &&
       email.includes("@") &&
       role
   );
@@ -132,8 +160,8 @@ export default function RegisterPage() {
     e.preventDefault();
     setTouched({ name: true, surname: true, username: true, email: true });
 
-    if (username.trim().length < 3) {
-      setError("El usuario debe tener al menos 3 caracteres.");
+    if (!USERNAME_RE.test(username.trim())) {
+      setError("El usuario debe tener de 3 a 30 caracteres: minúsculas, números, punto, guion o guion bajo.");
       return;
     }
 
@@ -333,15 +361,15 @@ export default function RegisterPage() {
               <StepIndicator current={step} total={2} />
 
               {success && (
-                <div className="mb-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                <div role="status" className="mb-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 animate-in fade-in">
                   <Check className="w-4 h-4 shrink-0" />
                   ¡Cuenta creada! Redirigiendo...
                 </div>
               )}
 
               {error && (
-                <div className="mb-2 bg-rose-50 border border-rose-200 text-rose-600 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 animate-in fade-in">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
+                <div role="alert" className="mb-2 bg-rose-50 border border-rose-200 text-rose-600 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
                   <span>{error}</span>
                 </div>
               )}
@@ -412,13 +440,15 @@ export default function RegisterPage() {
                           name="given-name"
                           autoComplete="given-name"
                           value={name}
-                          maxLength={100}
+                          maxLength={60}
                           onChange={(e) => setName(capitalizeWords(e.target.value))}
                           onBlur={() => markTouched("name")}
                           placeholder="Maria"
                           className={inputCls(fieldError("name", name))}
+                          {...a11y("name", "name", name)}
                         />
                       </div>
+                      {fieldErrorText("name", "name", name)}
                     </div>
                     <div className="space-y-0.5">
                       <label htmlFor="surname" className="text-[10px] font-black text-slate-400 tracking-widest block px-0.5">
@@ -431,13 +461,15 @@ export default function RegisterPage() {
                           name="family-name"
                           autoComplete="family-name"
                           value={surname}
-                          maxLength={100}
+                          maxLength={60}
                           onChange={(e) => setSurname(capitalizeWords(e.target.value))}
                           onBlur={() => markTouched("surname")}
                           placeholder="Farias"
                           className={inputCls(fieldError("surname", surname))}
+                          {...a11y("surname", "surname", surname)}
                         />
                       </div>
+                      {fieldErrorText("surname", "surname", surname)}
                     </div>
                   </div>
 
@@ -454,7 +486,7 @@ export default function RegisterPage() {
                         name="username"
                         autoComplete="username"
                         value={username}
-                        maxLength={50}
+                        maxLength={30}
                         onChange={(e) =>
                           setUsername(
                             e.target.value.toLowerCase().replace(/\s/g, "")
@@ -463,8 +495,10 @@ export default function RegisterPage() {
                         onBlur={() => markTouched("username")}
                         placeholder="tu_usuario"
                         className={inputCls(fieldError("username", username))}
+                        {...a11y("username", "username", username)}
                       />
                     </div>
+                    {fieldErrorText("username", "username", username)}
                   </div>
 
                   <div className="space-y-0.5">
@@ -483,8 +517,10 @@ export default function RegisterPage() {
                         onBlur={() => markTouched("email")}
                         placeholder="correo@ejemplo.com"
                         className={inputCls(fieldError("email", email))}
+                        {...a11y("email", "email", email)}
                       />
                     </div>
+                    {fieldErrorText("email", "email", email)}
                   </div>
 
                   <button
@@ -526,6 +562,7 @@ export default function RegisterPage() {
                           fieldError("password", password),
                           true
                         )}
+                        {...a11y("password", "password", password)}
                       />
                       <button
                         type="button"
@@ -540,6 +577,7 @@ export default function RegisterPage() {
                         )}
                       </button>
                     </div>
+                    {fieldErrorText("password", "password", password)}
                   </div>
 
                   <div className="space-y-0.5">
@@ -561,6 +599,7 @@ export default function RegisterPage() {
                           fieldError("confirmPw", confirmPw),
                           true
                         )}
+                        {...a11y("confirmPw", "confirmPw", confirmPw)}
                       />
                       <button
                         type="button"
@@ -575,6 +614,7 @@ export default function RegisterPage() {
                         )}
                       </button>
                     </div>
+                    {fieldErrorText("confirmPw", "confirmPw", confirmPw)}
                   </div>
 
                   <label

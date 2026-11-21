@@ -6,9 +6,9 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 ## schemas/admin.py
 
 - **PlatformStatsResponse** — total_users: int; total_students: int; total_teachers: int; total_teachers_pending: int; total_teachers_approved: int; total_classes: int; classes_this_month: int; classes_completed: int; classes_cancelled: int; total_revenue: float; total_paid_to_teachers: float; total_platform_earnings: float; pending_withdrawals: float; new_users_this_week: int; new_classes_this_week: int
-- **TeacherAdminResponse** — id: int; user_id: int; username: str; name: str; surname: str; email: str; status: str; commission_rate: float; balance: float; total_classes: int; total_students: int; created_at: datetime; video_url: Optional[str] = None; theme_color: Optional[str] = None; profile_photo_url: Optional[str] = None; phone_number: Optional[str] = None; nationality: Optional[str] = None; rejection_reason: Optional[str] = None; appeal_count: int = 0; appeal_exhausted: bool = False; has_pending_appeal: bool = False
+- **TeacherAdminResponse** — id: int; user_id: int; username: str; name: str; surname: str; email: str; status: str; commission_rate: float; balance: float; total_classes: int; total_students: int; created_at: datetime; video_url: Optional[str] = None; video_pending_url: Optional[str] = None; video_pending_rejection_reason: Optional[str] = None; theme_color: Optional[str] = None; profile_photo_url: Optional[str] = None; phone_number: Optional[str] = None; nationality: Optional[str] = None; rejection_reason: Optional[str] = None; appeal_count: int = 0; appeal_exhausted: bool = False; has_pending_appeal: bool = False
 - **UpdateTeacherStatusRequest** — status: str; reason: Optional[str] = None
-- **UpdateCommissionRequest** — commission_rate: float
+- **UpdateCommissionRequest** — commission_rate: float = Field(..., allow_inf_nan=False, ge=0.0, 
 - **UserAdminResponse** — id: int; username: str; email: str; name: str; surname: str; phone_number: Optional[str] = None; nationality: Optional[str] = None; role: str; is_active: bool; is_verified: bool; is_banned: bool = False; ban_reason: Optional[str] = None; banned_at: Optional[datetime] = None; created_at: datetime
 - **PaginatedUsersResponse** — total: int; users: List[UserAdminResponse]; active_count: Optional[int] = None
 - **UpdateUserStatusRequest** — is_active: bool; reason: Optional[str] = None
@@ -31,7 +31,7 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 
 - **WeeklySlotCreate** — day_of_week: int; start_time_local: str; end_time_local: str; is_available: bool = True  _(validadores: validate_day, validate_time_format)_
 - **SetWeeklyAvailabilityRequest** — timezone: str; slots: List[WeeklySlotCreate]
-- **WeeklySlotResponse** — id: int; teacher_id: int; day_of_week: int; local_day_of_week: int; start_time_utc: str; end_time_utc: str; is_available: bool
+- **WeeklySlotResponse** — id: int; teacher_id: int; day_of_week: int; start_time_local: str; end_time_local: str; is_available: bool; timezone: str
 - **ExceptionCreate** — date: str; end_date: Optional[str] = None; timezone: str; is_full_day: bool = False; start_time_local: Optional[str] = None; end_time_local: Optional[str] = None; is_available: bool = True; reason: Optional[str] = None  _(validadores: validate_time_format)_
 - **ExceptionResponse** — id: int; teacher_id: int; start_time_utc: datetime; end_time_utc: datetime; is_available: bool; reason: Optional[str]; is_full_day: bool
 - **AvailableSlotResponse** — start_time_utc: datetime; end_time_utc: datetime; duration_minutes: int; is_past: bool = False; too_soon: bool = False; is_preferred: bool = False; is_available: bool = True; buffer_minutes: int = 0; block_end_time_utc: datetime
@@ -80,7 +80,8 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 - **GodModeMoveCohortResponse** — message: str
 - **GroupToIndividualMigrationRequest** — current_enrollment_id: int; new_package_id: int
 - **GroupSessionCreate** — start_time_utc: datetime; duration_minutes: int = 50
-- **GroupSessionResponse** — id: int; cohort_id: int; start_time_utc: datetime; end_time_utc: datetime; duration: int; status: str; participant_count: int
+- **SkippedParticipant** — student_id: int; student_name: Optional[str] = None; reason: str = 'overlap'
+- **GroupSessionResponse** — id: int; cohort_id: int; start_time_utc: datetime; end_time_utc: datetime; duration: int; status: str; participant_count: int; skipped_participants: List[SkippedParticipant] = []
 - **CohortMemberResponse** — enrollment_id: int; student_id: int; student_name: str; student_avatar: Optional[str] = None; payment_status: str; joined_at: datetime
 - **SessionParticipantResponse** — student_id: int; student_name: str; attendance_status: str
 - **AttendanceSummaryResponse** — student_id: int; student_name: str; sessions_confirmed: int; sessions_no_show: int; sessions_total: int
@@ -114,12 +115,12 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 
 ## schemas/materials.py
 
-- **MaterialCreate** — title: str; description: Optional[str] = None; category: str; level: Optional[str] = None; vocabulary_words: Optional[List[str]] = None  _(validadores: validate_category, validate_level)_
+- **MaterialCreate** — title: str; description: Optional[str] = None; category: str; level: Optional[str] = None; vocabulary_words: Optional[List[str]] = None  _(validadores: validate_category, validate_level, validate_title, validate_description)_
 - **MaterialResponse** — id: int; teacher_id: int; title: str; description: Optional[str]; category: str; level: Optional[str]; file_url: Optional[str]; file_type: Optional[str]; file_size: Optional[int] = None; vocabulary_words: Optional[List[str]]; is_active: bool; created_at: datetime
 - **AssignMaterialRequest** — student_ids: List[int] = []; cohort_id: Optional[int] = None
 - **MaterialAssignmentResponse** — id: int; material_id: int; student_id: int; progress: str; assigned_at: datetime; completed_at: Optional[datetime]; material: MaterialResponse
 - **UpdateProgressRequest** — progress: str  _(validadores: validate_progress)_
-- **MaterialUpdate** — title: Optional[str] = None; description: Optional[str] = None; category: Optional[str] = None; level: Optional[str] = None  _(validadores: validate_title)_
+- **MaterialUpdate** — title: Optional[str] = None; description: Optional[str] = None; category: Optional[str] = None; level: Optional[str] = None  _(validadores: validate_title, validate_description, validate_category, validate_level)_
 
 ## schemas/notifications.py
 
@@ -127,12 +128,12 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 - **UnreadCountResponse** — unread_count: int
 - **CreateAppealRequest** — message: str  _(validadores: validate_message)_
 - **ResolveAppealRequest** — action: str; admin_response: Optional[str] = None  _(validadores: validate_action)_
-- **TeacherAppealResponse** — id: int; teacher_id: int; appeal_number: int; message: str; status: str; admin_response: Optional[str] = None; created_at: datetime; resolved_at: Optional[datetime] = None
+- **TeacherAppealResponse** — id: int; teacher_id: int; appeal_number: int; message: str; status: str; admin_response: Optional[str] = None; kind: str = 'profile'; created_at: datetime; resolved_at: Optional[datetime] = None
 - **TeacherAppealWithTeacherResponse** — teacher_username: str; teacher_name: str; teacher_surname: str; teacher_status: str
 
 ## schemas/packages.py
 
-- **PackageCreate** — name: str; subject: str; description: Optional[str] = None; description_type: str = 'paragraph'; description_items: Optional[List[str]] = None; icon: Optional[str] = '📦'; color: Optional[str] = '#ec4899'; classes_count: Optional[int] = None; price: float; price_per_class: Optional[float] = None; duration_minutes: int = 50; allow_installments: bool = False; installment_count: Optional[int] = None; installment_amount: Optional[float] = None; is_group: bool = False; min_students: Optional[int] = None; max_students: Optional[int] = None; group_schedule_mode: str = 'manual'; group_recurring_days_of  _(validadores: validate_duration_minutes, validate_installments, validate_classes, validate_price, validate_description_type, validate_group_schedule_mode, validate_recurring_days, validate_recurring_time, validate_price_per_class, validate_installment_amount, validate_fixed_schedule_complete)_
+- **PackageCreate** — name: str; subject: str; description: Optional[str] = None; description_type: str = 'paragraph'; description_items: Optional[List[str]] = None; icon: Optional[str] = '📦'; color: Optional[str] = '#ec4899'; classes_count: Optional[int] = None; price: float = Field(..., allow_inf_nan=False); price_per_class: Optional[float] = Field(None, allow_inf_nan=False); duration_minutes: int = 50; allow_installments: bool = False; installment_count: Optional[int] = None; installment_amount: Optional[float] = Field(None, allow_inf_nan=False); is_group: bool = False; min_students: Optional[int] = None; max_st  _(validadores: validate_duration_minutes, validate_installments, validate_classes, validate_price, validate_description_type, validate_group_schedule_mode, validate_recurring_days, validate_recurring_time, validate_price_per_class, validate_installment_amount, validate_fixed_schedule_complete)_
 - **PackageResponse** — id: int; teacher_id: int; name: str; subject: str; description: Optional[str]; description_type: str = 'paragraph'; description_items: Optional[List[str]] = None; icon: Optional[str] = '📦'; color: Optional[str] = '#ec4899'; classes_count: Optional[int]; price: float; price_per_class: Optional[float] = None; duration_minutes: int; allow_installments: bool = False; installment_count: Optional[int] = None; installment_amount: Optional[float] = None; is_active: bool; created_at: datetime; is_group: bool = False; min_students: Optional[int] = None; max_students: Optional[int] = None; group_schedule
 - **EnrollmentResponse** — id: int; student_id: int; package_id: int; teacher_id: int; classes_used: int; classes_total: Optional[int]; status: str; payment_status: Optional[str] = None; installments_paid: Optional[int] = 0; paid_via_installments: Optional[bool] = False; unlocked_credits: Optional[int] = 0; prepaid_unlimited_credits: Optional[int] = 0; available_credits: Optional[int] = None; activated_at: Optional[datetime] = None; renewal_count: int; created_at: datetime; package: PackageResponse; teacher_name: Optional[str] = None; teacher_username: Optional[str] = None; teacher_status: Optional[str] = None; teacher_
 - **RenewalRequest** — current_enrollment_id: int; new_package_id: int
@@ -145,8 +146,8 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 
 ## schemas/payments.py
 
-- **PaymentConfigResponse** — paypal_enabled: bool; binance_enabled: bool; bank_transfer_enabled: bool; mobile_payment_enabled: bool; paypal_email: Optional[str]; binance_address: Optional[str]; binance_network: Optional[str]; bank_transfer_details: Optional[str]; mobile_payment_details: Optional[str]; whatsapp_number: Optional[str]; default_commission_rate: float; has_any_method: bool
-- **UpdatePaymentConfigRequest** — paypal_enabled: Optional[bool] = None; binance_enabled: Optional[bool] = None; bank_transfer_enabled: Optional[bool] = None; mobile_payment_enabled: Optional[bool] = None; paypal_email: Optional[str] = None; binance_address: Optional[str] = None; binance_network: Optional[str] = None; bank_transfer_details: Optional[str] = None; mobile_payment_details: Optional[str] = None; whatsapp_number: Optional[str] = None; default_commission_rate: Optional[float] = None
+- **PaymentConfigResponse** — paypal_enabled: bool; binance_enabled: bool; bank_transfer_enabled: bool; mobile_payment_enabled: bool; paypal_email: Optional[str]; binance_address: Optional[str]; binance_network: Optional[str]; bank_transfer_details: Optional[str]; mobile_payment_details: Optional[str]; whatsapp_number: Optional[str]; default_commission_rate: Optional[float] = None; has_any_method: bool
+- **UpdatePaymentConfigRequest** — paypal_enabled: Optional[bool] = None; binance_enabled: Optional[bool] = None; bank_transfer_enabled: Optional[bool] = None; mobile_payment_enabled: Optional[bool] = None; paypal_email: Optional[str] = None; binance_address: Optional[str] = None; binance_network: Optional[str] = None; bank_transfer_details: Optional[str] = None; mobile_payment_details: Optional[str] = None; whatsapp_number: Optional[str] = None; default_commission_rate: Optional[Annotated[float, Field(allow_inf_nan=False, ge=0.0, le=1.0)]] = None
 - **BookAndPayRequest** — enrollment_id: Optional[int] = None; teacher_username: Optional[str] = None; start_time_utc: datetime; end_time_utc: datetime; duration_minutes: int; subject: Optional[str] = None  _(validadores: require_timezone)_
 - **PaymentResponse** — id: int; class_id: Optional[int]; student_id: int; teacher_id: int; amount_total: float; amount_teacher: float; amount_platform: float; payment_method: str; receipt_url: Optional[str]; transaction_id: Optional[str]; status: str; created_at: datetime; validated_at: Optional[datetime]
 - **ValidatePaymentRequest** — action: str; rejection_reason: Optional[str] = None  _(validadores: validate_action)_
@@ -154,14 +155,17 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 - **RefundPaymentInfo** — bank_name: Optional[str] = None; bank_account: Optional[str] = None; account_holder: Optional[str] = None; mobile_payment: Optional[str] = None; paypal_or_zelle: Optional[str] = None; other_notes: Optional[str] = None  _(validadores: validate_at_least_one_field)_
 - **RequestRefundTeacherSuspendedRequest** — enrollment_id: int; payment_info: RefundPaymentInfo
 - **RequestRefundCohortCancelledRequest** — enrollment_id: int; payment_info: RefundPaymentInfo
-- **WithdrawalRequest** — amount: float; destination_method: str; destination_details: str  _(validadores: validate_amount)_
-- **WithdrawalResponse** — id: int; teacher_id: int; amount: float; status: str; destination_method: Optional[str]; created_at: datetime
+- **WithdrawalRequest** — amount: FiniteFloat; destination_method: str; destination_details: str  _(validadores: validate_amount)_
+- **WithdrawalResponse** — id: int; teacher_id: int; amount: float; status: str; destination_method: Optional[str]; destination_details: Optional[str] = None; rejection_reason: Optional[str] = None; reference: Optional[str] = None; processed_at: Optional[datetime] = None; created_at: datetime
 - **NotifyPaymentRequest** — type: str; enrollment_id: Optional[int] = None; package_id: Optional[int] = None; class_id: Optional[int] = None; installment_index: Optional[int] = None; credits_requested: Optional[int] = None; payment_method: Optional[str] = None; transaction_reference: Optional[str] = None; change_option: Optional[str] = None; payment_info: Optional[RefundPaymentInfo] = None  _(validadores: validate_change_option, validate_type, validate_installment)_
-- **WithdrawalRequestV2** — amount: float; payment_info: str  _(validadores: validate_amount)_
+- **WithdrawalRequestV2** — amount: FiniteFloat; payment_info: str; destination_method: Optional[str] = None  _(validadores: validate_amount)_
 - **ProcessWithdrawalRequest** — action: str; reference: Optional[str] = None; rejection_reason: Optional[str] = None  _(validadores: validate_action)_
-- **GodModeEditPaymentRequest** — amount_total: Optional[float] = Field(None, gt=0); status: Optional[str] = None; rejection_reason: Optional[str] = None; transaction_id: Optional[str] = None  _(validadores: validate_status)_
-- **GodModeCreatePaymentRequest** — teacher_id: int; student_id: int; enrollment_id: Optional[int] = None; amount_total: float = Field(..., gt=0); payment_method: str; payment_type: str = 'package'; status: str = 'approved'; transaction_id: Optional[str] = None; is_manual_grant: bool = False  _(validadores: validate_create_status, validate_payment_type)_
+- **GodModeEditPaymentRequest** — amount_total: Optional[float] = Field(None, gt=0, allow_inf_nan=False); status: Optional[str] = None; rejection_reason: Optional[str] = None; transaction_id: Optional[str] = None  _(validadores: validate_status)_
+- **GodModeCreatePaymentRequest** — teacher_id: int; student_id: int; enrollment_id: Optional[int] = None; amount_total: float = Field(..., gt=0, allow_inf_nan=False); payment_method: str; payment_type: str = 'package'; status: str = 'approved'; transaction_id: Optional[str] = None; is_manual_grant: bool = False  _(validadores: validate_create_status, validate_payment_type)_
 - **GodModeEditPaymentResponse** — message: str; payment: PaymentResponse
+- **CreateManualGrantRequest** — enrollment_id: int; reason: str  _(validadores: validate_reason)_
+- **ResolveManualGrantRequest** — action: str; rejection_reason: Optional[str] = None  _(validadores: validate_action)_
+- **ManualGrantRequestResponse** — id: int; teacher_id: int; student_id: int; enrollment_id: int; package_id: Optional[int] = None; reason: str; status: str; rejection_reason: Optional[str] = None; created_at: datetime; resolved_at: Optional[datetime] = None; teacher_name: Optional[str] = None; student_name: Optional[str] = None; package_name: Optional[str] = None
 
 ## schemas/preferences.py
 
@@ -197,8 +201,8 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 ## schemas/teacher.py
 
 - **TeacherPublicResponse** — id: int; user_username: str; name: Optional[str] = None; surname: Optional[str] = None; nationality: Optional[str] = None; bio: Optional[str]; title: Optional[str]; timezone: Optional[str]; languages: Optional[List[str]]; subjects: Optional[List[str]]; skills: Optional[List[str]]; certificates: Optional[List[Dict[str, Any]]]; gallery: Optional[List[str]]; social_links: Optional[Dict[str, str]]; status: str; profile_photo_url: Optional[str] = None; video_url: Optional[str] = None; theme_color: Optional[str] = '#ec4899'; spoken_languages: List[SpokenLanguageItem] = []  _(validadores: _coerce_spoken)_
-- **TeacherProfileResponse** — commission_rate: float; balance: float; stripe_account_id: Optional[str]; created_at: datetime; video_public_id: Optional[str] = None; rejection_reason: Optional[str] = None; rejection_feedback_seen: bool = True; appeal_count: int = 0; appeal_exhausted: bool = False
-- **UpdateTeacherProfileRequest** — bio: Optional[str] = None; title: Optional[str] = None; timezone: Optional[str] = None; subjects: Optional[List[str]] = None; languages: Optional[List[str]] = None; skills: Optional[List[str]] = None; certificates: Optional[List[Dict[str, Any]]] = None; gallery: Optional[List[str]] = None; social_links: Optional[Dict[str, str]] = None; theme_color: Optional[str] = None
+- **TeacherProfileResponse** — commission_rate: float; balance: float; stripe_account_id: Optional[str]; created_at: datetime; video_public_id: Optional[str] = None; video_pending_rejection_reason: Optional[str] = None; video_pending_appeal_used: bool = False; video_pending_url: Optional[str] = None; rejection_reason: Optional[str] = None; rejection_feedback_seen: bool = True; appeal_count: int = 0; appeal_exhausted: bool = False
+- **UpdateTeacherProfileRequest** — bio: Optional[str] = None; title: Optional[str] = None; timezone: Optional[str] = None; subjects: Optional[List[str]] = None; languages: Optional[List[str]] = None; skills: Optional[List[str]] = None; certificates: Optional[List[Dict[str, Any]]] = None; gallery: Optional[List[str]] = None; social_links: Optional[Dict[str, str]] = None; theme_color: Optional[str] = None  _(validadores: _bio, _title, _timezone, _lists, _certificates, _gallery, _social_links, _theme_color)_
 
 ## schemas/tts.py
 
@@ -215,6 +219,6 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 - **StudentProfileResponse** — id: int; user_id: int; timezone: Optional[str] = None; goal: Optional[str] = None; phone_number: Optional[str] = None; preferred_payment_methods: Optional[List[str]] = []; teacher_username: Optional[str] = None; created_at: datetime
 - **UserUpdate** — name: Optional[str] = None; surname: Optional[str] = None; phone_number: Optional[str] = None; email: Optional[EmailStr] = None; nationality: Optional[str] = None; onboarding_completed: Optional[bool] = None
 - **StudentProfileUpdate** — timezone: Optional[str] = None; goal: Optional[str] = None; phone_number: Optional[str] = None; preferred_payment_methods: Optional[List[str]] = None; nationality: Optional[str] = None
-- **UpdateProfileRequest** — username: Optional[str] = None; email: Optional[EmailStr] = None; name: Optional[str] = None; surname: Optional[str] = None; avatar: Optional[str] = None; phone_number: Optional[str] = None; timezone: Optional[str] = None; nationality: Optional[str] = None; onboarding_completed: Optional[bool] = None; spoken_languages: Optional[List[Any]] = None
+- **UpdateProfileRequest** — username: Optional[str] = None; email: Optional[EmailStr] = None; name: Optional[str] = None; surname: Optional[str] = None; avatar: Optional[str] = Field(default=None, max_length=500); phone_number: Optional[str] = None; timezone: Optional[str] = None; nationality: Optional[str] = None; onboarding_completed: Optional[bool] = None; spoken_languages: Optional[List[Any]] = None  _(validadores: _username, _email, _avatar, _timezone)_
 - **DeleteAccountRequest** — password: Optional[str] = None; confirm_username: str
 - **ChangePasswordRequest** — current_password: str = Field(max_length=128); new_password: str = Field(max_length=128)  _(validadores: validate_password)_

@@ -22,7 +22,7 @@ def _teacher(db, name, role="teacher"):
     db.add(tp); db.flush()
     for dow in range(7):
         db.add(TeacherAvailability(teacher_id=tp.id, day_of_week=dow, is_available=True,
-                                   start_time_utc="00:00", end_time_utc="00:00"))
+                                   start_time_local="00:00", end_time_local="00:00"))
     db.commit()
     return u, tp
 
@@ -40,24 +40,34 @@ def _wallet(db, tp_id, amount):
     db.commit()
 
 
-# ── 1. teacher_admin se acredita dinero a si mismo y se procesa su propio retiro ──
+# ── 1. teacher_admin NO se acredita dinero ni se procesa su retiro (corregido, F16) ──
 def test_teacher_admin_self_payment_and_self_withdrawal(client, world, db):
     u, tp = _teacher(db, "tadmin", role="teacher_admin")
     r = client.post(f"{API}/god-mode/payments", json={
         "teacher_id": tp.id, "student_id": world["sp"].id, "amount_total": 1000.0,
         "payment_method": "bank_transfer", "status": "approved", "reason": "pago por fuera"},
         headers=hdr(u))
-    assert r.status_code == 201, r.text
+    assert r.status_code == 403, r.text
     db.expire_all()
     w = db.query(TeacherWallet).filter(TeacherWallet.teacher_id == tp.id).first()
-    assert w.available_balance == 850.0
+    assert w is None or w.available_balance == 0.0
+    _wallet(db, tp.id, 850.0)  # saldo ajeno a la sonda
     r = client.post(f"{API}/payments/request-withdrawal", json={"amount": 850.0, "payment_info": "mi IBAN"},
                     headers=hdr(u))
-    assert r.status_code == 201, r.text
+    assert r.status_code == 201, r.text  # puede solicitarlo...
     wid = r.json()["id"]
     r = client.post(f"{API}/payments/admin/withdrawals/{wid}/process",
                     json={"action": "complete", "reference": "ok"}, headers=hdr(u))
-    assert r.status_code == 200, r.text  # se aprueba su propio retiro
+    assert r.status_code == 403, r.text  # ...pero ya no procesar su propio retiro (corregido, F16)
+    r = client.post(f"{API}/payments/admin/withdrawals/{wid}/process",
+                    json={"action": "complete", "reference": "ok"}, headers=hdr(world["admin"]))
+    assert r.status_code == 200, r.text  # el superadmin si
+    # control: el superadmin si puede crear el pago
+    r = client.post(f"{API}/god-mode/payments", json={
+        "teacher_id": tp.id, "student_id": world["sp"].id, "amount_total": 1000.0,
+        "payment_method": "bank_transfer", "status": "approved", "reason": "pago por fuera"},
+        headers=hdr(world["admin"]))
+    assert r.status_code == 201, r.text
 
 
 def test_teacher_admin_approves_own_pending_payment_via_god_mode(client, world, db):
@@ -66,37 +76,43 @@ def test_teacher_admin_approves_own_pending_payment_via_god_mode(client, world, 
                   amount_platform=0, payment_method="bank_transfer", status="pending_review",
                   payment_type="unlimited_recharge", installment_index=1)
     db.add(pay); db.commit()
-    # NEG-01: el validate normal le da 403...
+    # NEG-01: el validate normal da 403 y ahora el Modo Dios tambien (corregido, F16)
     assert client.patch(f"{API}/payments/{pay.id}/validate", json={"action": "approve"},
                         headers=hdr(u)).status_code == 403
-    # ...pero el Modo Dios lo aprueba igual
     r = client.patch(f"{API}/god-mode/payments/{pay.id}", json={"status": "approved", "reason": "aprobar yo"},
                      headers=hdr(u))
-    assert r.status_code == 200, r.text
+    assert r.status_code == 403, r.text
     db.expire_all()
-    assert db.query(TeacherWallet).filter(TeacherWallet.teacher_id == tp.id).first().available_balance == 85.0
+    w = db.query(TeacherWallet).filter(TeacherWallet.teacher_id == tp.id).first()
+    assert db.get(Payment, pay.id).status == "pending_review"
+    assert w is None or w.available_balance == 0.0
 
 
-# ── 2. teacher_admin cambia a donde paga TODA la plataforma ──
+# ── 2. datos de pago: decision del dueño, el teacher_admin SI puede editarlos ──
 def test_teacher_admin_changes_platform_payment_destination(client, world, db):
     u, _ = _teacher(db, "tadmin", role="teacher_admin")
-    r = client.patch(f"{API}/payments/config", json={"paypal_enabled": True, "paypal_email": "yo@ladron.com"},
+    r = client.patch(f"{API}/payments/config", json={"paypal_enabled": True, "paypal_email": "yo@ejemplo.com"},
                      headers=hdr(u))
     assert r.status_code == 200
-    assert client.get(f"{API}/payments/config").json()["paypal_email"] == "yo@ladron.com"
+    assert client.get(f"{API}/payments/config").json()["paypal_email"] == "yo@ejemplo.com"
 
 
-def test_teacher_admin_switches_platform_to_single_with_himself_featured(client, world, db):
+def test_teacher_admin_cannot_switch_platform_to_single_with_himself_featured(client, world, db):
     u, tp = _teacher(db, "tadmin", role="teacher_admin")
     r = client.patch(f"{API}/admin/platform-config",
                      json={"is_single_tenant": True, "featured_teacher_username": "tadmin"}, headers=hdr(u))
-    assert r.status_code == 200
+    assert r.status_code == 403, r.text
     db.expire_all()
     cfg = db.query(PlatformConfig).first()
-    assert cfg.is_single_tenant and cfg.featured_teacher_id == tp.id
+    assert cfg is None or not (cfg.is_single_tenant or cfg.featured_teacher_id == tp.id)
+    # control: el superadmin si
+    r = client.patch(f"{API}/admin/platform-config",
+                     json={"is_single_tenant": True, "featured_teacher_username": "tadmin"},
+                     headers=hdr(world["admin"]))
+    assert r.status_code == 200, r.text
 
 
-# ── 3. teacher_admin lee chats de otro profesor ──
+# ── 3. teacher_admin NO lee chats de otro profesor (corregido, F16) ──
 def test_teacher_admin_reads_other_teacher_chat(client, world, db):
     u, _ = _teacher(db, "tadmin", role="teacher_admin")
     convo = ChatConversation(conversation_type=ChatConversationType.direct,
@@ -106,6 +122,10 @@ def test_teacher_admin_reads_other_teacher_chat(client, world, db):
     db.commit()
     r = client.get(f"{API}/chat/admin/conversations/{convo.id}/messages", params={"reason": "curiosidad"},
                    headers=hdr(u))
+    assert r.status_code == 403, r.text
+    # control: el superadmin si
+    r = client.get(f"{API}/chat/admin/conversations/{convo.id}/messages", params={"reason": "revision"},
+                   headers=hdr(world["admin"]))
     assert r.status_code == 200 and r.json()[0]["content"] == "secreto"
 
 
@@ -360,6 +380,8 @@ def test_teacher_admin_streams_other_teacher_material(client, world, db):
     m = Material(teacher_id=world["tp"].id, title="m", category="pdf", file_url="http://f", is_active=True)
     db.add(m); db.commit()
     r = client.get(f"{API}/materials/{m.id}/stream", headers=hdr(u), follow_redirects=False)
+    assert r.status_code == 403, r.text  # corregido F16: solo superadmin
+    r = client.get(f"{API}/materials/{m.id}/stream", headers=hdr(world["admin"]), follow_redirects=False)
     assert r.status_code in (302, 307)
 
 

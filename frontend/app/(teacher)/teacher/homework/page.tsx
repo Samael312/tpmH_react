@@ -18,6 +18,12 @@ import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
+import { getMyDisplayTimezone, getDateKeyTz, zonedLocalToUtcIso } from "@/lib/tzFormat";
+
+// Hora "HH:mm" (24 h) de un instante UTC en la zona del profesor.
+function timeKeyTz(utcIso: string, timeZone: string): string {
+  return new Date(utcIso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone });
+}
 import {
   useTeacherHomework,
   useHomeworkSubmissions,
@@ -207,7 +213,8 @@ function GradeModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [score, setScore]       = useState<number>(submission.score ?? 0);
+  // Fase 22 (m3): la nota empieza vacia; hay que elegirla explicitamente para guardar.
+  const [score, setScore]       = useState<number | null>(submission.score ?? null);
   const [feedback, setFeedback] = useState(submission.feedback ?? "");
   const [saving, setSaving]     = useState(false);
   const [success, setSuccess]   = useState(false);
@@ -216,7 +223,7 @@ function GradeModal({
   const hasSubmission = Boolean(submission.submission);
 
   const save = async () => {
-    if (!hasSubmission) return;
+    if (!hasSubmission || score === null) return;
     setSaving(true);
     try {
       await api.patch(
@@ -225,7 +232,8 @@ function GradeModal({
       );
       setSuccess(true);
       toast.success("Tarea calificada correctamente");
-      setTimeout(() => { onSaved(); onClose(); }, 1000);
+      onSaved();
+      setTimeout(onClose, 1000);
     } catch (e) {
       toast.error(getErrorMessage(e, "No se pudo calificar la tarea"));
     } finally { setSaving(false); }
@@ -302,21 +310,25 @@ function GradeModal({
                 <input
                   type="range"
                   min={0} max={10} step={0.5}
-                  value={score}
+                  value={score ?? 0}
                   disabled={!hasSubmission}
+                  aria-label="Calificación de 0 a 10"
                   onChange={e => setScore(parseFloat(e.target.value))}
                   className="flex-1 accent-pink-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <div className="w-14 h-11 bg-slate-50 rounded-xl flex items-center
                                 justify-center border-2 border-transparent
                                 text-lg font-black text-slate-800">
-                  {score}
+                  {score ?? "—"}
                 </div>
               </div>
               <div className="flex justify-between text-xs text-slate-300
                               font-bold mt-1 px-0.5">
                 <span>0</span><span>5</span><span>10</span>
               </div>
+              {score === null && hasSubmission && (
+                <p className="text-xs font-bold text-amber-600 mt-2">Elige una nota moviendo el control para poder guardar.</p>
+              )}
             </div>
 
             <div className="mb-6">
@@ -339,7 +351,7 @@ function GradeModal({
               />
             </div>
 
-            <button onClick={save} disabled={saving || !hasSubmission}
+            <button onClick={save} disabled={saving || !hasSubmission || score === null}
               className="w-full py-3.5 text-sm font-bold text-white rounded-xl
                          bg-gradient-to-r from-pink-500 to-rose-400
                          hover:from-pink-600 hover:to-rose-500
@@ -367,8 +379,12 @@ function EditHomeworkModal({
 }: { hw: Homework; onClose: () => void; onSaved: () => void }) {
   const [title, setTitle] = useState(hw.title);
   const [content, setContent] = useState(hw.description);
-  const [due, setDue] = useState(hw.due_date_utc.slice(0, 10));
-  const [dueTime, setDueTime] = useState(hw.due_date_utc.slice(11, 16) || "23:59");
+  // Fase 22 (TE-06): la fecha/hora se muestran y editan en la zona del profesor (antes: recorte del ISO en UTC).
+  const tz = getMyDisplayTimezone();
+  const initialDue = getDateKeyTz(hw.due_date_utc, tz);
+  const initialTime = timeKeyTz(hw.due_date_utc, tz);
+  const [due, setDue] = useState(initialDue);
+  const [dueTime, setDueTime] = useState(initialTime);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const toast = useToast();
@@ -376,11 +392,14 @@ function EditHomeworkModal({
   const save = async () => {
     setSaving(true); setError("");
     try {
-      await api.patch(`/homework/${hw.id}`, {
-        title,
-        description: content,
-        due_date_utc: new Date(`${due}T${dueTime || "23:59"}:00`).toISOString(),
-      });
+      const body: Record<string, string> = { title, description: content };
+      // Solo se envia la fecha si cambio (si no, se reenviaba la misma con el desfase de zona equivocado).
+      if (due !== initialDue || dueTime !== initialTime) {
+        const iso = zonedLocalToUtcIso(`${due}T${dueTime || "23:59"}`, tz);
+        if (!iso) { setError("Fecha límite inválida"); setSaving(false); return; }
+        body.due_date_utc = iso;
+      }
+      await api.patch(`/homework/${hw.id}`, body);
       toast.success("Tarea actualizada correctamente");
       onSaved();
       onClose();
@@ -618,7 +637,8 @@ export default function HomeworkPage() {
     setCreating(true);
     setCreateError("");
     try {
-      const dueDateUtc = new Date(`${hwDue}T${hwDueTime || "23:59"}:00`).toISOString();
+      const dueDateUtc = zonedLocalToUtcIso(`${hwDue}T${hwDueTime || "23:59"}`, getMyDisplayTimezone());
+      if (!dueDateUtc) { setCreateError("Fecha límite inválida"); setCreating(false); return; }
       await api.post("/homework/", {
         title: hwTitle,
         description: hwContent,

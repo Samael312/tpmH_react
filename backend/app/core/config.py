@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     EMAIL_ASYNC: bool = os.getenv("EMAIL_ASYNC", "true").lower() not in ("0", "false", "no")
     EMAIL_WORKERS: int = int(os.getenv("EMAIL_WORKERS", 2))
 
+    # Flow Tester del panel (Fase 21, S4): lanza pytest como subproceso, asi que esta APAGADO salvo que se active
+    # a proposito (solo en un backend de desarrollo con rama de BD propia).
+    FLOW_TESTS_ENABLED: bool = os.getenv("FLOW_TESTS_ENABLED", "false").lower() in ("1", "true", "yes")
+
     # Cache de la rejilla de huecos por profesor (Fase 14, E3). Se invalida al hacer commit de clases,
     # disponibilidad, excepciones o token de Google; el TTL cubre cambios en Google Calendar. 0 = sin cache.
     SLOTS_CACHE_TTL_SECONDS: int = int(os.getenv("SLOTS_CACHE_TTL_SECONDS", 45))

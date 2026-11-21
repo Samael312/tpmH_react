@@ -30,7 +30,7 @@ from typing import Any, Callable, Iterable
 from sqlalchemy import event, inspect
 from sqlalchemy.orm import Session
 
-from app.core.cache import cache_invalidate_prefix, cached
+from app.core.cache import cache_get, cache_invalidate_prefix, cache_set
 from app.core.config import settings
 from app.models.availability import TeacherAvailability, TeacherAvailabilityException
 from app.models.class_ import Class
@@ -46,13 +46,30 @@ def slots_key(teacher_id: int, date: str, duration: int, occupancy: int) -> str:
     return f"{SLOTS_PREFIX}{teacher_id}:{date}:{duration}:{occupancy}"
 
 
+class Uncacheable:
+    """El loader devuelve esto (con la rejilla dentro) cuando el resultado es degradado y NO debe cachearse,
+    p. ej. cuando freebusy de Google fallo: se sirve a esta peticion pero la siguiente vuelve a calcular."""
+
+    def __init__(self, value: Any):
+        self.value = value
+
+
 def cached_slot_grid(
     teacher_id: int, date: str, duration: int, occupancy: int, loader: Callable[[], Any]
 ) -> Any:
     ttl = settings.SLOTS_CACHE_TTL_SECONDS
     if ttl <= 0:
-        return loader()
-    return cached(slots_key(teacher_id, date, duration, occupancy), ttl, loader)
+        value = loader()
+        return value.value if isinstance(value, Uncacheable) else value
+    key = slots_key(teacher_id, date, duration, occupancy)
+    value = cache_get(key)
+    if value is not None:
+        return value
+    value = loader()
+    if isinstance(value, Uncacheable):
+        return value.value
+    cache_set(key, value, ttl)
+    return value
 
 
 def invalidate_teacher_slots(teacher_id: int) -> None:
@@ -65,6 +82,12 @@ def invalidate_all_slots() -> None:
 
 def _pending(session: Session) -> set:
     return session.info.setdefault(_INFO_KEY, set())
+
+
+def mark_teacher_slots_dirty(session: Session, teacher_id: int) -> None:
+    """Descarta la cache del profesor al hacer commit de esta sesion aunque no cambie ninguna entidad
+    rastreada (p. ej. cambia su zona horaria: el horario semanal en hora local mueve el UTC)."""
+    _pending(session).add(teacher_id)
 
 
 def _teacher_ids(obj: Any) -> Iterable[Any]:

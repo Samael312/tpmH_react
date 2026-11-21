@@ -41,7 +41,7 @@ def _patch_tz(client, user, tz):
 def _rows(db, tp):
     db.expire_all()
     return sorted(
-        [(r.local_day_of_week, r.day_of_week, r.start_time_utc, r.end_time_utc)
+        [(r.day_of_week, r.start_time_local, r.end_time_local)
          for r in db.query(TeacherAvailability).filter(TeacherAvailability.teacher_id == tp.id)],
     )
 
@@ -67,6 +67,14 @@ def _fixed_now(monkeypatch, fixed):
 
 # ─── Controles: conversion y recalculo basico ───────────────────────────────
 
+def _utc_hhmm(tz, row, on):
+    """(dia UTC, 'HH:MM' inicio UTC, 'HH:MM' fin UTC) de una fila local expandida en la fecha `on`."""
+    from zoneinfo import ZoneInfo
+    from app.core.slot_availability import local_range_to_utc
+    s, e = local_range_to_utc(on, row[1], row[2], ZoneInfo(tz))
+    return (s.weekday(), s.strftime("%H:%M"), e.strftime("%H:%M"))
+
+
 @pytest.mark.parametrize("tz,local,expected", [
     # Bogota UTC-5: lunes 17-21 local -> lunes 22:00-02:00 UTC (cruza medianoche UTC)
     ("America/Bogota", (0, "17:00", "21:00"), (0, 0, "22:00", "02:00")),
@@ -82,24 +90,28 @@ def _fixed_now(monkeypatch, fixed):
     ("America/Bogota", (0, "22:00", "02:00"), (0, 1, "03:00", "07:00")),
 ])
 def test_ok_put_weekly_extreme_offsets(client, world, db, tz, local, expected):
+    """Fase 26: la fila guarda la hora LOCAL tal cual; su expansion a UTC es la que antes se guardaba."""
     _reset_teacher(db, world["tp"], tz)
     r = _put_weekly(client, world["t_user"], tz, [local])
     assert r.status_code == 200, r.text
-    assert _rows(db, world["tp"]) == [expected]
+    assert _rows(db, world["tp"]) == [(local[0], local[1], local[2])]
+    assert _utc_hhmm(tz, local, _next_utc_date(0, min_days=1)) == expected[1:]
 
 
 @pytest.mark.parametrize("old_tz,new_tz,expected", [
-    ("America/Bogota", "Asia/Tokyo", (0, 6, "23:00", "03:00")),      # 08-12 Tokio -> dom 23:00-03:00
-    ("Asia/Tokyo", "Etc/GMT+12", (0, 0, "20:00", "00:00")),          # 08-12 UTC-12 -> lun 20:00-00:00
-    ("Asia/Kolkata", "Pacific/Kiritimati", (0, 6, "18:00", "22:00")),
-    ("Pacific/Kiritimati", "Asia/Kolkata", (0, 0, "02:30", "06:30")),
+    ("America/Bogota", "Asia/Tokyo", (6, "23:00", "03:00")),      # 08-12 Tokio -> dom 23:00-03:00
+    ("Asia/Tokyo", "Etc/GMT+12", (0, "20:00", "00:00")),          # 08-12 UTC-12 -> lun 20:00-00:00
+    ("Asia/Kolkata", "Pacific/Kiritimati", (6, "18:00", "22:00")),
+    ("Pacific/Kiritimati", "Asia/Kolkata", (0, "02:30", "06:30")),
 ])
 def test_ok_tz_change_preserves_local_time_and_day(client, world, db, old_tz, new_tz, expected):
+    """Fase 26: cambiar de zona NO toca las filas (hora y dia locales intactos); solo cambia su UTC."""
     _reset_teacher(db, world["tp"], old_tz)
     assert _put_weekly(client, world["t_user"], old_tz, [(0, "08:00", "12:00")]).status_code == 200
     r = _patch_tz(client, world["t_user"], new_tz)
     assert r.status_code == 200, r.text
-    assert _rows(db, world["tp"]) == [expected]
+    assert _rows(db, world["tp"]) == [(0, "08:00", "12:00")]
+    assert _utc_hhmm(new_tz, (0, "08:00", "12:00"), _next_utc_date(0, min_days=1)) == expected
 
 
 def test_ok_same_tz_twice_and_same_offset_is_noop(client, world, db):
@@ -130,14 +142,12 @@ def test_ok_booked_class_instant_not_moved_by_tz_change(client, world, db):
 
 # ─── P1: franja semanal que cruza medianoche UTC ────────────────────────────
 
-def test_bug_wrapped_slot_ignores_next_day_classes_and_blocks(client, world, db):
-    """Fila del lunes 22:00-02:00 UTC (= Bogota 17-21). Las clases y excepciones del
-    martes 00:00-02:00 UTC NO se ven en la consulta del lunes -> slots ocupados se
-    ofrecen como libres."""
+def test_fixed_wrapped_slot_respects_next_day_classes_and_blocks(client, world, db):
+    """CORREGIDO Fase 24. Fila del lunes 22:00-02:00 UTC (= Bogota 17-21). Las clases y excepciones del
+    martes 00:00-02:00 UTC ahora se ven (consulta por dia local en Bogota): slots ocupados salen ocupados."""
     tp = world["tp"]
     _reset_teacher(db, tp, "UTC")
-    db.add(TeacherAvailability(teacher_id=tp.id, day_of_week=0, local_day_of_week=0,
-                               start_time_utc="22:00", end_time_utc="02:00", is_available=True))
+    db.add(TeacherAvailability(teacher_id=tp.id, day_of_week=0, start_time_local="22:00", end_time_local="02:00", is_available=True))
     mon = _next_utc_date(0)
     tue = mon + timedelta(days=1)
     db.add(Class(teacher_id=tp.id, student_id=world["sp"].id, class_type=ClassType.regular,
@@ -147,29 +157,30 @@ def test_bug_wrapped_slot_ignores_next_day_classes_and_blocks(client, world, db)
                                         end_time_utc=_utc(tue, 2), is_available=False, reason="bloqueo"))
     db.commit()
     r = client.get(f"{API}/availability/{tp.user_username}/slots",
-                   params={"date": mon.isoformat(), "duration": 25, "class_type": "regular"}, headers=hdr(world["s_user"]))
+                   params={"date": mon.isoformat(), "duration": 25, "class_type": "regular", "tz": "America/Bogota"},
+                   headers=hdr(world["s_user"]))
     assert r.status_code == 200, r.text
     by_start = {s["start_time_utc"][:16]: s["is_available"] for s in r.json()}
-    assert by_start[f"{tue.isoformat()}T00:00"] is True   # ocupado por la clase, se ofrece libre
-    assert by_start[f"{tue.isoformat()}T01:00"] is True   # bloqueado por excepcion, se ofrece libre
+    assert by_start[f"{tue.isoformat()}T00:00"] is False  # ocupado por la clase
+    assert by_start[f"{tue.isoformat()}T01:00"] is False  # bloqueado por excepcion
 
 
-def test_bug_wrapped_slot_after_midnight_rejected_by_booking_validation(client, world, db):
-    """El slot martes 00:30 UTC se OFRECE (consulta del lunes) pero la validacion de
-    reserva del alumno (enforce_availability) lo rechaza: solo mira filas del martes."""
+def test_fixed_wrapped_slot_after_midnight_accepted_by_booking_validation(client, world, db):
+    """CORREGIDO Fase 24: el slot martes 00:30 UTC se ofrece (dia local lunes en Bogota) y la validacion de
+    reserva del alumno (enforce_availability) tambien lo acepta (mira la cola de la fila del lunes)."""
     tp = world["tp"]
     _reset_teacher(db, tp, "UTC")
-    db.add(TeacherAvailability(teacher_id=tp.id, day_of_week=0, local_day_of_week=0,
-                               start_time_utc="22:00", end_time_utc="02:00", is_available=True))
+    db.add(TeacherAvailability(teacher_id=tp.id, day_of_week=0, start_time_local="22:00", end_time_local="02:00", is_available=True))
     db.commit()
     mon = _next_utc_date(0)
     tue = mon + timedelta(days=1)
     r = client.get(f"{API}/availability/{tp.user_username}/slots",
-                   params={"date": mon.isoformat(), "duration": 25, "class_type": "regular"}, headers=hdr(world["s_user"]))
+                   params={"date": mon.isoformat(), "duration": 25, "class_type": "regular", "tz": "America/Bogota"},
+                   headers=hdr(world["s_user"]))
     offered = {s["start_time_utc"][:16] for s in r.json() if s["is_available"]}
     assert f"{tue.isoformat()}T00:30" in offered
     ok, _ = is_within_teacher_availability(tp.id, _utc(tue, 0, 30), _utc(tue, 1, 5), db)
-    assert ok is False
+    assert ok is True
     # y antes de medianoche si se acepta
     ok2, _ = is_within_teacher_availability(tp.id, _utc(mon, 22, 30), _utc(mon, 23, 5), db)
     assert ok2 is True
@@ -177,36 +188,48 @@ def test_bug_wrapped_slot_after_midnight_rejected_by_booking_validation(client, 
 
 # ─── P2: valores de zona horaria invalidos/vacios en el perfil ──────────────
 
-@pytest.mark.parametrize("bad", ["Foo/Bar", "UTC+3"])
-def test_bug_profile_invalid_tz_crashes_500(client, world, db, bad):
+@pytest.mark.parametrize("bad", ["Foo/Bar", "UTC+3", ""])
+def test_fixed_profile_invalid_tz_rejected_422(client, world, db, bad):
+    """CORREGIDO Fase 21 (menor 7): el esquema valida la zona con ZoneInfo -> 422, ya no 500."""
+    tp = world["tp"]
+    before = tp.timezone
     r = _patch_tz(client, world["t_user"], bad)
-    assert r.status_code == 500  # ZoneInfo(new_tz) en _recalc_exception_rows sin capturar
+    assert r.status_code == 422
+    db.expire_all()
+    assert db.get(TeacherProfile, tp.id).timezone == before
 
 
-def test_bug_profile_invalid_tz_saved_when_old_tz_empty(client, world, db):
-    """Si la tz vieja es vacia/None no se recalcula y NADA valida la nueva: se guarda basura."""
+def test_fixed_profile_invalid_tz_not_saved_when_old_tz_empty(client, world, db):
+    """CORREGIDO Fase 21: aunque la tz vieja sea vacia, la nueva invalida se rechaza (422) y no se guarda."""
     tp = world["tp"]
     tp.timezone = None
     db.commit()
     r = _patch_tz(client, world["t_user"], "Foo/Bar")
-    assert r.status_code == 200
+    assert r.status_code == 422
     db.expire_all()
-    assert db.get(TeacherProfile, tp.id).timezone == "Foo/Bar"
+    assert db.get(TeacherProfile, tp.id).timezone is None
 
 
-@pytest.mark.parametrize("empty", ["", None])
-def test_bug_profile_empty_tz_saved_then_next_change_skips_recalc(client, world, db, empty):
+def test_fixed_profile_empty_string_tz_rejected(client, world, db):
+    """CORREGIDO Fase 21: "" ya no se guarda (ZoneInfo('') falla -> 422)."""
+    tp = world["tp"]
+    _reset_teacher(db, tp, "America/Bogota")
+    assert _patch_tz(client, world["t_user"], "").status_code == 422
+    db.expire_all()
+    assert db.get(TeacherProfile, tp.id).timezone == "America/Bogota"
+
+
+def test_fixed_profile_null_tz_rejected(client, world, db):
+    """CORREGIDO Fase 27 (Z3): `timezone: null` explicito se rechaza con 422 y la zona no cambia;
+    el siguiente cambio sigue recalculando el horario."""
     tp = world["tp"]
     _reset_teacher(db, tp, "America/Bogota")
     _put_weekly(client, world["t_user"], "America/Bogota", [(0, "09:00", "11:00")])
-    assert _rows(db, tp) == [(0, 0, "14:00", "16:00")]
-    r = _patch_tz(client, world["t_user"], empty)
-    assert r.status_code == 200
+    assert _rows(db, tp) == [(0, "09:00", "11:00")]
+    r = _patch_tz(client, world["t_user"], None)
+    assert r.status_code == 422
     db.expire_all()
-    assert db.get(TeacherProfile, tp.id).timezone == empty
-    # ahora pasa a Tokio: old_tz vacio -> recalc omitido -> el horario queda en 04:00-06:00 Tokio
-    assert _patch_tz(client, world["t_user"], "Asia/Tokyo").status_code == 200
-    assert _rows(db, tp) == [(0, 0, "14:00", "16:00")]  # deberia ser (0, 6, "00:00", "02:00")
+    assert db.get(TeacherProfile, tp.id).timezone == "America/Bogota"
 
 
 def test_bug_legacy_alias_tz_accepted(client, world, db):
@@ -228,43 +251,39 @@ def test_bug_users_me_timezone_silently_ignored(client, world, db):
 
 # ─── P3: la tz del cuerpo de PUT /weekly no se guarda ni se compara con el perfil ─
 
-def test_bug_weekly_tz_mismatch_with_profile_breaks_later_recalc(client, world, db):
+def test_fixed_weekly_tz_mismatch_with_profile_updates_profile_zone(client, world, db):
+    """Fase 26 (Z4): la zona con la que se escribe el horario pasa a ser la del perfil, y como el horario
+    es local no hay recalculo posterior que corra nada."""
     tp = world["tp"]
     _reset_teacher(db, tp, "UTC")  # perfil dice UTC (p.ej. navegador en otra tz o default)
-    _put_weekly(client, world["t_user"], "America/Bogota", [(0, "09:00", "11:00")])  # 14-16 UTC
+    _put_weekly(client, world["t_user"], "America/Bogota", [(0, "09:00", "11:00")])
     db.expire_all()
-    assert db.get(TeacherProfile, tp.id).timezone == "UTC"  # PUT no actualiza el perfil
+    assert db.get(TeacherProfile, tp.id).timezone == "America/Bogota"
     assert _patch_tz(client, world["t_user"], "America/Bogota").status_code == 200
-    # recalc cree que 14:00 era hora local UTC -> lo pasa a 14:00 Bogota = 19:00 UTC
-    assert _rows(db, tp) == [(0, 0, "19:00", "21:00")]  # el profe queria 09-11 Bogota (14-16)
+    assert _rows(db, tp) == [(0, "09:00", "11:00")]  # el profe queria 09-11 Bogota
 
 
-# ─── P4: recalculo con DST usa el offset de HOY, no el del momento en que se guardo ─
+# ─── P4: (CORREGIDO Fase 26, H3) el cambio de zona ya no usa ningun desfase: la hora local no se toca ─
 
-def test_bug_dst_recalc_bakes_wrong_local_hour(client, world, db, monkeypatch):
+def test_fixed_dst_tz_change_keeps_local_hour(client, world, db, monkeypatch):
     tp = world["tp"]
     _reset_teacher(db, tp, "Europe/Madrid")
     _fixed_now(monkeypatch, datetime(2027, 7, 5, 12, tzinfo=dt_tz.utc))   # verano (UTC+2)
     _put_weekly(client, world["t_user"], "Europe/Madrid", [(0, "09:00", "11:00")])
-    assert _rows(db, tp) == [(0, 0, "07:00", "09:00")]
+    assert _rows(db, tp) == [(0, "09:00", "11:00")]
     _fixed_now(monkeypatch, datetime(2027, 1, 11, 12, tzinfo=dt_tz.utc))  # invierno (UTC+1)
     assert _patch_tz(client, world["t_user"], "America/Bogota").status_code == 200
-    # 07:00 UTC se lee como 08:00 Madrid (invierno) -> 08:00 Bogota = 13:00 UTC; el profe dijo 09:00
-    assert _rows(db, tp) == [(0, 0, "13:00", "15:00")]
+    assert _rows(db, tp) == [(0, "09:00", "11:00")]   # antes: 08:00-10:00 para siempre
 
 
-# ─── P5: filas viejas sin local_day_of_week se corren de DIA ────────────────
+# ─── P5: (CORREGIDO Fase 26, Z7) el dia local no se corre nunca al cambiar de zona ───
 
-def test_bug_legacy_row_without_local_day_shifts_day(client, world, db):
+def test_fixed_tz_change_never_shifts_local_day(client, world, db):
     tp = world["tp"]
     _reset_teacher(db, tp, "Asia/Tokyo")
-    # lunes 08:00-10:00 Tokio = domingo 23:00-01:00 UTC, fila vieja sin local_day_of_week
-    db.add(TeacherAvailability(teacher_id=tp.id, day_of_week=6, local_day_of_week=None,
-                               start_time_utc="23:00", end_time_utc="01:00", is_available=True))
-    db.commit()
+    _put_weekly(client, world["t_user"], "Asia/Tokyo", [(0, "08:00", "10:00")])  # lunes local (= domingo en UTC)
     assert _patch_tz(client, world["t_user"], "America/Bogota").status_code == 200
-    # ancla = domingo (dia UTC) -> domingo 08:00 Bogota = domingo 13:00 UTC; deberia ser lunes 13:00
-    assert _rows(db, tp) == [(None, 6, "13:00", "15:00")]
+    assert _rows(db, tp) == [(0, "08:00", "10:00")]   # sigue siendo lunes 08:00 (ahora Bogota)
 
 
 # ─── P6: excepciones al cambiar de tz ───────────────────────────────────────
@@ -342,7 +361,7 @@ def test_bug_weekly_validation_gaps(client, world, db):
     mon = _next_utc_date(0)
     s0 = client.get(f"{API}/availability/{tp.user_username}/slots",
                     params={"date": mon.isoformat(), "duration": 25, "class_type": "regular"}, headers=hdr(world["s_user"])).json()
-    assert len(s0) >= 40  # 10:00 -> 10:00 del dia siguiente
+    assert len(s0) >= 28  # 10:00 -> 10:00 del dia siguiente: el dia UTC lunes solo trae los inicios hasta 23:30
 
 
 def test_ok_weekly_rejects_24_00(client, world, db):

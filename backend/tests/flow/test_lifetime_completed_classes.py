@@ -109,6 +109,20 @@ def clean_lifetime_slate(db, fixed_users, volatile):
         _cleanup,
         label="limpieza total: clases/enrollments/payments/packages/disponibilidad del par profesor-estudiante fijo",
     )
+    # Fase 28: arranca sobre una pizarra limpia. Restos de un test anterior que fallo (enrollments activos o
+    # de una cohorte cancelada, clases solapadas) cambian la etapa de reserva (needs_group_refund/ready) y
+    # hacen fallar este test por datos, no por logica.
+    try:
+        from app.models.class_participant import ClassParticipant
+        s0 = db.__class__(bind=db.get_bind())
+        try:
+            s0.query(ClassParticipant).filter(ClassParticipant.student_id == state["student_id"]).delete(synchronize_session=False)
+            s0.commit()
+        finally:
+            s0.close()
+        _cleanup()
+    except Exception:
+        pass
     return state
 
 
@@ -491,6 +505,12 @@ def test_lifetime_counter_counts_group_classes_and_excludes_cancelled_participan
     }, headers=auth_headers(teacher_token))
     assert r_session.status_code == 201, r_session.text
     session_class_id = r_session.json()["id"]
+    # Fase 19: la sesión OMITE a un alumno que ya tiene otra clase/sesión solapada (restos de otros tests en
+    # la BD de dev lo harían no-participante y el contador no sube). Falla con un mensaje claro.
+    assert r_session.json().get("skipped_participants") in (None, []), (
+        f"El alumno fijo fue omitido de la sesión por solapamiento con otra clase: {r_session.json()['skipped_participants']}. "
+        "Hay datos residuales del par profesor-alumno en la BD de dev."
+    )
 
     # 4) Segundo participante ad-hoc, con una participación ya CANCELADA
     # en esta misma sesión (simula un alumno que se salió del grupo antes

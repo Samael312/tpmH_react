@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status, UploadFile, File, Form, Body
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import logging
 from app.core.email import send_material_assigned_email
 from app.db.base import get_db
-from app.auth.dependencies import get_current_user, get_current_teacher, get_current_student, get_current_approved_teacher
+from app.auth.dependencies import get_current_user, get_current_teacher, get_current_student, get_current_approved_teacher, require_superadmin
 from app.models.user import User, UserRole
 from app.models.material import Material, MaterialAssignment
 from app.models.student import StudentProfile
@@ -17,6 +17,7 @@ from app.schemas.materials import (
     MaterialAssignmentResponse,
     UpdateProgressRequest,
 )
+from pydantic import ValidationError
 from app.core.storage import upload_file_stream, delete_file
 from app.core.upload_quota import ensure_quota, get_upload_size, usage as quota_usage
 
@@ -45,6 +46,13 @@ def create_material(
     Puede ser un archivo subido o solo metadatos
     (para sets de vocabulario que se crean por separado).
     """
+    # TE-11: los campos de formulario (no pasan por un esquema JSON) se validan con el mismo esquema que el resto.
+    try:
+        checked = MaterialCreate(title=title, category=category, description=description, level=level or None)
+    except ValidationError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, e.errors()[0]["msg"].replace("Value error, ", ""))
+    title, category, description, level = checked.title, checked.category, checked.description, checked.level
+
     file_url = None
     file_public_id = None
     file_type = None
@@ -105,7 +113,8 @@ def update_material(
     """
     material = db.query(Material).filter(
         Material.id == material_id,
-        Material.teacher_id == current_user.teacher_profile.id
+        Material.teacher_id == current_user.teacher_profile.id,
+        Material.is_active == True,  # noqa: E712  (TE-11: un material borrado no se edita)
     ).first()
 
     if not material:
@@ -137,7 +146,8 @@ def set_vocabulary_words(
     """
     material = db.query(Material).filter(
         Material.id == material_id,
-        Material.teacher_id == current_user.teacher_profile.id
+        Material.teacher_id == current_user.teacher_profile.id,
+        Material.is_active == True,  # noqa: E712
     ).first()
 
     if not material:
@@ -145,6 +155,9 @@ def set_vocabulary_words(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Material no encontrado"
         )
+
+    if len(words) > 500 or any(len(w) > 100 for w in words):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Máximo 500 palabras de hasta 100 caracteres")
 
     seen = set()
     clean_words = []
@@ -173,7 +186,8 @@ def assign_material(
     """
     material = db.query(Material).filter(
         Material.id == material_id,
-        Material.teacher_id == current_user.teacher_profile.id
+        Material.teacher_id == current_user.teacher_profile.id,
+        Material.is_active == True,  # noqa: E712  (TE-11: no se asigna un material borrado)
     ).first()
 
     if not material:
@@ -274,6 +288,26 @@ def get_my_materials_teacher(
     ).order_by(Material.created_at.desc()).all()
 
 
+@router.get("/admin/list", response_model=List[MaterialResponse])
+def list_materials_admin(
+    response: Response,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    teacher_id: Optional[int] = Query(None),
+    q: Optional[str] = Query(None, max_length=100),
+    current_user: User = Depends(require_superadmin),
+    db: Session = Depends(get_db),
+):
+    """Superadmin: materiales activos de cualquier profesor (descarga vía /{id}/stream)."""
+    query = db.query(Material).filter(Material.is_active == True)
+    if teacher_id is not None:
+        query = query.filter(Material.teacher_id == teacher_id)
+    if q and q.strip():
+        query = query.filter(Material.title.ilike(f"%{q.strip()}%"))
+    response.headers["X-Total-Count"] = str(query.count())
+    return query.order_by(Material.created_at.desc(), Material.id.desc()).offset(offset).limit(limit).all()
+
+
 @router.delete("/{material_id}")
 def delete_material(
     material_id: int,
@@ -366,14 +400,14 @@ def stream_material_file(
     db: Session = Depends(get_db)
 ):
     """Redirige directamente al archivo en Cloudinary de forma segura"""
-    material = db.query(Material).filter(Material.id == material_id).first()
+    material = db.query(Material).filter(Material.id == material_id, Material.is_active == True).first()  # noqa: E712
     if not material or not material.file_url:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Archivo no encontrado"
         )
 
-    is_staff = current_user.role in (UserRole.superadmin, UserRole.teacher_admin)
+    is_staff = current_user.role == UserRole.superadmin
     is_owner_teacher = (
         current_user.teacher_profile is not None
         and material.teacher_id == current_user.teacher_profile.id

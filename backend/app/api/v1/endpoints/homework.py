@@ -235,6 +235,16 @@ def grade_homework(
             detail="No tienes permiso para calificar esta tarea"
         )
 
+    # Fase 22 (m3): solo se califica una tarea activa y una entrega ya enviada (o una nota a corregir). Antes se
+    # podia calificar una asignacion `pending` sin entrega (el alumno recibia nota y correo sin haber entregado).
+    if not homework.is_active:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Esta tarea está desactivada: no se puede calificar.")
+    if assignment.status not in ("submitted", "graded"):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "El alumno aún no ha entregado esta tarea: no se puede calificar.",
+        )
+
     assignment.score = data.score
     assignment.feedback = data.feedback
     assignment.status = "graded"

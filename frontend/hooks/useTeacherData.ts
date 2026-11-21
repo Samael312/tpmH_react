@@ -3,7 +3,7 @@ import { fetchMe } from '@/lib/me'
 import { fetchAllPages } from "@/lib/pagination";
 import { useLoadMoreList } from "@/hooks/useLoadMoreList";
 import type { SpokenLanguage } from '@/lib/spokenLanguages'
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 export interface TeacherClass {
   id: number
@@ -56,11 +56,11 @@ export interface TeacherProfile {
 export interface WeeklySlot {
   id: number
   teacher_id: number
-  day_of_week: number         // día real en UTC (uso interno del backend para reservas)
-  local_day_of_week: number   // día que el profesor eligió en su calendario — usar este para mostrar en UI
-  start_time_utc: string
-  end_time_utc: string
+  day_of_week: number         // día LOCAL del profesor (0=Lunes ... 6=Domingo), Fase 26
+  start_time_local: string    // "18:00" hora local del profesor (sin UTC: se pinta tal cual)
+  end_time_local: string      // "20:00"; si <= inicio cruza la medianoche local
   is_available: boolean
+  timezone: string            // zona IANA con la que se interpreta (la del perfil del profesor)
 }
 
 export interface WalletData {
@@ -382,24 +382,6 @@ export function useWallet() {
     isError: query.isError,
     refetch: query.refetch,
   }
-}
-
-interface WithdrawalPayload {
-  amount: number
-  destination_method: string
-  destination_details: string
-}
-
-export function useRequestWithdrawal() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: WithdrawalPayload) =>
-      api.post("/payments/request-withdrawal", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["teacher", "wallet"] })
-    },
-  })
 }
 
 // ─── Google Calendar status ──────────────────────────────────────────────────

@@ -43,44 +43,18 @@ def is_within_teacher_availability(
     donde antes no había ningún chequeo contra la disponibilidad
     declarada, solo contra choques con otras clases.
     """
-    from app.models.availability import TeacherAvailability, TeacherAvailabilityException
-    from app.core.timezone import build_weekly_range_utc
+    # Fase 24: mismo motor que la rejilla de huecos (core/slot_availability.py). Los rangos se
+    # arman por SOLAPE con [start, end) (incluida la cola de la fila UTC del dia anterior que
+    # cruza medianoche) y las excepciones se cargan por solape, no por dia UTC de inicio.
+    from app.core.slot_availability import load_teacher_window
 
-    date_str = start_utc.strftime("%Y-%m-%d")
-    day_of_week = start_utc.weekday()  # 0=Lunes ... 6=Domingo (ISO)
+    tw = load_teacher_window(db, teacher_id, start_utc, end_utc, include_classes=False)
+    for b_s, b_e in tw.blocks:
+        # Bloqueo puntual: si se solapa con el horario pedido, no es válido
+        if b_s < end_utc and b_e > start_utc:
+            return False, "El profesor bloqueó ese horario (excepción de no disponibilidad)"
 
-    weekly_slots = db.query(TeacherAvailability).filter(
-        TeacherAvailability.teacher_id == teacher_id,
-        TeacherAvailability.day_of_week == day_of_week,
-        TeacherAvailability.is_available == True,
-    ).all()
-
-    availability_ranges = []
-    for slot in weekly_slots:
-        try:
-            r_start, r_end = build_weekly_range_utc(date_str, slot.start_time_utc, slot.end_time_utc)
-            availability_ranges.append((r_start, r_end))
-        except ValueError:
-            continue
-
-    day_start = start_utc.replace(hour=0, minute=0, second=0, microsecond=0)
-    day_end = day_start + timedelta(days=1)
-
-    exceptions = db.query(TeacherAvailabilityException).filter(
-        TeacherAvailabilityException.teacher_id == teacher_id,
-        TeacherAvailabilityException.start_time_utc < day_end,
-        TeacherAvailabilityException.end_time_utc > day_start,
-    ).all()
-
-    for exc in exceptions:
-        if exc.is_available:
-            availability_ranges.append((exc.start_time_utc, exc.end_time_utc))
-        else:
-            # Bloqueo puntual: si se solapa con el horario pedido, no es válido
-            if exc.start_time_utc < end_utc and exc.end_time_utc > start_utc:
-                return False, "El profesor bloqueó ese horario (excepción de no disponibilidad)"
-
-    for r_start, r_end in availability_ranges:
+    for r_start, r_end in tw.ranges:
         if start_utc >= r_start and end_utc <= r_end:
             return True, ""
 
@@ -265,6 +239,58 @@ def lock_class_row(db: Session, class_id: int) -> "Class":
     return db.query(Class).filter(Class.id == class_id).with_for_update().populate_existing().first()
 
 
+def _google_busy_conflict(
+    teacher_id: int,
+    start_time_utc: datetime,
+    end_time_utc: datetime,
+    exclude_class_id: int | None,
+    db: Session,
+) -> bool:
+    """True si freebusy de Google marca ocupado algun instante de [start, end). Falla ABIERTO: si Google no
+    responde (caida, token invalido, cuota) se registra y se deja reservar, para no bloquear reservas por una
+    caida de un tercero. Si se esta reagendando una clase, el evento de Google de su horario ANTERIOR
+    (exactamente [inicio, fin] de esa clase) se ignora: es la propia clase, no un compromiso externo."""
+    from app.models.google_calendar import GoogleCalendarToken
+    has_token = db.query(GoogleCalendarToken.id).filter(
+        GoogleCalendarToken.teacher_id == teacher_id,
+        GoogleCalendarToken.is_active == True,  # noqa: E712
+        GoogleCalendarToken.needs_reauth == False,  # noqa: E712
+    ).first()
+    if not has_token:
+        return False
+    gdb = None
+    try:
+        from app.core.google_calendar import get_teacher_busy_ranges
+        from app.db.base import SessionLocal
+        # Sesion PROPIA: refrescar el token de Google hace commit y soltaria el lock de la reserva en curso.
+        gdb = SessionLocal()
+        own = None
+        if exclude_class_id:
+            old = db.query(Class.start_time_utc, Class.end_time_utc).filter(Class.id == exclude_class_id).first()
+            if old:
+                own = (old[0], old[1])
+        # Con una clase propia que se mueve, la ventana incluye su horario anterior: Google recorta freebusy a la
+        # ventana pedida y, sin esto, su evento llegaria cortado y no se reconoceria como "el mismo".
+        w_start = min(start_time_utc, own[0]) if own else start_time_utc
+        w_end = max(end_time_utc, own[1]) if own else end_time_utc
+        busy = get_teacher_busy_ranges(teacher_id, w_start, w_end, gdb, strict=True)
+        if not busy:
+            return False
+        tol = timedelta(minutes=1)
+        for b_start, b_end in busy:
+            if own and abs(b_start - own[0]) <= tol and abs(b_end - own[1]) <= tol:
+                continue
+            if b_start < end_time_utc and b_end > start_time_utc:
+                return True
+        return False
+    except Exception as e:
+        logger.warning(f"No se pudo consultar Google Calendar al reservar (teacher_id={teacher_id}); se permite: {e}")
+        return False
+    finally:
+        if gdb is not None:
+            gdb.close()
+
+
 def can_book_slot(
     start_time_utc: datetime,
     teacher_id: int,
@@ -308,55 +334,27 @@ def can_book_slot(
         if not in_availability:
             return False, "Ese horario no está dentro de la disponibilidad del profesor"
 
-    # Prefiltro amplio en SQL (3h cubre de sobra cualquier duración+margen
-    # posible hoy: máximo 110min + 10min = 120min). El chequeo exacto de
-    # solape se hace en Python más abajo, porque necesita sumarle a cada
-    # clase existente SU PROPIO margen de preparación (Class.buffer_minutes),
-    # que ya no es igual a end_time_utc a secas.
+    # Prefiltro (3h cubre cualquier duración+margen actual: máx 110+10 min) para los chequeos del
+    # ALUMNO más abajo; el chequeo exacto de solape se hace en Python.
     end_approx = start_time_utc + timedelta(hours=3)
     lookback = start_time_utc - timedelta(hours=3)
 
-    def _occupied_end(c: Class) -> datetime:
-        return c.end_time_utc + timedelta(minutes=c.buffer_minutes or 0)
-
-    # BUG-04 fix: "expired" se trata igual que "cancelled" (no bloquea el
-    # slot). "pending" ya no es necesario en esta lista: las clases
-    # regulares ahora siempre se crean directamente como "confirmed"
-    # (ver book_class), por lo que ese estado ya no puede ocurrir para
-    # clases nuevas; se deja fuera de la exclusión a propósito por si
-    # existieran filas históricas previas a este cambio.
-    #
-    # Las clases grupales ("group") se excluyen de este chequeo de
-    # disponibilidad del profesor: varios alumnos comparten el mismo
-    # Class/horario a propósito (ver can_join_group_class para el
-    # chequeo de cupo, que es el que corresponde ahí). Sin esta
-    # exclusión, el segundo alumno que intente unirse a la cohorte
-    # se encontraría con "El profesor ya tiene una clase en ese horario".
-    query = db.query(Class).filter(
-        Class.teacher_id == teacher_id,
-        Class.start_time_utc < end_approx,
-        Class.start_time_utc > lookback,
-        # AUD-02: una prueba pendiente de confirmar (pending_trial) y las sesiones
-        # grupales SI ocupan la agenda del profesor (antes se ignoraban y dos
-        # alumnos podian reservar la misma hora). El cupo de un grupo se valida
-        # aparte (can_join_group_class), no por esta via.
-        Class.status.notin_(["cancelled", "expired"]),
-    )
-    if exclude_class_id:
-        query = query.filter(Class.id != exclude_class_id)
-    # D5 fix: dos intervalos [a_start, a_end) y [b_start, b_end) se
-    # solapan solo si a_start < b_end Y b_start < a_end -- las DOS
-    # condiciones. Antes solo se evaluaba la primera (candidato empieza
-    # antes de que termine, con margen, la clase existente), lo cual
-    # también es cierto para cualquier candidato bien anterior que ni
-    # siquiera llega a tocar esa clase. Con la segunda condición
-    # (la clase existente empieza antes de que termine, con margen, el
-    # candidato) se descarta ese falso positivo.
+    # Fase 24 (C2): clases por SOLAPE con el bloque candidato (fin + margen de la existente > inicio y
+    # su inicio < fin del candidato), no por "inicio dentro de +-3 h". Es la misma carga que usa la
+    # rejilla (core/slot_availability.py), asi una clase que cruza la medianoche UTC bloquea los dos dias.
+    # BUG-04: "expired" = "cancelled" (no ocupa). AUD-02: pending_trial y sesiones grupales SI ocupan
+    # (el cupo de un grupo se valida aparte, can_join_group_class).
+    from app.core.slot_availability import load_busy_classes
     if any(
-        start_time_utc < _occupied_end(c) and c.start_time_utc < end_time_utc
-        for c in query.all()
+        start_time_utc < c_end and c_start < end_time_utc
+        for c_start, c_end, _ in load_busy_classes(db, teacher_id, start_time_utc, end_time_utc, exclude_class_id)
     ):
         return False, "El profesor ya tiene una clase en ese horario (o no ha pasado su margen de preparación)"
+
+    # G3: si el profesor tiene Google Calendar activo, el hueco exacto tambien debe estar libre alli
+    # (eventos creados en Google entre que se listaron los slots y se reservo, o reservas por API).
+    if _google_busy_conflict(teacher_id, start_time_utc, end_time_utc, exclude_class_id, db):
+        return False, "El profesor tiene otro compromiso en ese horario (Google Calendar)"
 
     # AUD-18: una sesion grupal no tiene student_id (NULL). Con `== None` SQL comparaba
     # `IS NULL` y daba un falso choque con cualquier otra sesion grupal; sin alumno
@@ -375,7 +373,7 @@ def can_book_slot(
     # D5 fix: mismo problema y misma corrección que arriba, del lado del
     # estudiante.
     if any(
-        start_time_utc < _occupied_end(c) and c.start_time_utc < end_time_utc
+        start_time_utc < c.end_time_utc and c.start_time_utc < end_time_utc  # alumno: sin margen del profesor
         for c in query_student.all()
     ):
         return False, "Ya tienes una clase en ese horario"
@@ -404,7 +402,7 @@ def can_book_slot(
         )
     )
     if any(
-        start_time_utc < _occupied_end(c) and c.start_time_utc < end_time_utc
+        start_time_utc < c.end_time_utc and c.start_time_utc < end_time_utc  # alumno: sin margen del profesor
         for c in query_group_participation.all()
     ):
         return False, "Ya tienes una clase en ese horario"
@@ -524,22 +522,119 @@ def resolve_status_after_reschedule(class_: Class) -> str:
     return class_.status
 
 
+# ─── Fase 22 (E2): matriz unica de transiciones de estado de clase ────────────
+# La usan PATCH /classes/{id}/status, DELETE /classes/teacher/{id} y los endpoints de reagendar/cancelar
+# del superadmin. Una clase cancelada/vencida NO se reabre por estado: solo se reagenda (y solo las
+# reagendables, ver can_reschedule_class). Las clases ya dadas solo se corrigen dentro de la ventana de 72 h.
+OPEN_CLASS_STATUSES = {"pending", "pending_trial", "pending_payment", "confirmed"}
+FINISHED_CLASS_STATUSES = {"completed", "no_show", "finalized"}
+CLASS_STATUS_TRANSITIONS: dict[str, set[str]] = {
+    "pending": {"confirmed", "cancelled", "completed", "no_show"},
+    "pending_trial": {"confirmed", "cancelled", "completed", "no_show"},
+    "pending_payment": {"confirmed", "cancelled", "completed", "no_show"},
+    "confirmed": {"cancelled", "completed", "no_show", "finalized"},
+    "finalized": {"completed", "no_show"},
+    "completed": {"no_show", "finalized"},
+    "no_show": {"completed", "finalized"},
+    "cancelled": set(),
+    "expired": set(),
+    "rescheduled": set(),
+}
+STATUS_LABELS_ES = {
+    "pending": "pendiente", "pending_trial": "prueba pendiente", "pending_payment": "pago pendiente",
+    "confirmed": "confirmada", "completed": "completada", "no_show": "no asistió",
+    "finalized": "finalizada sin marcar", "cancelled": "cancelada", "expired": "vencida",
+    "rescheduled": "reagendada",
+}
+
+
+def validate_class_status_transition(class_: Class, new_status: str, now: datetime | None = None) -> tuple[bool, str]:
+    """(ok, mensaje). Misma transicion = no-op permitido. No toca la BD."""
+    now = now or utc_now()
+    old = class_.status
+    if old == new_status:
+        return True, ""
+    label = STATUS_LABELS_ES.get(old, old)
+    if new_status == "rescheduled":
+        return False, "Para mover una clase usa «Reagendar»."
+    if old == "cancelled":
+        return False, "La clase está cancelada y no se puede reabrir. Si hace falta, reagéndala."
+    allowed = CLASS_STATUS_TRANSITIONS.get(old, set())
+    if new_status not in allowed:
+        if new_status == "cancelled":
+            return False, f"No se puede cancelar una clase {label}."
+        if new_status == "confirmed" and old in FINISHED_CLASS_STATUSES:
+            return False, f"La clase ya está {label}: para darle una nueva fecha usa «Reagendar»."
+        return False, f"No se puede pasar una clase de «{label}» a «{STATUS_LABELS_ES.get(new_status, new_status)}»."
+    if old in FINISHED_CLASS_STATUSES or new_status in ("completed", "no_show", "finalized"):
+        if now - class_.end_time_utc > timedelta(hours=CLASS_STATUS_WINDOW_HOURS):
+            return False, f"Ya pasaron {CLASS_STATUS_WINDOW_HOURS}h desde el fin de la clase; el estado quedó bloqueado."
+    if new_status == "cancelled" and class_.end_time_utc <= now:
+        return False, "No se puede cancelar una clase que ya pasó."
+    if new_status in ("completed", "no_show") and class_.start_time_utc > now:
+        return False, "No puedes marcar como completada o no asistida una clase que aún no ha empezado."
+    return True, ""
+
+
+def apply_reschedule_status(class_: Class, db: Session) -> str:
+    """
+    Fase 22 (TE-02): fija el estado tras reagendar y mantiene los contadores. Reagendar un `no_show` (cortesia)
+    a 'confirmed' devuelve el credito que ya se habia contado (antes se contaba dos veces al completarla).
+    No hace commit.
+    """
+    old_status = class_.status
+    new_status = resolve_status_after_reschedule(class_)
+    sync_student_lifetime_class_counter(class_, old_status, new_status, db=db)
+    class_.status = new_status
+    if old_status == "no_show" and new_status != "no_show" and class_.class_type == ClassType.regular and class_.enrollment_id:
+        update_enrollment_counter(class_.enrollment_id, delta=-1, db=db, class_=class_)
+    return new_status
+
+
+# Fase 22 (E1): tolerancia al comparar Class.created_at (a veces con resolucion de segundos) con el
+# inicio del ciclo (Enrollment.activated_at, que se renueva al aprobar una renovacion/cambio de paquete).
+CYCLE_START_TOLERANCE = timedelta(seconds=2)
+
+
+def class_in_current_cycle(class_: "Class | None", enrollment: Enrollment) -> bool:
+    """
+    Fase 22 (E1): ¿la clase pertenece al ciclo actual del enrollment? Renovar/cambiar de paquete pone
+    classes_used=0 pero las clases del ciclo anterior siguen ligadas al enrollment: al completarse NO deben
+    sumar al contador nuevo (antes lo llenaban y el enrollment pasaba a 'completed' con creditos disponibles).
+    Una clase creada antes del inicio del ciclo (activated_at) es del ciclo anterior.
+    """
+    if class_ is None or enrollment.activated_at is None:
+        return True
+    created = getattr(class_, "created_at", None)
+    if created is None:
+        return True
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+    started = enrollment.activated_at
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=UTC)
+    return created >= started - CYCLE_START_TOLERANCE
+
+
 def update_enrollment_counter(
     enrollment_id: int,
     delta: int,
-    db: Session
+    db: Session,
+    class_: "Class | None" = None,
 ):
     """
     Actualiza el contador de clases usadas en un enrollment.
     delta=1 cuando se completa una clase
     delta=-1 cuando se cancela una clase completada
+    `class_` (Fase 22, E1): si es de un ciclo anterior (renovacion/cambio de paquete) no toca el contador.
     """
     enrollment = db.query(Enrollment).filter(
         Enrollment.id == enrollment_id
     ).first()
 
     if enrollment:
-        enrollment.classes_used = max(0, enrollment.classes_used + delta)
+        if class_ is None or class_in_current_cycle(class_, enrollment):
+            enrollment.classes_used = max(0, enrollment.classes_used + delta)
 
         # AUD-09: solo se alterna active <-> completed. Antes se forzaba 'active' y se
         # pisaban estados pendientes (pending_renewal, pending_package_change) y cancelled.
@@ -552,6 +647,34 @@ def update_enrollment_counter(
                 enrollment.status = "active"
 
         db.commit()
+
+def _cohort_cancelled_refund_pending(student_id: int, teacher_id: int, db: Session) -> bool:
+    """
+    F3 / Fase 22 (E5): ¿el alumno tiene un enrollment pagado de una cohorte cancelada por el profesor y aun sin
+    reembolso pedido/aprobado? (Cancelar la cohorte conserva `cohort_id` en el enrollment para poder encontrarlo.)
+    """
+    from app.models.group_cohort import GroupCohort, CohortStatus
+    enrollment = (
+        db.query(Enrollment)
+        .join(GroupCohort, Enrollment.cohort_id == GroupCohort.id)
+        .filter(
+            Enrollment.student_id == student_id,
+            Enrollment.teacher_id == teacher_id,
+            Enrollment.status == EnrollmentStatus.cancelled,
+            Enrollment.payment_status == "paid",
+            GroupCohort.status == CohortStatus.cancelled,
+        )
+        .order_by(Enrollment.id.desc())
+        .first()
+    )
+    if not enrollment:
+        return False
+    return db.query(Payment).filter(
+        Payment.enrollment_id == enrollment.id,
+        Payment.payment_type == "refund",
+        Payment.status.in_(["pending_review", "approved"]),
+    ).first() is None
+
 
 def get_student_booking_stage(student_id: int, teacher_id: int, db: Session, *, heal: bool = True) -> str:
     """
@@ -591,6 +714,10 @@ def get_student_booking_stage(student_id: int, teacher_id: int, db: Session, *, 
     if trial_statuses & trial_in_progress_statuses:
         return "trial_in_progress"
     if not trial_statuses & trial_used_statuses:
+        # Fase 22 (E5): un alumno que entro a un grupo sin prueba previa y cuyo grupo se cancelo debe ver primero
+        # el reembolso pendiente, no "needs_trial".
+        if _cohort_cancelled_refund_pending(student_id, teacher_id, db):
+            return "needs_group_refund"
         return "needs_trial"
 
     # Fase 14, E9: los enrollments no cancelados de esta pareja, de una vez (antes, hasta 4 consultas:
@@ -647,28 +774,8 @@ def get_student_booking_stage(student_id: int, teacher_id: int, db: Session, *, 
     # que pagó para entrar a ese grupo. Una vez que el staff aprueba (o
     # rechaza) ese reembolso, el enrollment deja de calificar acá (el
     # Payment ya no está "pending_review") y sigue el flujo normal.
-    from app.models.group_cohort import GroupCohort, CohortStatus
-    cohort_cancelled_pending_refund = (
-        db.query(Enrollment)
-        .join(GroupCohort, Enrollment.cohort_id == GroupCohort.id)
-        .filter(
-            Enrollment.student_id == student_id,
-            Enrollment.teacher_id == teacher_id,
-            Enrollment.status == EnrollmentStatus.cancelled,
-            Enrollment.payment_status == "paid",
-            GroupCohort.status == CohortStatus.cancelled,
-        )
-        .order_by(Enrollment.id.desc())
-        .first()
-    )
-    if cohort_cancelled_pending_refund:
-        already_refunded = db.query(Payment).filter(
-            Payment.enrollment_id == cohort_cancelled_pending_refund.id,
-            Payment.payment_type == "refund",
-            Payment.status.in_(["pending_review", "approved"]),
-        ).first()
-        if not already_refunded:
-            return "needs_group_refund"
+    if _cohort_cancelled_refund_pending(student_id, teacher_id, db):
+        return "needs_group_refund"
 
     # D4 fix (confirmado, no reabrir): un enrollment "cancelled" -- sea
     # porque nunca se activó (pago inicial rechazado/nunca notificado) o
@@ -768,6 +875,44 @@ def notify_teachers_auto_no_show(db: Session, classes: list[Class]) -> None:
         )
 
 
+UNCONFIRMED_TRIAL_NOTIFICATION = "trial_unconfirmed"
+
+
+def notify_teachers_unconfirmed_trials(db: Session, classes: list[Class]) -> None:
+    """Fase 22 (E6): avisa (una vez por clase: solo se llama al pasar de pending_trial a finalized) a cada
+    profesor de sus pruebas que terminaron sin confirmar/marcar. No hace commit."""
+    if not classes:
+        return
+    from collections import defaultdict
+    from app.core.notifications import create_notification
+    from app.core.timezone import format_local_datetime
+    by_teacher: dict[int, list[Class]] = defaultdict(list)
+    for c in classes:
+        by_teacher[c.teacher_id].append(c)
+    for items in by_teacher.values():
+        teacher = items[0].teacher
+        if teacher is None or teacher.user_id is None:
+            continue
+        lines = [
+            f"• {format_local_datetime(c.start_time_utc, teacher.timezone)}"
+            + (f" (alumno: {c.student.user_username})" if c.student is not None else "")
+            for c in sorted(items, key=lambda x: x.start_time_utc)[:AUTO_NO_SHOW_MAX_LISTED]
+        ]
+        lines.append(
+            f"Marca si se dio o no en las próximas {CLASS_STATUS_WINDOW_HOURS} h. Pasado ese plazo la prueba se "
+            "cancela sin gastar la prueba gratis del alumno."
+        )
+        n = len(items)
+        create_notification(
+            db,
+            type=UNCONFIRMED_TRIAL_NOTIFICATION,
+            title="Una clase de prueba terminó sin confirmar" if n == 1 else f"{n} clases de prueba terminaron sin confirmar",
+            message=NOTIFICATION_LINE_BREAK.join(lines),
+            recipient_role="teacher",
+            recipient_user_id=teacher.user_id,
+        )
+
+
 def finalize_past_classes(db: Session) -> int:
     """
     Marca como 'finalized' las clases confirmadas cuyo horario ya terminó,
@@ -785,6 +930,19 @@ def finalize_past_classes(db: Session) -> int:
     for c in expired_confirmed:
         c.status = "finalized"
         count += 1
+
+    # Fase 22 (E6): una prueba que el profesor nunca confirmo ni marco pasa a `finalized` con la misma
+    # ventana de 72 h que una `confirmed` (antes iba directo a `no_show`, quemaba la prueba gratis del alumno y
+    # sumaba a sus contadores por una omision del profesor). Se avisa al profesor.
+    expired_pending_trials = db.query(Class).filter(
+        Class.status == "pending_trial",
+        Class.end_time_utc < now,
+    ).all()
+    for c in expired_pending_trials:
+        c.status = "finalized"
+        count += 1
+    notify_teachers_unconfirmed_trials(db, expired_pending_trials)
+    expired_confirmed = expired_confirmed + expired_pending_trials
 
     # NEG-02: pasadas CLASS_STATUS_WINDOW_HOURS sin que el profesor la marque,
     # una clase `finalized` pasa a `no_show` (consume el credito). El profesor
@@ -804,28 +962,17 @@ def finalize_past_classes(db: Session) -> int:
         c for c in expired_confirmed
         if c.end_time_utc < auto_cutoff and c.class_type != ClassType.external and c not in unresolved
     ]
+    auto_no_show: list[Class] = []
     for c in unresolved:
+        count += 1
+        # Nota (Fase 22, E6): sin una marca en el esquema no se distingue una prueba que nunca se confirmo de una que
+        # si; se mantiene la decision del dueno (2026-11-17): una prueba sin marcar tras 72 h cuenta como usada.
         sync_student_lifetime_class_counter(c, "finalized", "no_show", db=db)
         c.status = "no_show"
-        count += 1
+        auto_no_show.append(c)
         if c.class_type == ClassType.regular and c.enrollment_id:
-            update_enrollment_counter(c.enrollment_id, delta=1, db=db)
-    notify_teachers_auto_no_show(db, unresolved)
-
-    # BUG-04/12 fix: "pending" y "pending_payment" para clases regulares ya
-    # no pueden producirse (el flujo de "reservar y pagar después" fue
-    # eliminado); solo queda "pending_trial" para clases de prueba nunca
-    # confirmadas por el profesor/staff.
-    expired_pending = db.query(Class).filter(
-        Class.status == "pending_trial",
-        Class.end_time_utc < now,
-    ).all()
-    for c in expired_pending:
-        sync_student_lifetime_class_counter(c, "pending_trial", "no_show", db=db)
-        c.status = "no_show"
-        count += 1
-        if c.class_type == ClassType.regular and c.enrollment_id:
-            update_enrollment_counter(c.enrollment_id, delta=1, db=db)
+            update_enrollment_counter(c.enrollment_id, delta=1, db=db, class_=c)
+    notify_teachers_auto_no_show(db, auto_no_show)
 
     if count:
         db.commit()
@@ -1005,6 +1152,6 @@ def cancel_class_and_refund(
                 enrollment.prepaid_unlimited_credits += 1
             class_.used_prepaid_credit = False
         elif class_.class_type == ClassType.regular and class_.enrollment_id and old_counts:
-            update_enrollment_counter(class_.enrollment_id, delta=-1, db=db)
+            update_enrollment_counter(class_.enrollment_id, delta=-1, db=db, class_=class_)
 
     return credit_returned

@@ -7,6 +7,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.db.base import Base
+from app.db.types import Money
 
 
 class EnrollmentStatus(str, enum.Enum):
@@ -28,7 +29,7 @@ class Package(Base):
 
     description = Column(String, nullable=True)
     classes_count = Column(Integer, nullable=True)  # NULL si es paquete ilimitado/mensual
-    price = Column(Float, nullable=False)
+    price = Column(Money, nullable=False)
     # Correcciones Extra (informe D1-D14): precio de una clase suelta
     # dentro de este paquete, cargado a mano por el profesor en vez de
     # derivarse siempre como price/classes_count (evita arrastrar el
@@ -38,7 +39,7 @@ class Package(Base):
     # no aplica a paquetes ilimitados (classes_count NULL). Paquetes
     # creados antes de este campo quedan en NULL — ver
     # app.core.class_logic.get_price_per_class para el fallback.
-    price_per_class = Column(Float, nullable=True)
+    price_per_class = Column(Money, nullable=True)
     duration_minutes = Column(Integer, default=50)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -72,7 +73,7 @@ class Package(Base):
     # Campos para pagos en cuotas
     allow_installments = Column(Boolean, default=False)
     installment_count = Column(Integer, nullable=True)   # Número total de cuotas (ej. 3)
-    installment_amount = Column(Float, nullable=True)    # Precio por cuota
+    installment_amount = Column(Money, nullable=True)    # Precio por cuota
 
     # Relaciones
     teacher = relationship("TeacherProfile", back_populates="packages")
@@ -106,7 +107,7 @@ class Enrollment(Base):
     cohort_id = Column(Integer, ForeignKey("group_cohorts.id"), nullable=True)
     # Resto fraccional a favor tras convertir créditos grupales a individuales
     # (ver migración grupal -> individual en core/class_logic.py)
-    credit_balance_usd = Column(Float, nullable=True)
+    credit_balance_usd = Column(Money, nullable=True)
 
     # Gestión de Créditos, Activación y Cuotas
     unlocked_credits = Column(Integer, default=0)

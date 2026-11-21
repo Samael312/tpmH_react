@@ -24,9 +24,9 @@ from tempfile import gettempdir
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
-from app.auth.dependencies import get_current_staff
+from app.auth.dependencies import require_superadmin
 from app.core.config import settings
 from app.models.user import User
 
@@ -86,6 +86,12 @@ def _current_running() -> Optional[_RunState]:
 
 
 def _require_dev_environment():
+    if not settings.FLOW_TESTS_ENABLED:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "El Flow Tester está desactivado. Actívalo con FLOW_TESTS_ENABLED=true solo en un backend "
+            "de desarrollo con una base de datos propia (ver backend/doc/ENVIRONMENT.md).",
+        )
     env = (settings.ENVIRONMENT or "").lower()
     if env == "production":
         raise HTTPException(
@@ -249,6 +255,24 @@ class FlowTestRunRequest(BaseModel):
     # un bloque/módulo entero. None o [] = correr la suite completa.
     node_ids: Optional[list[str]] = None
 
+    @field_validator("node_ids")
+    @classmethod
+    def _only_flow_node_ids(cls, v):
+        # S4: cada id va a la linea de comandos de pytest; solo se aceptan ids de tests/flow/ (nada de opciones
+        # como `-p`/`--rootdir`, rutas fuera de la carpeta, `..`, espacios ni saltos de linea).
+        for n in v or []:
+            if (
+                not n.startswith("tests/flow/")
+                or ".." in n
+                or "\\" in n
+                or any(c.isspace() or ord(c) < 32 for c in n)
+                or len(n) > 300
+            ):
+                raise ValueError(f"node_id no permitido: solo ids de tests/flow/ sin espacios ni '..' ({n[:60]!r})")
+        if v is not None and len(v) > 2000:
+            raise ValueError("Demasiados node_ids")
+        return v
+
 
 class FlowTestResult(BaseModel):
     node_id: str
@@ -344,7 +368,7 @@ def _split_technical_ux(docstring: Optional[str]) -> tuple[Optional[str], Option
 
 @router.get("/manifest", response_model=FlowTestManifestResponse)
 def get_flow_tests_manifest(
-    current_user: User = Depends(get_current_staff),
+    current_user: User = Depends(require_superadmin),
 ):
     """
     Enumera todos los tests de backend/tests/flow SIN ejecutarlos (usa
@@ -394,7 +418,7 @@ def get_flow_tests_manifest(
 @router.post("/run", response_model=FlowTestRunResponse, status_code=status.HTTP_202_ACCEPTED)
 def start_flow_tests_run(
     data: FlowTestRunRequest,
-    current_user: User = Depends(get_current_staff),
+    current_user: User = Depends(require_superadmin),
 ):
     """
     Lanza backend/tests/flow en background y devuelve de inmediato un
@@ -422,8 +446,9 @@ def start_flow_tests_run(
 @router.get("/{run_id}", response_model=FlowTestRunResponse)
 def get_flow_tests_run(
     run_id: str,
-    current_user: User = Depends(get_current_staff),
+    current_user: User = Depends(require_superadmin),
 ):
     """Progreso/resultado de una corrida — hacer polling mientras status=='running'."""
+    _require_dev_environment()
     state = _get_run(run_id)
     return _build_response(state)

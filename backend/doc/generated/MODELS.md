@@ -65,6 +65,7 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | duration | INTEGER |  |
 | buffer_minutes | INTEGER | default=10 |
 | google_event_id | VARCHAR | ? |
+| google_sync_hash | VARCHAR(32) | ? |
 | external_source | VARCHAR | ? |
 | status | VARCHAR | ? default=pending |
 | meet_link | VARCHAR | ? |
@@ -76,6 +77,7 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | payment_expires_at | DATETIME | ? |
 | used_prepaid_credit | BOOLEAN | ? default=False |
 | reminder_sent_at | DATETIME | ? |
+| student_reschedule_count | INTEGER | default=0 |
 
 ## email_log
 
@@ -115,7 +117,7 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | renewal_requested_package_id | INTEGER | FK→packages.id ? |
 | change_requested_package_id | INTEGER | FK→packages.id ? |
 | cohort_id | INTEGER | FK→group_cohorts.id ? |
-| credit_balance_usd | FLOAT | ? |
+| credit_balance_usd | NUMERIC(12, 2) | ? |
 | unlocked_credits | INTEGER | ? default=0 |
 | prepaid_unlimited_credits | INTEGER | ? default=0 |
 | payment_status | VARCHAR | ? default=unpaid |
@@ -169,6 +171,8 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | refresh_token | TEXT | ? |
 | token_expiry | DATETIME | ? |
 | calendar_id | VARCHAR | ? default=primary |
+| google_account_sub | VARCHAR | ? |
+| google_account_email | VARCHAR | ? |
 | is_active | BOOLEAN | ? default=True |
 | needs_reauth | BOOLEAN | ? default=False |
 | last_synced_at | DATETIME | ? |
@@ -216,6 +220,23 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | feedback | VARCHAR | ? |
 | graded_at | DATETIME | ? |
 | assigned_at | DATETIME | ? |
+
+## manual_grant_requests
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| id | INTEGER | PK |
+| teacher_id | INTEGER | FK→teacher_profiles.id |
+| student_id | INTEGER | FK→student_profiles.id |
+| enrollment_id | INTEGER | FK→enrollments.id |
+| package_id | INTEGER | FK→packages.id ? |
+| reason | TEXT |  |
+| status | VARCHAR | default=pending |
+| rejection_reason | VARCHAR | ? |
+| created_at | DATETIME | ? |
+| resolved_at | DATETIME | ? |
+| resolved_by | INTEGER | ? |
+| payment_id | INTEGER | FK→payments.id ? |
 
 ## material_assignments
 
@@ -271,8 +292,8 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | subject | VARCHAR |  |
 | description | VARCHAR | ? |
 | classes_count | INTEGER | ? |
-| price | FLOAT |  |
-| price_per_class | FLOAT | ? |
+| price | NUMERIC(12, 2) |  |
+| price_per_class | NUMERIC(12, 2) | ? |
 | duration_minutes | INTEGER | ? default=50 |
 | is_active | BOOLEAN | ? default=True |
 | created_at | DATETIME | ? |
@@ -288,7 +309,7 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | group_recurring_time_local | VARCHAR(5) | ? |
 | allow_installments | BOOLEAN | ? default=False |
 | installment_count | INTEGER | ? |
-| installment_amount | FLOAT | ? |
+| installment_amount | NUMERIC(12, 2) | ? |
 
 ## password_reset_tokens
 
@@ -329,9 +350,9 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | class_id | INTEGER | FK→classes.id ? |
 | student_id | INTEGER | FK→student_profiles.id |
 | teacher_id | INTEGER | FK→teacher_profiles.id |
-| amount_total | FLOAT |  |
-| amount_teacher | FLOAT |  |
-| amount_platform | FLOAT |  |
+| amount_total | NUMERIC(12, 2) |  |
+| amount_teacher | NUMERIC(12, 2) |  |
+| amount_platform | NUMERIC(12, 2) |  |
 | payment_method | VARCHAR |  |
 | payment_type | VARCHAR | ? |
 | installment_index | INTEGER | ? |
@@ -480,6 +501,7 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | teacher_id | INTEGER | FK→teacher_profiles.id |
 | appeal_number | INTEGER |  |
 | message | TEXT |  |
+| kind | VARCHAR | default=profile |
 | status | VARCHAR | ? default=pending |
 | admin_response | VARCHAR | ? |
 | created_at | DATETIME | ? |
@@ -493,9 +515,8 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | id | INTEGER | PK |
 | teacher_id | INTEGER | FK→teacher_profiles.id |
 | day_of_week | INTEGER |  |
-| local_day_of_week | INTEGER | ? |
-| start_time_utc | VARCHAR(5) |  |
-| end_time_utc | VARCHAR(5) |  |
+| start_time_local | VARCHAR(5) |  |
+| end_time_local | VARCHAR(5) |  |
 | is_available | BOOLEAN | ? default=True |
 
 ## teacher_availability_exceptions
@@ -528,7 +549,7 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | social_links | JSONB | ? |
 | status | VARCHAR(9) | ? default=TeacherStatus.pending |
 | commission_rate | FLOAT | ? default=0.15 |
-| balance | FLOAT | ? default=0.0 |
+| balance | NUMERIC(12, 2) | ? default=0.0 |
 | stripe_account_id | VARCHAR | ? |
 | created_at | DATETIME | ? |
 | updated_at | DATETIME | ? |
@@ -536,6 +557,10 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | profile_photo_public_id | VARCHAR | ? |
 | video_url | VARCHAR | ? |
 | video_public_id | VARCHAR | ? |
+| video_pending_url | VARCHAR | ? |
+| video_pending_public_id | VARCHAR | ? |
+| video_pending_rejection_reason | VARCHAR | ? |
+| video_pending_appeal_used | BOOLEAN | default=False |
 | theme_color | VARCHAR | ? default=#ec4899 |
 | rejection_reason | VARCHAR | ? |
 | rejection_feedback_seen | BOOLEAN | ? default=True |
@@ -548,9 +573,9 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 |---|---|---|
 | id | INTEGER | PK |
 | teacher_id | INTEGER | unique FK→teacher_profiles.id ? |
-| available_balance | FLOAT | ? default=0.0 |
-| total_earned | FLOAT | ? default=0.0 |
-| total_withdrawn | FLOAT | ? default=0.0 |
+| available_balance | NUMERIC(12, 2) | ? default=0.0 |
+| total_earned | NUMERIC(12, 2) | ? default=0.0 |
+| total_withdrawn | NUMERIC(12, 2) | ? default=0.0 |
 | updated_at | DATETIME | ? |
 
 ## users
@@ -587,7 +612,7 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 |---|---|---|
 | id | INTEGER | PK |
 | teacher_id | INTEGER | FK→teacher_profiles.id |
-| amount | FLOAT |  |
+| amount | NUMERIC(12, 2) |  |
 | status | VARCHAR | ? default=pending |
 | destination_method | VARCHAR | ? |
 | destination_details | VARCHAR | ? |

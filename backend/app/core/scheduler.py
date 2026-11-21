@@ -45,23 +45,39 @@ def finalize_expired_classes():
     finally:
         db.close()
 
+# Fase 27 (E2): recordatorio unico. Se envia a toda clase viva que empieza en las proximas 25 h y a mas de
+# 30 min (a menos de 30 min ya no hay tiempo util y no se avisa). `reminder_sent_at` lo hace idempotente:
+# una clase recordada a ~24 h no se vuelve a recordar. Una reserva con < 23 h de antelacion se recuerda en
+# el siguiente tick (antes no recibia ninguno). No hay recordatorio de 1 h.
+REMINDER_MAX_AHEAD = timedelta(hours=25)
+REMINDER_MIN_AHEAD = timedelta(minutes=30)
+REMINDER_STATUSES = ["confirmed", "pending", "pending_trial"]
+
+
+def _reminder_hours(class_: Class, now: datetime) -> int:
+    """Horas que se dicen en el correo: 24 en la ventana clasica 23-25 h; si no, las reales (minimo 1)."""
+    hours = (class_.start_time_utc - now).total_seconds() / 3600
+    if 23 <= hours <= 25:
+        return 24
+    return max(1, round(hours))
+
+
 def send_class_reminders():
     """
-    Job que se ejecuta cada hora.
-    Busca clases confirmadas que empiezan en ~24h
-    y envía el recordatorio si aún no se envió.
+    Job por vencimiento. Recuerda (una sola vez, via reminder_sent_at) las clases no canceladas ni externas
+    que empiezan en las proximas 25 h y a mas de 30 min.
     """
     db: Session = SessionLocal()
     now = utc_now()
 
     try:
-        # Clases que empiezan entre 23h y 25h desde ahora
-        window_start = now + timedelta(hours=23)
-        window_end = now + timedelta(hours=25)
+        window_start = now + REMINDER_MIN_AHEAD
+        window_end = now + REMINDER_MAX_AHEAD
 
         upcoming = db.query(Class).filter(
-            Class.status == "confirmed",
-            Class.start_time_utc >= window_start,
+            Class.status.in_(REMINDER_STATUSES),  # Fase 22 (E6): tambien la prueba aun sin confirmar
+            Class.class_type != ClassType.external,
+            Class.start_time_utc > window_start,
             Class.start_time_utc <= window_end,
             Class.reminder_sent_at.is_(None),
         ).all()
@@ -78,12 +94,14 @@ def send_class_reminders():
             class_.reminder_sent_at = now
             db.commit()
 
-        def _queue_for_teacher(teacher_user, who: str, subject: str, when: str):
-            entry = teacher_items.setdefault(teacher_user.id, {"user": teacher_user, "items": []})
+        def _queue_for_teacher(teacher_user, who: str, subject: str, when: str, hours: int = 24):
+            entry = teacher_items.setdefault(teacher_user.id, {"user": teacher_user, "items": [], "hours": hours})
             entry["items"].append((who, subject, when))
+            entry["hours"] = min(entry["hours"], hours)
 
         for class_ in upcoming:
             try:
+                hours = _reminder_hours(class_, now)
                 teacher_profile = class_.teacher
                 teacher_user = db.query(User).filter(
                     User.id == teacher_profile.user_id
@@ -121,12 +139,12 @@ def send_class_reminders():
                             teacher_name=f"{teacher_user.name} {teacher_user.surname}",
                             subject=class_.subject or "Clase",
                             class_start_local=format_local_datetime(class_.start_time_utc, student_profile.timezone),
-                            hours_before=24,
+                            hours_before=hours,
                         )
 
                     _queue_for_teacher(
                         teacher_user, f"{len(participants)} alumno(s) del grupo", class_.subject or "Clase",
-                        format_local_datetime(class_.start_time_utc, teacher_profile.timezone),
+                        format_local_datetime(class_.start_time_utc, teacher_profile.timezone), hours,
                     )
 
                     class_.reminder_sent_at = now
@@ -155,12 +173,12 @@ def send_class_reminders():
                     teacher_name=f"{teacher_user.name} {teacher_user.surname}",
                     subject=class_.subject or "Clase",
                     class_start_local=format_local_datetime(class_.start_time_utc, student_profile.timezone),
-                    hours_before=24,
+                    hours_before=hours,
                 )
 
                 _queue_for_teacher(
                     teacher_user, f"{student_user.name} {student_user.surname}", class_.subject or "Clase",
-                    format_local_datetime(class_.start_time_utc, teacher_profile.timezone),
+                    format_local_datetime(class_.start_time_utc, teacher_profile.timezone), hours,
                 )
 
                 class_.reminder_sent_at = now
@@ -179,11 +197,11 @@ def send_class_reminders():
                     who, subject, when = items[0]
                     send_class_reminder_teacher_email(
                         to_email=user.email, teacher_name=user.name, student_name=who,
-                        subject=subject, class_start_local=when, hours_before=24,
+                        subject=subject, class_start_local=when, hours_before=entry["hours"],
                     )
                 else:
                     send_class_reminders_teacher_digest_email(
-                        to_email=user.email, teacher_name=user.name, items=items, hours_before=24,
+                        to_email=user.email, teacher_name=user.name, items=items, hours_before=entry["hours"],
                     )
             except Exception as e:
                 logger.error(f"Error enviando recordatorio agrupado al profesor {entry['user'].id}: {e}")
@@ -494,15 +512,19 @@ def _due_chat_digest(job: DueJob, db: Session, now: datetime) -> Optional[dateti
 
 
 def _due_reminders(job: DueJob, db: Session, now: datetime) -> Optional[datetime]:
-    """Recordatorio 24 h antes: se envia en la ventana [23 h, 25 h] antes del inicio."""
+    """
+    Recordatorio unico (Fase 27): vence 25 h antes del inicio. Si ya falta menos de 25 h (reserva tardia) vence
+    ya (`now`), salvo que falten <= 30 min (no se avisa; se ignora). Ver send_class_reminders.
+    """
     first = db.query(func.min(Class.start_time_utc)).filter(
-        Class.status == "confirmed",
+        Class.status.in_(REMINDER_STATUSES),
+        Class.class_type != ClassType.external,
         Class.reminder_sent_at.is_(None),
-        Class.start_time_utc >= now + timedelta(hours=23),
+        Class.start_time_utc > now + REMINDER_MIN_AHEAD,
     ).scalar()
     if first is None:
         return None
-    return first - timedelta(hours=25)
+    return max(first - REMINDER_MAX_AHEAD, now)
 
 
 def _due_calendar_sync(job: DueJob, db: Session, now: datetime) -> Optional[datetime]:
@@ -519,6 +541,7 @@ def _due_calendar_sync(job: DueJob, db: Session, now: datetime) -> Optional[date
     last = job.last_run or now
     busy = db.query(Class.id).filter(
         Class.status == "confirmed",
+        Class.class_type != ClassType.external,  # Fase 17: las de Preply ya no se empujan; no aceleran la sync
         Class.end_time_utc > now,
         Class.start_time_utc <= now + CALENDAR_ACTIVE_WINDOW,
     ).first()
@@ -526,6 +549,7 @@ def _due_calendar_sync(job: DueJob, db: Session, now: datetime) -> Optional[date
         return last + CALENDAR_ACTIVE_GAP
     nxt = db.query(func.min(Class.start_time_utc)).filter(
         Class.status == "confirmed",
+        Class.class_type != ClassType.external,
         Class.start_time_utc > now + CALENDAR_ACTIVE_WINDOW,
     ).scalar()
     due = last + CALENDAR_IDLE_GAP

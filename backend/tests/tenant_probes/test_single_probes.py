@@ -28,7 +28,7 @@ def _teacher(db, username, status=TeacherStatus.approved, subjects=("French",)):
     db.flush()
     for dow in range(7):
         db.add(TeacherAvailability(teacher_id=tp.id, day_of_week=dow, is_available=True,
-                                   start_time_utc="00:00", end_time_utc="00:00"))
+                                   start_time_local="00:00", end_time_local="00:00"))
     db.commit()
     return u, tp
 
@@ -50,9 +50,9 @@ def test_trial_with_suspended_featured_teacher(client, world, db):
                          params={"date": future(48).date().isoformat(), "duration": 25, "class_type": "trial"},
                          headers=hdr(world["s_user"]))
     assert r_slots.status_code == 404
-    # ... pero reservar la prueba por API directa funciona
+    # ... y reservar por API directa tambien se rechaza (400, arreglado antes de la Fase 18)
     r = client.post("/api/v1/payments/book", json=_trial_body(), headers=hdr(world["s_user"]))
-    assert r.status_code == 201, r.text
+    assert r.status_code == 400, r.text
     # y el endpoint publico sigue devolviendo su username
     r_u = client.get("/api/v1/availability/featured-teacher/username")
     assert r_u.status_code == 200 and r_u.json()["username"] == tp.user_username
@@ -66,7 +66,8 @@ def test_env_only_featured_inconsistent(client, world, db, monkeypatch):
     r = client.get("/api/v1/payments/booking-status", headers=hdr(world["s_user"]))
     assert r.status_code == 200 and r.json()["teacher_username"] == "profe"
     r2 = client.get("/api/v1/users/me/teachers", headers=hdr(world["s_user"]))
-    assert r2.status_code == 200 and r2.json() == []
+    # Fase 18: /me/teachers usa resolve_featured_teacher (env fallback)
+    assert r2.status_code == 200 and [t["teacher_username"] for t in r2.json()] == ["profe"]
     # La prueba se reserva igual con el profesor del env
     r3 = client.post("/api/v1/payments/book", json=_trial_body(), headers=hdr(world["s_user"]))
     assert r3.status_code == 201
@@ -102,10 +103,8 @@ def test_students_list_flip_flop(client, world, db):
     assert r.status_code == 201, r.text
     db.expire_all()
     assert sp.id in (db.get(TeacherProfile, a.id).students or [])
-    assert sp.id not in (db.get(TeacherProfile, b.id).students or [])
-    # B ya no puede escribirle aunque el alumno tiene paquete activo con B
-    r_chat = client.get("/api/v1/chat/conversations/direct/alumno", headers=hdr(b_user))
-    assert r_chat.status_code == 403
+    # Fase 18: B conserva al alumno (tiene paquete activo con B)
+    assert sp.id in (db.get(TeacherProfile, b.id).students or [])
 
     # 2) Reserva con su paquete de B -> ahora lo sacan de A
     s = future(72)
@@ -113,12 +112,10 @@ def test_students_list_flip_flop(client, world, db):
         "enrollment_id": enr_id, "start_time_utc": s.isoformat(),
         "end_time_utc": (s + timedelta(minutes=50)).isoformat(), "duration_minutes": 50},
         headers=hdr(world["s_user"]))
-    assert r2.status_code == 201, r2.text
+    assert r2.status_code == 400, r2.text  # single: solo la destacada
     db.expire_all()
     assert sp.id in (db.get(TeacherProfile, b.id).students or [])
-    assert sp.id not in (db.get(TeacherProfile, a.id).students or [])
-    r_chat_a = client.get("/api/v1/chat/conversations/direct/alumno", headers=hdr(world["t_user"]))
-    assert r_chat_a.status_code == 403  # el destacado pierde a su alumno con prueba pendiente
+    assert sp.id in (db.get(TeacherProfile, a.id).students or [])  # Fase 18: ya no salta
 
 
 # ── H3b: /users/me/teachers en single oculta el paquete activo con otro profesor ──
@@ -153,9 +150,8 @@ def test_cohort_enroll_single_no_link(client, world, db):
                     headers=hdr(world["s_user"]))
     assert r.status_code == 201, r.text
     db.expire_all()
-    assert world["sp"].id not in (db.get(TeacherProfile, tp.id).students or [])
-    # el profesor no puede abrir chat directo con su alumno de grupo
-    assert client.get("/api/v1/chat/conversations/direct/alumno", headers=hdr(world["t_user"])).status_code == 403
+    # el vínculo se guarda en ambos modos (F15): el alumno queda en la lista del profesor
+    assert world["sp"].id in (db.get(TeacherProfile, tp.id).students or [])
 
 
 # ── H4b: en single se puede unir a la cohorte de OTRO profesor (incluso suspendido) ──
@@ -170,7 +166,7 @@ def test_cohort_enroll_other_suspended_teacher_single(client, world, db):
     db.add(c); db.commit()
     r = client.post(f"/api/v1/cohorts/{c.id}/enroll", json={"cohort_id": c.id, "payment_method": "bank_transfer"},
                     headers=hdr(world["s_user"]))
-    assert r.status_code == 201, r.text
+    assert r.status_code == 400, r.text  # single: solo la destacada (ensure_featured_teacher_in_single_tenant)
 
 
 # ── H5: prueba creada por staff no vincula ──
@@ -207,9 +203,9 @@ def test_teacher_admin_sets_self_featured(client, world, db):
     _single(db, world["tp"].id)
     r = client.patch("/api/v1/admin/platform-config", json={"featured_teacher_username": "tadmin"},
                      headers=hdr(ta_user))
-    assert r.status_code == 200
+    assert r.status_code == 403  # Fase 16: PATCH platform-config es solo superadmin
     db.expire_all()
-    assert db.query(PlatformConfig).first().featured_teacher_id == ta.id
+    assert db.query(PlatformConfig).first().featured_teacher_id == world["tp"].id
 
 
 def test_featured_can_be_pending_teacher(client, world, db):
@@ -232,9 +228,9 @@ def test_switch_to_multi_env_only_no_links(client, world, db, monkeypatch):
     assert client.post("/api/v1/payments/book", json=_trial_body(), headers=hdr(world["s_user"])).status_code == 201
     r = client.patch("/api/v1/admin/platform-config", json={"is_single_tenant": False}, headers=hdr(world["admin"]))
     assert r.status_code == 200
-    assert db.query(StudentTeacherLink).count() == 0
+    assert db.query(StudentTeacherLink).count() == 1  # Fase 18: el backfill cubre a la destacada del entorno
     st = client.get("/api/v1/payments/booking-status", headers=hdr(world["s_user"])).json()
-    assert st["stage"] == "needs_teacher"  # el alumno con prueba pendiente "pierde" a su profesor
+    assert st["stage"] != "needs_teacher"
 
 
 # ── H8b: cambiar el destacado A->B en single no migra nada; pasar luego a multi solo vincula con B ──
@@ -249,7 +245,7 @@ def test_change_featured_then_multi_loses_a(client, world, db):
     assert [t["teacher_username"] for t in r] == ["profeb"]  # su prueba pendiente con profe desaparece
     assert client.patch("/api/v1/admin/platform-config", json={"is_single_tenant": False},
                         headers=hdr(world["admin"])).status_code == 200
-    assert db.query(StudentTeacherLink).count() == 0  # profeb no tenia historial; profe no se migra
+    assert db.query(StudentTeacherLink).count() == 1  # Fase 18: backfill de cualquier profesor con historial (A)
 
 
 # ── H9: Chipi en single lista materias de TODOS los profesores ──
@@ -313,5 +309,5 @@ def test_stale_teacher_username_never_relinks(client, world, db):
     r = client.post("/api/v1/payments/book", json=_trial_body(), headers=hdr(world["s_user"]))
     assert r.status_code == 201, r.text
     db.expire_all()
-    assert sp.id not in (db.get(TeacherProfile, tp.id).students or [])
-    assert client.get("/api/v1/chat/conversations/direct/alumno", headers=hdr(world["t_user"])).status_code == 403
+    # el vínculo se repara al reservar (F15/F18)
+    assert sp.id in (db.get(TeacherProfile, tp.id).students or [])

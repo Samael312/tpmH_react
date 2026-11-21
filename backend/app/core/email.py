@@ -1,7 +1,9 @@
 import resend
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from html import escape as _esc
+from html import escape as _esc, unescape as _unescape
+import functools
+import inspect
 from app.core.config import settings
 import logging
 
@@ -32,7 +34,7 @@ def _detail_row(label: str, value: str) -> str:
     return f"""
     <tr>
       <td style="padding:9px 0;border-bottom:1px solid {COLOR_BORDER};color:{COLOR_MUTED};font-size:13px;font-weight:600;font-family:Arial,sans-serif;">{label}</td>
-      <td style="padding:9px 0;border-bottom:1px solid {COLOR_BORDER};color:{COLOR_INK};font-size:13px;font-weight:700;text-align:right;font-family:Arial,sans-serif;">{value}</td>
+      <td style="padding:9px 0;border-bottom:1px solid {COLOR_BORDER};color:{COLOR_INK};font-size:13px;font-weight:700;text-align:right;font-family:Arial,sans-serif;white-space:pre-wrap;">{value}</td>
     </tr>"""
 
 
@@ -139,12 +141,18 @@ def shutdown_email_queue(wait: bool = True) -> None:
         executor.shutdown(wait=wait)
 
 
+def _plain_subject(subject: str) -> str:
+    """El asunto es texto plano: se deshace el escape HTML de los datos del usuario y se quitan saltos de línea (inyección de cabeceras)."""
+    return " ".join(_unescape(subject or "").split())[:200]
+
+
 def _send(to_email: str, subject: str, html: str, category: str = "essential") -> bool:
     """
     Pone el correo en cola y vuelve al instante (Fase 14, E1): la peticion ya no espera a Resend. Devuelve True si
     quedo en cola; si sale, se omite o falla se anota igual en email_log desde el hilo de envio. Ningun llamador usa
     el valor devuelto. Con EMAIL_ASYNC=false se envia en linea y devuelve el resultado real.
     """
+    subject = _plain_subject(subject)
     if not settings.EMAIL_ASYNC:
         return _send_now(to_email, subject, html, category)
     try:
@@ -377,7 +385,7 @@ def send_class_cancelled_email(
     body = f"""
       <p>Hola {student_name}, {who}.</p>
       {_detail_table([_detail_row("Fecha y hora", class_start_local)])}
-      {f'<p style="font-size:13px;color:{COLOR_MUTED};"><strong>Motivo:</strong> {reason}</p>' if reason else ""}
+      {f'<p style="font-size:13px;color:{COLOR_MUTED};white-space:pre-wrap;"><strong>Motivo:</strong> {reason}</p>' if reason else ""}
       {credit_line}
       {_cta_button("Ir a la plataforma", settings.FRONTEND_URL)}
     """
@@ -405,7 +413,7 @@ def send_homework_graded_email(
       <div style="text-align:center;margin:22px 0;">
         <span style="display:inline-block;font-size:32px;font-weight:900;color:{score_color};">{score}<span style="font-size:16px;color:{COLOR_SUBTLE};">/10</span></span>
       </div>
-      {f'<div style="background:{COLOR_SURFACE_SOFT};border-radius:16px;padding:16px 18px;margin-top:8px;"><p style="margin:0;font-size:13px;color:{COLOR_INK};"><strong>Retroalimentación:</strong> {feedback}</p></div>' if feedback else ''}
+      {f'<div style="background:{COLOR_SURFACE_SOFT};border-radius:16px;padding:16px 18px;margin-top:8px;"><p style="margin:0;font-size:13px;color:{COLOR_INK};white-space:pre-wrap;"><strong>Retroalimentación:</strong> {feedback}</p></div>' if feedback else ''}
       {_cta_button("Ver mis tareas", f"{settings.FRONTEND_URL}/dashboard/homework")}
     """
     html = _base_template("Tu tarea fue calificada", _badge("Tarea calificada", COLOR_GREEN), "¡Tienes una nueva calificación! ⭐", body)
@@ -455,7 +463,7 @@ def send_payment_failed_email(
         _detail_row("Concepto", concept),
         _detail_row("Monto", f"${amount:.2f}"),
       ])}
-      <p style="font-size:13px;color:{COLOR_RED};font-weight:700;">Motivo: {rejection_reason}</p>
+      <p style="font-size:13px;color:{COLOR_RED};font-weight:700;white-space:pre-wrap;">Motivo: {rejection_reason}</p>
       {_cta_button("Reintentar pago", settings.FRONTEND_URL)}
     """
     html = _base_template("Tu pago no fue validado", _badge("Pago rechazado", COLOR_RED), "Pago rechazado", body)
@@ -479,12 +487,33 @@ def send_teacher_status_update_email(
     body = f"""
       <p>Hola {teacher_name}, el estado de tu perfil ha sido actualizado.</p>
       {_detail_table([_detail_row("Nuevo estado", label)])}
-      {f'<p style="font-size:13px;color:{COLOR_MUTED};"><strong>Nota del equipo:</strong> {reason}</p>' if reason else ""}
+      {f'<p style="font-size:13px;color:{COLOR_MUTED};white-space:pre-wrap;"><strong>Nota del equipo:</strong> {reason}</p>' if reason else ""}
       <p>{next_step}</p>
       {_cta_button("Ir a mi perfil", f"{settings.FRONTEND_URL}/teacher/profile")}
     """
     html = _base_template("Actualización de tu perfil", _badge(label, color), "Estado de tu perfil actualizado", body)
     return _send(to_email, f"Estado de tu perfil: {label} — {PLATFORM_NAME}", html, category="teacher_status_support")
+
+
+from html import escape as _html_escape  # noqa: E402
+
+
+def send_teacher_video_review_email(to_email: str, teacher_name: str, approved: bool, reason: str | None = None) -> bool:
+    label, color = ("Video aprobado", COLOR_GREEN) if approved else ("Video rechazado", COLOR_RED)
+    next_step = (
+        "Tu video nuevo ya es el que ven los estudiantes en tu perfil público."
+        if approved else
+        "Tu video anterior sigue visible en tu perfil. Puedes subir otro video cuando quieras."
+    )
+    body = f"""
+      <p>Hola {teacher_name}, revisamos el video nuevo de tu perfil.</p>
+      {_detail_table([_detail_row("Resultado", label)])}
+      {f'<p style="font-size:13px;color:{COLOR_MUTED};white-space:pre-wrap;"><strong>Motivo:</strong> {_html_escape(reason or '')}</p>' if reason else ""}
+      <p>{next_step}</p>
+      {_cta_button("Ir a mi perfil", f"{settings.FRONTEND_URL}/teacher/profile")}
+    """
+    html = _base_template("Revisión de tu video", _badge(label, color), "Revisión de tu video", body)
+    return _send(to_email, f"{label} — {PLATFORM_NAME}", html, category="teacher_status_support")
 
 
 def send_support_ticket_response_email(
@@ -493,7 +522,7 @@ def send_support_ticket_response_email(
     body = f"""
       <p>Hola {user_name}, nuestro equipo respondió tu ticket de soporte.</p>
       {_detail_table([_detail_row("Asunto", subject)])}
-      <p style="font-size:13px;color:{COLOR_MUTED};"><strong>Respuesta del equipo:</strong> {admin_response}</p>
+      <p style="font-size:13px;color:{COLOR_MUTED};white-space:pre-wrap;"><strong>Respuesta del equipo:</strong> {admin_response}</p>
       {_cta_button("Ver mi ticket", f"{settings.FRONTEND_URL}{portal_path}")}
     """
     html = _base_template("Respondimos tu ticket de soporte", _badge("Respondido", COLOR_GREEN), "Tu ticket de soporte fue respondido 💬", body)
@@ -565,9 +594,9 @@ def send_class_reminders_teacher_digest_email(
     Un solo correo con TODAS las clases que el profesor tiene en la ventana de recordatorio, en vez de uno
     por clase. `items`: (alumno, materia, fecha y hora local).
     """
-    rows = [_detail_row(f"{_esc(student)} · {_esc(subject)}", _esc(when)) for student, subject, when in items]
+    rows = [_detail_row(f"{student} · {subject}", when) for student, subject, when in items]
     body = f"""
-      <p>Hola {_esc(teacher_name)}, tienes <strong style="color:{COLOR_PRIMARY};">{len(items)} clases</strong>
+      <p>Hola {teacher_name}, tienes <strong style="color:{COLOR_PRIMARY};">{len(items)} clases</strong>
       en aproximadamente {hours_before} horas.</p>
       {_detail_table(rows)}
       {_cta_button("Ver mi agenda", f"{settings.FRONTEND_URL}/teacher/dashboard")}
@@ -584,9 +613,9 @@ def send_chat_digest_teacher_email(
     `items`: (alumno, mensajes sin leer, vista previa del ultimo).
     """
     total = sum(n for _s, n, _p in items)
-    rows = [_detail_row(f"{_esc(student)} ({n})", _esc(preview)) for student, n, preview in items]
+    rows = [_detail_row(f"{student} ({n})", preview) for student, n, preview in items]
     body = f"""
-      <p>Hola {_esc(teacher_name)}, tienes <strong style="color:{COLOR_INK};">{total} mensajes nuevos</strong>
+      <p>Hola {teacher_name}, tienes <strong style="color:{COLOR_INK};">{total} mensajes nuevos</strong>
       de {len(items)} conversaciones en el chat interno.</p>
       {_detail_table(rows)}
       {_cta_button("Abrir el chat", conversation_url)}
@@ -606,7 +635,7 @@ def send_class_cancelled_teacher_email(
         _detail_row("Estudiante", student_name),
         _detail_row("Fecha y hora", class_start_local),
       ])}
-      {f'<p style="font-size:13px;color:{COLOR_MUTED};"><strong>Motivo:</strong> {reason}</p>' if reason else ""}
+      {f'<p style="font-size:13px;color:{COLOR_MUTED};white-space:pre-wrap;"><strong>Motivo:</strong> {reason}</p>' if reason else ""}
       {_cta_button("Ver mi agenda", f"{settings.FRONTEND_URL}/teacher/dashboard")}
     """
     html = _base_template("Una clase fue cancelada", _badge("Cancelada", COLOR_RED), "Clase cancelada ❌", body)
@@ -635,11 +664,22 @@ def send_new_review_received_email(
     body = f"""
       <p>Hola {teacher_name}, <strong style="color:{COLOR_INK};">{student_name}</strong> dejó una reseña sobre tus clases.</p>
       <div style="text-align:center;margin:18px 0;font-size:22px;">{stars} <span style="font-size:14px;color:{COLOR_MUTED};">({rating}/5)</span></div>
-      {f'<div style="background:{COLOR_SURFACE_SOFT};border-radius:16px;padding:16px 18px;"><p style="margin:0;font-size:13px;color:{COLOR_INK};font-style:italic;">"{comment}"</p></div>' if comment else ""}
+      {f'<div style="background:{COLOR_SURFACE_SOFT};border-radius:16px;padding:16px 18px;"><p style="margin:0;font-size:13px;color:{COLOR_INK};font-style:italic;white-space:pre-wrap;">"{comment}"</p></div>' if comment else ""}
       {_cta_button("Ver mi perfil público", f"{settings.FRONTEND_URL}/teacher/profile/preview")}
     """
     html = _base_template("Nueva reseña recibida", _badge("Nueva reseña", COLOR_PURPLE), "Nueva reseña recibida ⭐", body)
     return _send(to_email, f"Nueva reseña recibida — {PLATFORM_NAME}", html, category="reviews")
+
+
+def send_calendar_reauth_teacher_email(to_email: str, teacher_name: str) -> bool:
+    body = f"""
+      <p>Hola {teacher_name}, Google rechazó el acceso a tu calendario (el permiso fue revocado o expiró).</p>
+      <p>Mientras no lo reconectes, la sincronización con Google Calendar está detenida y las clases de Preply
+      importadas dejaron de bloquear tu agenda.</p>
+      {_cta_button("Reconectar Google Calendar", f"{settings.FRONTEND_URL}/teacher/profile")}
+    """
+    html = _base_template("Reconecta tu Google Calendar", _badge("Acción requerida", COLOR_BLUE), "Reconecta tu Google Calendar", body)
+    return _send(to_email, f"Reconecta tu Google Calendar — {PLATFORM_NAME}", html, category="teacher_status_support")
 
 
 def send_withdrawal_requested_teacher_email(
@@ -671,7 +711,7 @@ def send_withdrawal_processed_email(
     body = f"""
       <p>Hola {teacher_name}, tu solicitud de retiro fue {"procesada" if is_completed else "rechazada"}.</p>
       {_detail_table(rows)}
-      {f'<p style="font-size:13px;color:{COLOR_RED};font-weight:700;">Motivo: {rejection_reason}</p>' if not is_completed and rejection_reason else ""}
+      {f'<p style="font-size:13px;color:{COLOR_RED};font-weight:700;white-space:pre-wrap;">Motivo: {rejection_reason}</p>' if not is_completed and rejection_reason else ""}
       {_cta_button("Ver mis ganancias", f"{settings.FRONTEND_URL}/teacher/wallet")}
     """
     html = _base_template("Retiro procesado", _badge(label, color), f"Retiro {label.lower()}", body)
@@ -691,7 +731,7 @@ def send_admin_new_support_ticket_email(
         _detail_row("Categoría", category_label),
         _detail_row("Asunto", subject),
       ])}
-      <p style="font-size:13px;color:{COLOR_MUTED};"><strong>Mensaje:</strong> {message}</p>
+      <p style="font-size:13px;color:{COLOR_MUTED};white-space:pre-wrap;"><strong>Mensaje:</strong> {message}</p>
       {_cta_button("Ver bandeja de soporte", f"{settings.FRONTEND_URL}/admin/support")}
     """
     html = _base_template("Nuevo ticket de soporte", _badge("Pendiente", COLOR_AMBER), "Nuevo ticket de soporte 🎫", body)
@@ -813,3 +853,39 @@ def send_class_confirmed_teacher_email(
     """
     html = _base_template("Una clase fue confirmada", _badge("Confirmada", COLOR_GREEN), "Clase confirmada ✅", body)
     return _send(to_email, f"Clase confirmada — {PLATFORM_NAME}", html, category="bookings")
+
+
+# ─── Escape de HTML (Fase 21, S3) ─────────────────────────────────────────────
+# Un solo punto: todas las funciones `send_*` pasan por este envoltorio, que escapa CADA argumento de texto
+# (nombres, asuntos, mensajes, motivos, comentarios, títulos...) y los elementos de listas/tuplas antes de que
+# lleguen a las plantillas. Se exceptúan los parámetros que son direcciones o rutas internas armadas por el
+# servidor. El HTML intencional (botones, enlaces, negritas) vive en las plantillas, no en los argumentos.
+# Las funciones nuevas con prefijo `send_` quedan cubiertas solas.
+_RAW_PARAMS = frozenset({"to_email", "conversation_url", "portal_path", "verify_token", "reset_token"})
+
+
+def _escape_value(v):
+    if isinstance(v, str):
+        return _esc(v)
+    if isinstance(v, (list, tuple)):
+        return type(v)(_escape_value(i) for i in v)
+    return v
+
+
+def _escaped_args(fn):
+    sig = inspect.signature(fn)
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        bound = sig.bind(*args, **kwargs)
+        for name, value in list(bound.arguments.items()):
+            if name not in _RAW_PARAMS:
+                bound.arguments[name] = _escape_value(value)
+        return fn(*bound.args, **bound.kwargs)
+
+    return wrapper
+
+
+for _name, _fn in list(globals().items()):
+    if _name.startswith("send_") and inspect.isfunction(_fn):
+        globals()[_name] = _escaped_args(_fn)

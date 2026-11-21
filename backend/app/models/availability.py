@@ -5,25 +5,22 @@ from app.db.base import Base
 
 class TeacherAvailability(Base):
     """
-    Disponibilidad semanal recurrente del profesor.
-    Las horas se guardan en UTC como string HH:MM.
-    El día de la semana sigue el estándar ISO:
-    0=Lunes, 1=Martes, 2=Miércoles, 3=Jueves,
-    4=Viernes, 5=Sábado, 6=Domingo
+    Disponibilidad semanal recurrente del profesor, en HORA LOCAL (Fase 26).
+
+    `day_of_week` (0=Lunes ... 6=Domingo, ISO) y `start_time_local`/`end_time_local` ("HH:MM") son el
+    dia y la hora de reloj del propio profesor, en la zona IANA ACTUAL de `teacher_profiles.timezone`.
+    No hay UTC guardado: el instante real de cada fecha lo calcula `core/slot_availability.py` con
+    zoneinfo, asi el horario sigue siendo "18:00-20:00 en Madrid" antes y despues del cambio de hora y,
+    si el profesor cambia de zona, conserva su hora local semanal. Si fin <= inicio la franja cruza la
+    medianoche local y termina al dia siguiente (00:00-00:00 = 24 h).
     """
     __tablename__ = "teacher_availability"
 
     id = Column(Integer, primary_key=True, index=True)
     teacher_id = Column(Integer, ForeignKey("teacher_profiles.id"), nullable=False)
-    day_of_week = Column(Integer, nullable=False)   # 0-6 ISO, día real en UTC
-    # Día que el profesor eligió en SU calendario, siempre el mismo sin
-    # importar zona horaria (a diferencia de day_of_week, que es el día
-    # real en UTC y puede diferir para horarios cercanos a medianoche —
-    # ver core/timezone.py). Nullable solo por compatibilidad con filas
-    # viejas migradas; todo INSERT nuevo debe completarlo.
-    local_day_of_week = Column(Integer, nullable=True)
-    start_time_utc = Column(String(5), nullable=False)  # "09:00" UTC
-    end_time_utc = Column(String(5), nullable=False)    # "18:00" UTC
+    day_of_week = Column(Integer, nullable=False)       # 0-6 ISO, dia LOCAL del profesor
+    start_time_local = Column(String(5), nullable=False)  # "09:00" hora local
+    end_time_local = Column(String(5), nullable=False)    # "18:00" hora local
     is_available = Column(Boolean, default=True)
 
     teacher = relationship("TeacherProfile", back_populates="availability")

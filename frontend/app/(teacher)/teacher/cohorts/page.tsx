@@ -350,15 +350,24 @@ export default function TeacherCohortsPage() {
     if (!schedulingCohort || !sessionForm.date || !sessionForm.selectedSlot) return;
     setActionLoading(true);
     try {
-      await api.post(`/cohorts/${schedulingCohort.id}/sessions`, {
-        start_time_utc: sessionForm.selectedSlot.start_time_utc,
-        duration_minutes: Number(sessionForm.duration),
-      });
+      const created = await api.post<{ skipped_participants?: { student_name?: string | null }[] }>(
+        `/cohorts/${schedulingCohort.id}/sessions`,
+        {
+          start_time_utc: sessionForm.selectedSlot.start_time_utc,
+          duration_minutes: Number(sessionForm.duration),
+        },
+      );
+      const skipped = created.data?.skipped_participants ?? [];
       const res = await api.get<Session[]>(`/cohorts/${schedulingCohort.id}/sessions`);
       setSessionsByCohort((prev) => ({ ...prev, [schedulingCohort.id]: res.data }));
       setSchedulingCohort(null);
       setSessionForm({ date: "", selectedSlot: null, duration: String(rules.allowed_class_durations?.[0] ?? 50) });
       toast.success("Sesión agendada correctamente");
+      if (skipped.length > 0) {
+        toast.warning(
+          `No se agregó por solape de horario a: ${skipped.map((p) => p.student_name || "alumno").join(", ")}`,
+        );
+      }
     } catch (err) {
       toast.error(getErrorMessage(err, "No se pudo agendar la sesión"));
     } finally {

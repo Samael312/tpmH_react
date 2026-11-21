@@ -8,9 +8,9 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import ChipiWidget from "@/components/chipi/ChipiWidget";
-import { utcTimeToLocal } from "@/lib/scheduleUtc";
 import ExceptionsSection from "./ExceptionsSection";
 import { getMyDisplayTimezone } from "@/lib/tzFormat";
+import { localRangeCells } from "@/lib/weeklyLocal";
 import { useWeeklyAvailability } from "@/hooks/useTeacherData";
 import Skeleton from "@/components/ui/Skeleton";
 import RefreshButton from "@/components/ui/RefreshButton";
@@ -55,28 +55,15 @@ export default function TeacherAvailabilityPage() {
   // Sincroniza selectedSlots cuando llega nueva disponibilidad del servidor.
   useEffect(() => {
     if (availability.length === 0) return;
-    const userTimezone = getMyDisplayTimezone();
     const initialSlots: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
 
     availability.forEach((slot) => {
       if (!slot.is_available) return;
-      const day = slot.local_day_of_week;
-      const localStart = utcTimeToLocal(slot.start_time_utc, day, userTimezone);
-      const localEnd = utcTimeToLocal(slot.end_time_utc, day, userTimezone);
-
-      const startHour = parseInt(localStart.split(":")[0]);
-      let endHour = parseInt(localEnd.split(":")[0]);
-
-      if (localEnd.startsWith("00:0") && startHour > 0) {
-        endHour = 24;
-      }
-
-      for (let h = startHour; h < endHour; h++) {
-        const hourStr = `${h.toString().padStart(2, "0")}:00`;
-        if (!initialSlots[day].includes(hourStr)) {
-          initialSlots[day].push(hourStr);
-        }
-      }
+      // Fase 26: el backend guarda y devuelve la hora LOCAL del profesor (sin UTC): se pinta tal cual.
+      localRangeCells(slot.day_of_week, slot.start_time_local, slot.end_time_local).forEach(({ day, hour }) => {
+        const hourStr = `${hour.toString().padStart(2, "0")}:00`;
+        if (!initialSlots[day].includes(hourStr)) initialSlots[day].push(hourStr);
+      });
     });
     setSelectedSlots(initialSlots);
   }, [availability]);
@@ -156,7 +143,8 @@ export default function TeacherAvailabilityPage() {
     setError("");
     setSuccessMsg("");
     try {
-      const userTimezone = getMyDisplayTimezone();
+      // Zona con la que el servidor interpreta el horario (la del perfil); sin filas aun, la de la cuenta.
+      const userTimezone = availability[0]?.timezone || getMyDisplayTimezone();
 
       await api.put("/availability/me/weekly", {
         timezone: userTimezone,

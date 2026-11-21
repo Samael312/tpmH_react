@@ -59,6 +59,16 @@ class ChatConnectionManager:
         if not sockets:
             self._connections.pop(user_id, None)
 
+    async def close_user(self, user_id: int, code: int = 4401) -> int:
+        """Cierra TODOS los sockets de un usuario (baneo/desactivacion). Devuelve cuantos cerro."""
+        sockets = list(self._connections.pop(user_id, set()))
+        for ws in sockets:
+            try:
+                await ws.close(code=code)
+            except Exception:
+                pass
+        return len(sockets)
+
     def is_online(self, user_id: int) -> bool:
         return bool(self._connections.get(user_id))
 

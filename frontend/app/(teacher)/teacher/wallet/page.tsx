@@ -28,6 +28,17 @@ const STATUS_LABEL: Record<string, string> = {
   pending_review: 'En revisión',
 }
 
+const PAYMENT_TYPE_LABEL: Record<string, string> = {
+  package: 'Paquete',
+  renewal: 'Renovación',
+  package_change: 'Cambio de paquete',
+  unlimited_recharge: 'Recarga de créditos',
+  group_enrollment: 'Inscripción a grupo',
+  single_class: 'Clase suelta',
+  refund: 'Reembolso',
+  manual: 'Ajuste manual',
+}
+
 const DESTINATION_METHODS = [
   { value: 'paypal', label: 'PayPal', icon: WalletIcon, fg: 'text-blue-600' },
   { value: 'binance', label: 'Binance (USDT)', icon: Coins, fg: 'text-amber-600' },
@@ -53,7 +64,7 @@ function RequestWithdrawalModal({
   const toast = useToast()
 
   const amountNum = parseFloat(amount)
-  const valid = amountNum >= minWithdrawal && amountNum <= available && paymentInfo.trim().length > 0
+  const valid = Number.isFinite(amountNum) && amountNum >= minWithdrawal && amountNum <= available && paymentInfo.trim().length > 0
 
   const submit = async () => {
     if (!valid) return
@@ -61,7 +72,7 @@ function RequestWithdrawalModal({
     setError('')
     try {
       await api.post('/payments/request-withdrawal', {
-        amount: amountNum,
+        amount: Math.round(amountNum * 100) / 100,
         destination_method: method,
         payment_info: paymentInfo.trim(),
       })
@@ -102,7 +113,7 @@ function RequestWithdrawalModal({
           </div>
           <button
             type="button"
-            onClick={() => setAmount(available.toString())}
+            onClick={() => setAmount(available.toFixed(2))}
             className="text-xs font-bold text-emerald-700 underline underline-offset-2 hover:text-emerald-800 transition-colors"
           >
             Usar máximo
@@ -111,11 +122,16 @@ function RequestWithdrawalModal({
 
         {/* Monto */}
         <div className="space-y-1.5">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Monto a retirar</label>
+          <label htmlFor="withdraw-amount" className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Monto a retirar</label>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-black text-slate-300">$</span>
             <input
+              id="withdraw-amount"
               type="number"
+              step="0.01"
+              min={minWithdrawal}
+              max={available}
+              inputMode="decimal"
               value={amount}
               onChange={e => setAmount(e.target.value)}
               placeholder="0.00"
@@ -128,8 +144,8 @@ function RequestWithdrawalModal({
 
         {/* Método Selector */}
         <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Método de pago</label>
-          <div className="grid grid-cols-3 gap-2">
+          <span id="withdraw-method-label" className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Método de pago</span>
+          <div className="grid grid-cols-3 gap-2" role="group" aria-labelledby="withdraw-method-label">
             {DESTINATION_METHODS.map(m => (
               <button
                 key={m.value}
@@ -150,12 +166,13 @@ function RequestWithdrawalModal({
 
         {/* Datos de destino */}
         <div className="space-y-1.5">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+          <label htmlFor="withdraw-info" className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
             {method === 'paypal' && 'Email de PayPal'}
             {method === 'binance' && 'Dirección de Wallet (USDT TRC-20)'}
             {method === 'bank' && 'Datos Bancarios completos (IBAN / SWIFT)'}
           </label>
           <textarea
+            id="withdraw-info"
             rows={3}
             value={paymentInfo}
             onChange={e => setPaymentInfo(e.target.value)}
@@ -325,7 +342,12 @@ export default function WalletPage() {
                         <p className="text-[10px] text-slate-400 font-medium">
                           {new Date(w.created_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </p>
-                        {w.rejection_reason && <p className="text-[10px] text-rose-500 font-bold">{w.rejection_reason}</p>}
+                        {w.status === 'rejected' && w.rejection_reason && (
+                          <p className="text-[10px] text-rose-500 font-bold">Motivo del rechazo: {w.rejection_reason}</p>
+                        )}
+                        {w.status === 'completed' && w.reference && (
+                          <p className="text-[10px] text-emerald-600 font-bold">Referencia: {w.reference}</p>
+                        )}
                       </div>
                       <Badge variant={STATUS_BADGE[w.status]}>{STATUS_LABEL[w.status] ?? w.status}</Badge>
                     </div>
@@ -358,17 +380,20 @@ export default function WalletPage() {
                     <div key={p.id} className="p-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
                       <div className="space-y-0.5">
                         <p className="text-sm font-bold text-slate-800">
-                          {p.payment_type === 'package'
-                            ? `Paquete${p.installment_number ? ` — cuota ${p.installment_number}` : ''}`
-                            : 'Clase suelta'}
+                          {PAYMENT_TYPE_LABEL[p.payment_type ?? ''] ?? 'Pago'}
+                          {(p.payment_type === 'package' || p.payment_type === 'renewal') && p.installment_number
+                            ? ` — cuota ${p.installment_number}`
+                            : ''}
                         </p>
                         <p className="text-[10px] text-slate-400 font-medium">
                           {new Date(p.created_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </p>
                       </div>
                       <div className="text-right flex flex-col items-end gap-1">
-                        <p className="text-sm font-black text-emerald-600">
-                          {p.status === 'approved' ? `+$${p.amount_teacher.toFixed(2)}` : '—'}
+                        <p className={`text-sm font-black ${p.amount_teacher < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                          {p.status === 'approved'
+                            ? `${p.amount_teacher < 0 ? '-' : '+'}$${Math.abs(p.amount_teacher).toFixed(2)}`
+                            : '—'}
                         </p>
                         <Badge variant={STATUS_BADGE[p.status]}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
                       </div>

@@ -19,7 +19,9 @@ export default function GodModePage() {
   const isSuperadmin = user?.role === "superadmin";
   const actionsInCategory = GOD_MODE_ACTIONS.filter(a => a.category === category)
     // Un teacher_admin no puede transferir alumnos entre profesores (solo superadmin, validado también en backend)
-    .filter(a => isSuperadmin || a.id !== "student.transfer_teacher");
+    .filter(a => isSuperadmin || a.id !== "student.transfer_teacher")
+    // Crear/editar pagos también es solo superadmin (backend: 403 para teacher_admin)
+    .filter(a => isSuperadmin || (a.id !== "payment.create" && a.id !== "payment.edit"));
 
   return (
     <div className="space-y-6">

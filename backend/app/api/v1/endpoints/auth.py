@@ -1,5 +1,5 @@
 from sqlalchemy.exc import IntegrityError
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 import logging
@@ -93,6 +93,9 @@ def verify_email(request: Request, data: VerifyEmailRequest, db: Session = Depen
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "El enlace de verificación no es válido o expiró")
     record.is_used = True
     user.is_verified = True
+    # S12: confirmar el correo cierra las sesiones abiertas antes (si alguien creó la cuenta con un correo ajeno,
+    # el dueño real al verificar deja fuera a quien la preparó).
+    revoke_all_sessions(db, user.id)
     db.commit()
     return {"message": "Email verificado correctamente"}
 
@@ -402,16 +405,18 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
 def forgot_password(
     request: Request,
     data: ForgotPasswordRequest,
+    background: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
     Inicia el flujo de recuperación de contraseña.
-    Siempre devuelve 200 aunque el email no exista
-    para no revelar qué emails están registrados.
+    Siempre devuelve 200 aunque el email no exista para no revelar qué emails están registrados. El correo
+    sale en una tarea en segundo plano: la petición tarda igual exista o no la cuenta (Fase 21, menores 2).
+    El email se compara sin distinguir mayúsculas (se guarda en minúsculas).
     """
-    user = db.query(User).filter(User.email == data.email).first()
+    user = db.query(User).filter(func.lower(User.email) == data.email.strip().lower()).first()
 
-    if user:
+    if user and user.is_active:
         # Invalidar tokens anteriores del mismo usuario
         db.query(PasswordResetToken).filter(
             PasswordResetToken.user_id == user.id,
@@ -428,8 +433,8 @@ def forgot_password(
         db.add(reset_token)
         db.commit()
 
-        # Enviar email
-        send_password_reset_email(
+        background.add_task(
+            send_password_reset_email,
             to_email=user.email,
             user_name=user.name,
             reset_token=token,
@@ -492,17 +497,19 @@ def reset_password(
 def forgot_username(
     request: Request,
     data: ForgotUsernameRequest,
+    background: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
     Envía el nombre de usuario asociado a un email.
-    Igual que forgot-password: siempre devuelve el mismo mensaje,
-    exista o no el email, para no revelar qué correos están registrados.
+    Igual que forgot-password: siempre devuelve el mismo mensaje, exista o no el email, y el correo
+    sale en segundo plano.
     """
-    user = db.query(User).filter(User.email == data.email).first()
+    user = db.query(User).filter(func.lower(User.email) == data.email.strip().lower()).first()
 
-    if user:
-        send_username_recovery_email(
+    if user and user.is_active:
+        background.add_task(
+            send_username_recovery_email,
             to_email=user.email,
             user_name=user.name,
             username=user.username,

@@ -47,7 +47,7 @@ Crea `endpoints/<nombre>.py` con `router = APIRouter()`, impórtalo y regístral
 Ojo con `Enum` de Postgres: añadir valores exige migración explícita.
 
 ### Zonas horarias y fechas
-Todo en UTC con zona (`datetime` aware). Usa `utc_now()` de `app/core/timezone.py`, nunca `datetime.utcnow()`. Valida que las fechas del cliente traigan zona (hoy una fecha sin zona da 500: AUD-08). Disponibilidad semanal = `HH:MM` UTC + día; ojo con DST.
+Todo en UTC con zona (`datetime` aware). Usa `utc_now()` de `app/core/timezone.py`, nunca `datetime.utcnow()`. Valida que las fechas del cliente traigan zona (hoy una fecha sin zona da 500: AUD-08). Disponibilidad semanal del profesor = hora LOCAL (`day_of_week` + `HH:MM` locales) con la zona del perfil, expandida a UTC por fecha en `core/slot_availability.py` (DST correcto). Las preferencias del alumno siguen en UTC.
 
 ### Dinero y créditos (zona crítica)
 Antes de modificar `payments.py`/`class_logic.py`, lee `BUSINESS_RULES.md` §Créditos/§Dinero y los tests `test_booking_flow.py`, `test_findings.py`, `test_edge_cases.py`. Cualquier cambio en contadores (`unlocked_credits`, `classes_used`, `prepaid_unlimited_credits`) debe mantener las dos contabilidades coherentes (ocupadas vs usadas). Las operaciones de saldo deberían usar `with_for_update()` (hoy solo el retiro lo usa).

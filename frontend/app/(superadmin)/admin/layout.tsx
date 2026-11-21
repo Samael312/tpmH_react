@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { useAuthStore } from '@/store/authStore'
 import NavBar from '@/components/layout/NavBar'
 import DashboardTopbar from '@/components/layout/DashboardTopbar'
@@ -10,6 +10,7 @@ import { useChatSocketBootstrap } from '@/hooks/useChat'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
   const { user, hasHydrated } = useAuthStore()
   const { config: platformConfig } = usePlatformConfig()
 
@@ -17,6 +18,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   // no recibía mensajes ni actualizaba el badge mientras administraba.
   // (El superadmin solo audita chats, no participa — no necesita socket.)
   useChatSocketBootstrap(user?.role === 'teacher_admin' && platformConfig?.chat_enabled === true)
+
+  // Pantallas solo-superadmin (el backend responde 403 a teacher_admin): se le redirige al panel.
+  const blockedForRole =
+    user?.role === 'teacher_admin' &&
+    ['/admin/chat', '/admin/flow-tester', '/admin/classes', '/admin/materials'].some(p => pathname === p || pathname.startsWith(p + '/'))
+
+  useEffect(() => {
+    if (blockedForRole) router.replace('/admin/dashboard')
+  }, [blockedForRole, router])
 
   useEffect(() => {
     if (!hasHydrated) return
@@ -40,7 +50,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Page content */}
         <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
           <div className="max-w-[1400px] mx-auto">
-            {children}
+            {blockedForRole ? null : children}
           </div>
         </div>
       </main>

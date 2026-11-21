@@ -86,8 +86,8 @@ def seed():
     sp = StudentProfile(user_id=su.id, user_username="alumno", timezone="UTC")
     db.add_all([tp, sp]); db.flush()
     for d in range(7):
-        db.add(TeacherAvailability(teacher_id=tp.id, day_of_week=d, local_day_of_week=d, is_available=True,
-                                   start_time_utc="08:00", end_time_utc="20:00"))
+        db.add(TeacherAvailability(teacher_id=tp.id, day_of_week=d, is_available=True,
+                                   start_time_local="08:00", end_time_local="20:00"))
     db.add(Package(teacher_id=tp.id, name="Paquete 4", subject="English", classes_count=4, price=100.0,
                    price_per_class=25.0, duration_minutes=50, is_active=True))
     db.add(PaymentConfig(bank_transfer_enabled=True, paypal_enabled=False, binance_enabled=False,

@@ -1,25 +1,22 @@
 """
-Recálculo de horarios al cambiar la zona horaria de una cuenta.
+Cambio de zona horaria de una cuenta.
 
-Regla de negocio:
-- Disponibilidad semanal recurrente (TeacherAvailability) y preferencias del
-  estudiante (StudentSchedulePreference): se guardan como "HH:MM UTC" +
-  day_of_week + local_day_of_week. Al cambiar de zona horaria, la hora LOCAL
-  que el usuario configuró ("trabajo de 12:00 a 19:00") se PRESERVA tal cual,
-  y lo que se recalcula es el UTC equivalente para la nueva zona horaria.
-  local_day_of_week NO cambia nunca — es el día que el usuario eligió en su
-  propio calendario, independientemente de dónde esté físicamente. day_of_week
-  SÍ puede cambiar: representa el día de la semana real en UTC de ese horario,
-  y un cambio de zona horaria puede correrlo de día (ver core/timezone.py,
-  convert_local_time_to_utc) — por eso se recalcula acá igual que las horas.
+Fase 26 (horario de verano):
+- Disponibilidad semanal del PROFESOR (TeacherAvailability): se guarda en HORA LOCAL (dia local + HH:MM
+  local) y se expande a UTC por fecha al consultar (core/slot_availability.py). Cambiar la zona del
+  perfil NO requiere recalcular nada: el horario conserva su hora local semanal ("18:00-20:00" sigue
+  siendo 18:00-20:00 en la zona nueva). `recalculate_teacher_schedule_timezone` ya no toca filas semanales.
 
-- Excepciones puntuales (TeacherAvailabilityException): tienen una fecha de
-  calendario real (ej. "17 de agosto, vacaciones 09:00-13:00"). Ahí se
-  reinterpreta la MISMA fecha y hora de reloj local en la nueva zona
-  horaria, preservando fecha y hora exactas.
+- Preferencias del ESTUDIANTE (StudentSchedulePreference): siguen guardadas como "HH:MM UTC" +
+  day_of_week + local_day_of_week (limitacion conocida: el desfase de verano queda fijo hasta que el
+  alumno las vuelva a guardar; ver docs/TIMEZONE_AUDIT.md). Al cambiar de zona se preserva la hora
+  LOCAL y se recalcula el UTC equivalente (`recalculate_student_preferences_timezone`).
 
-Ninguna de estas funciones hace commit — el endpoint que las llama decide
-cuándo confirmar la transacción (junto con el resto de cambios del perfil).
+- Excepciones puntuales del profesor (TeacherAvailabilityException): tienen una fecha de calendario
+  real (ej. "17 de agosto, vacaciones 09:00-13:00"). Al cambiar de zona se reinterpreta la MISMA fecha
+  y hora de reloj local en la nueva zona horaria (como el horario semanal, conserva su hora local).
+
+Ninguna de estas funciones hace commit: el endpoint que las llama decide cuando confirmar.
 """
 from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
@@ -39,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 def _recalc_weekly_rows(rows, old_tz: str, new_tz: str) -> List[Dict[str, Any]]:
     """
-    Recalcula filas con day_of_week + start_time_utc/end_time_utc ("HH:MM"),
+    Recalcula filas (preferencias del estudiante) con day_of_week + start_time_utc/end_time_utc ("HH:MM"),
     preservando la hora local y recalculando el UTC para la nueva zona
     horaria. Devuelve un resumen de los cambios para notificar al usuario.
     """
@@ -127,23 +124,31 @@ def recalculate_teacher_schedule_timezone(
     teacher_id: int, old_tz: str, new_tz: str, db: Session
 ) -> Dict[str, Any]:
     """
-    Recalcula disponibilidad semanal + excepciones del profesor tras un
-    cambio de zona horaria. NO hace commit.
+    Tras un cambio de zona del profesor. Fase 26: el horario SEMANAL ya esta en hora local y no se toca
+    (`weekly_changes` siempre vacio, se mantiene la clave por compatibilidad). Solo se reinterpretan las
+    excepciones puntuales (fecha real + hora de reloj local). NO hace commit.
     """
     if not old_tz or old_tz == new_tz:
         return {"weekly_changes": [], "exception_changes": []}
-
-    weekly_rows = db.query(TeacherAvailability).filter(
-        TeacherAvailability.teacher_id == teacher_id
-    ).all()
-    weekly_changes = _recalc_weekly_rows(weekly_rows, old_tz, new_tz)
 
     exception_rows = db.query(TeacherAvailabilityException).filter(
         TeacherAvailabilityException.teacher_id == teacher_id
     ).all()
     exception_changes = _recalc_exception_rows(exception_rows, old_tz, new_tz)
 
-    return {"weekly_changes": weekly_changes, "exception_changes": exception_changes}
+    return {"weekly_changes": [], "exception_changes": exception_changes}
+
+
+def apply_teacher_timezone_change(profile, new_tz: str, db: Session) -> Dict[str, Any]:
+    """Pone `new_tz` en el perfil del profesor, reinterpreta sus excepciones y marca su cache de huecos
+    para descartarla al commit (el horario semanal en hora local cambia de UTC sin tocar
+    TeacherAvailability, asi que la invalidacion automatica por entidades no lo veria). NO hace commit."""
+    old_tz = profile.timezone
+    profile.timezone = new_tz
+    result = recalculate_teacher_schedule_timezone(profile.id, old_tz, new_tz, db)
+    from app.core.slots_cache import mark_teacher_slots_dirty
+    mark_teacher_slots_dirty(db, profile.id)
+    return result
 
 
 def recalculate_student_preferences_timezone(

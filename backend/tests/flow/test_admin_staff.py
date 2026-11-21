@@ -62,20 +62,34 @@ def test_staff_endpoints_reject_teacher_and_student(client, teacher_token, stude
 
 def test_only_superadmin_can_change_user_role(client, superadmin_token, teacher_admin_token, fixed_users):
     """
-    Técnico: admin_update_user (cambiar rol teacher <-> teacher_admin) usa
-    require_superadmin, NO get_current_staff — un teacher_admin no debería
-    poder tocar esto ni siquiera sobre sí mismo.
+    Técnico: admin_update_user usa get_current_staff (Fase 16+): el staff
+    (teacher_admin) SÍ puede editar datos de usuarios, pero solo el
+    superadmin puede cambiar roles (teacher <-> teacher_admin): promover
+    a teacher_admin da poderes de staff. Un teacher_admin que intenta
+    cambiar un rol (ni siquiera el propio) recibe 403 "Solo el superadmin
+    puede cambiar roles". Un PATCH sin rol (solo datos) es 200.
     UX: solo el dueño de la plataforma (superadmin) puede ascender o
     degradar el rol de una cuenta de staff — un teacher_admin no puede
-    auto-otorgarse (ni quitarse) ese nivel de acceso.
+    auto-otorgarse (ni quitarse) ese nivel de acceso, pero sí corrige
+    datos de contacto de las cuentas.
     """
     teacher_admin_id = fixed_users["teacher_admin"].id
-    r = client.patch(
+
+    # Editar datos (sin rol): permitido para staff.
+    r_data = client.patch(
         f"/api/v1/admin/users/{teacher_admin_id}",
         json={"phone_number": None},
         headers=auth_headers(teacher_admin_token),
     )
-    assert r.status_code == 403
+    assert r_data.status_code == 200, r_data.text
+
+    # Cambiar el rol: solo superadmin (el teacher_admin recibe 403 antes de validar la transición).
+    r_role = client.patch(
+        f"/api/v1/admin/users/{teacher_admin_id}",
+        json={"role": "teacher"},
+        headers=auth_headers(teacher_admin_token),
+    )
+    assert r_role.status_code == 403, r_role.text
 
 
 def test_withdrawals_pending_real_path(client, superadmin_token):

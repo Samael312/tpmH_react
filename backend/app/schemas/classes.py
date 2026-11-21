@@ -2,6 +2,7 @@ from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime, timezone
 from app.schemas.god_mode import GodModeActionBase
+from app.models.class_ import MAX_STUDENT_RESCHEDULES
 
 
 # Pool fijo (no editable a mano) del que el superadmin puede elegir
@@ -150,11 +151,16 @@ class ClassResponse(BaseModel):
     # core/google_calendar.py::import_external_classes_for_teacher).
     # Indica de qué plataforma se importó (ej. "preply").
     external_source: Optional[str] = None
+    # Fase 25 (m2): tope de reagendados del alumno por clase
+    student_reschedule_count: int = 0
+    reschedule_limit: int = MAX_STUDENT_RESCHEDULES
+    reschedules_remaining: int = MAX_STUDENT_RESCHEDULES
 
     class Config:
         from_attributes = True
 
     def model_post_init(self, __context):
+        self.reschedules_remaining = max(0, self.reschedule_limit - (self.student_reschedule_count or 0))
         # Ocultar meet_link si la clase no está confirmed
         if self.status not in ["confirmed", "completed", "finalized"]:
             self.meet_link = None

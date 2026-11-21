@@ -82,5 +82,5 @@ def restrict_availability(db, w, start="08:00", end="20:00"):
     """Limita la disponibilidad del profesor (por defecto el mundo de pruebas tiene 24 h)."""
     from app.models.availability import TeacherAvailability
     db.query(TeacherAvailability).filter(TeacherAvailability.teacher_id == w["tp"].id).update(
-        {"start_time_utc": start, "end_time_utc": end})
+        {"start_time_local": start, "end_time_local": end})
     db.commit()

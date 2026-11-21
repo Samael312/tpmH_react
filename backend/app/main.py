@@ -226,7 +226,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         # esperado con el mensaje de validación. jsonable_encoder (lo mismo
         # que usa el handler por defecto de FastAPI) sí sabe convertir esas
         # excepciones a texto antes de serializar.
-        content={"detail": jsonable_encoder(exc.errors())},
+        # Fase 20: se quita "input" (el valor enviado): con NaN/inf rompia la serializacion (500) y de paso no
+        # se reenvia al cliente lo que mando.
+        content={"detail": jsonable_encoder([{k: v for k, v in e.items() if k != "input"} for e in exc.errors()])},
     )
 
 

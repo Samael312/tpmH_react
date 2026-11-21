@@ -125,6 +125,8 @@ interface ChatStoreState {
   // hilo EN ESTA SESIÓN — así el hook sabe si mostrar skeleton (primera
   // vez) o solo refrescar en silencio (ya estaba cacheado).
   historyLoadedByConversation: Record<number, boolean>;
+  // Error al traer el historial (C2): permite mostrar un aviso con "Reintentar" en vez de un hilo vacio.
+  historyErrorByConversation: Record<number, string | null>;
   // Hilo que el usuario tiene abierto AHORA (ChatThreadView lo registra al
   // montar): un mensaje entrante en ese hilo se considera leído; en
   // cualquier otro queda como "nuevo" en la lista y suma al badge.
@@ -179,6 +181,7 @@ export const useChatStore = create<ChatStoreState>()((set, get) => ({
   errorByConversation: {},
   fetchingByConversation: {},
   historyLoadedByConversation: {},
+  historyErrorByConversation: {},
   activeConversationId: null,
   pulseKey: 0,
 
@@ -215,7 +218,7 @@ export const useChatStore = create<ChatStoreState>()((set, get) => ({
     get().disconnect();
     set({
       messagesByConversation: {}, errorByConversation: {}, eventVersion: 0,
-      fetchingByConversation: {}, historyLoadedByConversation: {},
+      fetchingByConversation: {}, historyLoadedByConversation: {}, historyErrorByConversation: {},
       activeConversationId: null, pulseKey: 0,
     });
   },
@@ -223,21 +226,30 @@ export const useChatStore = create<ChatStoreState>()((set, get) => ({
   setActiveConversation: (conversationId) => set({ activeConversationId: conversationId }),
 
   ensureHistory: async (conversationId) => {
-    set((state) => ({ fetchingByConversation: { ...state.fetchingByConversation, [conversationId]: true } }));
+    set((state) => ({
+      fetchingByConversation: { ...state.fetchingByConversation, [conversationId]: true },
+      historyErrorByConversation: { ...state.historyErrorByConversation, [conversationId]: null },
+    }));
     try {
       const cached = get().messagesByConversation[conversationId];
-      if (!cached || cached.length === 0) {
+      // C1: "ya cargado" lo dice historyLoaded, NO que haya algo en la cache: un mensaje llegado por el socket a un
+      // hilo que nunca se abrio no debe hacerse pasar por el historial.
+      if (!get().historyLoadedByConversation[conversationId] || !cached || cached.length === 0) {
         const res = await api.get(`/chat/conversations/${conversationId}/messages`);
         const msgs = (res.data as ServerMessagePayload[]).map(toClientMessage);
-        set((state) => ({
-          messagesByConversation: { ...state.messagesByConversation, [conversationId]: msgs },
-          historyLoadedByConversation: { ...state.historyLoadedByConversation, [conversationId]: true },
-        }));
+        set((state) => {
+          // Conserva lo que este "sending"/"failed" (id negativo) y no llego al servidor aun.
+          const pending = (state.messagesByConversation[conversationId] ?? []).filter((m) => m.id < 0);
+          return {
+            messagesByConversation: { ...state.messagesByConversation, [conversationId]: capList([...msgs, ...pending]) },
+            historyLoadedByConversation: { ...state.historyLoadedByConversation, [conversationId]: true },
+          };
+        });
         return;
       }
-      // Ya lo teníamos cacheado en esta sesión: solo pedimos lo nuevo
-      // desde el último id real que tenemos (los "sending" tienen id
-      // negativo, se ignoran para este cálculo).
+      // Ya lo teniamos cacheado en esta sesion: solo pedimos lo nuevo
+      // desde el ultimo id real que tenemos (los "sending" tienen id
+      // negativo, se ignoran para este calculo).
       const lastRealId = cached.reduce((max, m) => (m.id > max ? m.id : max), 0);
       const res = await api.get(`/chat/conversations/${conversationId}/messages`, {
         params: { after_id: lastRealId },
@@ -256,6 +268,13 @@ export const useChatStore = create<ChatStoreState>()((set, get) => ({
         });
       }
       set((state) => ({ historyLoadedByConversation: { ...state.historyLoadedByConversation, [conversationId]: true } }));
+    } catch {
+      set((state) => ({
+        historyErrorByConversation: {
+          ...state.historyErrorByConversation,
+          [conversationId]: "No se pudo cargar la conversación.",
+        },
+      }));
     } finally {
       set((state) => ({ fetchingByConversation: { ...state.fetchingByConversation, [conversationId]: false } }));
     }
@@ -362,6 +381,7 @@ function reconcileOptimistic(
     const list = state.messagesByConversation[conversationId] ?? [];
     const idx = list.findIndex((m) => m.client_id === clientId);
     if (idx === -1) {
+      if (!state.historyLoadedByConversation[conversationId]) return {};  // C1: ver arriba
       // Llegó el eco antes de que reconciliáramos (raro, pero por las
       // dudas no duplicamos si el id real ya está en la lista).
       if (list.some((m) => m.id === real.id)) return {};
@@ -521,6 +541,9 @@ function openSocket() {
         reconcileOptimistic(useChatStore.setState, data.conversation_id, data.client_id, toClientMessage(data));
       } else {
         useChatStore.setState((state) => {
+          // C1: si el hilo aun no se cargo en esta sesion no se crea una cache con este unico mensaje (taparia el
+          // historial); se traera completo al abrirlo. La lista de conversaciones se refresca por eventVersion.
+          if (!state.historyLoadedByConversation[data.conversation_id]) return {};
           const list = state.messagesByConversation[data.conversation_id] ?? [];
           if (list.some((m) => m.id === data.id)) return {};
           return {

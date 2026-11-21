@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { usePendingPayments, useWithdrawals, useTeachers, usePaymentsHistory, type PendingPayment, type WithdrawalRecord, type Teacher, type PaymentHistoryItem } from '@/hooks/useAdminData'
-import { Card, Badge, Button, RejectReasonModal } from '@/components/ui'
+import { usePendingPayments, useWithdrawals, useTeachers, usePaymentsHistory, useManualGrantRequests, type ManualGrantRequestRecord, type PendingPayment, type WithdrawalRecord, type Teacher, type PaymentHistoryItem } from '@/hooks/useAdminData'
+import { Card, Badge, Button, RejectReasonModal, ConfirmModal, FullScreenModal } from '@/components/ui'
+import { useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import ChipiWidget from '@/components/chipi/ChipiWidget'
 import Link from 'next/link'
@@ -13,6 +14,7 @@ import DesktopOnly from '@/components/ui/DesktopOnly'
 import LoadMoreButton from '@/components/ui/LoadMoreButton'
 import { usePageTopBar } from '@/lib/mobileTopBar'
 import { useToast } from '@/hooks/useToast'
+import { useAuthStore } from '@/store/authStore'
 import { getErrorMessage } from '@/lib/errorMessage'
 
 const TYPE_BADGE: Record<string, { label: (p: PendingPayment | PaymentHistoryItem) => string; cls: string }> = {
@@ -83,7 +85,22 @@ function RefundDestinationInfo({ info }: { info: PendingPayment["refund_payment_
 
 export default function PaymentsPage() {
   const toast = useToast()
-  const [activeTab, setActiveTab] = useState<'payments' | 'withdrawals' | 'teachers' | 'history'>('payments')
+  const user = useAuthStore(s => s.user)
+  const qc = useQueryClient()
+  const [activeTab, setActiveTab] = useState<'payments' | 'withdrawals' | 'grants' | 'teachers' | 'history'>('payments')
+  // Confirmaciones antes de mover dinero (aprobar pago / marcar retiro pagado con referencia / aprobar paquete gratis).
+  const [approveTarget, setApproveTarget] = useState<PendingPayment | null>(null)
+  const [payTarget, setPayTarget] = useState<WithdrawalRecord | null>(null)
+  const [payReference, setPayReference] = useState('')
+  const [grantApprove, setGrantApprove] = useState<ManualGrantRequestRecord | null>(null)
+  const [grantReject, setGrantReject] = useState<ManualGrantRequestRecord | null>(null)
+  const [grantBusy, setGrantBusy] = useState(false)
+  // Tras mover dinero se refresca todo lo del admin (stats, colas, historial).
+  const invalidateMoney = () => {
+    qc.invalidateQueries({ queryKey: ['admin'] })
+    qc.invalidateQueries({ queryKey: ['teacher', 'payments'] })
+    qc.invalidateQueries({ queryKey: ['teacher', 'wallet'] })
+  }
   const [validating, setValidating] = useState<number | null>(null)
   const [processing, setProcessing] = useState<number | null>(null)
 
@@ -99,17 +116,19 @@ export default function PaymentsPage() {
 
   const { payments, loading: paymentsLoading, isFetching: paymentsFetching, isError: paymentsError, refetch: refetchPayments } = usePendingPayments()
   const { withdrawals, loading: withdrawalsLoading, isFetching: withdrawalsFetching, isError: withdrawalsError, refetch: refetchWithdrawals } = useWithdrawals()
+  const { requests: grantRequests, loading: grantsLoading, isFetching: grantsFetching, isError: grantsError, refetch: refetchGrants } = useManualGrantRequests('pending')
   const { teachers: pendingTeachers, total: pendingTeachersTotal, loading: teachersLoading, isFetching: teachersFetching, isError: teachersError, refetch: refetchTeachers } = useTeachers('pending')
   // El historial crece sin límite: se pide al abrir su pestaña y de 50 en 50 (Fase 14, E6).
   const { history, loading: historyLoading, isFetching: historyFetching, isError: historyError, refetch: refetchHistory, hasMore: historyHasMore, loadMore: loadMoreHistory, loadingMore: historyLoadingMore } = usePaymentsHistory(activeTab === 'history')
 
-  const isFetching = paymentsFetching || withdrawalsFetching || teachersFetching || historyFetching
+  const isFetching = paymentsFetching || withdrawalsFetching || teachersFetching || historyFetching || grantsFetching
 
   const handleRefreshAll = () => {
     refetchPayments()
     refetchWithdrawals()
     refetchTeachers()
     refetchHistory()
+    refetchGrants()
   }
 
   usePageTopBar({
@@ -127,7 +146,8 @@ export default function PaymentsPage() {
       await api.patch(`/payments/${p.payment_id}/validate`, {
         action: 'approve',
       })
-      refetchPayments()
+      invalidateMoney()
+      setApproveTarget(null)
       toast.success('Pago aprobado correctamente')
     } catch (e) {
       toast.error(getErrorMessage(e, 'No se pudo aprobar el pago'))
@@ -144,16 +164,36 @@ export default function PaymentsPage() {
     })
   }
 
-  const handleProcessWithdrawal = async (id: number) => {
+  const handleProcessWithdrawal = async (id: number, reference: string) => {
     setProcessing(id)
     try {
-      await api.post(`/payments/admin/withdrawals/${id}/process`, { action: 'complete' })
-      refetchWithdrawals()
+      await api.post(`/payments/admin/withdrawals/${id}/process`, {
+        action: 'complete',
+        reference: reference.trim() || undefined,
+      })
+      invalidateMoney()
+      setPayTarget(null)
+      setPayReference('')
       toast.success('Retiro procesado correctamente')
     } catch (e) {
       toast.error(getErrorMessage(e, 'No se pudo procesar el retiro'))
     } finally {
       setProcessing(null)
+    }
+  }
+
+  const resolveGrant = async (g: ManualGrantRequestRecord, action: 'approve' | 'reject', reason?: string) => {
+    setGrantBusy(true)
+    try {
+      await api.patch(`/payments/manual-grant-requests/${g.id}/resolve`, { action, rejection_reason: reason })
+      invalidateMoney()
+      toast.success(action === 'approve' ? 'Paquete otorgado' : 'Solicitud rechazada')
+      setGrantApprove(null)
+      setGrantReject(null)
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'No se pudo resolver la solicitud'))
+    } finally {
+      setGrantBusy(false)
     }
   }
 
@@ -177,14 +217,14 @@ export default function PaymentsPage() {
           action: 'reject',
           rejection_reason: reason,
         })
-        refetchPayments()
+        invalidateMoney()
       } else {
         setProcessing(rejectTarget.withdrawalId)
         await api.post(`/payments/admin/withdrawals/${rejectTarget.withdrawalId}/process`, {
           action: 'reject',
           rejection_reason: reason,
         })
-        refetchWithdrawals()
+        invalidateMoney()
       }
       toast.success(rejectTarget.kind === 'payment' ? 'Pago rechazado correctamente' : 'Retiro rechazado correctamente')
       setRejectTarget(null)
@@ -219,12 +259,13 @@ export default function PaymentsPage() {
           {[
             { key: 'payments',    label: `Pagos por confirmar (${payments?.length || 0})` },
             { key: 'withdrawals', label: `Retiros (${withdrawals?.length || 0})` },
+            { key: 'grants',      label: `Paquetes gratis (${grantRequests?.length || 0})` },
             { key: 'teachers',    label: `Profesores por validar (${pendingTeachersTotal || 0})` },
             { key: 'history',     label: 'Historial' },
           ].map(tab => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key as 'payments' | 'withdrawals' | 'teachers' | 'history')}
+              onClick={() => setActiveTab(tab.key as 'payments' | 'withdrawals' | 'grants' | 'teachers' | 'history')}
               className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${
                 activeTab === tab.key
                   ? 'bg-white text-pink-600 shadow-sm border border-pink-100'
@@ -333,7 +374,7 @@ export default function PaymentsPage() {
                       <Button
                         variant="primary"
                         loading={validating === p.payment_id}
-                        onClick={() => handleApprove(p)}
+                        onClick={() => setApproveTarget(p)}
                       >
                         Confirmar pago
                       </Button>
@@ -394,24 +435,73 @@ export default function PaymentsPage() {
                       <span className="text-xl font-black text-emerald-600 bg-emerald-50 px-4 py-2 rounded-2xl">
                         ${w.amount.toFixed(2)}
                       </span>
-                      <Button
-                        variant="primary"
-                        loading={processing === w.id}
-                        onClick={() => handleProcessWithdrawal(w.id)}
-                      >
-                        Marcar Pagado
-                      </Button>
-                      <Button
-                        variant="danger"
-                        loading={processing === w.id}
-                        onClick={() => handleRejectWithdrawal(w.id, w.teacher_name)}
-                      >
-                        Rechazar
-                      </Button>
+                      {user?.role === 'teacher_admin' && w.teacher_username === user.username ? (
+                        <span className="text-xs font-bold text-slate-400 max-w-[11rem] text-right">
+                          Tu retiro lo resuelve el superadmin
+                        </span>
+                      ) : (
+                        <>
+                          <Button
+                            variant="primary"
+                            loading={processing === w.id}
+                            onClick={() => { setPayReference(''); setPayTarget(w) }}
+                          >
+                            Marcar Pagado
+                          </Button>
+                          <Button
+                            variant="danger"
+                            loading={processing === w.id}
+                            onClick={() => handleRejectWithdrawal(w.id, w.teacher_name)}
+                          >
+                            Rechazar
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </Card>
               ))
+            )}
+          </div>
+        )}
+
+        {/* Tab: solicitudes de paquete gratis (Fase 20) */}
+        {activeTab === 'grants' && (
+          <div className="space-y-4 pt-2">
+            {grantsError ? (
+              <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl px-4 py-3.5 text-xs font-bold">
+                No se pudieron cargar las solicitudes.{' '}
+                <button onClick={() => refetchGrants()} className="underline">Reintentar</button>
+              </div>
+            ) : grantsLoading ? (
+              <Skeleton className="h-24 w-full rounded-3xl" />
+            ) : grantRequests.length === 0 ? (
+              <Card className="p-16 text-center bg-slate-50/50 border-2 border-dashed border-slate-200 rounded-3xl shadow-none">
+                <p className="text-slate-500 font-bold text-lg">No hay solicitudes de paquete gratis pendientes</p>
+              </Card>
+            ) : (
+              grantRequests.map((g) => {
+                return (
+                  <Card key={g.id} className="p-6 border-slate-100 shadow-sm rounded-3xl space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="font-bold text-slate-800">{g.student_name ?? `Alumno #${g.student_id}`}</p>
+                        <p className="text-xs text-slate-500">
+                          Pide: <strong>{g.teacher_name}</strong> · Paquete: <strong>{g.package_name ?? '—'}</strong>
+                        </p>
+                      </div>
+                      <Badge variant="warning">Pendiente</Badge>
+                    </div>
+                    <p className="text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded-2xl p-3 whitespace-pre-wrap">
+                      {g.reason}
+                    </p>
+                    <div className="flex gap-3">
+                      <Button variant="primary" onClick={() => setGrantApprove(g)}>Aprobar</Button>
+                      <Button variant="danger" onClick={() => setGrantReject(g)}>Rechazar</Button>
+                    </div>
+                  </Card>
+                )
+              })
             )}
           </div>
         )}
@@ -577,6 +667,80 @@ export default function PaymentsPage() {
         loading={rejecting}
         onClose={() => { if (!rejecting) setRejectTarget(null) }}
         onConfirm={handleConfirmReject}
+      />
+
+      <ConfirmModal
+        open={!!approveTarget}
+        title="Confirmar pago"
+        description={approveTarget ? `Vas a aprobar ${approveTarget.student_name ? approveTarget.student_name + ' · ' : ''}$${Number(approveTarget.amount).toFixed(2)}. Esto activa el paquete y mueve el saldo del profesor.` : ''}
+        confirmLabel="Aprobar pago"
+        loading={validating === approveTarget?.payment_id}
+        onClose={() => { if (validating === null) setApproveTarget(null) }}
+        onConfirm={async () => { if (approveTarget) await handleApprove(approveTarget) }}
+      />
+
+      <FullScreenModal
+        open={!!payTarget}
+        onClose={() => { if (processing === null) setPayTarget(null) }}
+        title="Marcar retiro como pagado"
+        footer={
+          <div className="flex gap-3">
+            <button
+              onClick={() => setPayTarget(null)}
+              disabled={processing !== null}
+              className="flex-1 py-3 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <Button
+              variant="primary"
+              loading={processing === payTarget?.id}
+              onClick={() => payTarget && handleProcessWithdrawal(payTarget.id, payReference)}
+              className="flex-1 justify-center"
+            >
+              Confirmar pago
+            </Button>
+          </div>
+        }
+      >
+        {payTarget && (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600">
+              Confirmas que ya transferiste <strong>${payTarget.amount.toFixed(2)}</strong> a <strong>{payTarget.teacher_name}</strong>.
+            </p>
+            <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-xl p-3">{payTarget.destination_details}</p>
+            <div>
+              <label htmlFor="withdraw-reference" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                Referencia de la transferencia (opcional)
+              </label>
+              <input
+                id="withdraw-reference"
+                value={payReference}
+                onChange={(e) => setPayReference(e.target.value)}
+                placeholder="Nº de operación, hash, etc."
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-200"
+              />
+            </div>
+          </div>
+        )}
+      </FullScreenModal>
+
+      <ConfirmModal
+        open={!!grantApprove}
+        title="Aprobar paquete gratis"
+        description={grantApprove ? `Vas a dar «${grantApprove.package_name ?? 'el paquete'}» gratis a ${grantApprove.student_name ?? 'este alumno'}. Queda registrado en la auditoría.` : ''}
+        confirmLabel="Aprobar"
+        loading={grantBusy}
+        onClose={() => { if (!grantBusy) setGrantApprove(null) }}
+        onConfirm={async () => { if (grantApprove) await resolveGrant(grantApprove, 'approve') }}
+      />
+      <RejectReasonModal
+        open={!!grantReject}
+        title="Rechazar solicitud de paquete gratis"
+        description={grantReject ? `${grantReject.teacher_name} → ${grantReject.student_name}` : undefined}
+        loading={grantBusy}
+        onClose={() => { if (!grantBusy) setGrantReject(null) }}
+        onConfirm={(reason) => grantReject ? resolveGrant(grantReject, 'reject', reason) : undefined}
       />
 
       <ChipiWidget screenName="admin_payments" />

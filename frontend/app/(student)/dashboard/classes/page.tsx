@@ -20,6 +20,7 @@ import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 import { useNow } from "@/lib/useNow";
+import { useBusinessRules } from "@/hooks/useBusinessRules";
 
 const HISTORY_STATUSES = ["completed", "cancelled", "no_show", "finalized"];
 
@@ -144,6 +145,11 @@ function CancelModal({
   };
 
   const dateFormatted = formatDateHumanTz(classDate, getMyDisplayTimezone());
+  // Fase 22 (S9/U5): avisar de la regla de antelacion antes de confirmar (el servidor la sigue validando).
+  const { rules: businessRules } = useBusinessRules();
+  const hoursLeft = (new Date(classDate).getTime() - Date.now()) / (1000 * 60 * 60);
+  const minCancelHours = businessRules.min_cancel_hours;
+  const tooLate = !isGroup && hoursLeft < minCancelHours;
 
   // Paso 2 (solo grupal): ya salió del grupo — ofrecer elegir nuevo paquete
   if (left) {
@@ -278,6 +284,19 @@ function CancelModal({
               </>
             )}
           </p>
+          {!isGroup && (
+            tooLate ? (
+              <p className="mt-3 text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2" role="alert">
+                Faltan {Math.max(0, Math.floor(hoursLeft))} h para la clase y solo se puede cancelar con al menos {minCancelHours} h
+                de antelación: el sistema no te dejará cancelarla. Contacta a tu profesor si no puedes asistir.
+              </p>
+            ) : (
+              <p className="mt-3 text-xs font-medium text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                Si cancelas con al menos {minCancelHours} h de antelación (te quedan {Math.floor(hoursLeft)} h), tu crédito vuelve a tu paquete.
+                Después de ese plazo ya no podrás cancelar desde aquí.
+              </p>
+            )
+          )}
         </div>
 
         {error && (
@@ -690,6 +709,7 @@ export default function MyClassesPage() {
             counterpart_name: rescheduleTarget.teacher_name,
             classType: rescheduleTarget.class_type,
             status: rescheduleTarget.status,
+            reschedulesRemaining: rescheduleTarget.reschedules_remaining,
           }}
           teacherUsername={rescheduleTarget.teacher_username}
           endpoint={`/classes/${rescheduleTarget.id}/reschedule`}

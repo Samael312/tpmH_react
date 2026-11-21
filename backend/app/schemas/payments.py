@@ -1,7 +1,11 @@
 from pydantic import BaseModel, field_validator, model_validator, Field
-from typing import Optional, List
+from typing import Annotated, Optional, List
 from datetime import datetime, timezone
 from app.schemas.god_mode import GodModeActionBase
+
+
+# Fase 20 (D1): ningun importe de entrada admite NaN/inf (NaN pasaba todas las comparaciones y dejaba el saldo en NaN).
+FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
 
 
 # ─── Configuración de pagos ──────────────────────────────────────────────────
@@ -17,7 +21,8 @@ class PaymentConfigResponse(BaseModel):
     bank_transfer_details: Optional[str]
     mobile_payment_details: Optional[str]
     whatsapp_number: Optional[str]
-    default_commission_rate: float
+    # None para quien no es staff (la comision por defecto no se expone a alumnos/profesores)
+    default_commission_rate: Optional[float] = None
     has_any_method: bool
 
     class Config:
@@ -35,7 +40,7 @@ class UpdatePaymentConfigRequest(BaseModel):
     bank_transfer_details: Optional[str] = None
     mobile_payment_details: Optional[str] = None
     whatsapp_number: Optional[str] = None
-    default_commission_rate: Optional[float] = None
+    default_commission_rate: Optional[Annotated[float, Field(allow_inf_nan=False, ge=0.0, le=1.0)]] = None
 
 # ─── Reserva y pago ─────────────────────────────────────────────────────────
 
@@ -160,7 +165,7 @@ class RequestRefundCohortCancelledRequest(BaseModel):
 
 
 class WithdrawalRequest(BaseModel):
-    amount: float
+    amount: FiniteFloat
     destination_method: str   # "paypal", "binance", "bank"
     destination_details: str  # email, wallet address, etc.
 
@@ -178,6 +183,10 @@ class WithdrawalResponse(BaseModel):
     amount: float
     status: str
     destination_method: Optional[str]
+    destination_details: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    reference: Optional[str] = None
+    processed_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:
@@ -232,8 +241,9 @@ class NotifyPaymentRequest(BaseModel):
 
 
 class WithdrawalRequestV2(BaseModel):
-    amount: float
+    amount: FiniteFloat
     payment_info: str  # datos de cobro (Zelle, IBAN, wallet, etc.)
+    destination_method: Optional[str] = None  # "paypal" | "binance" | "bank" (informativo)
 
     @field_validator("amount")
     @classmethod
@@ -271,7 +281,7 @@ class GodModeEditPaymentRequest(GodModeActionBase):
     endpoint ajusta el saldo de la billetera del profesor para que no
     quede desincronizado con lo que realmente se le acreditó.
     """
-    amount_total: Optional[float] = Field(None, gt=0)
+    amount_total: Optional[float] = Field(None, gt=0, allow_inf_nan=False)
     status: Optional[str] = None
     rejection_reason: Optional[str] = None
     transaction_id: Optional[str] = None
@@ -296,7 +306,7 @@ class GodModeCreatePaymentRequest(GodModeActionBase):
     teacher_id: int
     student_id: int
     enrollment_id: Optional[int] = None
-    amount_total: float = Field(..., gt=0)
+    amount_total: float = Field(..., gt=0, allow_inf_nan=False)
     payment_method: str
     payment_type: str = "package"
     status: str = "approved"
@@ -325,6 +335,54 @@ class GodModeCreatePaymentRequest(GodModeActionBase):
 class GodModeEditPaymentResponse(BaseModel):
     message: str
     payment: PaymentResponse
+
+    class Config:
+        from_attributes = True
+
+
+# ─── Solicitudes de otorgamiento manual (Fase 20, D5) ───────────────────────
+
+class CreateManualGrantRequest(BaseModel):
+    enrollment_id: int
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, v):
+        v = (v or "").strip()
+        if len(v) < 5:
+            raise ValueError("Explica el motivo (mínimo 5 caracteres)")
+        if len(v) > 1000:
+            raise ValueError("El motivo es demasiado largo (máx. 1000 caracteres)")
+        return v
+
+
+class ResolveManualGrantRequest(BaseModel):
+    action: str  # "approve" | "reject"
+    rejection_reason: Optional[str] = None
+
+    @field_validator("action")
+    @classmethod
+    def validate_action(cls, v):
+        if v not in ("approve", "reject"):
+            raise ValueError("action debe ser 'approve' o 'reject'")
+        return v
+
+
+class ManualGrantRequestResponse(BaseModel):
+    id: int
+    teacher_id: int
+    student_id: int
+    enrollment_id: int
+    package_id: Optional[int] = None
+    reason: str
+    status: str
+    rejection_reason: Optional[str] = None
+    created_at: datetime
+    resolved_at: Optional[datetime] = None
+    teacher_name: Optional[str] = None
+    student_name: Optional[str] = None
+    package_name: Optional[str] = None
 
     class Config:
         from_attributes = True

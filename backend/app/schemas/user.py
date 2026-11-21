@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, field_validator, Field, computed_field
 from typing import Any, Optional, List
 from datetime import datetime
 from app.core.spoken_languages import read_spoken_languages
+from app.schemas.validators import check_cloudinary_url
 
 
 class SpokenLanguageItem(BaseModel):
@@ -93,13 +94,39 @@ class UpdateProfileRequest(BaseModel):
     email: Optional[EmailStr] = None
     name: Optional[str] = None
     surname: Optional[str] = None
-    avatar: Optional[str] = None
+    avatar: Optional[str] = Field(default=None, max_length=500)
     phone_number: Optional[str] = None
     timezone: Optional[str] = None
     nationality: Optional[str] = None
     onboarding_completed: Optional[bool] = None
     # Fase 8: se valida contra el catalogo `spoken_languages` en el endpoint (core/spoken_languages.py)
     spoken_languages: Optional[List[Any]] = None
+
+    @field_validator("username")
+    @classmethod
+    def _username(cls, v):
+        # Solo se normaliza aquí; la regla completa (formato, reservados) se aplica en el endpoint SOLO si cambia,
+        # para no bloquear a cuentas antiguas cuyo usuario no cumple el formato nuevo y reenvían el suyo tal cual.
+        return None if v is None else v.strip().lower()
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, v):
+        return None if v is None else v.strip().lower()
+
+    @field_validator("avatar")
+    @classmethod
+    def _avatar(cls, v):
+        return check_cloudinary_url(v)
+
+    @field_validator("timezone")
+    @classmethod
+    def _timezone(cls, v):
+        # Fase 27 (Z3): omitir vale; null/vacio explicito se rechaza (nunca debe llegar a guardarse como NULL).
+        if v is None or not v.strip():
+            raise ValueError("La zona horaria no puede estar vacía")
+        return v.strip()
+
 
 class DeleteAccountRequest(BaseModel):
     """

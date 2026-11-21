@@ -362,14 +362,14 @@ def open_teacher_availability(fixed_users):
     try:
         tp = s.query(TeacherProfile).filter(TeacherProfile.user_id == fixed_users["teacher"].id).first()
         saved = [
-            dict(day_of_week=r.day_of_week, local_day_of_week=r.local_day_of_week, start_time_utc=r.start_time_utc,
-                 end_time_utc=r.end_time_utc, is_available=r.is_available)
+            dict(day_of_week=r.day_of_week, start_time_local=r.start_time_local,
+                 end_time_local=r.end_time_local, is_available=r.is_available)
             for r in s.query(TeacherAvailability).filter(TeacherAvailability.teacher_id == tp.id).all()
         ]
         s.query(TeacherAvailability).filter(TeacherAvailability.teacher_id == tp.id).delete()
         for dow in range(7):
-            s.add(TeacherAvailability(teacher_id=tp.id, day_of_week=dow, local_day_of_week=dow, is_available=True,
-                                      start_time_utc="00:00", end_time_utc="00:00"))
+            s.add(TeacherAvailability(teacher_id=tp.id, day_of_week=dow, is_available=True,
+                                      start_time_local="00:00", end_time_local="00:00"))
         s.commit()
         teacher_id = tp.id
     finally:

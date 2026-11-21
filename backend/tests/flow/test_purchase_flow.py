@@ -91,6 +91,20 @@ def clean_slate(db, fixed_users, volatile):
         _cleanup,
         label="limpieza total: clases/enrollments/payments/packages/disponibilidad/billetera del par profesor-estudiante fijo",
     )
+    # Fase 28: arranca sobre una pizarra limpia. Restos de un test anterior que fallo (enrollments activos o
+    # de una cohorte cancelada, clases solapadas) cambian la etapa de reserva (needs_group_refund/ready) y
+    # hacen fallar este test por datos, no por logica.
+    try:
+        from app.models.class_participant import ClassParticipant
+        s0 = db.__class__(bind=db.get_bind())
+        try:
+            s0.query(ClassParticipant).filter(ClassParticipant.student_id == state["student_id"]).delete(synchronize_session=False)
+            s0.commit()
+        finally:
+            s0.close()
+        _cleanup()
+    except Exception:
+        pass
     return state
 
 

@@ -65,6 +65,26 @@ MAX_VIDEO_SIZE = MAX_VIDEO_SIZE_MB * 1024 * 1024
 # en esta iteración porque MAX_VIDEO_SIZE_MB=100 no lo requiere.
 
 
+# Extensión del archivo según el tipo YA VALIDADO (el nombre que manda el cliente no decide la extensión; Fase 21).
+_EXT_BY_TYPE = {
+    "application/pdf": "pdf",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+    "audio/mpeg": "mp3",
+    "audio/mp3": "mp3",
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "video/mp4": "mp4",
+    "video/quicktime": "mov",
+}
+
+MAX_AVATAR_SIZE_MB = 5
+MAX_AVATAR_SIZE = MAX_AVATAR_SIZE_MB * 1024 * 1024
+
+
 def _slugify(text: str) -> str:
     text = text.strip().lower()
     text = re.sub(r"[^\w\s-]", "", text)
@@ -163,12 +183,14 @@ def upload_file(
     return _send_to_cloudinary(file_bytes, filename, content_type, folder, display_name)
 
 
-def _validate_upload(head: bytes, size: int, content_type: str) -> None:
+def _validate_upload(head: bytes, size: int, content_type: str, max_bytes: int | None = None) -> None:
     """Valida tamano y firma (magic bytes) sin necesitar el archivo completo."""
+    if max_bytes is not None and size > max_bytes:
+        raise ValueError(f"El archivo supera el tamaño máximo permitido de {max_bytes // (1024 * 1024)} MB.")
     if not _matches_declared_type(head, content_type):
         raise ValueError(
             "El contenido del archivo no coincide con su tipo declarado. "
-            "Verificá que el archivo no esté corrupto o renombrado."
+            "Comprueba que el archivo no esté corrupto o renombrado."
         )
 
     is_video = content_type in ALLOWED_VIDEO_TYPES
@@ -190,6 +212,8 @@ def upload_file_stream(
     content_type: str,
     folder: str = "materials",
     display_name: str | None = None,
+    allowed_types: set | frozenset | None = None,
+    max_bytes: int | None = None,
 ) -> dict:
     """
     Igual que upload_file, pero recibe un objeto tipo archivo (p. ej. `UploadFile.file`,
@@ -197,7 +221,7 @@ def upload_file_stream(
     carga entero en RAM. Valida tamano y firma ANTES de enviar nada, y los videos se suben por
     trozos (`upload_large`).
     """
-    if content_type not in ALL_ALLOWED_TYPES:
+    if content_type not in ALL_ALLOWED_TYPES or (allowed_types is not None and content_type not in allowed_types):
         raise ValueError(f"Tipo de archivo no permitido: {content_type}")
 
     fileobj.seek(0, 2)
@@ -206,7 +230,7 @@ def upload_file_stream(
     head = fileobj.read(16)
     fileobj.seek(0)
 
-    _validate_upload(head, size, content_type)
+    _validate_upload(head, size, content_type, max_bytes)
     return _send_to_cloudinary(fileobj, filename, content_type, folder, display_name)
 
 
@@ -218,7 +242,7 @@ CLOUDINARY_TIMEOUT = Timeout(connect=10, read=float(os.getenv("CLOUDINARY_READ_T
 def _send_to_cloudinary(data, filename: str, content_type: str, folder: str, display_name: str | None) -> dict:
     """`data` puede ser bytes o un objeto tipo archivo."""
     is_video = content_type in ALLOWED_VIDEO_TYPES
-    ext = filename.rsplit(".", 1)[-1] if "." in filename else ""
+    ext = _EXT_BY_TYPE.get(content_type, "")
     base_name = _slugify(display_name) if display_name else _slugify(filename.rsplit(".", 1)[0])
     upload_filename = f"{base_name}.{ext}" if ext else base_name
 

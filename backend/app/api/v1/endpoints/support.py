@@ -3,7 +3,8 @@
 from datetime import timedelta
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from app.core.rate_limit import limiter, user_or_ip_key
 from app.core.pagination import Pagination, paginate
 from sqlalchemy.orm import Session
 
@@ -34,7 +35,8 @@ _CATEGORY_LABELS = {
 
 
 def _require_student_or_teacher(current_user: User) -> None:
-    if current_user.role not in (UserRole.student, UserRole.teacher):
+    # teacher_admin también es profesor: tiene su propia bandeja "Mi soporte" (Fase 21, E3).
+    if current_user.role not in (UserRole.student, UserRole.teacher, UserRole.teacher_admin):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             "Solo estudiantes y profesores pueden enviar tickets de soporte",
@@ -42,7 +44,9 @@ def _require_student_or_teacher(current_user: User) -> None:
 
 
 @router.post("/tickets", response_model=SupportTicketResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/hour", key_func=user_or_ip_key)  # cada ticket notifica por correo a todo el staff
 def create_support_ticket(
+    request: Request,
     data: CreateSupportTicketRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -97,7 +101,9 @@ def create_support_ticket(
 
 
 @router.post("/class-corrections", response_model=SupportTicketResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/hour", key_func=user_or_ip_key)
 def create_class_correction_ticket(
+    request: Request,
     data: CreateClassCorrectionRequest,
     current_user: User = Depends(get_current_teacher_or_teacher_admin),
     db: Session = Depends(get_db),

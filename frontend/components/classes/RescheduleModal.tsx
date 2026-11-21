@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Calendar, ChevronLeft, ChevronRight,
   AlertCircle, X, Check, RotateCcw, BookOpen
@@ -42,6 +42,9 @@ export function RescheduleCalendar({
   restrictToHighlighted?: boolean;
 }) {
   const today = new Date();
+  // Fase 22: "hoy" en fecha LOCAL (YYYY-MM-DD). Antes se comparaba con new Date("YYYY-MM-DD") (UTC) y
+  // toISOString() (UTC), lo que marcaba mal el pasado/hoy segun la zona horaria del navegador.
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const [year, setYear]   = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
 
@@ -61,6 +64,8 @@ export function RescheduleCalendar({
     <div className="bg-slate-50/85 border border-slate-100 rounded-2xl p-3.5 shadow-inner">
       <div className="flex items-center justify-between mb-2.5">
         <button
+          type="button"
+          aria-label="Mes anterior"
           onClick={() => {
             if (month === 0) { setMonth(11); setYear(y => y - 1); }
             else setMonth(m => m - 1);
@@ -75,6 +80,8 @@ export function RescheduleCalendar({
           {MONTHS[month]} {year}
         </span>
         <button
+          type="button"
+          aria-label="Mes siguiente"
           onClick={() => {
             if (month === 11) { setMonth(0); setYear(y => y + 1); }
             else setMonth(month + 1);
@@ -102,8 +109,8 @@ export function RescheduleCalendar({
           if (!day) return <div key={i} />;
           const dateStr = `${year}-${String(month + 1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
           const isSelected = dateStr === value;
-          const isPast     = new Date(dateStr) < new Date(today.toDateString());
-          const isToday    = dateStr === today.toISOString().split("T")[0];
+          const isPast     = dateStr < todayStr;
+          const isToday    = dateStr === todayStr;
           const isHighlighted = highlightedDates?.has(dateStr) ?? false;
           const isUnavailable = unavailableDates?.has(dateStr) ?? false;
           const isDisabled = isPast || (restrictToHighlighted && !isHighlighted) || (isHighlighted && isUnavailable);
@@ -111,7 +118,10 @@ export function RescheduleCalendar({
           return (
             <button
               key={i}
+              type="button"
               disabled={isDisabled}
+              aria-label={`${day} de ${MONTHS[month]} de ${year}`}
+              aria-pressed={isSelected}
               title={isHighlighted && isUnavailable ? "Ese día ya está ocupado en tu agenda" : undefined}
               onClick={() => onChange(dateStr)}
               className={`
@@ -165,6 +175,8 @@ export interface RescheduleModalClassItem {
    * (comportamiento seguro por defecto).
    */
   status?: string;
+  /** Fase 25: reagendados que le quedan al ALUMNO para esta clase (solo flujo de alumno; undefined = sin dato). */
+  reschedulesRemaining?: number | null;
 }
 
 interface RescheduleModalProps {
@@ -192,6 +204,13 @@ export function RescheduleModal({
   const [selected, setSelected] = useState<AvailableSlot | null>(null);
   const toast = useToast();
 
+  // Esc cierra el modal (salvo mientras se guarda).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !saving) onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [saving, onClose]);
+
   const currentDuration = classItem?.duration_minutes || 60;
   const resolvedClassType = classItem?.classType ?? (classItem?.isGroup ? "group" : "regular");
   const { slots, loading } = useAvailableSlots(date, currentDuration, teacherUsername ?? null, resolvedClassType);
@@ -209,6 +228,9 @@ export function RescheduleModal({
   const hoursUntilCurrentClass = classItem
     ? (new Date(classItem.start_time_utc).getTime() - Date.now()) / (1000 * 60 * 60)
     : Infinity;
+  // Fase 25: tope de reagendados del alumno por clase (el profesor no tiene tope)
+  const remaining = isStudentFlow ? classItem?.reschedulesRemaining ?? null : null;
+  const blockedByCap = remaining !== null && remaining <= 0;
   const blockedByMinNotice =
     isStudentFlow && !isFinalized && hoursUntilCurrentClass < businessRules.min_reschedule_hours_student;
   const hoursLeftLabel = Math.max(0, Math.floor(hoursUntilCurrentClass));
@@ -253,9 +275,10 @@ export function RescheduleModal({
   if (!classItem) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+         role="dialog" aria-modal="true" aria-labelledby="reschedule-modal-title">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-md transition-opacity"
-           onClick={onClose} />
+           onClick={onClose} aria-hidden="true" />
 
       <div className="relative w-full max-w-2xl bg-white/95 backdrop-blur-2xl
                       rounded-[2.5rem] shadow-2xl shadow-slate-300/50
@@ -273,7 +296,7 @@ export function RescheduleModal({
               <RotateCcw className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-slate-800 tracking-tight">
+              <h2 id="reschedule-modal-title" className="text-xl font-black text-slate-800 tracking-tight">
                 Reagendar clase
               </h2>
               <p className="text-xs text-slate-500 font-medium">
@@ -281,7 +304,7 @@ export function RescheduleModal({
               </p>
             </div>
           </div>
-          <button onClick={onClose}
+          <button onClick={onClose} type="button" aria-label="Cerrar"
             className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200
                        flex items-center justify-center transition-colors text-slate-500">
             <X className="w-4 h-4" />
@@ -302,7 +325,18 @@ export function RescheduleModal({
           ) : (
             <div className="space-y-4">
 
-              {blockedByMinNotice ? (
+              {blockedByCap ? (
+                <div role="alert" className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex flex-col items-center text-center gap-2">
+                  <AlertCircle className="w-9 h-9 text-amber-500 mb-1" />
+                  <p className="text-sm font-black text-slate-800">
+                    Ya no te quedan reagendados para esta clase
+                  </p>
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-sm">
+                    Cada clase se puede reagendar un máximo de veces. Contacta a tu profesor para
+                    que la mueva, o cancélala con al menos {businessRules.min_reschedule_hours_student}h de antelación.
+                  </p>
+                </div>
+              ) : blockedByMinNotice ? (
                 <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex flex-col items-center text-center gap-2">
                   <AlertCircle className="w-9 h-9 text-amber-500 mb-1" />
                   <p className="text-sm font-black text-slate-800">
@@ -316,6 +350,12 @@ export function RescheduleModal({
                 </div>
               ) : (
               <>
+
+              {remaining !== null && (
+                <p className="text-xs font-bold text-slate-500" aria-live="polite">
+                  Te {remaining === 1 ? "queda 1 reagendado" : `quedan ${remaining} reagendados`} para esta clase
+                </p>
+              )}
 
               {classItem.isGroup && (
                 <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex gap-3 items-start">
@@ -469,11 +509,11 @@ export function RescheduleModal({
                          bg-slate-100 hover:bg-slate-200 rounded-xl
                          transition-colors"
             >
-              Cancelar
+              Volver
             </button>
             <button
               onClick={reschedule}
-              disabled={!selected || saving}
+              disabled={!selected || saving || blockedByCap || blockedByMinNotice}
               className="flex-1 py-3 text-sm font-bold text-white
                          rounded-xl bg-gradient-to-r from-pink-500 to-rose-400
                          hover:from-pink-600 hover:to-rose-500

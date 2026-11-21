@@ -2,6 +2,7 @@
 // Ejecutar: cd frontend && npx vitest run --config __tz_probes__/vitest.config.ts
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { utcTimeToLocal } from "@/lib/scheduleUtc";
+import { localRangeCells } from "@/lib/weeklyLocal";
 import { getDateKeyTz, formatCalendarDateHuman, formatTimeTz } from "@/lib/tzFormat";
 import { TIMEZONE_OPTIONS } from "@/lib/timezones";
 import {
@@ -11,7 +12,7 @@ import {
 
 afterEach(() => { vi.useRealTimers(); });
 
-describe("U1 · rejilla semanal: la última hora (23:00) se pierde al recargar", () => {
+describe("U1 [legado UTC, ya no aplica al profesor: ver U1-fixed; las preferencias del alumno siguen en UTC] · rejilla semanal: la última hora (23:00) se pierde al recargar", () => {
   it("bloque 22:00-24:00 se guarda como end 23:59 y al hidratar solo vuelve 22:00", () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date("2026-11-19T15:00:00Z"));
     const tz = "America/Caracas";
@@ -37,13 +38,30 @@ describe("U2 · utcTimeToLocal no coincide con el backend en la semana del cambi
   });
 });
 
-describe("U3 · horario semanal en UTC fijo: la hora local se corre 1h tras el cambio de hora", () => {
+describe("U3 [legado UTC, ya no aplica al profesor: ver U3-fixed] · horario semanal en UTC fijo: la hora local se corre 1h tras el cambio de hora", () => {
   it("Madrid lunes 09:00 guardado en enero se muestra 10:00 en julio", () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date("2026-01-14T12:00:00Z"));
     const saved = backendLocalToUtc("09:00", "Europe/Madrid", 0, new Date());
     expect(saved.hhmm).toBe("08:00");
     vi.setSystemTime(new Date("2026-07-15T12:00:00Z"));
     expect(utcTimeToLocal(saved.hhmm, 0, "Europe/Madrid")).toBe("10:00");
+  });
+});
+
+describe("Fase 26 (H1/H5 corregidos para el profesor): el editor semanal recibe y pinta HORA LOCAL, sin conversion UTC", () => {
+  it("U1-fixed: 22:00-23:59 local vuelve completo (22:00 y 23:00)", () => {
+    expect(localRangeCells(0, "22:00", "23:59").map((c) => c.hour)).toEqual([22, 23]);
+  });
+  it("U3-fixed: lunes 09:00 local se pinta igual en enero y en julio, en cualquier zona del navegador", () => {
+    for (const bz of ["Europe/Madrid", "America/New_York", "Pacific/Auckland"]) {
+      withBrowserTz(bz, () => {
+        vi.useFakeTimers();
+        for (const when of ["2026-01-14T12:00:00Z", "2026-07-15T12:00:00Z", "2026-03-27T12:00:00Z"]) {
+          vi.setSystemTime(new Date(when));
+          expect(localRangeCells(0, "09:00", "12:00").map((c) => c.hour)).toEqual([9, 10, 11]);
+        }
+      });
+    }
   });
 });
 

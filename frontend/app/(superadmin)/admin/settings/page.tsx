@@ -423,6 +423,11 @@ const TABS = [
 
 type TabKey = typeof TABS[number]['key']
 
+// El teacher_admin solo ve lo que el backend le permite (get_current_staff):
+// pagos, catálogos y reglas. Plataforma (PATCH /admin/platform-config),
+// chats y correos son solo del superadmin.
+const SUPERADMIN_ONLY_TABS: readonly TabKey[] = ['platform', 'chat', 'email']
+
 export default function SettingsPage() {
   const toast = useToast()
   const isSuperadmin = useAuthStore(s => s.user?.role) === 'superadmin'
@@ -443,7 +448,8 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [rulesSaving, setRulesSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<TabKey>('platform')
+  const visibleTabs = TABS.filter(t => isSuperadmin || !SUPERADMIN_ONLY_TABS.includes(t.key))
+  const [activeTab, setActiveTab] = useState<TabKey>(isSuperadmin ? 'platform' : 'payments')
 
   // Sincroniza las copias editables con el servidor SOLO si no hay cambios
   // sin guardar — misma salvaguarda que en /admin/users, para no pisar una
@@ -574,10 +580,11 @@ export default function SettingsPage() {
     }
   }
 
-  const savePlatformConfig = async () => {
+  const savePlatformConfig = async (force = false) => {
     setSaving(true)
     try {
       await api.patch('/admin/platform-config', {
+        force,
         platform_name: platformConfig?.platform_name,
         platform_tagline: platformConfig?.platform_tagline,
         is_single_tenant: platformConfig?.is_single_tenant,
@@ -594,7 +601,25 @@ export default function SettingsPage() {
       toast.success('Configuración de la plataforma guardada correctamente')
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
-      toast.error(getErrorMessage(e, 'No se pudo guardar la configuración de la plataforma'))
+      // 409: pasar a single con alumnos que tienen paquetes vivos o clases futuras con otros profesores.
+      const resp = (e as { response?: { status?: number; data?: { detail?: unknown } } })?.response
+      const detail = resp?.data?.detail as
+        | { message?: string; affected_students?: number; sample?: { student_username?: string }[] }
+        | undefined
+      if (resp?.status === 409 && detail && typeof detail === 'object') {
+        const names = (detail.sample ?? []).map((s) => s.student_username).filter(Boolean).join(', ')
+        const ok = window.confirm(
+          `${detail.message ?? 'Hay alumnos afectados.'}\n\nAlumnos afectados: ${detail.affected_students ?? 0}` +
+            (names ? ` (${names})` : '') +
+            '\n\n¿Guardar de todos modos?'
+        )
+        if (ok) {
+          setSaving(false)
+          return await savePlatformConfig(true)
+        }
+      } else {
+        toast.error(getErrorMessage(e, 'No se pudo guardar la configuración de la plataforma'))
+      }
     } finally {
       setSaving(false)
     }
@@ -629,7 +654,7 @@ export default function SettingsPage() {
       {/* ─── Navegación por pestañas ─────────────────────────────────── */}
       <div className="-mx-6 md:-mx-8 px-6 md:px-8 py-2 mb-6 bg-white border-b border-slate-100">
         <div className="flex gap-2 overflow-x-auto no-scrollbar">
-          {TABS.map(tab => {
+          {visibleTabs.map(tab => {
             const active = activeTab === tab.key
             const count = tabCount(tab.key)
             return (
@@ -1258,7 +1283,7 @@ export default function SettingsPage() {
                 <Button
                   variant="primary"
                   loading={saving}
-                  onClick={savePlatformConfig}
+                  onClick={() => savePlatformConfig()}
                   className="md:w-auto w-full px-8 py-3 !rounded-2xl shadow-md shadow-pink-200"
                 >
                   {saved ? '✓ Configuración guardada' : 'Guardar plataforma'}
@@ -1361,7 +1386,7 @@ export default function SettingsPage() {
                 <Button
                   variant="primary"
                   loading={saving}
-                  onClick={savePlatformConfig}
+                  onClick={() => savePlatformConfig()}
                   className="md:w-auto w-full px-8 py-3 !rounded-2xl shadow-md shadow-pink-200"
                 >
                   {saved ? '✓ Configuración guardada' : 'Guardar chat'}

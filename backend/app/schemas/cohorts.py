@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime
 from app.schemas.god_mode import GodModeActionBase
 
@@ -168,6 +168,12 @@ class GroupSessionCreate(BaseModel):
     duration_minutes: int = 50
 
 
+class SkippedParticipant(BaseModel):
+    student_id: int
+    student_name: Optional[str] = None
+    reason: str = "overlap"
+
+
 class GroupSessionResponse(BaseModel):
     id: int
     cohort_id: int
@@ -176,6 +182,8 @@ class GroupSessionResponse(BaseModel):
     duration: int
     status: str
     participant_count: int
+    # Alumnos no agregados a la sesión por solape con otra clase (opcional, retrocompatible).
+    skipped_participants: List[SkippedParticipant] = []
 
     class Config:
         from_attributes = True

@@ -3,11 +3,14 @@ from zoneinfo import ZoneInfo
 import logging
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status, UploadFile, File
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from app.core.phone import normalize_phone
+from app.schemas.validators import clean_person_name, clean_username
 from app.db.base import get_db
-from app.core.rate_limit import limiter
+from app.core.rate_limit import limiter, user_or_ip_key
 from app.auth.dependencies import get_current_student, get_current_user
 from app.auth.passwords import hash_password, verify_password
 from app.models.user import User
@@ -19,7 +22,7 @@ from app.models.student_preferences import StudentSchedulePreference
 from app.core.timezone import convert_local_time_to_utc, validate_timezone
 from app.core.schedule_recalc import recalculate_student_preferences_timezone
 from app.schemas.preferences import SetPreferencesRequest, PreferenceSlotResponse
-from app.core.storage import upload_file_stream, delete_file
+from app.core.storage import upload_file_stream, delete_file, ALLOWED_IMAGE_TYPES, MAX_AVATAR_SIZE
 from app.models.teacher import TeacherProfile, TeacherStatus
 from app.core.teacher_students import link_student_to_teacher
 from app.models.payment_config import PlatformConfig
@@ -55,7 +58,9 @@ def _process_and_update_user_avatar(
             file.file,
             filename=file.filename,
             content_type=file.content_type,
-            folder="tpm/avatars"
+            folder="tpm/avatars",
+            allowed_types=ALLOWED_IMAGE_TYPES,  # Fase 21: el avatar solo admite imágenes (<= 5 MB)
+            max_bytes=MAX_AVATAR_SIZE,
         )
 
         # 3. Buscar public_id anterior para limpiarlo de Cloudinary si existe
@@ -121,6 +126,7 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 @router.patch("/me", response_model=UserResponse)
 def update_profile(
+    response: Response,
     data: UpdateProfileRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -128,37 +134,63 @@ def update_profile(
     """
     Actualiza datos básicos del perfil.
     Solo actualiza los campos que se envían (PATCH parcial).
+
+    Cambiar el email (Fase 21, S1): se guarda en minúsculas, se compara sin distinguir mayúsculas, la cuenta
+    pasa a NO verificada, se envía el enlace de verificación al email nuevo y se cierran las demás sesiones
+    (la actual recibe cookies nuevas). Así un atacante con sesión robada no puede dejar la cuenta atada al
+    correo de otra persona (que luego entraría con Google) ni conservar el acceso.
     """
-    if data.username and data.username != current_user.username:
+    def _check(fn, value):
+        try:
+            return fn(value)
+        except ValueError as e:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
+
+    username_changed = False
+    if data.username and data.username != (current_user.username or "").lower():
+        data.username = _check(clean_username, data.username)
         existing = db.query(User).filter(
-            User.username == data.username
+            func.lower(User.username) == data.username,
+            User.id != current_user.id,
         ).first()
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Este nombre de usuario ya está en uso"
             )
+        username_changed = True
+    if username_changed:
         if current_user.role == "student" and current_user.student_profile:
             current_user.student_profile.user_username = data.username
         elif current_user.role in ("teacher", "teacher_admin") and current_user.teacher_profile:
             current_user.teacher_profile.user_username = data.username
 
-    if data.email and data.email != current_user.email:
+    email_changed = False
+    if data.email and data.email != (current_user.email or "").strip().lower():
         if current_user.google_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Tu cuenta está vinculada con Google: el email no se puede editar aquí."
             )
         existing = db.query(User).filter(
-            User.email == data.email
+            func.lower(User.email) == data.email,
+            User.id != current_user.id,
         ).first()
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Este email ya está registrado"
             )
+        email_changed = True
+
+    for field in ("name", "surname"):
+        value = getattr(data, field)
+        if value is not None and value != getattr(current_user, field):
+            setattr(data, field, _check(clean_person_name, value))
 
     update_data = data.model_dump(exclude_unset=True)
+    if "username" in update_data and update_data["username"] is not None:
+        update_data["username"] = update_data["username"].lower()
 
     # Fase 8: idiomas que habla. Validacion y normalizacion en el servidor (catalogo, max 10, sin repetidos).
     if "spoken_languages" in update_data:
@@ -197,8 +229,25 @@ def update_profile(
                 )
         update_data["phone_number"] = normalized_phone
 
+    if not email_changed:
+        update_data.pop("email", None)  # mismo correo con otras mayúsculas: no es un cambio
     for field, value in update_data.items():
         setattr(current_user, field, value)
+
+    if email_changed:
+        from app.auth.session import revoke_all_sessions, set_auth_cookies
+        from app.api.v1.endpoints.auth import _issue_verification_email
+        current_user.is_verified = False
+        revoke_all_sessions(db, current_user.id)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Este email ya está registrado")
+        set_auth_cookies(response, current_user, db)  # la sesión actual sigue viva con cookies nuevas
+        _issue_verification_email(current_user, db)
+        db.refresh(current_user)
+        return current_user
 
     db.commit()
     db.refresh(current_user)
@@ -282,9 +331,66 @@ def _account_deletion_blockers(user: User, db: Session) -> list[str]:
     return reasons
 
 
+def _retire_teacher_profile(user: User, anon_tag: str, db: Session) -> None:
+    """
+    Fase 21 (S6): al borrar la cuenta de un profesor su perfil deja de ser visible (suspended), se borran sus
+    medios (video, materiales; la foto ya se borró arriba), la conexión de Google Calendar y los datos de
+    destino de sus retiros, y se desactivan sus paquetes. NO se cancela nada: ni clases de la plataforma ni
+    eventos de Google (regla del dueño); las clases simplemente dejan de sincronizarse.
+    """
+    from app.models.google_calendar import GoogleCalendarToken
+    from app.models.material import Material
+    from app.models.package import Package
+    from app.models.payment import Withdrawal
+
+    tp = user.teacher_profile
+    tp.user_username = anon_tag
+    tp.status = TeacherStatus.suspended
+    tp.bio = None
+    tp.title = None
+    tp.profile_photo_url = None
+    tp.profile_photo_public_id = None
+    tp.gallery = []
+    tp.social_links = {}
+    tp.certificates = []
+    tp.skills = []
+
+    if tp.video_public_id:
+        delete_file(tp.video_public_id, resource_type="video")
+    tp.video_url = None
+    tp.video_public_id = None
+    if tp.video_pending_public_id:
+        delete_file(tp.video_pending_public_id, resource_type="video")
+    tp.video_pending_url = None
+    tp.video_pending_public_id = None
+
+    for m in db.query(Material).filter(Material.teacher_id == tp.id).all():
+        if m.file_public_id:
+            kind = m.file_type if m.file_type in ("image", "video") else "raw"
+            delete_file(m.file_public_id, resource_type=kind)
+        m.file_url = None
+        m.file_public_id = None
+        m.is_active = False
+
+    db.query(Package).filter(Package.teacher_id == tp.id).update({"is_active": False}, synchronize_session=False)
+    db.query(Withdrawal).filter(Withdrawal.teacher_id == tp.id).update(
+        {"destination_details": None}, synchronize_session=False
+    )
+
+    token = db.query(GoogleCalendarToken).filter(GoogleCalendarToken.teacher_id == tp.id).first()
+    if token:
+        from app.core.google_calendar import revoke_token
+        try:
+            revoke_token(token.access_token)
+        except Exception:
+            logger.warning("No se pudo revocar el token de Google del profesor %s", tp.id)
+        db.delete(token)
+
+
 @router.delete("/me")
 def delete_account(
     data: DeleteAccountRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -337,20 +443,25 @@ def delete_account(
         current_user.student_profile.profile_photo_url = None
         current_user.student_profile.profile_photo_public_id = None
 
+    if current_user.student_profile:
+        # Los datos de destino de reembolsos son datos de pago personales: se borran (el pago y su importe se conservan).
+        db.query(Payment).filter(
+            Payment.student_id == current_user.student_profile.id,
+            Payment.refund_payment_info.isnot(None),
+        ).update({"refund_payment_info": None}, synchronize_session=False)
+
     if current_user.teacher_profile:
-        current_user.teacher_profile.user_username = anon_tag
-        current_user.teacher_profile.bio = None
-        current_user.teacher_profile.profile_photo_url = None
-        current_user.teacher_profile.profile_photo_public_id = None
-        current_user.teacher_profile.gallery = []
-        current_user.teacher_profile.social_links = {}
+        _retire_teacher_profile(current_user, anon_tag, db)
 
     db.commit()
+    # Corta ya sus websockets de chat abiertos (como en el baneo).
+    from app.core.chat_ws import chat_manager
+    background_tasks.add_task(chat_manager.close_user, current_user.id)
 
     return {
-        "message": "Tu cuenta fue eliminada. Se borraron tus datos personales y podrás registrarte "
-                   "de nuevo con el mismo correo si quieres; tu historial de pagos y clases se "
-                   "conserva por motivos contables."
+        "message": "Tu cuenta fue eliminada. Se borraron tus datos personales, tu foto y tus datos de "
+                   "cobro o reembolso, y podrás registrarte de nuevo con el mismo correo si quieres; "
+                   "el historial de pagos y clases se conserva anonimizado por motivos contables."
     }
 
 
@@ -380,7 +491,9 @@ def get_photo(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/me/avatar")
+@limiter.limit("20/hour", key_func=user_or_ip_key)  # cada subida va a Cloudinary
 def upload_avatar_post(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -390,7 +503,9 @@ def upload_avatar_post(
 
 
 @router.patch("/me/avatar")
+@limiter.limit("20/hour", key_func=user_or_ip_key)  # cada subida va a Cloudinary
 def upload_avatar_patch(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -400,7 +515,9 @@ def upload_avatar_patch(
 
 
 @router.post("/me/photo")
+@limiter.limit("20/hour", key_func=user_or_ip_key)  # cada subida va a Cloudinary
 def upload_photo_post(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -410,7 +527,9 @@ def upload_photo_post(
 
 
 @router.patch("/me/photo")
+@limiter.limit("20/hour", key_func=user_or_ip_key)  # cada subida va a Cloudinary
 def upload_photo_patch(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -469,6 +588,15 @@ def update_student_profile(
         )
 
     allowed_fields = {"timezone", "goal", "preferred_payment_methods"}
+    # Fase 27 (Z3): una zona explicitamente nula/vacia/invalida nunca se guarda (omitirla si vale).
+    if "timezone" in data:
+        tz_value = data["timezone"]
+        if not isinstance(tz_value, str) or not tz_value.strip() or not validate_timezone(tz_value.strip()):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Zona horaria no válida"
+            )
+        data["timezone"] = tz_value.strip()
     old_timezone = profile.timezone
     new_timezone = data.get("timezone")
 
@@ -630,9 +758,10 @@ def get_my_teachers(
     student_id = current_user.student_profile.id
 
     if config and config.is_single_tenant:
-        teacher_ids = []
-        if config.featured_teacher_id:
-            teacher_ids = [config.featured_teacher_id]
+        # Misma resolución que la reserva (BD o FEATURED_TEACHER_USERNAME del entorno).
+        from app.core.platform_config import resolve_featured_teacher
+        featured = resolve_featured_teacher(db, config)
+        teacher_ids = [featured.id] if featured else []
     else:
         links = db.query(StudentTeacherLink).filter(
             StudentTeacherLink.student_id == student_id
@@ -719,13 +848,9 @@ def link_teacher(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesor no encontrado o no disponible")
 
     profile = current_user.student_profile
-    existing = db.query(StudentTeacherLink).filter(
-        StudentTeacherLink.student_id == profile.id,
-        StudentTeacherLink.teacher_id == teacher.id,
-    ).first()
-
-    if not existing:
-        db.add(StudentTeacherLink(student_id=profile.id, teacher_id=teacher.id))
+    from app.core.teacher_students import ensure_student_teacher_link
+    # Tolera la carrera con otra petición (restricción única): nunca 500.
+    if ensure_student_teacher_link(db, profile.id, teacher.id):
         db.commit()
         link_student_to_teacher(db, profile, teacher, old_teacher_username=None)
 

@@ -69,6 +69,8 @@ export interface Teacher {
   balance: number
   has_pending_appeal: boolean
   video_url: string | null
+  video_pending_url?: string | null
+  video_pending_rejection_reason?: string | null
   total_classes: number
   total_students: number
   created_at: string
@@ -186,6 +188,40 @@ export function useWithdrawals() {
 
   return {
     withdrawals: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  }
+}
+
+export interface ManualGrantRequestRecord {
+  id: number
+  teacher_id: number
+  student_id: number
+  enrollment_id: number
+  package_id: number | null
+  reason: string
+  status: 'pending' | 'approved' | 'rejected'
+  rejection_reason: string | null
+  created_at: string
+  resolved_at: string | null
+  teacher_name: string | null
+  student_name: string | null
+  package_name: string | null
+}
+
+/** Solicitudes de paquete gratis de los profesores (Fase 20). Por defecto solo las pendientes. */
+export function useManualGrantRequests(status: string = 'pending') {
+  const query = useQuery({
+    queryKey: ["admin", "manual-grants", status],
+    queryFn: async () => {
+      return (await fetchAllPages<ManualGrantRequestRecord>(`/payments/manual-grant-requests?status=${status}`)).rows
+    },
+  })
+
+  return {
+    requests: query.data ?? [],
     loading: query.isLoading,
     isFetching: query.isFetching,
     isError: query.isError,
@@ -311,6 +347,7 @@ export interface TeacherAppeal {
   teacher_id: number
   appeal_number: number
   message: string
+  kind?: string
   status: string
   admin_response: string | null
   created_at: string

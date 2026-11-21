@@ -57,6 +57,7 @@ Cuenta de prueba sin tocar la BD real: `python -m tests.audit.run_server` (SQLit
 | `EMAIL_FROM` | `soporte@mail.tuprofemaria.com` | no | remitente | el dominio debe estar verificado en Resend |
 | `PUBLIC_CACHE_MAX_AGE` / `PUBLIC_CACHE_SWR` | `60` / `300` | no | `Cache-Control` de landing, lista y perfil público de profesores (Fase 14, E4, `core/http_cache.py`) | `0` = `no-cache`; afecta al navegador y a la CDN, no a la caché en memoria |
 | `SLOTS_CACHE_TTL_SECONDS` | `45` | no | caché de la rejilla de huecos por profesor (Fase 14, E3, `core/slots_cache.py`) | `0` = sin caché; se invalida al hacer commit de clases o disponibilidad |
+| `FLOW_TESTS_ENABLED` | `false` | no | habilita el Flow Tester del panel (`/flow-tests/*`, solo superadmin; lanza `pytest tests/flow`, que escribe en la BD real) (Fase 21, S4) | déjalo en `false` salvo en un backend de desarrollo con rama de BD propia; con `ENVIRONMENT=production` queda bloqueado aunque sea `true` |
 | `EMAIL_ASYNC` / `EMAIL_WORKERS` | `true` / `2` | no | envío de correos en segundo plano (Fase 14, E1): la petición no espera a Resend | `false` = envío en línea (tests); la cola vive en memoria |
 | `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | definidas | para archivos | `core/storage.py`, TTS | |
 | `MAX_VIDEO_UPLOAD_MB` | `100` | no | tope de vídeo (`storage.py`) | desde la Fase 5 se sube por streaming (no se carga entero en RAM) |

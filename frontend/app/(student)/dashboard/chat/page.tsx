@@ -31,6 +31,7 @@ export default function StudentChatPage() {
   const [active, setActive] = useState<ChatConversation | null>(null);
   const searchParams = useSearchParams();
   const threadRefetchRef = useRef<(() => void) | null>(null);
+  const appliedDeepLinkRef = useRef<string | null>(null);
   const [threadFetching, setThreadFetching] = useState(false);
   const [creatingWith, setCreatingWith] = useState<string | null>(null);
   const toast = useToast();
@@ -50,8 +51,12 @@ export default function StudentChatPage() {
   useEffect(() => {
     const conversationId = searchParams.get("conversation");
     if (!conversationId || loading || conversations.length === 0) return;
+    // Se aplica UNA vez por enlace: sin esto cada refresco de la lista volvia a abrir el hilo aunque el usuario
+    // hubiera pulsado "Volver" (C3).
+    if (appliedDeepLinkRef.current === conversationId) return;
     const found = conversations.find((c) => c.id === Number(conversationId));
     if (!found) return;
+    appliedDeepLinkRef.current = conversationId;
     Promise.resolve().then(() => setActive(found));
   }, [searchParams, conversations, loading]);
 

@@ -45,7 +45,7 @@ Severidad: 🔴 crítico · 🟠 alto · 🟡 medio · 🔵 bajo.
 doble contabilidad de créditos (`occupied` vs `classes_used`; el aviso de bajo crédito usa la segunda);
 `get_student_booking_stage` ya no escribe en los GET (Fase 9: `heal=False`; los POST siguen curando y un barrido diario cancela los enrollments sin pagar); `finalize_past_classes` ya no corre en los GET (Fase 5; solo su job por vencimiento); rama muerta en `finalize_past_classes`;
 `manual-grant` ilimitado = 0 créditos; `cancel_class_admin` no notifica grupales; sin idempotencia fuerte en `validate_payment`/`process_withdrawal_v2`;
-`transaction_reference` no único; DST en disponibilidad recurrente; `default_commission_rate` nunca se aplica.
+`transaction_reference` no único; DST en preferencias del alumno (la disponibilidad del profesor se corrigió en la Fase 26); `default_commission_rate` nunca se aplica.
 
 ## Corregidos en la Fase 5 (coste y rendimiento)
 - Engine principal con pool (antes `NullPool`); `finalize_past_classes` fuera de los GET de agenda; jobs del scheduler como `def` (ya no bloquean el event loop).
@@ -107,11 +107,71 @@ Todas resueltas (ver «Decisiones de negocio acordadas» en `CORRECCIONES.md`): 
 - **Clase en curso oculta (corregido):** «próximas» filtraba por `start_time_utc >= ahora` y la clase desaparecía del dashboard al empezar, con su enlace de Meet. Ahora filtra por el fin.
 - **Tanda 1 de mejoras (corregido):** las clases `external` (Preply) se quedan en `finalized` (antes pasaban a `no_show` a las 72 h); los layouts de alumno y profesor verifican el onboarding una vez por sesión, no en cada cambio de ruta (el perfil del profesor actualiza la zona horaria del store al guardar); el selector de idiomas muestra y deja quitar los idiomas que ya no están en el catálogo; el vencimiento del job de Meet solo cuenta profesores con Calendar conectado; un recordatorio sin destinatario se marca como tratado. _Tests: `test_due_jobs.py` (+4) y `spokenLanguages.test.ts` (+2)._
 
+## Hallazgos A1-A4 de `docs/TENANT_MODES_AUDIT.md` §6 (corregidos el 2026-11-21, Fase 16)
+Un `teacher_admin` tenía poderes de dinero y de plataforma que no le tocaban. Ahora `require_superadmin` (en `auth/dependencies.py`) protege:
+- **A1:** `PATCH /admin/platform-config` (modo single/multi y destacado).
+- **A2 (revertido por decisión del propietario):** `PATCH /payments/config` (datos de pago: banco, PayPal, Binance, WhatsApp…) vuelve a ser de staff (`get_current_staff`): el `teacher_admin` puede editarlo; `test_payment_config_editable_by_teacher_admin`. Riesgo aceptado: puede cambiar a dónde pagan los alumnos.
+- **A3:** `POST /god-mode/payments` y `PATCH /god-mode/payments/{id}`; además un `teacher_admin` recibe 403 al procesar su propio retiro.
+- **A4:** `/chat/admin/conversations*`, reagendar y borrar clases desde el panel admin, y descarga de materiales de otros profesores. Banear/desbanear alumnos, cambiar el estado de profesores y editar usuarios **siguen abiertos** al `teacher_admin` (solo el cambio de rol es del superadmin).
+- **A5 (reseñas propias en Modo Dios): no es bug, decisión del propietario.** Se deja como está.
+
+## Transición single/multi (Fase 18, corregido 2026-11-21, `tests/audit/test_f18_tenant_transition.py`)
+T2/T5: backfill atómico, completo (cualquier profesor) y re-ejecutable; T3: reservar en single ya no quita al alumno del profesor anterior; `/users/me/teachers` usa la destacada resuelta; single sin destacada -> 400; multi->single con alumnos de otros profesores -> 409 salvo `force=true`; creadores de links tolerantes a la restricción única.
+Pendiente: T1 (créditos con otros profesores invisibles en single; `legacy` en `/me/teachers`), pre-check al cambiar destacada A->B dentro de single, y `god_mode.py::transfer` aún crea el link sin savepoint.
+
 ## Revisión de los flujos de `teacher_admin` (verificada)
-- **Panel staff** (`get_current_staff`, 67 rutas): superadmin y `teacher_admin`. Solo `superadmin` (`require_superadmin`): editar usuarios y cambiar roles (`PATCH /admin/users/{id}`, solo alterna `teacher`/`teacher_admin`), `email-settings`, resolver correcciones de clase, transferir alumnos (Modo Dios) y cambiar la comisión propia. Las páginas del frontend ocultan lo que solo ve el superadmin (`EmailSettingsPanel`, `EmailQuotaBanner`).
+- **Panel staff** (`get_current_staff`): superadmin y `teacher_admin`. Solo `superadmin` (`require_superadmin`; ampliado en la Fase 16, ver arriba): cambiar roles (`PATCH /admin/users/{id}` con `role`; el resto de la edición de usuarios es de staff; solo alterna `teacher`/`teacher_admin`), `email-settings`, resolver correcciones de clase, transferir alumnos (Modo Dios) y cambiar la comisión propia. Las páginas del frontend ocultan lo que solo ve el superadmin (`EmailSettingsPanel`, `EmailQuotaBanner`).
 - **Pagos:** valida los de otros profesores; los propios dan 403 y se marcan `is_own_payment`. Con `manual-grant` puede crear la concesión de cualquier enrollment, pero la valida el superadmin.
 - **Modo Dios:** las 14 acciones de escritura y los 9 listados de apoyo comprueban que la entidad sea suya (`_require_*_scope` o comprobación directa). `lookup/class-durations` y el log general (`/audit-log`) son de lectura para todo el staff a propósito.
 - **Tests que lo cubren:** `test_permissions_money`, `test_findings`, `test_class_correction`, `test_f7_email_settings`, `test_god_mode_pagination` (16 pasan).
 - **Corregido al revisar los flujos de profesor:** un `teacher_admin` se trataba como no-profesor en 3 sitios: al cambiar su `username` no se actualizaba `TeacherProfile.user_username` (`users.py`; test en `test_permissions_money.py`), el correo de respuesta a su ticket enlazaba a `/dashboard/support` en vez de `/teacher/support` (`admin.py`) y su ticket se etiquetaba «Estudiante» en la notificación (`support.py`).
 - **Mejora menor pendiente:** `GET /god-mode/audit-log` hace una consulta por fila para el nombre del autor (máx. 200 filas); el historial por entidad ya va por lotes.
 
+## Seguridad y comunicación (corregido el 2026-11-21, Fase 21, `tests/audit/test_f21_security.py`)
+- Cambiar el email desde `PATCH /users/me` no exigía verificación ni cerraba sesiones, y era sensible a mayúsculas: ahora minúsculas, `is_verified=False`, correo de verificación y revocación del resto de sesiones. Verificar el email también revoca las sesiones anteriores.
+- Los correos insertaban nombres, mensajes, motivos y comentarios sin escapar (HTML inyectable): ahora se escapan todos los argumentos de `send_*` en un solo punto (`core/email.py`).
+- El Flow Tester lo podía lanzar cualquier staff con ids arbitrarios de pytest: ahora solo superadmin, `FLOW_TESTS_ENABLED` (apagado por defecto) e ids `tests/flow/...`.
+- Borrar la cuenta de un profesor dejaba el perfil público, el video, los paquetes y el token de Google: ahora se suspende y limpia (sin cancelar clases ni eventos).
+- **Corregido (Fase 23):** un profesor aprobado que sube un video nuevo ya NO vuelve a `pending`: el nuevo va a `video_pending_*` y el anterior sigue público hasta que el staff lo apruebe. Si el staff lo rechaza, el profesor puede apelar UNA vez (`TeacherAppeal.kind='video'`); el archivo pendiente se conserva hasta resolver la apelación (aprobar: se promueve; rechazar: se borra) o hasta que suba otro video (reemplaza el pendiente; no se puede subir mientras la apelación está en revisión).
+- **Corregido (Fase 23):** al banear o desactivar a un usuario se cierran sus websockets de chat al instante (`chat_manager.close_user`). Borrar la cuenta propia también cierra sus sockets de chat.
+- **Abierto:** el token de acceso (JWT) ya emitido sigue valiendo hasta que caduque aunque se revoquen las sesiones de refresh; solo se cortan las renovaciones.
+- **Abierto:** `admin.py` no cierra los sockets de chat al banear (se cierran en la siguiente comprobación, <= 20 s); `cohorts.py` conserva un mensaje con voseo («No tenés acceso a este grupo»).
+
+## Solapes de cohortes (corregido el 2026-11-21, Fase 19)
+- Crear una sesión de cohorte o aprobar el pago de un alumno que se auto-une a sesiones futuras podía dejarlo con dos clases a la vez (otra clase con otro profesor u otra sesión grupal). Ahora se omite al alumno en conflicto (`student_has_overlap`); `skipped_participants` informa al profesor al crear la sesión. En la auto-unión por pago el alumno simplemente no se agrega a esa sesión (sin aviso).
+- Los choques del profesor en cohortes ignoraban `pending_trial` (y sin cota inferior); unificado con `can_book_slot`. `_create_group_session` toma `lock_booking_rows` (caso 11b).
+- `can_book_slot` ya no cuenta el margen de preparación del OTRO profesor como tiempo ocupado del alumno.
+- Pendiente menor: el alumno omitido sigue inscrito y pagado en la cohorte; el profesor debe reagendar con él.
+
+## Google Calendar y Preply (corregido el 2026-11-21, Fase 17)
+- La sync empujaba las clases `external` (Preply) a Google: reescribía el evento de Preply y, si Google daba 403, creaba eventos propios y filas `Class` duplicadas en cada sync (G1/G1b). Ahora las `external` son de solo lectura (no entran en el bucle de push) y un error 403/5xx al editar un evento propio ya no se toma por «el evento no existe».
+- Un evento de Preply en curso se reimportaba en cada sync (G2): ahora se buscan los existentes por `google_event_id` y hay índice único parcial `(teacher_id, google_event_id)`. La migración `e4a1b2c3d4f5` borra duplicados conservando el más antiguo; los que tienen pagos/participantes/tickets o no son `external` solo pierden `google_event_id`.
+- `calendar_id` ya no guarda el email de la plataforma: es `"primary"` (los valores antiguos con `@` se tratan como `primary`; migración `e5b2c3d4e5f6`). Una cuenta de Google solo puede estar conectada a un profesor (índice único en `google_account_sub`, 409 en el callback); las filas antiguas no tienen `sub` hasta que el profesor reconecta.
+- Tras conectar se lanza una sync en segundo plano. Al desconectar, perder el acceso (RefreshError) o cambiar de cuenta NO se cancela nada (regla del dueño); las clases `external` (Preply) sobrantes pueden seguir bloqueando huecos hasta que pase su fecha. Se avisa al profesor (campana `calendar_reauth_required` + correo, categoría `teacher_status_support`) y `POST /calendar/toggle` no reactiva un token con `needs_reauth`.
+- La sync omite el `update` si nada cambió (`classes.google_sync_hash`, migración `e6c3d4e5f6a7`), solo procesa a los profesores con clase propia en curso/próximas 3 h o con última sync > 5,5 h, aísla fallos por profesor y distingue permiso (403) de cuota (429/403 `rateLimitExceeded`, que sí se reintenta). Las `external` ya no aceleran el job de sync (J4).
+- `GET /availability/*/slots`: límite 120/min por IP; un freebusy fallido NO se cachea; el busy de Google cubre todo el rango ofrecido (G4). `can_book_slot` comprueba el hueco exacto en Google (G3, falla abierto con log).
+- **Pendiente / límites:** (1) un evento propio borrado a mano en Google ya no se recrea hasta que la clase cambie (antes se recreaba en cada sync; el coste era una llamada por clase). (2) La consulta a Google en `can_book_slot` añade latencia a cada reserva de profesores con Calendar conectado (timeout de la API 60 s; usa sesión propia para no soltar el lock de reserva). (3) Siguen abiertos G6 (declined/transparent), G8 (borrado fallido), caché de freebusy por `GET /slots` y el resto del rediseño UTC (C1-C3, C5).
+
+## Dinero (corregido el 2026-11-21, Fase 20, `tests/audit/test_f20_money.py`)
+
+- NaN/inf en retiros, comisión, config y precios -> 422 (el manejador de validación ya no devuelve `input`, que con NaN rompía en 500); saldo con CHECK >= 0.
+- Reembolsos ya no usan el precio actual del paquete sino lo pagado, con tope (D2/D3); `update_package` congela precio/duración/clases/cuotas con alumnos vivos o cohortes abiertas (409), lo que también congela el importe de las cuotas (M17).
+- Billetera con escrituras atómicas y `Numeric(12,2)` (D4); Modo Dios no deja saldo negativo, usa la tasa congelada y no edita reembolsos (M8/M9); `total_revenue` sin reembolsos ni otorgamientos (M10); `GET /payments/config` autenticado (S5).
+- Otorgamiento manual: ahora es solicitud del profesor + aprobación del staff (D5).
+- **Efecto a tener en cuenta:** un cambio a un paquete más barato de un alumno cuyo paquete actual fue un otorgamiento manual ($0 pagados) ya no genera reembolso (400 «no hay ningún pago aprobado»); antes inventaba un reembolso de dinero no cobrado.
+- **Límite conocido:** tras varias renovaciones, «pagado» suma los ciclos anteriores; el tope sigue impidiendo reembolsar más de lo cobrado en total, pero el reparto por ciclo no es exacto.
+
+## Estados de clase y matrícula (corregido el 2026-11-21, Fase 22, `tests/audit/test_f22_states.py`)
+
+- **Corregido:** E1 (clases del ciclo viejo llenaban el contador nuevo), E2/TE-02 (reabrir canceladas, cancelar completadas, no_show reagendado contado dos veces), E3 (`book` con `pending_renewal`), E4 (cancelar cambio dejaba el pago aprobable; endpoints heredados eliminados), E5 (cohorte cancelada perdía `cohort_id` y el reembolso), E6 (prueba sin confirmar quemaba la prueba gratis), m1, m3, TE-06.
+- **m2 (tope de reagendados):** resuelto en la Fase 25 (`Class.student_reschedule_count`).
+- **Abierto:** el inicio de ciclo reutiliza `Enrollment.activated_at` con 2 s de tolerancia frente a `Class.created_at` (sin columna nueva). Una clase reservada menos de 2 s antes de aprobar una renovación cuenta como del ciclo nuevo.
+- **Abierto (E6):** a las 72 h sin marcar una prueba sigue pasando a `no_show` (quema la prueba gratis), incluso si nunca se confirmó: distinguirlas exige una marca en el esquema o revertir la decisión del dueño de 2026-11-17 (cambio de una línea en `finalize_past_classes`: cancelar las `trial` en vez de `no_show`).
+- Modo Dios con `reset_classes_used` en el movimiento de cohorte no refresca `activated_at`.
+
+## Medianoche UTC (corregido el 2026-11-21, Fase 24, `tests/audit/test_f24_midnight_utc.py`)
+- C1-C3, C5, C6 de `docs/TIMEZONE_AUDIT.md` corregidos (se ofrecía y se rechazaba con 409; clases/bloqueos tras 00:00Z no bloqueaban; el front pedía el día local como UTC; `is_preferred` en franjas que cruzan 00:00Z). C4 verificado. Contrato: `/slots?date=&tz=&end_date=`.
+- **Corregido (Fase 26):** DST en la disponibilidad del profesor (H1-H5): se guarda en hora local y se expande por fecha. **Pendiente:** las preferencias del ALUMNO (`StudentSchedulePreference`) siguen en `HH:MM` UTC con el desfase de la fecha de guardado; solo afectan al resalte `is_preferred`, no a reservas. Horas locales inexistentes/ambiguas en la franja semanal: se saltan / primera ocurrencia (ver `BUSINESS_RULES.md`). Sigue sin haber rejilla alineada a 30 min en la validación de reserva (R5): se acepta cualquier minuto dentro de un rango.
+- El alumno (check de solape propio) y los participantes de grupo siguen usando la ventana ±3 h por inicio; vale con las duraciones actuales (máx. 110 + margen).
+
+- **Zona nula y recordatorios tardíos (Fase 27, corregido):** `timezone: null` ya no se guarda por API (422) y las reservas con < 23 h reciben un recordatorio (una clase que empieza en < 30 min no recibe ninguno; no hay recordatorio de 1 h). _Tests: `test_f27_tz_null_reminders.py`._

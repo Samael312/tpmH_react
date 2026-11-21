@@ -53,6 +53,9 @@ function formatErrorMessage(error: unknown, fallbackMessage: string): string {
 type TeacherProfileWithPhoto = TeacherProfile & { 
   photo_url?: string | null;
   video_url?: string | null;
+  video_pending_url?: string | null;
+  video_pending_rejection_reason?: string | null;
+  video_pending_appeal_used?: boolean;
   theme_color?: string | null;
   status?: string;
   nationality?: string | null;
@@ -280,15 +283,40 @@ function FreeChipInput({
 function VideoUploadSection({
   teacherStatus,
   videoUrl,
+  videoPendingUrl,
+  videoRejectionReason,
+  videoAppealUsed,
   onUploaded,
 }: {
   teacherStatus?: string;
   videoUrl?: string | null;
+  videoPendingUrl?: string | null;
+  videoRejectionReason?: string | null;
+  videoAppealUsed?: boolean;
   onUploaded: () => void;
 }) {
   const videoRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [feedback, setFeedback] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [showAppeal, setShowAppeal] = useState(false);
+  const [appealMsg, setAppealMsg] = useState("");
+  const [appealing, setAppealing] = useState(false);
+
+  const sendAppeal = async () => {
+    if (!appealMsg.trim()) return;
+    setAppealing(true);
+    try {
+      await api.post("/teachers/me/appeal", { message: appealMsg.trim() });
+      setFeedback({ msg: "Apelación enviada. El equipo la revisará.", type: "success" });
+      setShowAppeal(false);
+      setAppealMsg("");
+      onUploaded();
+    } catch (e) {
+      setFeedback({ msg: formatErrorMessage(e, "Error enviando la apelación"), type: "error" });
+    } finally {
+      setAppealing(false);
+    }
+  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -353,6 +381,63 @@ function VideoUploadSection({
               Aún no has subido tu video de presentación. Es obligatorio para que el equipo
               pueda aprobar tu perfil y hacerlo visible a los estudiantes.
             </p>
+          </div>
+        )}
+
+        {videoPendingUrl && videoRejectionReason && (
+          <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 space-y-3">
+            <div className="flex gap-3 items-start">
+              <AlertTriangle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs font-bold text-rose-700 leading-relaxed">
+                Tu video nuevo fue rechazado. Motivo: {videoRejectionReason}. Tu video actual sigue visible.
+                {videoAppealUsed
+                  ? " Tu apelación está en revisión."
+                  : " Puedes apelar una vez o subir otro video."}
+              </p>
+            </div>
+            {!videoAppealUsed && !showAppeal && (
+              <button
+                type="button"
+                onClick={() => setShowAppeal(true)}
+                className="px-4 py-2 bg-white hover:bg-rose-100 text-rose-600 rounded-xl font-bold text-xs border border-rose-200"
+              >
+                Apelar esta decisión
+              </button>
+            )}
+            {!videoAppealUsed && showAppeal && (
+              <div className="space-y-2">
+                <textarea
+                  value={appealMsg}
+                  onChange={(e) => setAppealMsg(e.target.value)}
+                  maxLength={2000}
+                  rows={3}
+                  placeholder="Explica por qué crees que el video debería aprobarse"
+                  className="w-full rounded-xl border border-rose-200 p-3 text-xs"
+                />
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setShowAppeal(false)} disabled={appealing}
+                    className="px-4 py-2 bg-white text-slate-500 rounded-xl font-bold text-xs border border-slate-200">Cancelar</button>
+                  <button type="button" onClick={sendAppeal} disabled={appealing || !appealMsg.trim()}
+                    className="px-4 py-2 bg-rose-500 text-white rounded-xl font-bold text-xs disabled:opacity-60">
+                    {appealing ? "Enviando..." : "Enviar apelación"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {videoPendingUrl && !videoRejectionReason && (
+          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 space-y-3">
+            <div className="flex gap-3 items-start">
+              <AlertTriangle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs font-bold text-blue-700 leading-relaxed">
+                Video en revisión. Tu video actual sigue visible en tu perfil hasta que el equipo apruebe el nuevo.
+              </p>
+            </div>
+            <div className="rounded-2xl overflow-hidden bg-slate-900 aspect-video max-w-md">
+              <video src={videoPendingUrl} controls className="w-full h-full object-contain" />
+            </div>
           </div>
         )}
 
@@ -1157,6 +1242,9 @@ export default function TeacherProfilePage() {
               <VideoUploadSection
                 teacherStatus={profile?.status}
                 videoUrl={profile?.video_url}
+                videoPendingUrl={profile?.video_pending_url}
+                videoRejectionReason={profile?.video_pending_rejection_reason}
+                videoAppealUsed={profile?.video_pending_appeal_used}
                 onUploaded={refetch}
               />
 

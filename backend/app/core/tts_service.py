@@ -4,6 +4,7 @@ from app.core.storage import upload_file
 import hashlib
 import os
 import logging
+from starlette.concurrency import run_in_threadpool
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,11 @@ def _get_cache_key(word: str, voice: str, speed: float) -> str:
     """
     raw = f"{word.lower().strip()}_{voice}_{speed}"
     return hashlib.md5(raw.encode()).hexdigest()
+
+
+def count_cached(words: list[str], voice: str = DEFAULT_VOICE, speed: float = DEFAULT_SPEED) -> int:
+    """Cuantas de estas palabras ya tienen audio en cache (consultar ANTES de generar, para informar cached)."""
+    return sum(1 for w in words if _get_cache_key(w, voice, speed) in _audio_cache)
 
 
 async def generate_word_audio(
@@ -78,7 +84,9 @@ async def generate_word_audio(
         audio_bytes = response.content
 
         # 4. Subir a Cloudinary
-        upload_result = upload_file(
+        # upload_file es sincrono (Cloudinary): en un hilo para no bloquear el bucle de eventos (Fase 21).
+        upload_result = await run_in_threadpool(
+            upload_file,
             file_bytes=audio_bytes,
             filename=f"{cache_key}.mp3",
             content_type="audio/mpeg",

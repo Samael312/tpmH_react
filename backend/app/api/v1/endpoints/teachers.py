@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, logger, Response, status, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, logger, Request, Response, status, Query, UploadFile, File
+from app.core.rate_limit import limiter, user_or_ip_key
 from app.core.pagination import Pagination, paginate
 from app.core.http_cache import set_public_cache
 from sqlalchemy.orm import Session, contains_eager
@@ -13,7 +14,7 @@ from app.schemas.teacher import (
     TeacherPublicResponse
 )
 from app.models.student import StudentProfile
-from app.core.storage import upload_file_stream, delete_file
+from app.core.storage import upload_file_stream, delete_file, ALLOWED_VIDEO_TYPES, MAX_VIDEO_SIZE
 from app.models.package import Enrollment
 from app.models.material import Material, MaterialAssignment
 from app.core.email import send_admin_new_teacher_pending_email
@@ -22,7 +23,7 @@ from app.core.notifications import create_notification, get_user_unread_count
 from app.models.notification import Notification
 from app.models.teacher_appeal import TeacherAppeal
 from app.schemas.notifications import CreateAppealRequest, NotificationResponse, TeacherAppealResponse, UnreadCountResponse
-from app.core.schedule_recalc import recalculate_teacher_schedule_timezone
+from app.core.schedule_recalc import apply_teacher_timezone_change
 from app.core.platform_config import get_or_create_platform_config
 from app.core.spoken_languages import read_spoken_languages, speaks as speaks_language
 from app.schemas.user import SpokenLanguageItem
@@ -65,6 +66,7 @@ def list_approved_teachers(
     ).filter(
         TeacherProfile.status == TeacherStatus.approved,
         User.is_test_account.is_(False),
+        User.is_active.is_(True),  # Fase 21, S6: cuentas desactivadas/borradas no se listan
     ).all()
 
     # Filtrar por materia
@@ -104,7 +106,7 @@ def get_teacher_profile(username: str, response: Response, db: Session = Depends
         TeacherProfile.user_username == username
     ).first()
 
-    if not teacher:
+    if not teacher or (teacher.user is not None and not teacher.user.is_active):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Profesor no encontrado"
@@ -143,11 +145,10 @@ def update_my_teacher_profile(
 ):
     """
     Actualiza el perfil del profesor autenticado.
-    Si cambia la zona horaria, se recalcula la disponibilidad semanal y las
-    excepciones puntuales para que la hora LOCAL configurada por el profesor
-    se preserve (ej. "06:00-08:00" en Sydney sigue siendo "06:00-08:00" al
-    pasar a Bogotá) — lo único que cambia es el UTC equivalente. Ver
-    core/schedule_recalc.py para el detalle de la regla de negocio.
+    Si cambia la zona horaria, la disponibilidad semanal (guardada en hora local, Fase 26) conserva su
+    hora local sin recalcular ("06:00-08:00" en Sydney sigue siendo "06:00-08:00" al pasar a Bogotá) y
+    las excepciones puntuales se reinterpretan con la misma fecha y hora de reloj. Ver
+    core/schedule_recalc.py.
     """
     profile = current_user.teacher_profile
     if not profile:
@@ -166,16 +167,14 @@ def update_my_teacher_profile(
     old_timezone = profile.timezone
     new_timezone = update_data.get("timezone")
 
+    tz_changed = bool(new_timezone and new_timezone != old_timezone)
     for field, value in update_data.items():
+        if field == "timezone" and tz_changed:
+            continue  # lo aplica apply_teacher_timezone_change (excepciones + cache de huecos)
         setattr(profile, field, value)
 
-    if new_timezone and new_timezone != old_timezone:
-        recalculate_teacher_schedule_timezone(
-            teacher_id=profile.id,
-            old_tz=old_timezone,
-            new_tz=new_timezone,
-            db=db,
-        )
+    if tz_changed:
+        apply_teacher_timezone_change(profile, new_timezone, db)
 
     db.commit()
     db.refresh(profile)
@@ -324,18 +323,29 @@ def get_my_students_full(
     return result
 
 @router.post("/me/video")
+@limiter.limit("10/hour", key_func=user_or_ip_key)  # cada subida pesa hasta 100 MB en Cloudinary
 def upload_teacher_video(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_teacher),
     db: Session = Depends(get_db),
 ):
     """
-    Sube (o reemplaza) el video de presentación del profesor.
+    Sube (o reemplaza) el video de presentación del profesor (solo video, <= 100 MB).
     Es un requisito obligatorio para que el superadmin pueda aprobar el perfil.
+
+    Un video nuevo NUNCA sale a producción sin revisar. Primer video / perfil no aprobado: flujo de onboarding
+    (video_url + perfil "pending"). Profesor ya aprobado: el video va a video_pending_* y el anterior sigue
+    público hasta que el staff apruebe (Fase 23). Solo se avisa al staff al crearse un pendiente nuevo.
     """
     profile = current_user.teacher_profile
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil no encontrado")
+
+    if db.query(TeacherAppeal).filter(
+        TeacherAppeal.teacher_id == profile.id, TeacherAppeal.kind == "video", TeacherAppeal.status == "pending",
+    ).first():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Tu apelación sobre el video está en revisión; espera la resolución")
 
     try:
         result = upload_file_stream(
@@ -344,9 +354,50 @@ def upload_teacher_video(
             content_type=file.content_type,
             folder=f"teacher_videos/teacher_{profile.id}",
             display_name=f"presentacion_{profile.user_username}",
+            allowed_types=ALLOWED_VIDEO_TYPES,
+            max_bytes=MAX_VIDEO_SIZE,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    # Fase 23: un profesor YA aprobado y con video publico no pierde su perfil al reemplazar el video: el nuevo
+    # queda "pendiente" (columnas video_pending_*) y el publico sigue viendo el anterior hasta que el staff lo apruebe.
+    if profile.status == TeacherStatus.approved and profile.video_url:
+        # Un pendiente ya rechazado cuenta como "nuevo" para el aviso al staff.
+        had_pending = bool(profile.video_pending_url) and not profile.video_pending_rejection_reason
+        if profile.video_pending_public_id:
+            try:
+                delete_file(profile.video_pending_public_id, resource_type="video")
+            except Exception:
+                pass
+        profile.video_pending_url = result["url"]
+        profile.video_pending_public_id = result["public_id"]
+        profile.video_pending_rejection_reason = None
+        profile.video_pending_appeal_used = False
+        db.commit()
+
+        if not had_pending:  # un reintento que pisa el mismo pendiente no vuelve a avisar al staff
+            admin_emails = [a.email for a in db.query(User).filter(User.role == UserRole.superadmin, User.is_active == True).all()]
+            for admin_email in admin_emails:
+                send_admin_new_teacher_pending_email(
+                    to_email=admin_email, teacher_name=f"{current_user.name} {current_user.surname}",
+                    teacher_email=current_user.email,
+                    subjects_or_languages=(profile.subjects or []) + (profile.languages or []),
+                )
+            create_notification(
+                db,
+                type="teacher_pending",
+                title="Video nuevo pendiente",
+                message=f"{current_user.name} {current_user.surname} subió un video nuevo y espera revisión.",
+                related_teacher_id=profile.id,
+            )
+            db.commit()
+
+        return {
+            "message": "Video recibido. Tu video actual sigue visible hasta que el equipo apruebe el nuevo.",
+            "video_url": profile.video_url,
+            "video_pending_url": profile.video_pending_url,
+        }
 
     # Borrar el video anterior de Cloudinary si existía
     if profile.video_public_id:
@@ -355,6 +406,8 @@ def upload_teacher_video(
         except Exception:
             pass
 
+    previous_status = profile.status
+    had_video = bool(profile.video_url)
     profile.video_url = result["url"]
     profile.video_public_id = result["public_id"]
 
@@ -369,25 +422,30 @@ def upload_teacher_video(
         profile.appeal_count = 0
         profile.appeal_exhausted = False
 
+    state_changed_to_pending = profile.status == TeacherStatus.pending and (
+        previous_status != TeacherStatus.pending or not had_video
+    )
+
     db.commit()
     db.refresh(profile)
 
-    admin_emails = [a.email for a in db.query(User).filter(User.role == UserRole.superadmin, User.is_active == True).all()]
-    for admin_email in admin_emails:
-        send_admin_new_teacher_pending_email(
-            to_email=admin_email, teacher_name=f"{current_user.name} {current_user.surname}",
-            teacher_email=current_user.email,
-            subjects_or_languages=(profile.subjects or []) + (profile.languages or []),
-        )
+    if state_changed_to_pending:
+        admin_emails = [a.email for a in db.query(User).filter(User.role == UserRole.superadmin, User.is_active == True).all()]
+        for admin_email in admin_emails:
+            send_admin_new_teacher_pending_email(
+                to_email=admin_email, teacher_name=f"{current_user.name} {current_user.surname}",
+                teacher_email=current_user.email,
+                subjects_or_languages=(profile.subjects or []) + (profile.languages or []),
+            )
 
-    create_notification(
-        db,
-        type="teacher_pending",
-        title="Nuevo video de presentación",
-        message=f"{current_user.name} {current_user.surname} subió su video y espera revisión.",
-        related_teacher_id=profile.id,
-    )
-    db.commit()
+        create_notification(
+            db,
+            type="teacher_pending",
+            title="Nuevo video de presentación",
+            message=f"{current_user.name} {current_user.surname} subió su video y espera revisión.",
+            related_teacher_id=profile.id,
+        )
+        db.commit()
 
     from app.api.v1.endpoints.public import invalidate_landing_cache
     invalidate_landing_cache()
@@ -395,6 +453,7 @@ def upload_teacher_video(
     return {
         "message": "Video subido correctamente. Tu perfil está en revisión por el equipo.",
         "video_url": profile.video_url,
+        "video_pending_url": profile.video_pending_url,
     }
 
 
@@ -456,10 +515,36 @@ def submit_appeal(
     if not profile:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Perfil no encontrado")
 
+    existing_pending = db.query(TeacherAppeal).filter(
+        TeacherAppeal.teacher_id == profile.id,
+        TeacherAppeal.status == "pending",
+    ).first()
+    if existing_pending:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya tienes una apelación pendiente de revisión")
+
+    # Fase 23: video nuevo rechazado de un profesor aprobado -> una sola apelacion por video.
+    if profile.status != TeacherStatus.rejected and profile.video_pending_rejection_reason:
+        if profile.video_pending_appeal_used:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya apelaste este video. Sube uno nuevo para volver a revisión.")
+        appeal = TeacherAppeal(teacher_id=profile.id, appeal_number=1, message=data.message, status="pending", kind="video")
+        db.add(appeal)
+        profile.video_pending_appeal_used = True
+        db.commit()
+        db.refresh(appeal)
+        create_notification(
+            db,
+            type="teacher_appeal",
+            title="Apelación de video nuevo",
+            message=f"{current_user.name} {current_user.surname} apeló el rechazo de su video nuevo.",
+            related_teacher_id=profile.id,
+        )
+        db.commit()
+        return appeal
+
     if profile.status != TeacherStatus.rejected:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Solo puedes apelar cuando tu perfil está rechazado"
+            "Solo puedes apelar cuando tu perfil o tu video nuevo están rechazados"
         )
 
     if profile.appeal_exhausted or (profile.appeal_count or 0) >= 2:

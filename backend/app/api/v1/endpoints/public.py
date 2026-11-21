@@ -105,6 +105,7 @@ def _build_landing_response(db: Session) -> LandingResponse:
             TeacherProfile.user_username == username,
             TeacherProfile.status == TeacherStatus.approved,
             User.is_test_account.is_(False),
+            User.is_active.is_(True),
         ).all()
     else:
         teacher_profiles = (
@@ -113,6 +114,7 @@ def _build_landing_response(db: Session) -> LandingResponse:
             .filter(
                 TeacherProfile.status == TeacherStatus.approved,
                 User.is_test_account.is_(False),
+            User.is_active.is_(True),
                 # Solo profesores con avatar configurado: evita el círculo
                 # de 80px con la inicial desproporcionada en el landing.
                 TeacherProfile.profile_photo_url.isnot(None),
