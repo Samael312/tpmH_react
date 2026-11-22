@@ -738,7 +738,7 @@ export default function StudentProfilePage() {
                       {/* Opción de objetivo personalizado */}
                       <button
                         type="button"
-                        onClick={() => { setUseCustomGoal(true); if (normalizedGoals.some(g => g.text === goal)) setGoal(""); }}
+                        onClick={() => { setUseCustomGoal(true); if (allGoalsFlat.some(g => (typeof g === "string" ? g : g.text) === goal)) setGoal(""); }}
                         disabled={savingInfo}
                         className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl border-2 text-left transition-all duration-200 disabled:opacity-60 ${
                           useCustomGoal ? "border-pink-400 bg-pink-50" : "border-slate-100 bg-white hover:border-slate-200"

@@ -68,9 +68,10 @@ describe("EmailSettingsPanel", () => {
   it("cambiar el límite diario y el modo ahorro se envía junto", async () => {
     const user = setup();
     const limit = await screen.findByLabelText("Límite diario de correos");
-    // OJO UX (KNOWN_ISSUES): al borrar el campo el componente lo ajusta a 1 al instante, así que teclear "300" tras
-    // borrar da "1300". Aquí se fija el valor de una vez para probar lo que se envía.
-    fireEvent.change(limit, { target: { value: "300" } });
+    // F15 (corregido): se puede borrar y teclear «300» sin que el campo salte a «1300».
+    await user.clear(limit);
+    await user.type(limit, "300");
+    expect(limit).toHaveValue(300);
     await user.click(screen.getByRole("switch", { name: "Modo ahorro automático" }));
     await user.click(screen.getByRole("button", { name: /Guardar/ }));
     await waitFor(() => expect(callsTo("put", "/admin/email-settings")).toHaveLength(1));
@@ -80,12 +81,19 @@ describe("EmailSettingsPanel", () => {
   it("el límite nunca baja de 1 ni el porcentaje pasa de 100", async () => {
     setup(settings({ auto_saver_enabled: true }));
     const limit = await screen.findByLabelText("Límite diario de correos");
+    // Se ajusta al salir del campo (blur), no mientras se teclea.
     fireEvent.change(limit, { target: { value: "0" } });
+    fireEvent.blur(limit);
     expect(limit).toHaveValue(1);
     fireEvent.change(limit, { target: { value: "-5" } });
+    fireEvent.blur(limit);
+    expect(limit).toHaveValue(1);
+    fireEvent.change(limit, { target: { value: "" } });
+    fireEvent.blur(limit);
     expect(limit).toHaveValue(1);
     const pct = screen.getByLabelText("Pausar al llegar al (%)");
     fireEvent.change(pct, { target: { value: "250" } });
+    fireEvent.blur(pct);
     expect(pct).toHaveValue(100);
   });
 

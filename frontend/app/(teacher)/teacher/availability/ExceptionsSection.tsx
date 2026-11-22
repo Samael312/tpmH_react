@@ -126,7 +126,7 @@ export default function ExceptionsSection() {
         reason: reason.trim() || null,
       });
       const count = Array.isArray(res.data) ? res.data.length : 1;
-      const msg = `${count} excepción${count !== 1 ? "es" : ""} guardada${count !== 1 ? "s" : ""} correctamente`;
+      const msg = count === 1 ? "1 excepción guardada correctamente" : `${count} excepciones guardadas correctamente`;
       setSuccess(msg);
       toast.success(msg);
       resetForm();

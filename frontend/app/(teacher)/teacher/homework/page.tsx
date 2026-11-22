@@ -85,6 +85,7 @@ function DatePicker({
 }) {
   const [open, setOpen] = useState(false);
   const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const [viewYear, setViewYear]   = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
 
@@ -175,7 +176,8 @@ function DatePicker({
               if (!day) return <div key={i} />;
               const dateStr = `${viewYear}-${String(viewMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
               const isSelected = dateStr === value;
-              const isPast = new Date(dateStr) < new Date(today.toDateString());
+              // Texto contra texto (día local): `new Date("YYYY-MM-DD")` es medianoche UTC y en husos negativos hacía que HOY saliera como pasado (U5).
+              const isPast = dateStr < todayStr;
               return (
                 <button
                   key={i}

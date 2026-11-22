@@ -84,8 +84,8 @@ describe("U4 · Mis clases (profesor y alumno) agrupa por día UTC, no por día 
   });
 });
 
-// U5 (RescheduleCalendar marcaba «hoy» como pasado en husos negativos) está CORREGIDO: su regresión es un test de
-// componente (tests/components/classModals.test.tsx · «el día de hoy se puede elegir…»), porque el código vive en un componente.
+// U5 (RescheduleCalendar y el selector de fecha de tareas marcaban «hoy» como pasado en husos negativos) está CORREGIDO
+// (el de tareas se destapó después, F18): su regresión son tests de componente (classModals.test.tsx y teacherHomework.test.tsx), porque el código vive en componentes.
 
 describe("U6 · formatDateHuman de RescheduleModal / GodModeAvailabilityPicker muestra el día anterior", () => {
   it("2026-11-23 (lunes) se muestra como domingo 22 en Caracas", () => {

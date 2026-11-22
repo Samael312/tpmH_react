@@ -203,6 +203,19 @@ describe("Recuperar acceso", () => {
     expect(await screen.findByText("¡Revisa tu correo!")).toBeInTheDocument();
   });
 
+  it.each([
+    [429, /Demasiadas solicitudes/],
+    [422, /Revisa que el correo esté bien escrito/],
+  ] as const)("un %s NO confirma el envío (F17): avisa del problema", async (status, msg) => {
+    mockApiError("post", "/auth/forgot-password", status, "x");
+    const { container } = renderScreen(<ForgotPasswordPage />, { role: "anon" });
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText("tu@email.com"), "ana@example.com");
+    await user.click(submit(container));
+    expect(await screen.findByText(msg)).toBeInTheDocument();
+    expect(screen.queryByText("¡Revisa tu correo!")).not.toBeInTheDocument();
+  });
+
   it("un fallo del servidor (5xx) sí avisa de que no se pudo procesar", async () => {
     mockApiError("post", "/auth/forgot-password", 500, "x");
     const { container } = renderScreen(<ForgotPasswordPage />, { role: "anon" });

@@ -12,14 +12,22 @@ import {
 } from '@/lib/emailSettings'
 
 /** Pestaña «Correos» de /admin/settings (solo superadmin). */
+/** Entero dentro de [min, max]; vacío o no numérico → min. */
+function clampInt(text: string, min: number, max: number): number {
+  const n = Math.trunc(Number(text))
+  if (!Number.isFinite(n)) return min
+  return Math.min(max, Math.max(min, n))
+}
+
 export default function EmailSettingsPanel() {
   const toast = useToast()
   const { settings, isError, refetch, save } = useEmailSettings(true)
 
   const [enabled, setEnabled] = useState<Record<string, boolean>>({})
-  const [limit, setLimit] = useState(100)
+  // Texto crudo de los números: se ajusta al rango al salir del campo (F15: antes borrar y teclear daba «1300»).
+  const [limitText, setLimitText] = useState('100')
   const [saver, setSaver] = useState(false)
-  const [saverPct, setSaverPct] = useState(80)
+  const [saverPctText, setSaverPctText] = useState('80')
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -27,9 +35,9 @@ export default function EmailSettingsPanel() {
   useEffect(() => {
     if (!settings || dirty) return
     setEnabled(Object.fromEntries(settings.categories.map(c => [c.key, c.enabled])))
-    setLimit(settings.daily_limit)
+    setLimitText(String(settings.daily_limit))
     setSaver(settings.auto_saver_enabled)
-    setSaverPct(settings.auto_saver_percent)
+    setSaverPctText(String(settings.auto_saver_percent))
   }, [settings, dirty])
 
   if (isError) {
@@ -43,6 +51,8 @@ export default function EmailSettingsPanel() {
   }
   if (!settings) return <Skeleton className="h-32 w-full rounded-2xl" />
 
+  const limit = clampInt(limitText, 1, Infinity)
+  const saverPct = clampInt(saverPctText, 1, 100)
   const pct = quotaPercent(settings.sent_today, settings.daily_limit)
   const message = alertMessage(settings)
 
@@ -137,8 +147,9 @@ export default function EmailSettingsPanel() {
             </label>
             <input
               id="email-daily-limit" type="number" min={1}
-              value={limit}
-              onChange={e => { setLimit(Math.max(1, Number(e.target.value) || 1)); touch() }}
+              value={limitText}
+              onChange={e => { setLimitText(e.target.value); touch() }}
+              onBlur={() => setLimitText(String(limit))}
               className="w-full md:w-48 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300 transition-all"
             />
             <p className="text-xs text-slate-500 font-medium ml-1">Cámbialo si pasas a un plan de pago. Al llegar al límite solo salen los correos esenciales.</p>
@@ -164,8 +175,9 @@ export default function EmailSettingsPanel() {
               </label>
               <input
                 id="email-saver-percent" type="number" min={1} max={100} disabled={!saver}
-                value={saverPct}
-                onChange={e => { setSaverPct(Math.min(100, Math.max(1, Number(e.target.value) || 1))); touch() }}
+                value={saverPctText}
+                onChange={e => { setSaverPctText(e.target.value); touch() }}
+                onBlur={() => setSaverPctText(String(saverPct))}
                 className="w-full md:w-32 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300 transition-all disabled:opacity-50"
               />
             </div>

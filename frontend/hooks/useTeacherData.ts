@@ -1,9 +1,8 @@
 import api from '@/lib/api'
-import { fetchMe } from '@/lib/me'
 import { fetchAllPages } from "@/lib/pagination";
 import { useLoadMoreList } from "@/hooks/useLoadMoreList";
 import type { SpokenLanguage } from '@/lib/spokenLanguages'
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 
 export interface TeacherClass {
   id: number
@@ -331,10 +330,10 @@ export interface CurrentUser {
 }
 
 export function useCurrentUser() {
-  const qc = useQueryClient()
   const query = useQuery({
     queryKey: ["user", "me"],
-    queryFn: () => fetchMe<CurrentUser>(qc),
+    // Llamada directa: `fetchMe` usa esta MISMA clave y la consulta se esperaría a sí misma (nunca resolvía sin caché previa).
+    queryFn: async () => (await api.get('/users/me')).data as CurrentUser,
   })
 
   return {

@@ -241,7 +241,7 @@ export default function TeacherAvailabilityPage() {
               </div>
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Activos</p>
-                <p className="text-lg font-black text-slate-800">{blocks.length} bloques</p>
+                <p className="text-lg font-black text-slate-800">{blocks.length} {blocks.length === 1 ? "bloque" : "bloques"}</p>
               </div>
             </div>
             <DesktopOnly>

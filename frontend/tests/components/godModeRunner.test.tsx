@@ -248,3 +248,85 @@ describe("GodModeActionRunner · ejecutar", () => {
     expect(callsTo("patch", "/god-mode/enrollments/11/adjust")[0].body).toEqual({ reason: "Compensación acordada", unlocked_credits: 10 });
   });
 });
+
+describe("GodModeActionRunner · selectores de paquete, pago y reseña", () => {
+  const PAY = (over: Record<string, unknown> = {}) => ({
+    id: 31, amount_total: 80, amount_teacher: 60, payment_method: "paypal", status: "approved", payment_type: "package",
+    is_manual_grant: false, created_at: "2026-03-01T10:00:00Z", ...over,
+  });
+  const REV = { id: 41, student_name: "Luis", rating: 4, is_legacy: true, created_at: "2026-03-01T10:00:00Z", total_completed_classes: 12, comment: "Muy bueno" };
+
+  async function pickTeacher(user: ReturnType<typeof userEvent.setup>) {
+    await screen.findByRole("option", { name: /Profe Uno/ });
+    await user.selectOptions(await control("Profesor"), "7");
+  }
+  async function pickPair(user: ReturnType<typeof userEvent.setup>) {
+    await pickTeacher(user);
+    await screen.findByRole("option", { name: /Alumno Uno/ });
+    await user.selectOptions(await control("Alumno"), "1");
+  }
+
+  it("cambiar de paquete: ofrece los paquetes del profesor, ilimitados incluidos", async () => {
+    mockApi("get", /\/god-mode\/lookup\/teachers\/7\/packages/, [
+      { id: 5, name: "Pack 8", subject: "Español", is_unlimited: false, classes_count: 8 },
+      { id: 6, name: "Libre", subject: "Inglés", is_unlimited: true, classes_count: null },
+    ]);
+    const user = setup("enrollment.change_package");
+    expect(await control("Paquete nuevo")).toBeDisabled();
+    await pickTeacher(user);
+    expect(await screen.findByRole("option", { name: /Pack 8 · Español · 8 clases/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Libre · Inglés · ilimitado/ })).toBeInTheDocument();
+  });
+
+  it("editar pago: lista los pagos y avisa si el cambio moverá la billetera", async () => {
+    mockApi("get", /\/god-mode\/lookup\/teachers\/7\/students\/1\/payments/, [PAY(), PAY({ id: 32, status: "pending" })]);
+    const user = setup("payment.edit");
+    expect(await control("Pago")).toBeDisabled();
+    await pickPair(user);
+    await screen.findByRole("option", { name: /#31/ });
+    await user.selectOptions(await control("Pago"), "31");
+    expect(await screen.findByText(/Actual: \$80 total · \$60 para el profesor/)).toBeInTheDocument();
+    expect(screen.queryByText(/va a ajustar la billetera/)).not.toBeInTheDocument();
+    await user.type(await control("Monto total corregido", "input"), "90");
+    expect(await screen.findByText(/va a ajustar la billetera/)).toBeInTheDocument();
+  });
+
+  it("editar pago: pasar un pago pendiente a aprobado también mueve la billetera", async () => {
+    mockApi("get", /\/god-mode\/lookup\/teachers\/7\/students\/1\/payments/, [PAY({ id: 32, status: "pending" })]);
+    const user = setup("payment.edit");
+    await pickPair(user);
+    await screen.findByRole("option", { name: /#32/ });
+    await user.selectOptions(await control("Pago"), "32");
+    await screen.findByText(/Actual: \$80 total/);
+    await user.selectOptions(await control("Nuevo estado"), "approved");
+    expect(await screen.findByText(/va a ajustar la billetera/)).toBeInTheDocument();
+  });
+
+  it("un pago de reembolso o regalo manual no mueve la billetera", async () => {
+    mockApi("get", /\/god-mode\/lookup\/teachers\/7\/students\/1\/payments/, [PAY({ payment_type: "refund" })]);
+    const user = setup("payment.edit");
+    await pickPair(user);
+    await screen.findByRole("option", { name: /#31/ });
+    await user.selectOptions(await control("Pago"), "31");
+    await user.type(await control("Monto total corregido", "input"), "90");
+    expect(screen.queryByText(/va a ajustar la billetera/)).not.toBeInTheDocument();
+  });
+
+  it("editar reseña: lista las reseñas del profesor y muestra su detalle", async () => {
+    mockApi("get", /\/god-mode\/lookup\/teachers\/7\/reviews/, [REV]);
+    const user = setup("review.edit");
+    expect(await control("Reseña")).toBeDisabled();
+    await pickTeacher(user);
+    await screen.findByRole("option", { name: /#41 · Luis · 4★ · legacy/ });
+    await user.selectOptions(await control("Reseña"), "41");
+    expect(await screen.findByText(/12 clases completadas con este profesor/)).toBeInTheDocument();
+    expect(screen.getByText(/Muy bueno/)).toBeInTheDocument();
+  });
+
+  it("reagendar: el selector de horario avisa qué falta (profesor, luego duración)", async () => {
+    const user = setup("class.reschedule");
+    expect((await screen.findAllByText("Elige un profesor primero")).length).toBeGreaterThan(0);
+    await pickTeacher(user);
+    expect(await screen.findByText("Indica la duración primero")).toBeInTheDocument();
+  });
+});

@@ -2,11 +2,14 @@
 import "@testing-library/jest-dom/vitest";
 import React from "react";
 import { afterEach, beforeEach, vi } from "vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { fakeApi, resetApi, FIXTURE } from "./fakeApi";
 import { LANDING_CONTENT_DEFAULTS } from "@/hooks/useLandingData";
 import { routerState, resetRouter } from "./router";
 import { useToastStore } from "@/store/toastStore";
+
+// Con ~1000 tests en paralelo, la espera por defecto (1 s) de findBy*/waitFor dejaba tests intermitentes.
+configure({ asyncUtilTimeout: 4000 });
 
 // ── Sin red: todo `api` sale del arnés ───────────────────────────────────────
 vi.mock("@/lib/api", () => ({

@@ -38,7 +38,13 @@ const handleSubmit = async (e: React.SubmitEvent) => {
       const status = axios.isAxiosError(e) ? e.response?.status : undefined;
       // Anti-enumeración solo aplica a 4xx (el backend ya responde igual
       // exista o no el email). Los fallos de red/servidor deben avisarse.
-      if (status && status < 500) {
+      // F17: 429 (demasiadas solicitudes) y 422 (email mal formado) NO envían nada, así que se avisan; no revelan si el
+      // correo existe. El resto de 4xx (p. ej. 404) sigue confirmando igual.
+      if (status === 429) {
+        setError("Demasiadas solicitudes. Espera unos minutos antes de volver a intentarlo.");
+      } else if (status === 422) {
+        setError("Revisa que el correo esté bien escrito.");
+      } else if (status && status < 500) {
         setSent(true);
       } else {
         setError("No pudimos procesar tu solicitud. Revisa tu conexión e inténtalo de nuevo.");

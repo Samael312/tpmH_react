@@ -36,3 +36,4 @@ frontend/doc/                      referencia técnica del frontend
 4. Al **añadir variable de entorno**: `backend/.env.example` o `frontend/.env.example`, `backend/doc/ENVIRONMENT.md` y, si es `NEXT_PUBLIC_*`, el `ARG`/`ENV` del `frontend/Dockerfile`.
 5. Cita siempre `archivo:línea` y comprueba que sigue siendo cierto antes de fiarte de una cifra de líneas: cambian.
 6. Idioma: español; comentarios y mensajes de la API en español.
+- [Plan de la suite completa de pruebas (frontend + backend)](PLAN_SUITE_COMPLETA.md): trabajo pendiente de cobertura y ejecución conjunta.

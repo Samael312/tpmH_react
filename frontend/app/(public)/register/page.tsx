@@ -190,10 +190,8 @@ export default function RegisterPage() {
       return;
     }
 
-    if (!acceptedTerms) {
-      setError("Debes aceptar los Términos de Servicio y la Política de Privacidad para continuar.");
-      return;
-    }
+    // «Crear cuenta» ya está desactivado sin los términos aceptados (F16): aquí solo queda el guard, sin mensaje inalcanzable.
+    if (!acceptedTerms) return;
 
     if (!step2Valid) return;
     if (submittingRef.current) return;

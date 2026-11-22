@@ -29,6 +29,7 @@ Usuarios `lt_` sembrados por el flujo real, servidor como en Railway sin correos
 `python doc/generate_docs.py` (ver `README.md`).
 
 ## Qué NO está probado todavía
+(Plan conjunto con el frontend: `../../docs/PLAN_SUITE_COMPLETA.md`.)
 Concurrencia real (doble reserva/aprobación/retiro: necesita PostgreSQL), cohortes y AUD-18, DST con fechas fijas, integraciones externas (Google, Cloudinary, Resend, OpenAI), WebSocket de chat, E2E de UI con navegador (la extensión de Chrome no estaba conectada), accesibilidad/rendimiento, carga y rate-limit tras proxy, `pip-audit`/`npm audit`, tests de frontend.
 
 ## Estado de `tests/flow` (ejecutado contra la rama dev de Neon, noviembre 2026)
