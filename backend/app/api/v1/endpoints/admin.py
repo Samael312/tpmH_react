@@ -5,10 +5,10 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.phone import normalize_phone
 from sqlalchemy import func, or_ as sa_or
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import timedelta
 from app.schemas.admin import AdminUserUpdate, BanStudentRequest
 from app.db.base import get_db
-from app.auth.dependencies import get_current_user, get_current_staff, require_superadmin
+from app.auth.dependencies import get_current_staff, require_superadmin
 from app.models.user import User, UserRole
 from app.models.teacher import TeacherProfile, TeacherStatus
 from app.models.student import StudentProfile
@@ -21,10 +21,9 @@ from app.models.support_ticket import SupportCategory, SupportTicket, SupportTic
 from app.core.email import send_teacher_status_update_email, send_support_ticket_response_email, send_teacher_video_review_email
 from app.core.storage import delete_file
 from app.core.chat_ws import chat_manager
-from app.core.timezone import utc_now, UTC
+from app.core.timezone import utc_now
 from app.core.notifications import create_notification, get_unread_count
-from app.models.student_teacher_link import StudentTeacherLink
-from app.core.teacher_students import link_student_to_teacher, backfill_student_teacher_links
+from app.core.teacher_students import backfill_student_teacher_links
 from app.core.platform_config import resolve_featured_teacher
 from app.schemas.admin import (
     PlatformStatsResponse,

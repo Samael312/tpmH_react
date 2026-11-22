@@ -7,13 +7,8 @@ from typing import List, Optional
 from datetime import timedelta
 
 from app.db.base import get_db
-from app.auth.dependencies import (
-    get_current_student,
-    get_current_teacher_or_teacher_admin,
-    get_current_staff,
-    get_current_staff_or_teacher,
-)
-from app.models.class_ import Class, ClassType 
+from app.auth.dependencies import get_current_student, get_current_teacher_or_teacher_admin
+from app.models.class_ import Class
 from app.core.timezone import utc_now             
 from app.core.class_logic import get_business_rules, validate_package_duration
 from app.api.v1.endpoints.public import invalidate_landing_cache

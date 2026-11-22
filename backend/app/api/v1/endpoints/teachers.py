@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, logger, Request, Response, status, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, Query, UploadFile, File
 from app.core.rate_limit import limiter, user_or_ip_key
 from app.core.pagination import Pagination, paginate
 from app.core.http_cache import set_public_cache
 from sqlalchemy.orm import Session, contains_eager
 from typing import List, Optional 
 from app.db.base import get_db
-from app.auth.dependencies import get_current_user, get_current_teacher, get_current_teacher_or_teacher_admin
+from app.auth.dependencies import get_current_teacher, get_current_teacher_or_teacher_admin
 from app.models.user import User, UserRole
 from app.models.teacher import TeacherProfile, TeacherStatus
 from app.schemas.teacher import (

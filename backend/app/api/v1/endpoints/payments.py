@@ -13,7 +13,6 @@ from app.auth.dependencies import (
     get_current_user,
     require_verified_email,
     get_current_staff,
-    require_superadmin,
     get_current_staff_or_teacher,
     get_current_student,
     get_current_teacher_or_teacher_admin,

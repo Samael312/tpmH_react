@@ -143,17 +143,6 @@ export interface StudentEnrollment {
   has_pending_recharge?: boolean;
 }
 
-export interface StudentMaterial {
-  link_id: number;
-  material_id: number;
-  title: string;
-  category: string;
-  level: string;
-  content: string;
-  tags: { words?: string[] } | null;
-  progress: string;
-}
-
 export interface StudentHomework {
   id: number;
   homework_id: number;
@@ -174,13 +163,6 @@ export interface StudentHomework {
     is_active: boolean;
     created_at: string;
   };
-}
-
-export interface TeacherResolution {
-  loading: boolean;
-  isSingleTenant: boolean;
-  teacherUsername: string | null;
-  hasChosenTeacher: boolean;
 }
 
 export interface TeacherPublicProfile {
@@ -603,39 +585,6 @@ export function useStudentProfileData() {
 
   return {
     data: query.data ?? null,
-    loading: query.isLoading,
-    isFetching: query.isFetching,
-    isError: query.isError,
-    refetch: query.refetch,
-  };
-}
-
-export function useFeaturedTeacher() {
-  const query = useQuery({
-    queryKey: ["student", "featured-teacher"],
-    queryFn: async () => {
-      // F9: sin usuario "mar12" por defecto — sale de la variable pública o, si no, del profesor destacado
-      // configurado en la plataforma (el mismo que usa el backend).
-      let username = process.env.NEXT_PUBLIC_FEATURED_TEACHER_USERNAME || "";
-      if (!username) {
-        const cfg = await api.get("/admin/platform-config");
-        username = cfg.data?.featured_teacher?.username || "";
-      }
-      if (!username) throw new Error("No hay profesor destacado configurado");
-      const [tRes, rRes] = await Promise.all([
-        api.get(`/teachers/${username}`),
-        api.get(`/reviews/${username}`),
-      ]);
-      return {
-        teacher: tRes.data as TeacherPublicProfile,
-        reviews: rRes.data as Review[],
-      };
-    },
-  });
-
-  return {
-    teacher: query.data?.teacher ?? null,
-    reviews: query.data?.reviews ?? [],
     loading: query.isLoading,
     isFetching: query.isFetching,
     isError: query.isError,

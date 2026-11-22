@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator, model_validator, Field
-from typing import Annotated, Optional, List
+from typing import Annotated, Optional
 from datetime import datetime, timezone
 from app.schemas.god_mode import GodModeActionBase
 

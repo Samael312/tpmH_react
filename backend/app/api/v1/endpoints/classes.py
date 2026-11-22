@@ -32,7 +32,6 @@ from app.core.class_logic import (
     lock_class_row,
     can_cancel_class,
     can_reschedule_class,
-    resolve_status_after_reschedule,
     apply_reschedule_status,
     validate_class_status_transition,
     update_enrollment_counter,
@@ -45,7 +44,7 @@ from app.core.class_logic import (
 from app.core.timezone import UTC, utc_now, format_local_datetime
 from app.db.base import get_db
 from app.models.class_ import Class, ClassType, MAX_STUDENT_RESCHEDULES
-from app.models.package import Enrollment, EnrollmentStatus
+from app.models.package import Enrollment
 from app.models.student import StudentProfile
 from app.models.teacher import TeacherProfile
 from app.models.user import User

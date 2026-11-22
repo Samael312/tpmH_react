@@ -22,3 +22,14 @@ export function localRangeCells(day: number, startLocal: string, endLocal: strin
   }
   return cells;
 }
+
+/** Hidratación de la rejilla del ALUMNO (preferencias guardadas en UTC): de un bloque local «HH:MM»–«HH:MM» a las horas en
+ *  punto que cubre. Un bloque que termina en 23:59 (guardado como fin de día) pierde la última hora (U1, legado). */
+export function hoursFromBlock(localStart: string, localEnd: string): string[] {
+  const out: string[] = [];
+  const startHour = parseInt(localStart.split(":")[0]);
+  let endHour = parseInt(localEnd.split(":")[0]);
+  if (localEnd.startsWith("00:0") && startHour > 0) endHour = 24;
+  for (let h = startHour; h < endHour; h++) out.push(`${h.toString().padStart(2, "0")}:00`);
+  return out;
+}

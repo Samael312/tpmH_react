@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 import { useNow } from "@/lib/useNow";
 import { useBusinessRules } from "@/hooks/useBusinessRules";
+import { toUtcDateStr, getWeekDates } from "@/lib/weekDates";
 
 const HISTORY_STATUSES = ["completed", "cancelled", "no_show", "finalized"];
 
@@ -338,20 +339,6 @@ function CancelModal({
   );
 }
 
-function toUtcDateStr(date: Date) {
-  return date.toISOString().split("T")[0];
-}
-
-function getWeekDates() {
-  const today = new Date();
-  const monday = new Date(today);
-  monday.setUTCDate(today.getUTCDate() - today.getUTCDay() + 1);
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setUTCDate(monday.getUTCDate() + i);
-    return d;
-  });
-}
 
 const WEEK_DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];

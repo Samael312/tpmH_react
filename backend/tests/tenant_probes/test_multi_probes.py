@@ -2,6 +2,8 @@
 actual (bug) para dejar evidencia: si pasa, el hallazgo esta confirmado."""
 from datetime import timedelta
 
+import pytest
+
 from tests.audit.conftest import hdr, _mk_user, future
 from tests.audit.helpers import API, approve, book, complete_trial, buy_package, iso
 from app.models.payment import Payment, TeacherWallet
@@ -94,7 +96,8 @@ def test_teacher_admin_changes_platform_payment_destination(client, world, db):
     r = client.patch(f"{API}/payments/config", json={"paypal_enabled": True, "paypal_email": "yo@ejemplo.com"},
                      headers=hdr(u))
     assert r.status_code == 200
-    assert client.get(f"{API}/payments/config").json()["paypal_email"] == "yo@ejemplo.com"
+    # Fase 20: GET /payments/config ya no es publico, exige sesion
+    assert client.get(f"{API}/payments/config", headers=hdr(u)).json()["paypal_email"] == "yo@ejemplo.com"
 
 
 def test_teacher_admin_cannot_switch_platform_to_single_with_himself_featured(client, world, db):
@@ -136,20 +139,27 @@ def test_chat_admin_list_with_both_filters_crashes(client, world, db):
     assert r.status_code == 500
 
 
-# ── 4. profesor desactivado (is_active=False) sigue en el marketplace y recibe reservas ──
-def test_deactivated_teacher_still_listed_and_bookable(client, world, db):
+# ── 4. profesor desactivado (is_active=False): corregido en la Fase 21, ya no se lista ni recibe reservas ──
+def test_fixed_deactivated_teacher_not_listed(client, world, db):
     r = client.patch(f"{API}/admin/users/{world['t_user'].id}/status", json={"is_active": False},
                      headers=hdr(world["admin"]))
     assert r.status_code == 200
     names = [t["user_username"] for t in client.get(f"{API}/teachers/").json()]
-    assert "profe" in names
-    assert client.get(f"{API}/teachers/profe").status_code == 200
+    assert "profe" not in names
+    assert client.get(f"{API}/teachers/profe").status_code != 200
+
+
+@pytest.mark.xfail(strict=True, reason="AUD-24: un profesor desactivado (is_active=False) aun recibe reservas de prueba")
+def test_deactivated_teacher_cannot_receive_bookings(client, world, db):
+    r = client.patch(f"{API}/admin/users/{world['t_user'].id}/status", json={"is_active": False},
+                     headers=hdr(world["admin"]))
+    assert r.status_code == 200
     r = book(client, world, future(30))
-    assert r.status_code == 201, r.text  # prueba reservada con un profesor que no puede entrar
+    assert r.status_code != 201, r.text  # hoy: 201, la prueba queda con un profesor que no puede entrar
 
 
-# ── 5. editar el paquete entre la notificacion y la aprobacion cambia lo que recibe el alumno ──
-def test_package_edit_between_notify_and_approve(client, world, db):
+# ── 5. editar el paquete entre la notificacion y la aprobacion: corregido en la Fase 20 (409, paquete congelado) ──
+def test_fixed_package_edit_between_notify_and_approve(client, world, db):
     complete_trial(client, world)
     r = client.post(f"{API}/payments/notify-payment", json={
         "type": "package", "package_id": world["pkg"].id, "payment_method": "bank_transfer"},
@@ -158,24 +168,23 @@ def test_package_edit_between_notify_and_approve(client, world, db):
     r = client.patch(f"{API}/packages/{world['pkg'].id}", json={
         "name": "P4", "subject": "English", "classes_count": 10, "price": 250.0, "price_per_class": 25.0,
         "duration_minutes": 50}, headers=hdr(world["t_user"]))
-    assert r.status_code == 200, r.text
+    assert r.status_code == 409, r.text
     assert approve(client, world, pid).status_code == 200
     db.expire_all()
     p = db.get(Payment, pid)
     e = db.get(Enrollment, p.enrollment_id)
-    print("amount", p.amount_total, "unlocked", e.unlocked_credits, "total", e.classes_total)
-    assert p.amount_total == 100.0 and e.unlocked_credits == 10 and e.classes_total == 4
+    assert p.amount_total == 100.0 and e.unlocked_credits == 4 and e.classes_total == 4
 
 
-def test_package_edit_mid_enrollment_changes_duration_and_refund_basis(client, world, db):
+def test_fixed_package_edit_mid_enrollment_is_blocked(client, world, db):
     eid, _ = buy_package_after_trial(client, world)
     r = client.patch(f"{API}/packages/{world['pkg'].id}", json={
         "name": "P4", "subject": "English", "classes_count": 4, "price": 400.0, "price_per_class": 100.0,
         "duration_minutes": 80}, headers=hdr(world["t_user"]))
-    assert r.status_code == 200
-    # el alumno ya no puede reservar con la duracion que compro (50)
+    assert r.status_code == 409  # Fase 20: con alumnos activos el paquete esta congelado
+    # el alumno sigue reservando con la duracion que compro (50)
     r = book(client, world, future(50), enrollment_id=eid, duration=50)
-    assert r.status_code == 400 and "80" in r.text
+    assert r.status_code == 201, r.text
 
 
 def buy_package_after_trial(client, world):
@@ -183,8 +192,8 @@ def buy_package_after_trial(client, world):
     return buy_package(client, world)
 
 
-# ── 6. reembolso por profesor suspendido sobre un paquete NO pagado o pagado a medias ──
-def test_suspended_refund_on_partially_paid_installments_refunds_full_price(client, world, db):
+# ── 6. reembolso por profesor suspendido: corregido en la Fase 20, solo se reembolsa lo realmente pagado ──
+def test_fixed_suspended_refund_on_partially_paid_installments_refunds_only_paid(client, world, db):
     pkg = Package(teacher_id=world["tp"].id, name="P4c", subject="English", classes_count=4, price=100.0,
                   price_per_class=25.0, duration_minutes=50, is_active=True, allow_installments=True,
                   installment_count=2, installment_amount=50.0)
@@ -205,11 +214,10 @@ def test_suspended_refund_on_partially_paid_installments_refunds_full_price(clie
     assert r.status_code == 200, r.text
     db.expire_all()
     ref = db.query(Payment).filter(Payment.payment_type == "refund").first()
-    print("pagado 50, reembolso", ref.amount_total)
-    assert ref.amount_total == 100.0
+    assert ref.amount_total == 50.0  # pagado 50 de 100: se reembolsa lo pagado
 
 
-def test_suspended_refund_on_never_paid_enrollment(client, world, db):
+def test_fixed_suspended_refund_on_never_paid_enrollment_is_rejected(client, world, db):
     complete_trial(client, world)
     r = client.post(f"{API}/payments/notify-payment", json={
         "type": "package", "package_id": world["pkg"].id, "payment_method": "bank_transfer"},
@@ -223,12 +231,10 @@ def test_suspended_refund_on_never_paid_enrollment(client, world, db):
     _suspend(db, world["tp"].id)
     r = client.post(f"{API}/payments/request-refund-teacher-suspended",
                     json={"enrollment_id": eid, "payment_info": {"bank_name": "X"}}, headers=hdr(world["s_user"]))
-    print("refund never-paid", r.status_code, r.text[:200])
-    assert r.status_code == 200
-    rid = r.json()["payment_id"]
-    assert approve(client, world, rid).status_code == 200
+    assert r.status_code == 400, r.text  # Fase 20: sin pagos aprobados no hay nada reembolsable
     db.expire_all()
-    print("wallet after", db.query(TeacherWallet).filter(TeacherWallet.teacher_id == world["tp"].id).first().available_balance)
+    assert db.query(Payment).filter(Payment.payment_type == "refund").count() == 0
+    assert db.query(TeacherWallet).filter(TeacherWallet.teacher_id == world["tp"].id).first().available_balance == 500.0
 
 
 def test_buy_package_from_suspended_teacher_after_trial(client, world, db):

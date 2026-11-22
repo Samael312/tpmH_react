@@ -23,7 +23,6 @@ from app.core.config import settings
 from app.core.timezone import UTC, utc_now
 from app.models.class_ import Class, ClassType
 from app.models.google_calendar import GoogleCalendarToken
-from app.models.teacher import TeacherProfile
 
 logger = logging.getLogger(__name__)
 

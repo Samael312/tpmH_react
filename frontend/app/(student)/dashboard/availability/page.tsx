@@ -15,6 +15,7 @@ import DesktopOnly from "@/components/ui/DesktopOnly";
 import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
+import { hoursFromBlock } from "@/lib/weeklyLocal";
 
 const DAYS = [
   { value: 0, label: "Lunes", short: "Lun" },
@@ -75,18 +76,8 @@ export default function StudentPreferencesPage() {
         const localStart = utcTimeToLocal(pref.start_time_utc, day, userTimezone);
         const localEnd = utcTimeToLocal(pref.end_time_utc, day, userTimezone);
 
-        const startHour = parseInt(localStart.split(":")[0]);
-        let endHour = parseInt(localEnd.split(":")[0]);
-
-        if (localEnd.startsWith("00:0") && startHour > 0) {
-          endHour = 24;
-        }
-
-        for (let h = startHour; h < endHour; h++) {
-          const hourStr = `${h.toString().padStart(2, "0")}:00`;
-          if (!initialSlots[day].includes(hourStr)) {
-            initialSlots[day].push(hourStr);
-          }
+        for (const hourStr of hoursFromBlock(localStart, localEnd)) {
+          if (!initialSlots[day].includes(hourStr)) initialSlots[day].push(hourStr);
         }
       } catch (err) {
         // Ahora esto funcionará perfectamente

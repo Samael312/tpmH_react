@@ -1,6 +1,7 @@
 "use client";
 
-import { finalizedNotice } from "@/lib/classStatusNotice";
+import { finalizedNotice, manualStatusTargets } from "@/lib/classStatusNotice";
+import { localDateTimeToUtcIso, getTimezoneDiffLabel } from "@/lib/tzFormat";
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { createPortal } from "react-dom";
@@ -39,7 +40,8 @@ export interface ClassCardData {
   external_source?: string | null;
 }
 
-type Role = "student" | "teacher" | "teacher_admin";
+// Solo dos vistas. Un teacher_admin que use esta tarjeta debe pasar role="teacher" (F14: antes caía en las reglas de alumno).
+type Role = "student" | "teacher";
 
 interface ClassCardProps {
   class_: ClassCardData;
@@ -75,7 +77,6 @@ const HISTORY_STATUSES = ["completed", "cancelled", "no_show", "finalized", "exp
 // dentro de una ventana de 72h desde que la clase terminó (ver también
 // backend: classes.py update_class_status). La cancelación sigue siendo una
 // acción aparte (DELETE /classes/teacher/{id}, ver teacherCancelInline).
-const MANUAL_TARGET_STATUSES = ["completed", "no_show", "finalized"];
 const MANUAL_STATUS_WINDOW_HOURS = 72;
 const TEACHER_CANCELABLE_STATUSES = ["pending_trial", "confirmed", "finalized"];
 
@@ -98,68 +99,6 @@ function PersonAvatar({ name, url, className }: { name?: string | null; url?: st
       {name ? name.charAt(0).toUpperCase() : <User className="w-3 h-3" />}
     </div>
   );
-}
-
-// ─── Conversión local a ISO UTC según zona horaria IANA ──────────────────
-function localDateTimeToUtcIso(dateStr: string, timeStr: string, timeZone: string): string {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  const [hour, minute] = timeStr.split(":").map(Number);
-  
-  const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute));
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    timeZone, hour12: false,
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
-  });
-  const parts = dtf.formatToParts(utcGuess).reduce((acc, p) => {
-    acc[p.type] = p.value;
-    return acc;
-  }, {} as Record<string, string>);
-  
-  const asUTC = Date.UTC(
-    Number(parts.year), Number(parts.month) - 1, Number(parts.day),
-    Number(parts.hour) % 24, Number(parts.minute), Number(parts.second)
-  );
-  const offsetMinutes = (asUTC - utcGuess.getTime()) / 60000;
-  return new Date(utcGuess.getTime() - offsetMinutes * 60000).toISOString();
-}
-
-// ─── Diferencia de zona horaria entre dos IANA timezones ────────────────────
-function getUtcOffsetMinutes(timeZone: string, date = new Date()): number | null {
-  try {
-    const dtf = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      hour12: false,
-      year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", second: "2-digit",
-    });
-    const parts = dtf.formatToParts(date).reduce((acc, p) => {
-      acc[p.type] = p.value;
-      return acc;
-    }, {} as Record<string, string>);
-    const asUTC = Date.UTC(
-      Number(parts.year), Number(parts.month) - 1, Number(parts.day),
-      Number(parts.hour) % 24, Number(parts.minute), Number(parts.second)
-    );
-    return (asUTC - date.getTime()) / 60000;
-  } catch {
-    return null;
-  }
-}
-
-/** Devuelve la diferencia horaria de `otherTz` respecto a `myTz`, ej. "+3h" o "-1.5h" */
-function getTimezoneDiffLabel(otherTz?: string | null, myTz?: string | null): string | null {
-  if (!otherTz || !myTz) return null;
-  const offOther = getUtcOffsetMinutes(otherTz);
-  const offMy = getUtcOffsetMinutes(myTz);
-  if (offOther === null || offMy === null) return null;
-
-  const diffHours = (offOther - offMy) / 60;
-  if (diffHours === 0) return "Mismo huso horario";
-
-  const sign = diffHours > 0 ? "+" : "";
-  const rounded = Math.abs(diffHours % 1) < 0.01 ? diffHours.toFixed(0) : diffHours.toFixed(1);
-  return `${sign}${rounded}h respecto a ti`;
 }
 
 /** Construye el link de wa.me a partir de un teléfono, quitando todo lo que no sea dígito. */
@@ -383,8 +322,9 @@ export default function ClassCard({
   // acotadas por la ventana de 72h desde el fin de la clase.
   const hoursSinceEnd = (Date.now() - endDate.getTime()) / (1000 * 60 * 60);
   const withinManualStatusWindow = hoursSinceEnd <= MANUAL_STATUS_WINDOW_HOURS;
-  const teacherNextActions = role === "teacher" && withinManualStatusWindow
-    ? MANUAL_TARGET_STATUSES.filter((s) => s !== class_.status)
+  // Solo lo que el backend permitiría desde el estado actual (antes se ofrecía todo y daba 400 en cancelled/expired/...).
+  const teacherNextActions = role === "teacher"
+    ? manualStatusTargets(class_.status, new Date(class_.start_time_utc), endDate)
     : [];
   const canReschedule = isExternal ? false : role === "teacher"
     // El profesor SÍ puede reagendar una clase 'no_show' — como cortesía
@@ -414,12 +354,11 @@ export default function ClassCard({
   // estado en el que el backend se lo empieza a mostrar al alumno).
   // Tanto alumno como profesor ven el botón de unirse en cuanto hay un
   // link cargado (el profesor además conserva el de editar).
-  const canManageMeetLink = (role === "teacher" || role === "teacher_admin")
+  const canManageMeetLink = role === "teacher"
     && class_.status === "confirmed" && !readOnly && !isExternal;
   // El profesor también puede unirse (no solo editar) una vez que hay
   // link cargado — antes solo el alumno tenía botón de "Unirse".
-  const canJoinMeetLink = !!class_.meet_link
-    && (role === "student" || role === "teacher" || role === "teacher_admin");
+  const canJoinMeetLink = !!class_.meet_link;
 
   // BUG-05/17 fix: antes 'showTeacherActions' exigía !isPast, lo que ocultaba
   // los botones de Completar/No asistió justo cuando más se necesitan (después

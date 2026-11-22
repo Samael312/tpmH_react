@@ -12,7 +12,6 @@ from app.auth.dependencies import get_current_user, get_current_teacher
 from app.models.user import User, UserRole
 from app.models.teacher import TeacherProfile, TeacherStatus
 from app.models.availability import TeacherAvailability, TeacherAvailabilityException
-from app.models.class_ import Class
 from app.schemas.availability import (
     WeeklySlotResponse,
     ExceptionResponse,
@@ -20,15 +19,7 @@ from app.schemas.availability import (
     SetWeeklyAvailabilityRequest,
     AvailableSlotResponse,
 )
-from app.core.timezone import (
-    UTC,
-    utc_now,
-    build_weekly_range_utc,
-    get_all_slots_utc,
-    is_slot_in_past,
-    is_slot_too_soon,
-    validate_timezone,
-)
+from app.core.timezone import UTC, utc_now, is_slot_in_past, is_slot_too_soon, validate_timezone
 from app.core.google_calendar import FreebusyError, get_teacher_busy_ranges
 from app.core.slot_availability import (
     window_for_local_dates,

@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import SpokenLanguagesNotice from '@/components/SpokenLanguagesNotice'
+import { toUtcDateStr, getWeekDates } from '@/lib/weekDates'
 
 const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
@@ -39,20 +40,6 @@ const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto
 const UPCOMING_STATUSES = ['pending', 'pending_trial', 'pending_payment', 'confirmed']
 const HISTORY_STATUSES = ['completed', 'cancelled', 'no_show', 'finalized']
 
-function toUtcDateStr(date: Date) {
-  return date.toISOString().split('T')[0]
-}
-
-function getWeekDates() {
-  const today = new Date()
-  const monday = new Date(today)
-  monday.setUTCDate(today.getUTCDate() - today.getUTCDay() + 1)
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday)
-    d.setUTCDate(monday.getUTCDate() + i)
-    return d
-  })
-}
 
 function KpiIcon({
   children,

@@ -86,8 +86,3 @@ export function renderGradientTitle(text: string, gradientId?: string | null): R
   });
 }
 
-/** Versión "texto plano" (sin JSX) -- útil para <title>, meta tags, alt, etc. */
-export function stripGradientMarkers(text: string): string {
-  if (!text) return text;
-  return text.replace(/\{\{([^{}]*)\}\}/g, "$1");
-}

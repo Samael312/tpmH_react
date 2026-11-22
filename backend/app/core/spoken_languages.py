@@ -24,7 +24,6 @@ MAX_LEN = 40
 
 # Del mas alto al mas bajo.
 LEVELS = ("native", "fluent", "intermediate", "basic")
-LEVEL_LABELS = {"native": "nativo", "fluent": "fluido", "intermediate": "intermedio", "basic": "básico"}
 
 # Se usa solo si la fila del catalogo aun no existe (migracion sin aplicar).
 DEFAULT_SPOKEN_LANGUAGES = [

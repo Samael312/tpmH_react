@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Literal, Optional
+from typing import List, Literal
 
 # SEC-02: topes de entrada. Sin ellos un anonimo podia enviar 200 KB por request (coste en
 # OpenAI) y mensajes con role "system" para reescribir las instrucciones del asistente.

@@ -8,7 +8,7 @@ import {
 import api from "@/lib/api";
 import { useAvailableSlots, type AvailableSlot } from "@/hooks/useStudentData";
 import { useBusinessRules } from "@/hooks/useBusinessRules";
-import { getMyDisplayTimezone, formatTimeTz } from "@/lib/tzFormat";
+import { getMyDisplayTimezone, formatTimeTz, formatDateHuman } from "@/lib/tzFormat";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 
@@ -239,13 +239,6 @@ export function RescheduleModal({
   const myTz = getMyDisplayTimezone();
   const formatTimeLocal = (utc: string) => formatTimeTz(utc, myTz);
 
-  const formatDateHuman = (dateStr: string) => {
-    if (!dateStr) return "";
-    const dateObj = new Date(dateStr);
-    return dateObj.toLocaleDateString("es", {
-      weekday: "long", day: "numeric", month: "long"
-    });
-  };
 
   const reschedule = async () => {
     if (!selected || !classItem) return;

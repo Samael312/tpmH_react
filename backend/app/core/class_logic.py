@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from app.models.class_ import Class, ClassType
 from app.models.package import Enrollment, EnrollmentStatus
 from app.models.payment import Payment
-from app.models.payment_config import PlatformConfig
 from app.models.student import StudentProfile
 from app.models.teacher import TeacherProfile
 from app.core.timezone import utc_now, UTC
@@ -20,7 +19,6 @@ logger = logging.getLogger(__name__)
 MIN_BOOKING_HOURS = 1
 MIN_CANCEL_HOURS = 12
 MIN_RESCHEDULE_HOURS_STUDENT = 12
-MIN_RESCHEDULE_HOURS_STAFF = 0
 DEFAULT_TRIAL_DURATION_MINUTES = 25
 DEFAULT_MEET_LINK_AUTOGEN_MINUTES = 30
 
@@ -526,7 +524,6 @@ def resolve_status_after_reschedule(class_: Class) -> str:
 # La usan PATCH /classes/{id}/status, DELETE /classes/teacher/{id} y los endpoints de reagendar/cancelar
 # del superadmin. Una clase cancelada/vencida NO se reabre por estado: solo se reagenda (y solo las
 # reagendables, ver can_reschedule_class). Las clases ya dadas solo se corrigen dentro de la ventana de 72 h.
-OPEN_CLASS_STATUSES = {"pending", "pending_trial", "pending_payment", "confirmed"}
 FINISHED_CLASS_STATUSES = {"completed", "no_show", "finalized"}
 CLASS_STATUS_TRANSITIONS: dict[str, set[str]] = {
     "pending": {"confirmed", "cancelled", "completed", "no_show"},

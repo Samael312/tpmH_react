@@ -25,8 +25,9 @@ const QUICK_SUGGESTIONS = [
 
 // ─── Mapeo de ruta → screen_name (contexto para Chipi) ────────────────────────
 // IMPORTANTE: estas claves deben coincidir EXACTAMENTE con las que espera
-// `SCREEN_CONTEXTS` en el backend (backend/app/core/chipi/prompts.py). Si
-// agregas una pantalla nueva, agrégala en ambos lados con la misma clave.
+// las fichas de `backend/app/core/chipi/knowledge/screens/<clave>.md`. Si
+// agregas una pantalla nueva, agrégala en ambos lados con la misma clave
+// (un test del backend falla si una ruta no tiene ficha).
 //
 // Nota: cuando una pantalla ya renderiza <ChipiWidget screenName="..." />
 // con un valor explícito, ese prop tiene prioridad y este mapeo automático
@@ -46,6 +47,9 @@ const SCREEN_ROUTES: Array<[string, string]> = ([
   ["/forgot-password", "forgot-password"],
   ["/reset-password", "reset-password"],
   ["/verify-email", "verify-email"],
+  ["/privacy", "privacy"],
+  ["/terms", "terms"],
+  ["/unauthorized", "unauthorized"],
 
   // Estudiante
   // Nota: "/dashboard/teachers" (lista) vs "/dashboard/teachers/[username]"
@@ -78,6 +82,7 @@ const SCREEN_ROUTES: Array<[string, string]> = ([
   ["/teacher/support", "support_teacher"],
   ["/teacher/chat", "chat_teacher"],
   ["/teacher/payments", "teacher_payments"],
+  ["/teacher/notifications", "teacher_notifications"],
   ["/teacher/calendar/callback", "teacher_calendar_callback"],
 
   // Admin / staff
@@ -92,6 +97,9 @@ const SCREEN_ROUTES: Array<[string, string]> = ([
   ["/admin/settings", "admin_settings"],
   ["/admin/support", "admin_support"],
   ["/admin/users", "admin_users"],
+  ["/admin/chat", "admin_chat"],
+  ["/admin/classes", "admin_classes"],
+  ["/admin/materials", "admin_materials"],
 
   // Fallbacks genéricos (solo se alcanzan si se agrega una pantalla nueva
   // bajo /teacher o /admin sin registrarla arriba)
@@ -187,7 +195,7 @@ export default function ChipiWidget({ screenName, raised }: ChipiWidgetProps) {
   const autoScreen  = useScreenName();
   const screen      = screenName ?? autoScreen;
   const { user }    = useAuthStore();
-  const canReportToSupport = user?.role === "student" || user?.role === "teacher";
+  const canReportToSupport = user?.role === "student" || user?.role === "teacher" || user?.role === "teacher_admin";
   // N2: si no se pasa `raised` explícito, se detecta solo mirando si el
   // botón flotante del chat interno está montado en esta pantalla (ver
   // store/chatWidgetPresenceStore.ts + components/chat/ChatWidget.tsx) —
@@ -444,7 +452,7 @@ export default function ChipiWidget({ screenName, raised }: ChipiWidgetProps) {
           </div>
         )}
 
-        {/* Enlace a soporte humano — solo para student/teacher autenticados */}
+        {/* Enlace a soporte humano — solo para student/teacher/teacher_admin autenticados */}
         {canReportToSupport && (
           <div className="px-4 py-2 bg-white border-t border-slate-100 flex-shrink-0">
             <button

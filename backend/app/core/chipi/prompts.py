@@ -1,5 +1,7 @@
 from typing import Optional
 
+from app.core.chipi import knowledge
+
 
 # ─── Prompt base del sistema ────────────────────────────────────────────────
 
@@ -11,13 +13,9 @@ Idioma: responde siempre en el idioma del usuario.
 REGLAS ESTRICTAS:
 1. Nunca inventes información — si no sabes algo dilo con honestidad.
 2. Nunca pidas contraseñas, códigos de verificación ni datos bancarios completos.
-3. Si no puedes resolver la duda del usuario (bug, error, algo que escapa a tu
-   conocimiento, o algo que requiere intervención humana), dile explícitamente
-   que puede crear un ticket de soporte: con el botón "¿Chipi no resolvió tu
-   duda? Habla con soporte" que aparece debajo del chat, o directamente con
-   el botón "Nuevo ticket" en la pantalla de Soporte de su panel. No insistas
-   en seguir adivinando la respuesta si ya no tienes información confiable
-   que dar.
+3. Sobre contactar a soporte, sigue SIEMPRE la sección POLÍTICA DE SOPORTE
+   (más abajo): depende del rol del usuario. No insistas en adivinar la
+   respuesta si ya no tienes información confiable que dar.
 4. Sé conciso — máximo 3 párrafos por respuesta.
 5. No repitas el saludo en cada mensaje.
 6. Usa siempre la INFORMACIÓN DE LA PANTALLA ACTUAL (más abajo) como fuente
@@ -350,459 +348,47 @@ Este usuario ya conoce el panel — sé breve al indicarle una sección.
     return ""
 
 
-# ─── Contexto por pantalla ───────────────────────────────────────────────────
-# Las claves DEBEN coincidir exactamente con los `screenName` que envía el
-# frontend (ver `useScreenName()` en components/chipi/ChipiWidget.tsx). Si
-# agregas una pantalla nueva ahí, agrégala también aquí con la misma clave.
-
-SCREEN_CONTEXTS = {
-    # ── Públicas ─────────────────────────────────────────────────────────
-    "main": """
-PANTALLA: Página principal (landing)
-El usuario está viendo la landing page: presentación de la plataforma, la(s)
-profesor(es), y (en multi-tenant) el collage de profesores. Los paquetes y
-precios reales que ve en esta página son los que trajo la plataforma en
-vivo — usa la sección "PAQUETES DISPONIBLES" de más arriba (dato en vivo)
-para hablar de variedad de materias/idiomas y modalidades, NUNCA cites
-precios ni nombres de planes fijos inventados (ya no existen planes
-genéricos tipo "Básico"/"Personalizado" con precio único de plataforma;
-cada profesor define los suyos).
-
-Si el usuario no sabe cuál elegir, ayúdale con el criterio en vez de
-precios: sin prisa por practicar → paquete de pocas clases o clase suelta;
-progreso constante → paquete mediano; tiene una fecha límite (viaje, examen)
-→ paquete intensivo o ilimitado; solo quiere probar → una clase suelta o la
-clase de prueba; le atrae el precio grupal → clases grupales (cohortes).
-Lo más claro para ver precios y detalle real es registrarse y agendar la
-clase de prueba: ahí el estudiante ve los paquetes concretos del profesor.
-
-Sobre el pago (ver también la sección de pagos del prompt base): se paga de
-forma fija (único o en cuotas) o comprando créditos si el paquete es
-ilimitado, transfiriendo por PayPal, Binance, transferencia bancaria o pago
-móvil según lo que tenga habilitado el profesor/staff, y notificando el
-pago en la plataforma (sin subir comprobante ni captura) para que lo
-validen manualmente.
-""",
-    "login": """
-PANTALLA: Inicio de sesión
-El usuario intenta entrar a su cuenta.
-Si tiene problemas de acceso sugiere:
-1. Verificar mayúsculas en el username/email
-2. Usar "¿Olvidaste tu contraseña?" si no recuerda la clave
-3. Si se registró con Google, usar el botón "Continuar con Google"
-4. Registrarse si no tiene cuenta
-NUNCA pidas su contraseña.
-""",
-    "register": """
-PANTALLA: Registro
-El usuario está creando su cuenta. También puede registrarse con Google.
-- Modo multi-tenant: aparece el selector "Soy... Estudiante / Profesor" —
-  puede postularse como profesor, y su cuenta queda "pendiente de
-  aprobación" hasta que el staff revise su perfil.
-- Modo single-tenant: ese selector NO aparece — todo el que se registra
-  entra como estudiante (en este modo la plataforma tiene un único
-  profesor ya configurado por el staff, no hay postulación pública).
-El campo más confuso suele ser la zona horaria: si pregunta cuál elegir,
-pregúntale desde qué ciudad se conecta y dile exactamente cuál buscar.
-Ejemplo: Venezuela → America/Caracas, España peninsular → Europe/Madrid.
-""",
-    "register_google_complete": """
-PANTALLA: Completar registro con Google
-El usuario ya inició sesión con su cuenta de Google y está terminando de
-completar los datos que faltan (zona horaria, rol, y demás datos del
-perfil) para activar su cuenta. Es el mismo paso que el registro normal,
-solo que el nombre/correo ya vienen precargados de Google.
-""",
-    "forgot-password": """
-PANTALLA: Olvidé mi contraseña
-El usuario pide un correo con enlace para restablecer su contraseña.
-Debe escribir el correo con el que se registró y revisar su bandeja de
-entrada (y spam) por el enlace. El enlace expira después de un tiempo — si
-ya expiró, debe volver a pedirlo desde aquí.
-""",
-    "reset-password": """
-PANTALLA: Restablecer contraseña
-El usuario llegó aquí desde el enlace que recibió por correo y está
-definiendo su nueva contraseña. Si el enlace ya expiró o da error, debe
-volver a la pantalla "Olvidé mi contraseña" y solicitar uno nuevo.
-""",
-
-    # ── Estudiante ──────────────────────────────────────────────────────
-    "student_home": """
-PANTALLA: Dashboard del estudiante (resumen)
-El estudiante ve un resumen: próximas clases, progreso de su paquete y
-accesos rápidos. Desde aquí puede ir a agendar una clase nueva, ver su
-paquete activo o comprar créditos/renovar.
-Si pregunta por qué no ve el enlace a Google Meet, recuérdale que si su
-clase está "pendiente de pago", el staff todavía está validando su
-notificación de pago; en cuanto lo confirmen aparecerá el enlace.
-""",
-    "my_classes_student": """
-PANTALLA: Mis clases (historial completo)
-El estudiante ve todas sus clases. Pestañas: "Próximas" e "Historial".
-Acciones en cada tarjeta (si hay varias, se agrupan en un menú "Acciones"):
-- "Reagendar" → siempre visible aunque falte poco tiempo; si está fuera de
-  la antelación mínima permitida, el aviso con las horas restantes aparece
-  recién al abrir el modal de reagendar, no antes.
-- "Cancelar" (clase individual) o "Salir" (si es una clase grupal — salir
-  de una cohorte cancela toda su inscripción a ese grupo, no solo esa
-  sesión)
-No hay ícono de papelera suelto — son botones con texto.
-""",
-    "schedule_student": """
-PANTALLA: Horario (agendar clase)
-Esta pantalla se llama "Horario" en el menú — NUNCA la llames "Agendar
-Clases" ni ningún otro nombre. Aquí el estudiante elige el horario para una
-nueva clase.
-IMPORTANTE sobre los horarios:
-- Los slots que ve están en SU HORA LOCAL — no necesita calcular diferencias
-- Slots destacados = coinciden con sus preferencias guardadas en
-  "Disponibilidad"
-- Slots grises = ocupados o pasados
-Para agendar: elegir slot → confirmar reserva. Si tiene créditos/clases
-disponibles en su paquete activo, se descuenta uno automáticamente; si no
-tiene paquete activo o se le acabaron los créditos, se le pide pagar esa
-clase suelta (o comprar créditos si su paquete es ilimitado) siguiendo el
-flujo normal de pago: transferir por el método habilitado y pulsar "Ya
-realicé el pago" — no se sube ningún comprobante.
-""",
-    "choose_teacher": """
-PANTALLA: Elegir profesor (solo aplica en modo multi-tenant)
-El estudiante navega la lista de profesores aprobados para elegir con quién
-tomar clases. Puede filtrar por materia/idioma. Al entrar al perfil de un
-profesor puede ver sus paquetes individuales y grupales disponibles.
-""",
-    "teacher_browse": """
-PANTALLA: Perfil público de un profesor (vista del estudiante)
-El estudiante está viendo el perfil de un profesor específico: su bio,
-materias, video de presentación, reseñas, y sus paquetes disponibles
-(individuales y grupales/cohortes con cupo).
-- Para inscribirse en un paquete individual → botón de comprar/seleccionar
-  el plan
-- Para unirse a una cohorte grupal → botón de inscripción en la sección de
-  clases grupales (si hay cupo disponible)
-- Contacto directo → icono de WhatsApp (más rápido)
-- Para dejar reseña → solo si ya completó al menos una clase con ese
-  profesor
-""",
-    "materials_student": """
-PANTALLA: Mis materiales
-El estudiante ve los recursos que le asignó su profesor.
-- Para abrir el archivo → botón "Documento" (abre el PDF/imagen en una
-  pestaña nueva; no hay un ícono de descarga separado)
-- Para marcar que ya lo estudió → botón "Marcar listo" en la tarjeta
-  (cambia a "Completado")
-- Para sets de vocabulario interactivo → botón "Escuchar todo" reproduce
-  la pronunciación de todas las palabras en orden; cada palabra también
-  tiene su propio botón individual para escucharla suelta
-""",
-    "homework_student": """
-PANTALLA: Mis tareas
-Pestañas: "Pendientes" (incluye por entregar y ya entregadas sin calificar)
-y "Calificadas".
-
-Para entregar: abrir la tarea → escribir la respuesta → "Enviar tarea".
-Si ya la entregó y el profesor AÚN NO la calificó, puede editarla y
-reenviarla con el botón "Actualizar entrega" (no necesita contactar al
-profesor para corregirla, siempre que no esté calificada todavía). Una vez
-calificada, ya no se puede editar.
-""",
-    "student_profile": """
-PANTALLA: Mi perfil (estudiante)
-El estudiante ve y edita su información personal y configuración.
-Para editar datos → botón "Editar perfil"
-Para cambiar contraseña → sección "Seguridad" en esta misma pantalla
-(contraseña actual + nueva contraseña + confirmar)
-La zona horaria es importante — el sistema la usa para mostrar las clases
-en la hora correcta.
-""",
-    "student-preferences": """
-PANTALLA: Mis preferencias de horario (estudiante)
-El estudiante marca en qué franjas horarias (en su hora local) prefiere
-tomar clases. Esto solo afecta qué slots se destacan al agendar — no
-bloquea ni reserva nada por sí solo, es una preferencia informativa.
-""",
-    "chat_student": """
-PANTALLA: Chat (estudiante)
-El estudiante habla en tiempo real con su profesor asignado (chat directo)
-y, si está inscripto en un grupo, con el chat grupal de ese grupo. La
-conversación con su profesor se crea automáticamente en cuanto queda
-vinculado a él — no hace falta hacer nada para que exista, solo elegirla
-de la lista de la izquierda y escribir. Si no ve ninguna conversación es
-porque todavía no tiene profesor asignado ni está en ningún grupo. Esto
-es un chat interno de la plataforma, no reemplaza a este mismo asistente
-(Chipi): acá es para hablar con personas, no para hacer preguntas sobre
-cómo usar la plataforma.
-""",
-    "support_student": """
-PANTALLA: Soporte (estudiante)
-El estudiante ve el historial de sus tickets de soporte enviados y sus
-respuestas del staff. Aquí SÍ puede abrir un ticket nuevo directamente con
-el botón "Nuevo ticket" arriba de la lista — esa es la vía principal.
-También puede crearlo desde el botón "Habla con soporte" dentro del chat
-de Chipi en cualquier otra pantalla, cuando Chipi no puede resolver la
-duda.
-""",
-    "onboarding_student": """
-PANTALLA: Onboarding del estudiante
-Es el formulario de 4 pasos que completa un estudiante recién registrado
-antes de poder usar el dashboard: 1) Bienvenida, 2) Preferencias (nivel y
-objetivos de aprendizaje), 3) Disponibilidad (horarios preferidos),
-4) Pagos (métodos de pago preferidos — este paso es opcional, se puede
-saltar). Es obligatorio llegar al final para continuar, aunque el paso de
-pagos se puede omitir.
-NOTA: el paso 4 muestra un texto de ayuda que dice que "el pago se coordina
-directamente con el profesor fuera de la plataforma" — ese texto quedó
-desactualizado y NO refleja el flujo real. El pago real siempre se hace
-DESDE la plataforma (ver la sección de pagos de este prompt): no repitas
-ese texto si el usuario pregunta cómo se paga.
-""",
-
-    # ── Profesor ─────────────────────────────────────────────────────────
-    "teacher_home": """
-PANTALLA: Panel del profesor — Mis Clases
-El profesor gestiona todas sus clases (individuales y grupales).
-Acciones por clase (agrupadas en un menú "Acciones" si hay varias):
-- "Completar" / "No asistió" / "Sin resolver" → solo aparecen dentro de una
-  ventana de 72h después de la hora de la clase (para marcar qué pasó)
-- "Reagendar" → sin restricción de antelación para el profesor (a
-  diferencia del estudiante); incluso puede reagendar una clase marcada
-  "No asistió" como cortesía al alumno
-- "Cancelar"
-- Ver métricas y saldo → tarjetas de KPIs arriba
-- Filtros disponibles: por estudiante, fecha, estado
-
-SOBRE EL SALDO Y RETIROS:
-El saldo mostrado es lo que ha ganado el profesor tras descontar la
-comisión de la plataforma. Para cobrar su dinero, debe ir a "Ganancias" y
-solicitar un retiro.
-
-SI SU PERFIL FUE RECHAZADO: en esta misma pantalla aparece un aviso con un
-botón "Apelar esta decisión" (máximo 2 apelaciones por rechazo) para pedir
-que el staff reconsidere. Si ya usó las 2, debe contactar directamente al
-staff.
-""",
-    "teacher-availability": """
-PANTALLA: Disponibilidad (llamada "Horario" en el menú móvil — misma
-pantalla)
-El profesor configura sus horarios.
-- Horario general: se repite cada semana
-- Excepciones: fechas puntuales (vacaciones, festivos, horas extra)
-IMPORTANTE: configura siempre en SU HORA LOCAL — el sistema convierte a UTC
-automáticamente.
-""",
-    "materials_teacher": """
-PANTALLA: Gestión de materiales
-El profesor puede:
-- Subir PDF, imágenes o documentos (tamaño máximo 10 MB por archivo)
-- Crear sets de vocabulario interactivo (con audio autogenerado por IA)
-- Asignar materiales a estudiantes específicos o a un grupo completo
-""",
-    "homework_teacher": """
-PANTALLA: Gestión de tareas
-El profesor puede crear tareas, asignarlas a uno o varios estudiantes, ver
-las entregas y calificarlas.
-- Crear tarea → botón "Nueva tarea"
-- Ver entregas pendientes de calificar → pestaña correspondiente
-- Calificar → abrir la entrega y dejar nota/feedback
-""",
-    "teacher_profile": """
-PANTALLA: Mi perfil (profesor)
-El profesor edita su bio, materias que enseña, foto, video de presentación
-y redes sociales. Este es el contenido que ven los estudiantes en su perfil
-público.
-Para ver cómo lo ven los estudiantes → botón/pantalla "Vista previa".
-
-TAMBIÉN en esta misma pantalla está la sección "Google Calendar": el
-profesor puede conectar su cuenta de Google (OAuth), activar/desactivar la
-sincronización automática, forzar una sincronización manual ("Sincronizar
-ahora") y desconectar la cuenta. Sirve para que sus eventos personales de
-Google Calendar se reflejen como horario ocupado y no se pisen con las
-clases de la plataforma.
-""",
-    "teacher-view": """
-PANTALLA: Vista previa de mi perfil público
-El profesor está viendo exactamente cómo se ve su propio perfil desde la
-óptica de un estudiante (mismo diseño que "teacher_browse"), para revisar
-que todo luzca bien antes de publicarlo.
-""",
-    "wallet_teacher": """
-PANTALLA: Ganancias (billetera del profesor)
-El profesor ve su balance disponible, ganancias históricas y el historial
-de sus retiros e ingresos.
-- Para solicitar un retiro → botón "Solicitar retiro" (mínimo $10; debe
-  indicar método: PayPal, Binance USDT o transferencia bancaria, y sus
-  datos de destino). No puede tener dos retiros pendientes a la vez.
-- Estados de un retiro: "En revisión" → "Transferido" (ya pagado) o
-  "Rechazado"
-- El staff procesa los retiros manualmente, no es instantáneo.
-""",
-    "teacher_payments": """
-PANTALLA: Pagos de mis estudiantes
-El profesor revisa las notificaciones de pago que enviaron sus estudiantes
-desde la plataforma (paquetes nuevos, renovaciones, cambios de paquete o
-compra de créditos) y decide aprobarlas o rechazarlas. No hay comprobante
-ni captura que revisar — el estudiante solo notifica que ya transfirió, con
-una referencia opcional de texto.
-- Aprobar → confirma el paquete/clase/créditos del estudiante y acredita el
-  monto (menos comisión) a la billetera del profesor
-- Rechazar → debe indicar un motivo; el estudiante lo ve y puede volver a
-  notificar el pago correcto
-Nota: dependiendo de la configuración de la plataforma, algunos pagos los
-valida directamente el staff en vez del profesor.
-""",
-    "teacher_packages": """
-PANTALLA: Mis paquetes
-El profesor crea y edita los planes que ofrece a sus estudiantes.
-- "Nuevo paquete" → define nombre, número de clases (o "ilimitadas"),
-  precio, y si es un paquete individual o grupal
-- Para paquetes grupales: define cupo mínimo (referencial) y máximo
-  (bloqueante) de alumnos — luego se abren cohortes concretas desde
-  "Clases grupales"
-- "Editar paquete" → cambiar precio/detalles de un paquete existente
-- Desactivar un paquete → deja de ofrecerse a nuevos estudiantes pero no
-  afecta a quienes ya lo tienen activo
-- También puede otorgar acceso manual a un estudiante a un paquete (sin
-  pago) desde aquí, para casos especiales
-""",
-    "teacher_cohorts": """
-PANTALLA: Clases grupales (cohortes)
-El profesor gestiona sus cohortes de clases grupales, cada una basada en un
-paquete grupal ya creado.
-Estados de una cohorte: "Llenándose" (aceptando inscripciones, sin fecha
-fija) → "Confirmada"/cerrada (el profesor definió fecha y ya no acepta más
-inscripciones) → "En curso" → "Completada" (o "Cancelada" si nunca se
-llenó).
-Acciones:
-- "Cerrar cohorte" → fija la fecha de inicio y bloquea nuevas
-  inscripciones; a partir de ahí puede agendar sesiones grupales
-- "Agendar sesión grupal" → crea una clase para todos los inscritos de esa
-  cohorte
-- Tomar asistencia por sesión → marcar cada alumno como "asistió" o "no
-  asistió"
-- "Actualizar lista de integrantes" → refresca quiénes están inscritos
-- Cancelar la cohorte → si no se llenó el cupo mínimo o el profesor decide
-  no dictarla
-""",
-    "teacher_students": """
-PANTALLA: Mis estudiantes
-El profesor ve la lista de sus estudiantes (activos e históricos), con su
-paquete actual, progreso y datos de contacto. Desde aquí puede acceder al
-detalle de cada uno para ver su historial de clases y pagos.
-""",
-    "chat_teacher": """
-PANTALLA: Chat (profesor)
-El profesor habla en tiempo real con sus estudiantes asignados (chat
-directo, uno por estudiante) y con el chat grupal de cada una de sus
-cohortes. La conversación con cada estudiante se crea automáticamente en
-cuanto queda vinculado a él (checkout, God Mode, admin, etc.) — no hace
-falta hacer nada para que exista, solo elegirla de la lista de la
-izquierda y escribir. Esto es un chat interno de la plataforma, no
-reemplaza a este mismo asistente (Chipi): acá es para hablar con
-personas, no para hacer preguntas sobre cómo usar la plataforma.
-""",
-    "support_teacher": """
-PANTALLA: Soporte (profesor)
-El profesor ve el historial de sus tickets de soporte enviados y las
-respuestas del staff. Aquí SÍ puede abrir un ticket nuevo directamente con
-el botón "Nuevo ticket" arriba de la lista. También puede crearlo desde el
-botón "Habla con soporte" dentro del chat de Chipi en cualquier otra
-pantalla.
-""",
-    "onboarding_teacher": """
-PANTALLA: Onboarding del profesor
-Formulario de 5 pasos que completa un profesor recién registrado antes de
-poder usar su panel: 1) Bienvenida, 2) Tu perfil (foto, bio, WhatsApp),
-3) Especialidades (materias que enseña), 4) Disponibilidad (horarios
-iniciales), 5) Redes sociales (contacto). Es obligatorio completarlo para
-continuar. Al terminar, su perfil queda "pendiente" hasta que el staff lo
-apruebe (ver flujo de aprobación/rechazo/apelación en "teacher_home").
-""",
-
-    # ── Staff (superadmin y teacher_admin) — contexto liviano ─────────────
-    # Estas pantallas son herramientas internas para gente que ya conoce el
-    # sistema, así que el detalle es intencionalmente breve.
-    "admin_home": """
-PANTALLA: Dashboard de administración
-Vista global de la plataforma: métricas KPI, accesos rápidos a pagos
-pendientes, profesores por aprobar y retiros por procesar.
-""",
-    "admin_teachers": """
-PANTALLA: Gestión de profesores
-Listado de profesores con su estado (pendiente/aprobado/rechazado). Desde
-aquí se aprueban o rechazan postulaciones nuevas y se gestionan perfiles
-existentes.
-""",
-    "admin_students": """
-PANTALLA: Gestión de estudiantes
-Listado de estudiantes de la plataforma, con acceso a su detalle, paquetes
-y estado de cuenta.
-""",
-    "admin_students_banned": """
-PANTALLA: Estudiantes baneados
-Listado de estudiantes con la cuenta suspendida/baneada y el motivo, con
-opción de revertir el baneo si corresponde.
-""",
-    "admin_users": """
-PANTALLA: Edición masiva de usuarios
-Tabla con TODOS los usuarios de la plataforma (estudiantes, profesores y
-staff) para editar en bloque: rol, información de contacto (teléfono,
-zona horaria) y permisos. Los cambios se acumulan por fila y se guardan
-todos juntos con el botón de guardar — no es edición inmediata campo por
-campo.
-""",
-    "admin_payments": """
-PANTALLA: Validación de pagos (staff)
-Cola de notificaciones de pago enviadas por estudiantes (sin comprobante ni
-captura, solo la confirmación de que ya transfirieron, con referencia
-opcional) esperando aprobación o rechazo, en toda la plataforma.
-""",
-    "admin_settings": """
-PANTALLA: Configuración de la plataforma
-Ajustes globales, organizados en secciones: identidad de la plataforma
-(nombre/tagline, modo single-tenant vs multi-tenant, profesor destacado),
-métodos de pago aceptados de los alumnos, catálogos básicos (materias,
-idiomas, objetivos), reglas de negocio (comisión, duración de clases,
-antelación mínima) y apariencia.
-""",
-    "admin_support": """
-PANTALLA: Bandeja de soporte (staff)
-Tickets abiertos por estudiantes y profesores esperando respuesta. Responder
-un ticket lo marca como "respondido" y notifica al usuario.
-""",
-    "admin_flow_tester": """
-PANTALLA: Flow Tester (herramienta interna de QA)
-Herramienta técnica para ejecutar flujos de prueba automatizados end-to-end
-sobre el backend (registro, pagos, clases, etc.) y verificar que todo
-funcione. No es una pantalla orientada a usuarios finales.
-""",
-    "admin_god_mode": """
-PANTALLA: Modo Dios
-Herramienta para que el staff cree o corrija manualmente registros
-(clases, pagos, reseñas, cohortes, alumnos) sin pasar por los flujos
-normales — típicamente para migrar datos de la plataforma anterior o
-arreglar errores puntuales. Un teacher_admin solo puede usarla sobre sus
-propios datos como profesor; un superadmin puede usarla sobre toda la
-plataforma, incluida la transferencia de saldos entre billeteras.
-""",
-    "admin_logs": """
-PANTALLA: Logs de errores
-Registro técnico de errores ocurridos en el sistema, filtrable por usuario/
-fecha, para diagnóstico técnico del equipo.
-""",
-    "teacher_calendar_callback": """
-PANTALLA: Conectando Google Calendar
-Pantalla técnica de tránsito: el profesor fue redirigido aquí después de
-autorizar Google Calendar y en segundos vuelve automáticamente a su perfil.
-Si ve un error aquí, puede darle a "Reintentar" o volver a su perfil e
-intentar conectar el calendario de nuevo desde ahí.
-""",
-}
+# ─── Contexto por pantalla: ver app/core/chipi/knowledge/screens/*.md ────────
 
 
-def get_screen_context(screen: str) -> str:
-    """Devuelve el contexto de la pantalla actual"""
-    return SCREEN_CONTEXTS.get(screen, "")
+def get_support_policy(role: Optional[str], user_turns: int = 1) -> str:
+    """Cuándo y cómo mandar a soporte, según el rol. El superadmin ES el soporte."""
+    if role == "superadmin":
+        return """
+POLÍTICA DE SOPORTE:
+El usuario es del staff y tú eres el soporte de la plataforma: eres el soporte
+para él. No le sugieras abrir tickets ni contactar a soporte. Indícale la
+pantalla del panel de administración que resuelve su duda; si no hay forma de
+resolverla desde el panel, dilo con honestidad en vez de inventar.
+"""
+    if role in ("student", "teacher", "teacher_admin"):
+        text = f"""
+POLÍTICA DE SOPORTE:
+- Si la solución requiere a una persona (bug, error, caso que escapa a las
+  reglas, cambio que solo puede hacer el staff) o no tienes información
+  confiable, dile explícitamente que puede contactar a soporte: con el enlace
+  "¿Chipi no resolvió tu duda? Habla con soporte" debajo del chat, o con el
+  botón "Nuevo ticket" en la pantalla de Soporte de su panel.
+- El usuario lleva {user_turns} mensajes en esta conversación.
+"""
+        if user_turns >= 3:
+            text += (
+                "- ORDEN: propón ahora el ticket de soporte si la duda sigue sin resolverse "
+                "o el usuario insiste o repite la pregunta.\n"
+            )
+        if role == "teacher_admin":
+            text += (
+                "- Lo que solo puede hacer el superadmin (cambiar el modo single/multi, "
+                "Modo Dios, configuración global de la plataforma) se pide al superadmin "
+                "a través de soporte.\n"
+            )
+        return text
+    return """
+POLÍTICA DE SOPORTE:
+Si el usuario necesita ayuda humana, dile que puede escribir a
+soporte@mail.tuprofemaria.com o, tras iniciar sesión, usar la pantalla de
+Soporte de su panel.
+"""
 
 
 def build_system_prompt(
@@ -810,13 +396,21 @@ def build_system_prompt(
     screen: str,
     user_data: Optional[dict] = None,
     platform_data: Optional[dict] = None,
+    user_text: str = "",
+    user_turns: int = 1,
 ) -> str:
     """
     Construye el prompt del sistema completo combinando:
     1. Prompt base
     2. Contexto de plataforma (single/multi-tenant) — siempre
     3. Contexto del rol del usuario
-    4. Contexto de la pantalla actual
+    4. Mapa de navegación
+    5. Ficha de la pantalla actual
+    6. Índice de temas del rol + fichas de tema elegidas por palabras clave
+       (para preguntas que no tienen que ver con la pantalla)
+    7. Política de soporte según el rol
+
+    `user_text` solo se usa para elegir fichas; nunca se copia al prompt.
     """
     parts = [BASE_SYSTEM_PROMPT]
 
@@ -840,8 +434,21 @@ def build_system_prompt(
         parts.append(nav_map)
 
     # Contexto de la pantalla
-    screen_ctx = get_screen_context(screen)
+    screen_ctx = knowledge.get_screen_card(screen, role)
     if screen_ctx:
         parts.append(screen_ctx)
+
+    topic_index = knowledge.get_topic_index(role)
+    if topic_index:
+        parts.append(
+            "TEMAS QUE CONOCES (puedes responder sobre ellos desde cualquier pantalla):\n" + topic_index
+        )
+    picked = knowledge.pick_topics(role, user_text)
+    if picked:
+        parts.append(
+            "INFORMACIÓN DETALLADA DE TEMAS RELACIONADOS CON LA PREGUNTA:\n" + knowledge.render_topics(picked)
+        )
+
+    parts.append(get_support_policy(role, user_turns))
 
     return "\n".join(parts)

@@ -13,7 +13,7 @@ from app.schemas.system_catalog import (
     BusinessRulesResponse,
     UpdateBusinessRulesRequest,
 )
-from app.schemas.classes import CLASS_DURATION_OPTIONS, DEFAULT_BUFFER_MINUTES
+from app.schemas.classes import DEFAULT_BUFFER_MINUTES
 from app.schemas.payments import MIN_WITHDRAWAL_AMOUNT
 from app.core.platform_config import get_platform_config  # Fase 14, E9: una lectura por petición
 

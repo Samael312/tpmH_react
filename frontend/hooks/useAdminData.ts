@@ -451,10 +451,6 @@ export interface StudentDetail {
   total_completed_classes: number
 }
 
-export function fetchStudentDetail(userId: number) {
-  return api.get<StudentDetail>(`/admin/students/${userId}/detail`)
-}
-
 // ─── Lista completa de usuarios (edición masiva) ─────────────────────────────
 export interface AdminUserRaw {
   id: number
@@ -472,6 +468,10 @@ export interface AdminUserRaw {
 
 // BUG-10 fix: paginación real en vez de pedir un límite fijo de una sola
 // vez y descartar el total. El backend ahora devuelve {total, users}.
+// Referencia estable: un `?? []` nuevo en cada render hacía que `useEffect([users])` de /admin/users se realimentara
+// (setRows → render → users distinto → effect...) en bucle mientras cargaba o si la petición fallaba (F12).
+const NO_USERS: AdminUserRaw[] = []
+
 export function useAdminUsersList(page: number = 1, pageSize: number = 50) {
   const skip = (page - 1) * pageSize
   const query = useQuery({
@@ -489,7 +489,7 @@ export function useAdminUsersList(page: number = 1, pageSize: number = 50) {
   })
 
   return {
-    users: query.data?.users ?? [],
+    users: query.data?.users ?? NO_USERS,
     total: query.data?.total ?? 0,
     page,
     pageSize,

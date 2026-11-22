@@ -261,8 +261,8 @@ def test_chipi_landscape_includes_other_teachers(client, world, db):
     assert ctx["package_landscape"]["teachers_with_packages_count"] == 2
 
 
-# ── H10: profesor destacado que borra su cuenta sigue siendo destacado y recibe pruebas ──
-def test_deleted_featured_teacher_still_bookable(client, world, db):
+# ── H10: profesor destacado que borra su cuenta: corregido en la Fase 21 (perfil suspendido, sin pruebas nuevas) ──
+def test_fixed_deleted_featured_teacher_is_suspended_and_not_bookable(client, world, db):
     tp = world["tp"]
     _single(db, tp.id)
     r = client.request("DELETE", "/api/v1/users/me", json={"password": "Password123", "confirm_username": "profe"},
@@ -270,12 +270,9 @@ def test_deleted_featured_teacher_still_bookable(client, world, db):
     assert r.status_code == 200, r.text
     db.expire_all()
     t = db.get(TeacherProfile, tp.id)
-    assert t.status == TeacherStatus.approved
+    assert t.status == TeacherStatus.suspended
     r2 = client.post("/api/v1/payments/book", json=_trial_body(), headers=hdr(world["s_user"]))
-    assert r2.status_code == 201, r2.text
-    land = client.get("/api/v1/public/landing").json()
-    # landing en single busca por username anonimizado -> aparece "Usuario eliminado"
-    print("landing teachers:", land["teachers"])
+    assert r2.status_code != 201, r2.text
 
 
 # ── H11: single + paquete de otro profesor: comprar exige prueba con ese profesor (ok) ──

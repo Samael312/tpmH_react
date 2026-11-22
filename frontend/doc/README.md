@@ -17,5 +17,5 @@
 
 Regenerar: `cd backend && python doc/generate_docs.py`.
 
-Comandos: `npm run dev` · `npm run build` · `npm run lint` · `npx tsc --noEmit`. No hay script de tests.
+Comandos: `npm run dev` · `npm run build` · `npm run lint` · `npx tsc --noEmit` · `npm test` (Vitest: unit + componentes, ver `TESTING.md`) · `npm run test:e2e` (Playwright, necesita `E2E_PYTHON`).
 Variables: `NEXT_PUBLIC_API_URL` (default `http://localhost:8000/api/v1`), `NEXT_PUBLIC_GOOGLE_CLIENT_ID`, `NEXT_PUBLIC_FEATURED_TEACHER_USERNAME` (default `"mar12"`).

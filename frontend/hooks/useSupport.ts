@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 
 import { fetchAllPages } from "@/lib/pagination";
@@ -79,10 +79,3 @@ export function useUnreadSupportCount(enabled: boolean = true) {
   return { count: enabled ? count : 0, refetch: fetchUnread };
 }
 
-// ─── Helper para invalidar caché tras crear/ver un ticket ────────────────────
-export function useSupportQueryInvalidation() {
-  const queryClient = useQueryClient();
-  return useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["support", "my-tickets"] });
-  }, [queryClient]);
-}

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Clock, Calendar, AlertCircle, X, Check } from "lucide-react";
 import { RescheduleCalendar } from "@/components/classes/RescheduleModal";
 import { useAvailableSlots, AvailableSlot } from "@/hooks/useStudentData";
-import { getMyDisplayTimezone, formatTimeTz } from "@/lib/tzFormat";
+import { getMyDisplayTimezone, formatTimeTz, formatDateHuman } from "@/lib/tzFormat";
 
 interface GodModeAvailabilityPickerProps {
   teacherUsername: string;
@@ -29,10 +29,6 @@ export default function GodModeAvailabilityPicker({
 
   const myTz = getMyDisplayTimezone();
   const formatTimeLocal = (utc: string) => formatTimeTz(utc, myTz);
-  const formatDateHuman = (dateStr: string) => {
-    if (!dateStr) return "";
-    return new Date(dateStr).toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" });
-  };
 
   const confirm = () => {
     if (selected) onSelect(selected);

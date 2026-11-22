@@ -64,35 +64,35 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/class_logic.py
 
-- `is_within_teacher_availability(teacher_id: int, start_utc: datetime, end_utc: datetime, db: Session)` — L27: Verifica que [start_utc, end_utc) caiga dentro de un bloque de disponibilidad declarado por el profesor (horario semanal recurrente + excepciones puntuales de disponibilidad extra), y que no choque con una excepción de bloqueo puntual (vacaciones, feriado, etc).
-- `validate_payment_method(payment_method: str, db: Session)` — L83: Correcciones Extra (informe D1-D14): el método de pago que indica el estudiante al notificar un pago tiene que ser uno de los métodos que el admin tiene efectivamente habilitados en ese momento (no alcanza con que sea una de las 4 claves conocidas -- si el admin apagó "bank_transfer", ya no es un mé
-- `get_price_per_class(package)` — L113: Correcciones Extra (informe D1-D14): precio de una clase suelta dentro de `package`. Usa el campo `price_per_class` guardado a mano por el profesor si existe; si es un paquete creado antes de que ese campo existiera (queda NULL), cae al cálculo derivado de siempre (price/classes_count) para no rompe
-- `get_business_rules(db: Session)` — L129: Lee las reglas de negocio configuradas por el superadmin desde PlatformConfig. Si no hay fila aún, cae a los defaults de arriba.
-- `validate_class_duration(duration_minutes: int, db: Session)` — L181: Valida una duración de clase REGULAR contra el subconjunto configurado por el superadmin. No aplica a trial (ver get_trial_duration_minutes, que no es una elección del usuario sino un valor fijo de config).
-- `validate_package_duration(duration_minutes: int, db: Session)` — L192: Valida la duración de clase de un PAQUETE contra el subconjunto configurado por el superadmin (allowed_package_durations) — catálogo independiente de allowed_class_durations, aunque hoy comparten el mismo pool fijo (CLASS_DURATION_OPTIONS).
-- `get_buffer_minutes_for_type(class_type, db: Session)` — L204: Minutos de margen que se descuentan del final real de una clase de este tipo, según la config vigente. `class_type` puede ser un ClassType o su valor string ("trial" | "regular" | "group").
-- `lock_booking_rows(db: Session, teacher_id: int, student_id: int | None=None)` — L221: Serializa las reservas concurrentes tomando un lock de fila (SELECT ... FOR UPDATE) sobre el alumno y luego el profesor (siempre en ese orden, para evitar deadlocks). Sin esto, dos requests simultaneos leen la agenda/creditos antes de que el otro haga commit y ambos pasan los chequeos (doble reserva
-- `lock_class_row(db: Session, class_id: int)` — L237: Recarga la clase con lock de fila para que dos cancelaciones simultaneas no devuelvan el credito dos veces.
-- `_google_busy_conflict(teacher_id: int, start_time_utc: datetime, end_time_utc: datetime, exclude_class_id: int | None, db: Session)` — L242: True si freebusy de Google marca ocupado algun instante de [start, end). Falla ABIERTO: si Google no responde (caida, token invalido, cuota) se registra y se deja reservar, para no bloquear reservas por una caida de un tercero. Si se esta reagendando una clase, el evento de Google de su horario ANTE
-- `can_book_slot(start_time_utc: datetime, teacher_id: int, student_id: int, end_time_utc: datetime, db: Session, exclude_class_id: int=None, enforce_min_not)` — L294
-- `can_join_group_class(class_: Class, db: Session)` — L413: Chequeo de cupo para una sesión grupal ya creada (Class con class_type == "group"): ¿hay lugar para un alumno más? Complementa a can_book_slot, que ya valida antelación mínima y que ni el alumno ni el profesor tengan otro compromiso en ese horario.
-- `can_cancel_class(class_: Class, requesting_user_id: int, db: Session)` — L439
-- `can_reschedule_class(class_: Class, role: str, db: Session)` — L461
-- `resolve_status_after_reschedule(class_: Class)` — L501: Determina el status que debe quedar una clase tras reagendarla.
-- `validate_class_status_transition(class_: Class, new_status: str, now: datetime | None=None)` — L551: (ok, mensaje). Misma transicion = no-op permitido. No toca la BD.
-- `apply_reschedule_status(class_: Class, db: Session)` — L579: Fase 22 (TE-02): fija el estado tras reagendar y mantiene los contadores. Reagendar un `no_show` (cortesia) a 'confirmed' devuelve el credito que ya se habia contado (antes se contaba dos veces al completarla). No hace commit.
-- `class_in_current_cycle(class_: 'Class | None', enrollment: Enrollment)` — L599: Fase 22 (E1): ¿la clase pertenece al ciclo actual del enrollment? Renovar/cambiar de paquete pone classes_used=0 pero las clases del ciclo anterior siguen ligadas al enrollment: al completarse NO deben sumar al contador nuevo (antes lo llenaban y el enrollment pasaba a 'completed' con creditos dispo
-- `update_enrollment_counter(enrollment_id: int, delta: int, db: Session, class_: 'Class | None'=None)` — L619: Actualiza el contador de clases usadas en un enrollment. delta=1 cuando se completa una clase delta=-1 cuando se cancela una clase completada `class_` (Fase 22, E1): si es de un ciclo anterior (renovacion/cambio de paquete) no toca el contador.
-- `_cohort_cancelled_refund_pending(student_id: int, teacher_id: int, db: Session)` — L651: F3 / Fase 22 (E5): ¿el alumno tiene un enrollment pagado de una cohorte cancelada por el profesor y aun sin reembolso pedido/aprobado? (Cancelar la cohorte conserva `cohort_id` en el enrollment para poder encontrarlo.)
-- `get_student_booking_stage(student_id: int, teacher_id: int, db: Session, *, heal: bool=True)` — L679: Determina la etapa de reserva del estudiante CON UN PROFESOR ESPECÍFICO. Cada relación estudiante-profesor es independiente: completar la prueba con un profesor no exime de la prueba con otro.
-- `release_stale_unpaid_enrollments(db: Session, older_than_hours: int=STALE_UNPAID_ENROLLMENT_HOURS)` — L802: Cancela los enrollments individuales activos que nunca se pagaron ni tienen un pago en revision y tienen mas de `older_than_hours` horas. Es lo que antes hacia, en un GET, `get_student_booking_stage`. Los de cohorte (grupales) no se tocan.
-- `notify_teachers_auto_no_show(db: Session, classes: list[Class])` — L838: Fase 13 (A9): avisa a cada profesor (campana «Avisos», sin correo) de las clases que pasaron solas a `no_show` por no marcarlas en 72 h. UNA notificacion por profesor y pasada del job, aunque sean varias clases (si el job estuvo caido no se le inunda). No hace commit: va en la misma transaccion que 
-- `notify_teachers_unconfirmed_trials(db: Session, classes: list[Class])` — L881: Fase 22 (E6): avisa (una vez por clase: solo se llama al pasar de pending_trial a finalized) a cada profesor de sus pruebas que terminaron sin confirmar/marcar. No hace commit.
-- `finalize_past_classes(db: Session)` — L916: Marca como 'finalized' las clases confirmadas cuyo horario ya terminó, y como 'no_show' las que nunca se confirmaron/pagaron y ya pasó su hora. Actualiza también el contador de clases usadas del paquete, ya que estos estados cuentan contra el cupo del estudiante.
-- `class_counts_towards_package(class_status: str, start_time_utc: datetime, reference_time: datetime | None=None, apply_late_cancel_penalty: bool=True, min_cancel_hours: i)` — L986: Determina si una clase en este estado debe contarse contra el paquete del estudiante (classes_used).
-- `sync_student_lifetime_class_counter(class_: 'Class', old_status: str, new_status: str, db: Session)` — L1029: Mantiene StudentProfile.total_completed_classes al día cada vez que el status de una Class entra o sale de LIFETIME_COUNTING_STATUSES.
-- `count_completed_classes_with_teacher(db: Session, teacher_id: int, student_id: int)` — L1077: Cuántas clases completó un alumno con un profesor puntual (individuales + grupales, status 'completed'). A diferencia del contador de por vida de StudentProfile, este número es específico del par profesor-alumno y no incluye 'no_show' — usa el mismo criterio que la elegibilidad para dejar una reseña
-- `cancel_class_and_refund(class_: 'Class', db: Session, apply_late_cancel_penalty: bool)` — L1104: Marca la clase como cancelada y devuelve el crédito al estudiante si corresponde. Centraliza la lógica que antes estaba duplicada en los 3 endpoints de cancelación (estudiante, profesor, admin).
+- `is_within_teacher_availability(teacher_id: int, start_utc: datetime, end_utc: datetime, db: Session)` — L25: Verifica que [start_utc, end_utc) caiga dentro de un bloque de disponibilidad declarado por el profesor (horario semanal recurrente + excepciones puntuales de disponibilidad extra), y que no choque con una excepción de bloqueo puntual (vacaciones, feriado, etc).
+- `validate_payment_method(payment_method: str, db: Session)` — L81: Correcciones Extra (informe D1-D14): el método de pago que indica el estudiante al notificar un pago tiene que ser uno de los métodos que el admin tiene efectivamente habilitados en ese momento (no alcanza con que sea una de las 4 claves conocidas -- si el admin apagó "bank_transfer", ya no es un mé
+- `get_price_per_class(package)` — L111: Correcciones Extra (informe D1-D14): precio de una clase suelta dentro de `package`. Usa el campo `price_per_class` guardado a mano por el profesor si existe; si es un paquete creado antes de que ese campo existiera (queda NULL), cae al cálculo derivado de siempre (price/classes_count) para no rompe
+- `get_business_rules(db: Session)` — L127: Lee las reglas de negocio configuradas por el superadmin desde PlatformConfig. Si no hay fila aún, cae a los defaults de arriba.
+- `validate_class_duration(duration_minutes: int, db: Session)` — L179: Valida una duración de clase REGULAR contra el subconjunto configurado por el superadmin. No aplica a trial (ver get_trial_duration_minutes, que no es una elección del usuario sino un valor fijo de config).
+- `validate_package_duration(duration_minutes: int, db: Session)` — L190: Valida la duración de clase de un PAQUETE contra el subconjunto configurado por el superadmin (allowed_package_durations) — catálogo independiente de allowed_class_durations, aunque hoy comparten el mismo pool fijo (CLASS_DURATION_OPTIONS).
+- `get_buffer_minutes_for_type(class_type, db: Session)` — L202: Minutos de margen que se descuentan del final real de una clase de este tipo, según la config vigente. `class_type` puede ser un ClassType o su valor string ("trial" | "regular" | "group").
+- `lock_booking_rows(db: Session, teacher_id: int, student_id: int | None=None)` — L219: Serializa las reservas concurrentes tomando un lock de fila (SELECT ... FOR UPDATE) sobre el alumno y luego el profesor (siempre en ese orden, para evitar deadlocks). Sin esto, dos requests simultaneos leen la agenda/creditos antes de que el otro haga commit y ambos pasan los chequeos (doble reserva
+- `lock_class_row(db: Session, class_id: int)` — L235: Recarga la clase con lock de fila para que dos cancelaciones simultaneas no devuelvan el credito dos veces.
+- `_google_busy_conflict(teacher_id: int, start_time_utc: datetime, end_time_utc: datetime, exclude_class_id: int | None, db: Session)` — L240: True si freebusy de Google marca ocupado algun instante de [start, end). Falla ABIERTO: si Google no responde (caida, token invalido, cuota) se registra y se deja reservar, para no bloquear reservas por una caida de un tercero. Si se esta reagendando una clase, el evento de Google de su horario ANTE
+- `can_book_slot(start_time_utc: datetime, teacher_id: int, student_id: int, end_time_utc: datetime, db: Session, exclude_class_id: int=None, enforce_min_not)` — L292
+- `can_join_group_class(class_: Class, db: Session)` — L411: Chequeo de cupo para una sesión grupal ya creada (Class con class_type == "group"): ¿hay lugar para un alumno más? Complementa a can_book_slot, que ya valida antelación mínima y que ni el alumno ni el profesor tengan otro compromiso en ese horario.
+- `can_cancel_class(class_: Class, requesting_user_id: int, db: Session)` — L437
+- `can_reschedule_class(class_: Class, role: str, db: Session)` — L459
+- `resolve_status_after_reschedule(class_: Class)` — L499: Determina el status que debe quedar una clase tras reagendarla.
+- `validate_class_status_transition(class_: Class, new_status: str, now: datetime | None=None)` — L548: (ok, mensaje). Misma transicion = no-op permitido. No toca la BD.
+- `apply_reschedule_status(class_: Class, db: Session)` — L576: Fase 22 (TE-02): fija el estado tras reagendar y mantiene los contadores. Reagendar un `no_show` (cortesia) a 'confirmed' devuelve el credito que ya se habia contado (antes se contaba dos veces al completarla). No hace commit.
+- `class_in_current_cycle(class_: 'Class | None', enrollment: Enrollment)` — L596: Fase 22 (E1): ¿la clase pertenece al ciclo actual del enrollment? Renovar/cambiar de paquete pone classes_used=0 pero las clases del ciclo anterior siguen ligadas al enrollment: al completarse NO deben sumar al contador nuevo (antes lo llenaban y el enrollment pasaba a 'completed' con creditos dispo
+- `update_enrollment_counter(enrollment_id: int, delta: int, db: Session, class_: 'Class | None'=None)` — L616: Actualiza el contador de clases usadas en un enrollment. delta=1 cuando se completa una clase delta=-1 cuando se cancela una clase completada `class_` (Fase 22, E1): si es de un ciclo anterior (renovacion/cambio de paquete) no toca el contador.
+- `_cohort_cancelled_refund_pending(student_id: int, teacher_id: int, db: Session)` — L648: F3 / Fase 22 (E5): ¿el alumno tiene un enrollment pagado de una cohorte cancelada por el profesor y aun sin reembolso pedido/aprobado? (Cancelar la cohorte conserva `cohort_id` en el enrollment para poder encontrarlo.)
+- `get_student_booking_stage(student_id: int, teacher_id: int, db: Session, *, heal: bool=True)` — L676: Determina la etapa de reserva del estudiante CON UN PROFESOR ESPECÍFICO. Cada relación estudiante-profesor es independiente: completar la prueba con un profesor no exime de la prueba con otro.
+- `release_stale_unpaid_enrollments(db: Session, older_than_hours: int=STALE_UNPAID_ENROLLMENT_HOURS)` — L799: Cancela los enrollments individuales activos que nunca se pagaron ni tienen un pago en revision y tienen mas de `older_than_hours` horas. Es lo que antes hacia, en un GET, `get_student_booking_stage`. Los de cohorte (grupales) no se tocan.
+- `notify_teachers_auto_no_show(db: Session, classes: list[Class])` — L835: Fase 13 (A9): avisa a cada profesor (campana «Avisos», sin correo) de las clases que pasaron solas a `no_show` por no marcarlas en 72 h. UNA notificacion por profesor y pasada del job, aunque sean varias clases (si el job estuvo caido no se le inunda). No hace commit: va en la misma transaccion que 
+- `notify_teachers_unconfirmed_trials(db: Session, classes: list[Class])` — L878: Fase 22 (E6): avisa (una vez por clase: solo se llama al pasar de pending_trial a finalized) a cada profesor de sus pruebas que terminaron sin confirmar/marcar. No hace commit.
+- `finalize_past_classes(db: Session)` — L913: Marca como 'finalized' las clases confirmadas cuyo horario ya terminó, y como 'no_show' las que nunca se confirmaron/pagaron y ya pasó su hora. Actualiza también el contador de clases usadas del paquete, ya que estos estados cuentan contra el cupo del estudiante.
+- `class_counts_towards_package(class_status: str, start_time_utc: datetime, reference_time: datetime | None=None, apply_late_cancel_penalty: bool=True, min_cancel_hours: i)` — L983: Determina si una clase en este estado debe contarse contra el paquete del estudiante (classes_used).
+- `sync_student_lifetime_class_counter(class_: 'Class', old_status: str, new_status: str, db: Session)` — L1026: Mantiene StudentProfile.total_completed_classes al día cada vez que el status de una Class entra o sale de LIFETIME_COUNTING_STATUSES.
+- `count_completed_classes_with_teacher(db: Session, teacher_id: int, student_id: int)` — L1074: Cuántas clases completó un alumno con un profesor puntual (individuales + grupales, status 'completed'). A diferencia del contador de por vida de StudentProfile, este número es específico del par profesor-alumno y no incluye 'no_show' — usa el mismo criterio que la elegibilidad para dejar una reseña
+- `cancel_class_and_refund(class_: 'Class', db: Session, apply_late_cancel_penalty: bool)` — L1101: Marca la clase como cancelada y devuelve el crédito al estudiante si corresponde. Centraliza la lógica que antes estaba duplicada en los 3 endpoints de cancelación (estudiante, profesor, admin).
 
 ## app/core/config.py
 
@@ -175,37 +175,37 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/google_calendar.py
 
-- `get_oauth_flow()` — L58: Crea el flujo OAuth2 para conectar Google Calendar
-- `get_auth_url(state: Optional[str]=None)` — L75: Genera la URL de autorización de Google. Limpia los parámetros de PKCE para evitar desajustes de 'code_verifier'.
-- `exchange_code_for_tokens(code: str, code_verifier: Optional[str]=None)` — L101: Intercambia el código de autorización por tokens.
-- `_identity_from_id_token(id_token: Optional[str])` — L120: (sub, email) del id_token que Google devuelve en el canje del codigo (scope openid/email). Llega directo del endpoint de tokens de Google por TLS, por eso no se re-verifica la firma.
-- `calendar_id_for(token: GoogleCalendarToken)` — L137: Calendario a usar: siempre el principal de la cuenta conectada. Las filas antiguas guardaban el email de la plataforma en calendar_id (puede no ser la cuenta de Google conectada): se tratan como "primary".
-- `revoke_token(token: str)` — L146: Revoca el token de acceso en los servidores de Google
-- `get_calendar_service_for_token(token: GoogleCalendarToken, db: Session)` — L163
-- `reset_platform_sync_state(teacher_id: int, db: Session, clear_event_ids: bool)` — L212: Prepara las clases PROPIAS (no external) de un profesor para re-publicarse en un calendario de Google distinto/desconocido. NUNCA cancela clases ni borra nada en Google. - Siempre limpia google_sync_hash: la proxima sync consulta el evento (update); si no existe en ese   calendario (404) lo crea de 
-- `notify_calendar_reauth(token: GoogleCalendarToken, db: Session)` — L232: Avisa al profesor (campana + correo) de que debe reconectar Google Calendar. Nunca lanza.
-- `run_calendar_sync_background(teacher_id: int)` — L257: Sync de un profesor con su PROPIA sesion de BD (para BackgroundTasks: la de la peticion ya se cerro).
-- `http_error_kind(e: HttpError)` — L272: Clasifica un HttpError de Google: "quota" (429 o 403 por limite/cuota: reintentable mas tarde), "permission" (403/401 real: el profesor no tiene permiso sobre ese evento/calendario), "gone" (404/410) u "other".
-- `_with_retries(fn, *args, **kwargs)` — L301
-- `class FreebusyError()` — L322: freebusy fallo (HttpError, error dentro del calendario o token invalido). Solo se lanza con strict=True.
-- `get_busy_ranges(service, calendar_id: str, time_min: datetime, time_max: datetime, strict: bool=False)` — L326: Rangos ocupados del calendario. Por defecto falla ABIERTO (devuelve [] si Google falla, para no romper reservas); con strict=True lanza FreebusyError para que el llamador sepa que el resultado NO es fiable (p. ej. para no cachearlo).
-- `get_teacher_busy_ranges(teacher_id: int, time_min: datetime, time_max: datetime, db: Session, strict: bool=False)` — L378
-- `list_calendar_events(service, calendar_id: str, time_min: datetime, time_max: datetime)` — L407: Trae los eventos "reales" (con título, no solo el rango busy/free) del calendario del profesor en la ventana dada. `singleEvents=True` expande eventos recurrentes en instancias individuales, cada una con su propio id — necesario para poder dedupear/actualizar por Class.google_event_id igual que hace
-- `_is_own_event(event: dict)` — L451: True si el evento lo creó esta plataforma (ver create_calendar_event / create_calendar_event_with_meet, que siempre marcan extendedProperties). Estos nunca deben re-importarse como clase externa.
-- `_match_external_source(event: dict)` — L462: Si el título del evento contiene alguna de las keywords configuradas en EXTERNAL_IMPORT_SOURCES, devuelve el nombre de la fuente (ej. "preply"). None si no matchea ninguna o si el evento no tiene un horario puntual (dateTime) — los eventos de todo el día (solo "date") no se importan porque Class exi
-- `import_external_classes_for_teacher(teacher_id: int, service, calendar_id: str, db: Session, time_min: datetime, time_max: datetime)` — L484: Lee los eventos reales del Google Calendar del profesor (no solo freebusy) y refleja como Class(class_type="external") los que correspondan a una plataforma externa reconocida (ver EXTERNAL_IMPORT_SOURCES, hoy solo Preply, detectado por palabra en el título). Son de solo lectura desde la perspectiva
-- `_build_attendees(attendee_emails: Optional[List[str]])` — L628: Arma la lista de `attendees` para el body del evento. Se usa para que el profesor quede explícitamente como invitado del evento (además de ser el dueño del calendario), de forma que Google Meet lo reconozca como participante autorizado y no le pida "Pedir unirme" al entrar. Siempre se combina con se
-- `_teacher_attendees(class_: Class)` — L642: El profesor como invitado explicito (igual que los hooks de calendar_sync._teacher_attendee_emails).
-- `_event_fingerprint(title: str, description: str, class_: Class, attendees: List[str])` — L648: Huella corta de lo que la sync empuja a Google para esta clase.
-- `create_calendar_event(service, calendar_id: str, title: str, start_utc: datetime, end_utc: datetime, description: str='', meet_link: Optional[str]=None, attendee_)` — L658
-- `_extract_meet_link(event: dict)` — L695: Saca el link de Google Meet de un evento con conferenceData.
-- `create_calendar_event_with_meet(service, calendar_id: str, title: str, start_utc: datetime, end_utc: datetime, description: str='', attendee_emails: Optional[List[str]]=Non)` — L706: Crea un evento en Google Calendar generando de una vez un link de Google Meet real (conferenceData). Devuelve (event_id, meet_link); cualquiera de los dos puede venir None si falló ese paso puntual.
-- `add_meet_conference_to_event(service, calendar_id: str, event_id: str, attendee_emails: Optional[List[str]]=None)` — L750: Agrega un link de Google Meet real a un evento ya existente (conferenceData). Devuelve el link generado, o None si el evento ya no existe (fue borrado externamente) o si la generación falla — en ambos casos el llamador debe manejarlo sin romper el flujo.
-- `update_calendar_event(service, calendar_id: str, event_id: str, start_utc: Optional[datetime]=None, end_utc: Optional[datetime]=None, meet_link: Optional[str]=Non)` — L806
-- `delete_calendar_event(service, calendar_id: str, event_id: str)` — L868
-- `sync_calendar_logic(teacher_id: int, db: Session)` — L886
-- `_teachers_needing_sync(db: Session, tokens: List[GoogleCalendarToken], now: datetime)` — L1049: Solo los profesores con una clase propia (no Preply) en curso o en la ventana activa, o cuya ultima sync es antigua (ciclo ocioso: importar Preply / refrescar). El resto se salta: cero llamadas a Google.
-- `run_calendar_sync_for_all_teachers(db: Session)` — L1073
+- `get_oauth_flow()` — L57: Crea el flujo OAuth2 para conectar Google Calendar
+- `get_auth_url(state: Optional[str]=None)` — L74: Genera la URL de autorización de Google. Limpia los parámetros de PKCE para evitar desajustes de 'code_verifier'.
+- `exchange_code_for_tokens(code: str, code_verifier: Optional[str]=None)` — L100: Intercambia el código de autorización por tokens.
+- `_identity_from_id_token(id_token: Optional[str])` — L119: (sub, email) del id_token que Google devuelve en el canje del codigo (scope openid/email). Llega directo del endpoint de tokens de Google por TLS, por eso no se re-verifica la firma.
+- `calendar_id_for(token: GoogleCalendarToken)` — L136: Calendario a usar: siempre el principal de la cuenta conectada. Las filas antiguas guardaban el email de la plataforma en calendar_id (puede no ser la cuenta de Google conectada): se tratan como "primary".
+- `revoke_token(token: str)` — L145: Revoca el token de acceso en los servidores de Google
+- `get_calendar_service_for_token(token: GoogleCalendarToken, db: Session)` — L162
+- `reset_platform_sync_state(teacher_id: int, db: Session, clear_event_ids: bool)` — L211: Prepara las clases PROPIAS (no external) de un profesor para re-publicarse en un calendario de Google distinto/desconocido. NUNCA cancela clases ni borra nada en Google. - Siempre limpia google_sync_hash: la proxima sync consulta el evento (update); si no existe en ese   calendario (404) lo crea de 
+- `notify_calendar_reauth(token: GoogleCalendarToken, db: Session)` — L231: Avisa al profesor (campana + correo) de que debe reconectar Google Calendar. Nunca lanza.
+- `run_calendar_sync_background(teacher_id: int)` — L256: Sync de un profesor con su PROPIA sesion de BD (para BackgroundTasks: la de la peticion ya se cerro).
+- `http_error_kind(e: HttpError)` — L271: Clasifica un HttpError de Google: "quota" (429 o 403 por limite/cuota: reintentable mas tarde), "permission" (403/401 real: el profesor no tiene permiso sobre ese evento/calendario), "gone" (404/410) u "other".
+- `_with_retries(fn, *args, **kwargs)` — L300
+- `class FreebusyError()` — L321: freebusy fallo (HttpError, error dentro del calendario o token invalido). Solo se lanza con strict=True.
+- `get_busy_ranges(service, calendar_id: str, time_min: datetime, time_max: datetime, strict: bool=False)` — L325: Rangos ocupados del calendario. Por defecto falla ABIERTO (devuelve [] si Google falla, para no romper reservas); con strict=True lanza FreebusyError para que el llamador sepa que el resultado NO es fiable (p. ej. para no cachearlo).
+- `get_teacher_busy_ranges(teacher_id: int, time_min: datetime, time_max: datetime, db: Session, strict: bool=False)` — L377
+- `list_calendar_events(service, calendar_id: str, time_min: datetime, time_max: datetime)` — L406: Trae los eventos "reales" (con título, no solo el rango busy/free) del calendario del profesor en la ventana dada. `singleEvents=True` expande eventos recurrentes en instancias individuales, cada una con su propio id — necesario para poder dedupear/actualizar por Class.google_event_id igual que hace
+- `_is_own_event(event: dict)` — L450: True si el evento lo creó esta plataforma (ver create_calendar_event / create_calendar_event_with_meet, que siempre marcan extendedProperties). Estos nunca deben re-importarse como clase externa.
+- `_match_external_source(event: dict)` — L461: Si el título del evento contiene alguna de las keywords configuradas en EXTERNAL_IMPORT_SOURCES, devuelve el nombre de la fuente (ej. "preply"). None si no matchea ninguna o si el evento no tiene un horario puntual (dateTime) — los eventos de todo el día (solo "date") no se importan porque Class exi
+- `import_external_classes_for_teacher(teacher_id: int, service, calendar_id: str, db: Session, time_min: datetime, time_max: datetime)` — L483: Lee los eventos reales del Google Calendar del profesor (no solo freebusy) y refleja como Class(class_type="external") los que correspondan a una plataforma externa reconocida (ver EXTERNAL_IMPORT_SOURCES, hoy solo Preply, detectado por palabra en el título). Son de solo lectura desde la perspectiva
+- `_build_attendees(attendee_emails: Optional[List[str]])` — L627: Arma la lista de `attendees` para el body del evento. Se usa para que el profesor quede explícitamente como invitado del evento (además de ser el dueño del calendario), de forma que Google Meet lo reconozca como participante autorizado y no le pida "Pedir unirme" al entrar. Siempre se combina con se
+- `_teacher_attendees(class_: Class)` — L641: El profesor como invitado explicito (igual que los hooks de calendar_sync._teacher_attendee_emails).
+- `_event_fingerprint(title: str, description: str, class_: Class, attendees: List[str])` — L647: Huella corta de lo que la sync empuja a Google para esta clase.
+- `create_calendar_event(service, calendar_id: str, title: str, start_utc: datetime, end_utc: datetime, description: str='', meet_link: Optional[str]=None, attendee_)` — L657
+- `_extract_meet_link(event: dict)` — L694: Saca el link de Google Meet de un evento con conferenceData.
+- `create_calendar_event_with_meet(service, calendar_id: str, title: str, start_utc: datetime, end_utc: datetime, description: str='', attendee_emails: Optional[List[str]]=Non)` — L705: Crea un evento en Google Calendar generando de una vez un link de Google Meet real (conferenceData). Devuelve (event_id, meet_link); cualquiera de los dos puede venir None si falló ese paso puntual.
+- `add_meet_conference_to_event(service, calendar_id: str, event_id: str, attendee_emails: Optional[List[str]]=None)` — L749: Agrega un link de Google Meet real a un evento ya existente (conferenceData). Devuelve el link generado, o None si el evento ya no existe (fue borrado externamente) o si la generación falla — en ambos casos el llamador debe manejarlo sin romper el flujo.
+- `update_calendar_event(service, calendar_id: str, event_id: str, start_utc: Optional[datetime]=None, end_utc: Optional[datetime]=None, meet_link: Optional[str]=Non)` — L805
+- `delete_calendar_event(service, calendar_id: str, event_id: str)` — L867
+- `sync_calendar_logic(teacher_id: int, db: Session)` — L885
+- `_teachers_needing_sync(db: Session, tokens: List[GoogleCalendarToken], now: datetime)` — L1048: Solo los profesores con una clase propia (no Preply) en curso o en la ventana activa, o cuya ultima sync es antigua (ciclo ocioso: importar Preply / refrescar). El resto se salta: cero llamadas a Google.
+- `run_calendar_sync_for_all_teachers(db: Session)` — L1072
 
 ## app/core/grant_emails.py
 
@@ -276,37 +276,37 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/scheduler.py
 
-- `class JobFailed()` — L27: Un job por vencimiento no pudo con alguno de sus elementos. `_run_due_job` la cuenta como fallo (reintento con espera creciente y tope de intentos, ver `compute_run_at`).
-- `finalize_expired_classes()` — L32: Job que se ejecuta cada 10 minutos. Marca como 'finalized' las clases confirmadas cuyo horario ya pasó.
-- `_reminder_hours(class_: Class, now: datetime)` — L57: Horas que se dicen en el correo: 24 en la ventana clasica 23-25 h; si no, las reales (minimo 1).
-- `send_class_reminders()` — L65: Job por vencimiento. Recuerda (una sola vez, via reminder_sent_at) las clases no canceladas ni externas que empiezan en las proximas 25 h y a mas de 30 min.
-- `send_chat_digests()` — L218: Job por vencimiento: un correo por profesor con sus conversaciones de chat pendientes (core/chat_digest.py).
-- `generate_upcoming_meet_links()` — L234: Job que se ejecuta cada 5 minutos. Genera automáticamente el link de videollamada (Google Meet, vía el Calendar del profesor) para las clases confirmadas que empiezan dentro de la ventana configurada por el superadmin (meet_link_autogen_minutes en PlatformConfig, default 30 min) y todavía NO tienen 
-- `sync_all_teacher_calendars()` — L303: Job que se ejecuta cada 30 minutos, en segundo plano, sin depender de que algún profesor tenga el panel abierto.
-- `notify_low_credit_packages()` — L326: Job semanal. Revisa enrollments activos con pocas clases restantes (finitos o ilimitados con crédito prepagado) y avisa al estudiante si no se le avisó ya dentro de la ventana configurada por el superadmin (low_credit_renotify_days en PlatformConfig).
-- `purge_old_chat_messages()` — L381: Job diario. Borra mensajes de chat interno más viejos que PlatformConfig.chat_retention_days (0 = sin límite, no borra nada).
-- `release_stale_enrollments()` — L401: Job diario. Cancela los enrollments sin pagar de mas de 24 h (antes lo hacia un GET).
-- `purge_old_logs()` — L416: Job diario. Purga `error_logs` y `email_log` por antiguedad (core/retention.py).
-- `class DueJob()` — L462
-- `_due_finalize(job: DueJob, db: Session, now: datetime)` — L471: Primera clase que hay que cerrar: confirmed/pending_trial al terminar, finalized a las 72 h de terminar.
-- `_due_meet_links(job: DueJob, db: Session, now: datetime)` — L487: Hora en que la proxima clase sin link entra en la ventana de autogeneracion. Solo cuentan los profesores con Google Calendar conectado: sin el, no se puede generar el link y el job reintentaba cada 5 min (despertando Neon) durante toda la ventana previa a cada clase.
-- `_due_chat_digest(job: DueJob, db: Session, now: datetime)` — L509
-- `_due_reminders(job: DueJob, db: Session, now: datetime)` — L514: Recordatorio unico (Fase 27): vence 25 h antes del inicio. Si ya falta menos de 25 h (reserva tardia) vence ya (`now`), salvo que falten <= 30 min (no se avisa; se ignora). Ver send_class_reminders.
-- `_due_calendar_sync(job: DueJob, db: Session, now: datetime)` — L530: Sin profesores con Calendar conectado no hay nada que sincronizar. Con clase en curso o en las proximas 3 h: cada 30 min. Si no: cada 6 h, y siempre antes de que la proxima clase entre en esa ventana.
-- `retry_delay(job: DueJob)` — L571: Espera antes de reintentar tras `job.failures` fallos seguidos: min_gap x 2^(fallos-1), con tope MAX_BACKOFF.
-- `compute_run_at(job: DueJob, due: Optional[datetime], now: datetime)` — L576: Cuando programar la proxima ejecucion: `due` acotado a [ahora+1s, ahora+MAX_SLEEP] y respetando `min_gap`.
-- `reschedule_job(job: DueJob)` — L589: Recalcula (con una consulta corta) cuando le toca al job y lo programa. Nunca lanza.
-- `report_job_failure(job: DueJob, exc: Exception)` — L608: Deja el fallo en la pantalla de Logs del admin (ErrorLog) con el numero de intento. Nunca lanza.
-- `_run_due_job(job_id: str)` — L625
-- `reschedule_all_due_jobs()` — L638
-- `request_reschedule(delay_seconds: int=3)` — L643: Pide recalcular los vencimientos (con un pequeño retraso: varias escrituras seguidas cuentan una vez).
-- `_watched_models()` — L659
-- `_after_flush(session, flush_context)` — L665
-- `_after_commit(session)` — L670
-- `_after_soft_rollback(session, previous_transaction)` — L675
-- `install_session_hooks()` — L679
-- `start_scheduler()` — L690
-- `stop_scheduler()` — L704: Para el scheduler al apagar la aplicación
+- `class JobFailed()` — L26: Un job por vencimiento no pudo con alguno de sus elementos. `_run_due_job` la cuenta como fallo (reintento con espera creciente y tope de intentos, ver `compute_run_at`).
+- `finalize_expired_classes()` — L31: Job que se ejecuta cada 10 minutos. Marca como 'finalized' las clases confirmadas cuyo horario ya pasó.
+- `_reminder_hours(class_: Class, now: datetime)` — L56: Horas que se dicen en el correo: 24 en la ventana clasica 23-25 h; si no, las reales (minimo 1).
+- `send_class_reminders()` — L64: Job por vencimiento. Recuerda (una sola vez, via reminder_sent_at) las clases no canceladas ni externas que empiezan en las proximas 25 h y a mas de 30 min.
+- `send_chat_digests()` — L217: Job por vencimiento: un correo por profesor con sus conversaciones de chat pendientes (core/chat_digest.py).
+- `generate_upcoming_meet_links()` — L233: Job que se ejecuta cada 5 minutos. Genera automáticamente el link de videollamada (Google Meet, vía el Calendar del profesor) para las clases confirmadas que empiezan dentro de la ventana configurada por el superadmin (meet_link_autogen_minutes en PlatformConfig, default 30 min) y todavía NO tienen 
+- `sync_all_teacher_calendars()` — L302: Job que se ejecuta cada 30 minutos, en segundo plano, sin depender de que algún profesor tenga el panel abierto.
+- `notify_low_credit_packages()` — L325: Job semanal. Revisa enrollments activos con pocas clases restantes (finitos o ilimitados con crédito prepagado) y avisa al estudiante si no se le avisó ya dentro de la ventana configurada por el superadmin (low_credit_renotify_days en PlatformConfig).
+- `purge_old_chat_messages()` — L380: Job diario. Borra mensajes de chat interno más viejos que PlatformConfig.chat_retention_days (0 = sin límite, no borra nada).
+- `release_stale_enrollments()` — L400: Job diario. Cancela los enrollments sin pagar de mas de 24 h (antes lo hacia un GET).
+- `purge_old_logs()` — L415: Job diario. Purga `error_logs` y `email_log` por antiguedad (core/retention.py).
+- `class DueJob()` — L461
+- `_due_finalize(job: DueJob, db: Session, now: datetime)` — L470: Primera clase que hay que cerrar: confirmed/pending_trial al terminar, finalized a las 72 h de terminar.
+- `_due_meet_links(job: DueJob, db: Session, now: datetime)` — L486: Hora en que la proxima clase sin link entra en la ventana de autogeneracion. Solo cuentan los profesores con Google Calendar conectado: sin el, no se puede generar el link y el job reintentaba cada 5 min (despertando Neon) durante toda la ventana previa a cada clase.
+- `_due_chat_digest(job: DueJob, db: Session, now: datetime)` — L508
+- `_due_reminders(job: DueJob, db: Session, now: datetime)` — L513: Recordatorio unico (Fase 27): vence 25 h antes del inicio. Si ya falta menos de 25 h (reserva tardia) vence ya (`now`), salvo que falten <= 30 min (no se avisa; se ignora). Ver send_class_reminders.
+- `_due_calendar_sync(job: DueJob, db: Session, now: datetime)` — L529: Sin profesores con Calendar conectado no hay nada que sincronizar. Con clase en curso o en las proximas 3 h: cada 30 min. Si no: cada 6 h, y siempre antes de que la proxima clase entre en esa ventana.
+- `retry_delay(job: DueJob)` — L570: Espera antes de reintentar tras `job.failures` fallos seguidos: min_gap x 2^(fallos-1), con tope MAX_BACKOFF.
+- `compute_run_at(job: DueJob, due: Optional[datetime], now: datetime)` — L575: Cuando programar la proxima ejecucion: `due` acotado a [ahora+1s, ahora+MAX_SLEEP] y respetando `min_gap`.
+- `reschedule_job(job: DueJob)` — L588: Recalcula (con una consulta corta) cuando le toca al job y lo programa. Nunca lanza.
+- `report_job_failure(job: DueJob, exc: Exception)` — L607: Deja el fallo en la pantalla de Logs del admin (ErrorLog) con el numero de intento. Nunca lanza.
+- `_run_due_job(job_id: str)` — L624
+- `reschedule_all_due_jobs()` — L637
+- `request_reschedule(delay_seconds: int=3)` — L642: Pide recalcular los vencimientos (con un pequeño retraso: varias escrituras seguidas cuentan una vez).
+- `_watched_models()` — L658
+- `_after_flush(session, flush_context)` — L664
+- `_after_commit(session)` — L669
+- `_after_soft_rollback(session, previous_transaction)` — L674
+- `install_session_hooks()` — L678
+- `start_scheduler()` — L689
+- `stop_scheduler()` — L703: Para el scheduler al apagar la aplicación
 
 ## app/core/slot_availability.py
 
@@ -339,13 +339,13 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/spoken_languages.py
 
-- `class SpokenLanguagesError()` — L36: Entrada invalida; el mensaje es apto para mostrar al usuario (HTTP 422).
-- `_key(text: str)` — L40: Clave de comparacion: sin tildes, sin mayusculas, sin espacios sobrantes.
-- `get_catalog(db: Session)` — L46
-- `read_spoken_languages(raw)` — L52: Lee lo guardado (formato nuevo o textos sueltos de la Fase 8) como [{language, level|None}]. Nunca lanza.
-- `language_names(raw)` — L64
-- `speaks(raw, language: str)` — L68: True si la lista incluye ese idioma (sin distinguir mayusculas ni tildes).
-- `normalize_spoken_languages(raw, catalog: list[str])` — L74: Valida y normaliza. Devuelve [{language, level}] con la ortografia del catalogo; lanza SpokenLanguagesError si no es valida. Cada elemento debe ser {"language": ..., "level": ...} con un nivel de LEVELS.
+- `class SpokenLanguagesError()` — L35: Entrada invalida; el mensaje es apto para mostrar al usuario (HTTP 422).
+- `_key(text: str)` — L39: Clave de comparacion: sin tildes, sin mayusculas, sin espacios sobrantes.
+- `get_catalog(db: Session)` — L45
+- `read_spoken_languages(raw)` — L51: Lee lo guardado (formato nuevo o textos sueltos de la Fase 8) como [{language, level|None}]. Nunca lanza.
+- `language_names(raw)` — L63
+- `speaks(raw, language: str)` — L67: True si la lista incluye ese idioma (sin distinguir mayusculas ni tildes).
+- `normalize_spoken_languages(raw, catalog: list[str])` — L73: Valida y normaliza. Devuelve [{language, level}] con la ortografia del catalogo; lanza SpokenLanguagesError si no es valida. Cada elemento debe ser {"language": ..., "level": ...} con un nivel de LEVELS.
 
 ## app/core/storage.py
 
@@ -407,23 +407,23 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/chipi/context.py
 
-- `_get_package_landscape(db: Session)` — L17: Resumen EN VIVO (sin precios) de los paquetes activos que existen hoy en la plataforma, para que Chipi nunca hable de planes/precios inventados o hardcodeados. Deliberadamente sin montos — solo variedad (materias/idiomas, si hay grupales, si hay pago en cuotas) para que Chipi anime a registrarse y t
-- `get_platform_context_for_chipi(db: Session)` — L44: Datos de configuración global de la plataforma (modo single/multi-tenant, nombre, profesor destacado) + resumen en vivo de los paquetes activos. Se agrega SIEMPRE al prompt, sin importar el rol, porque cambia cómo Chipi debe explicar la home y los planes.
-- `_open_support_tickets_count(user_id: int, db: Session)` — L68
-- `get_student_data_for_chipi(user: User, db: Session)` — L75: Recopila datos relevantes del estudiante para el contexto de Chipi. Solo datos que Chipi realmente necesita — no sobrecargar el prompt.
-- `get_teacher_data_for_chipi(user: User, db: Session, is_admin: bool=False)` — L126: Recopila datos relevantes del profesor para el contexto de Chipi. Se usa tanto para role="teacher" como para role="teacher_admin" (mismo tipo de datos — un teacher_admin es, ante todo, un profesor). `is_admin` solo agrega la bandera para que el prompt sepa que además tiene permisos de staff (Modo Di
-- `get_staff_data_for_chipi(user: User, db: Session)` — L198: Datos ligeros para superadmin (vista global de la plataforma, no de un profesor en particular). Se mantiene deliberadamente liviano — el staff ya conoce el panel de administración, Chipi solo da un resumen rápido.
+- `_get_package_landscape(db: Session)` — L16: Resumen EN VIVO (sin precios) de los paquetes activos que existen hoy en la plataforma, para que Chipi nunca hable de planes/precios inventados o hardcodeados. Deliberadamente sin montos — solo variedad (materias/idiomas, si hay grupales, si hay pago en cuotas) para que Chipi anime a registrarse y t
+- `get_platform_context_for_chipi(db: Session)` — L43: Datos de configuración global de la plataforma (modo single/multi-tenant, nombre, profesor destacado) + resumen en vivo de los paquetes activos. Se agrega SIEMPRE al prompt, sin importar el rol, porque cambia cómo Chipi debe explicar la home y los planes.
+- `_open_support_tickets_count(user_id: int, db: Session)` — L67
+- `get_student_data_for_chipi(user: User, db: Session)` — L74: Recopila datos relevantes del estudiante para el contexto de Chipi. Solo datos que Chipi realmente necesita — no sobrecargar el prompt.
+- `get_teacher_data_for_chipi(user: User, db: Session, is_admin: bool=False)` — L125: Recopila datos relevantes del profesor para el contexto de Chipi. Se usa tanto para role="teacher" como para role="teacher_admin" (mismo tipo de datos — un teacher_admin es, ante todo, un profesor). `is_admin` solo agrega la bandera para que el prompt sepa que además tiene permisos de staff (Modo Di
+- `get_staff_data_for_chipi(user: User, db: Session)` — L197: Datos ligeros para superadmin (vista global de la plataforma, no de un profesor en particular). Se mantiene deliberadamente liviano — el staff ya conoce el panel de administración, Chipi solo da un resumen rápido.
 
 ## app/core/chipi/prompts.py
 
-- `get_platform_context(platform_data: Optional[dict])` — L66: Contexto de configuración de la plataforma (single vs multi-tenant). Se agrega siempre, independientemente del rol, porque cambia completamente cómo se debe hablar de "elegir profesor" o "los planes".
-- `get_student_context(user_data: dict)` — L136: Contexto específico del estudiante autenticado. user_data viene de la BD en tiempo real.
-- `get_teacher_context(user_data: dict)` — L174: Contexto del profesor autenticado. También se usa para teacher_admin (con una nota adicional sobre sus permisos de staff — ver `is_admin`).
-- `get_staff_context(user_data: Optional[dict])` — L228: Contexto ligero para superadmin (vista global de la plataforma).
-- `get_public_context()` — L257: Contexto para usuarios no autenticados
-- `get_navigation_map(role: Optional[str], platform_data: Optional[dict]=None)` — L282
-- `get_screen_context(screen: str)` — L803: Devuelve el contexto de la pantalla actual
-- `build_system_prompt(role: Optional[str], screen: str, user_data: Optional[dict]=None, platform_data: Optional[dict]=None)` — L808: Construye el prompt del sistema completo combinando: 1. Prompt base 2. Contexto de plataforma (single/multi-tenant) — siempre 3. Contexto del rol del usuario 4. Contexto de la pantalla actual
+- `get_platform_context(platform_data: Optional[dict])` — L64: Contexto de configuración de la plataforma (single vs multi-tenant). Se agrega siempre, independientemente del rol, porque cambia completamente cómo se debe hablar de "elegir profesor" o "los planes".
+- `get_student_context(user_data: dict)` — L134: Contexto específico del estudiante autenticado. user_data viene de la BD en tiempo real.
+- `get_teacher_context(user_data: dict)` — L172: Contexto del profesor autenticado. También se usa para teacher_admin (con una nota adicional sobre sus permisos de staff — ver `is_admin`).
+- `get_staff_context(user_data: Optional[dict])` — L226: Contexto ligero para superadmin (vista global de la plataforma).
+- `get_public_context()` — L255: Contexto para usuarios no autenticados
+- `get_navigation_map(role: Optional[str], platform_data: Optional[dict]=None)` — L280
+- `get_support_policy(role: Optional[str], user_turns: int=1)` — L354: Cuándo y cómo mandar a soporte, según el rol. El superadmin ES el soporte.
+- `build_system_prompt(role: Optional[str], screen: str, user_data: Optional[dict]=None, platform_data: Optional[dict]=None, user_text: str='', user_turns: int=1)` — L394: Construye el prompt del sistema completo combinando: 1. Prompt base 2. Contexto de plataforma (single/multi-tenant) — siempre 3. Contexto del rol del usuario 4. Mapa de navegación 5. Ficha de la pantalla actual 6. Índice de temas del rol + fichas de tema elegidas por palabras clave    (para pregunta
 
 ## app/core/chipi/service.py
 

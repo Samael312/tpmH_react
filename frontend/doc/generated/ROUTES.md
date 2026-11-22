@@ -19,7 +19,7 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/dashboard/materials` | `app/(student)/dashboard/materials/page.tsx` | student | 494 | app/student/materials/page.tsx |
 | `/dashboard/onboarding` | `app/(student)/dashboard/onboarding/page.tsx` | student | 895 |  |
 | `/dashboard` | `app/(student)/dashboard/page.tsx` | student | 774 |  |
-| `/dashboard/profile` | `app/(student)/dashboard/profile/page.tsx` | student | 987 |  |
+| `/dashboard/profile` | `app/(student)/dashboard/profile/page.tsx` | student | 988 |  |
 | `/dashboard/schedule` | `app/(student)/dashboard/schedule/page.tsx` | student | 1812 |  |
 | `/dashboard/support` | `app/(student)/dashboard/support/page.tsx` | student | 21 |  |
 | `/dashboard/teachers/[username]` | `app/(student)/dashboard/teachers/[username]/page.tsx` | student | 317 |  |

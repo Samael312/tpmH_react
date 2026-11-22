@@ -1,7 +1,6 @@
 # app/core/scheduler.py
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy.orm import Session
 from app.core.email import send_package_expiring_email
 from app.models.package import Enrollment, EnrollmentStatus

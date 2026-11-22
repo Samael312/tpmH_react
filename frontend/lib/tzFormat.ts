@@ -133,3 +133,74 @@ export function zonedLocalToUtcIso(local: string, timeZone: string): string | nu
   const d = new Date(utc);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
+
+
+// ─── Conversión local a ISO UTC según zona horaria IANA ──────────────────
+export function localDateTimeToUtcIso(dateStr: string, timeStr: string, timeZone: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const [hour, minute] = timeStr.split(":").map(Number);
+  
+  const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone, hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+  const parts = dtf.formatToParts(utcGuess).reduce((acc, p) => {
+    acc[p.type] = p.value;
+    return acc;
+  }, {} as Record<string, string>);
+  
+  const asUTC = Date.UTC(
+    Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+    Number(parts.hour) % 24, Number(parts.minute), Number(parts.second)
+  );
+  const offsetMinutes = (asUTC - utcGuess.getTime()) / 60000;
+  return new Date(utcGuess.getTime() - offsetMinutes * 60000).toISOString();
+}
+
+// ─── Diferencia de zona horaria entre dos IANA timezones ────────────────────
+export function getUtcOffsetMinutes(timeZone: string, date = new Date()): number | null {
+  try {
+    const dtf = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour12: false,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+    });
+    const parts = dtf.formatToParts(date).reduce((acc, p) => {
+      acc[p.type] = p.value;
+      return acc;
+    }, {} as Record<string, string>);
+    const asUTC = Date.UTC(
+      Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+      Number(parts.hour) % 24, Number(parts.minute), Number(parts.second)
+    );
+    return (asUTC - date.getTime()) / 60000;
+  } catch {
+    return null;
+  }
+}
+
+/** Devuelve la diferencia horaria de `otherTz` respecto a `myTz`, ej. "+3h" o "-1.5h" */
+export function getTimezoneDiffLabel(otherTz?: string | null, myTz?: string | null, at: Date = new Date()): string | null {
+  if (!otherTz || !myTz) return null;
+  const offOther = getUtcOffsetMinutes(otherTz, at);
+  const offMy = getUtcOffsetMinutes(myTz, at);
+  if (offOther === null || offMy === null) return null;
+
+  const diffHours = (offOther - offMy) / 60;
+  if (diffHours === 0) return "Mismo huso horario";
+
+  const sign = diffHours > 0 ? "+" : "";
+  const rounded = Math.abs(diffHours % 1) < 0.01 ? diffHours.toFixed(0) : diffHours.toFixed(1);
+  return `${sign}${rounded}h respecto a ti`;
+}
+
+/** Fecha legible («lunes, 23 de noviembre») de un `YYYY-MM-DD` o ISO, interpretada en la zona del NAVEGADOR (no en la del
+ *  perfil). Con `YYYY-MM-DD` el navegador lo toma como UTC, así que en husos negativos sale el día anterior (U6):
+ *  para fechas de calendario existe `formatCalendarDateHuman`. */
+export function formatDateHuman(dateStr: string): string {
+  if (!dateStr) return "";
+  return new Date(dateStr).toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" });
+}

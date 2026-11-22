@@ -31,7 +31,7 @@ from app.core.config import settings
 from app.models.password_reset import PasswordResetToken
 from app.core.email import send_password_reset_email, send_username_recovery_email  
 from app.core.timezone import utc_now
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from app.core.email import send_welcome_email, send_verification_email
 from app.models.email_verification import EmailVerificationToken
 from app.auth.dependencies import get_current_user

@@ -28,7 +28,19 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def _build_system_prompt(current_user: Optional[User], screen: Optional[str], db: Session) -> str:
+def _conversation_signals(message: str, history) -> tuple[str, int]:
+    """(texto para elegir fichas, mensajes del usuario en la conversación).
+
+    El historial lo manda el cliente: solo cuentan los mensajes `user`; lo que dice
+    `assistant` nunca influye. El texto se usa solo para elegir fichas, no se copia al prompt.
+    """
+    user_msgs = [m.content for m in history if m.role == "user"]
+    text = message if not user_msgs else f"{message}\n{user_msgs[-1]}"
+    return text, len(user_msgs) + 1
+
+
+def _build_system_prompt(current_user: Optional[User], screen: Optional[str], db: Session,
+                         user_text: str = "", user_turns: int = 1) -> str:
     role = None
     user_data = None
 
@@ -52,6 +64,8 @@ def _build_system_prompt(current_user: Optional[User], screen: Optional[str], db
         screen=screen,
         user_data=user_data,
         platform_data=platform_data,
+        user_text=user_text,
+        user_turns=user_turns,
     )
 
 
@@ -78,7 +92,10 @@ async def chat_with_chipi(
 
     # 1-3. Datos del usuario, contexto de plataforma y prompt: consultas SINCRONAS a la BD (varias por mensaje).
     # En un hilo para no bloquear el bucle de eventos mientras otros usuarios chatean (Fase 21, menores 4).
-    system_prompt = await run_in_threadpool(_build_system_prompt, current_user, data.screen, db)
+    user_text, user_turns = _conversation_signals(data.message, data.history)
+    system_prompt = await run_in_threadpool(
+        _build_system_prompt, current_user, data.screen, db, user_text, user_turns
+    )
 
     # 4. Convertir historial al formato de OpenAI
     history = [

@@ -28,7 +28,7 @@ from app.core.timezone import (
     convert_local_time_to_utc,
     convert_utc_time_to_local_string,
 )
-from app.models.availability import TeacherAvailability, TeacherAvailabilityException
+from app.models.availability import TeacherAvailabilityException
 from app.models.student_preferences import StudentSchedulePreference
 
 logger = logging.getLogger(__name__)

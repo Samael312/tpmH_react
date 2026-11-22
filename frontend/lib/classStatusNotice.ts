@@ -51,3 +51,35 @@ export function pendingToMarkText({ count, hoursLeft }: PendingToMark): string {
   const when = hoursLeft >= 24 ? `${Math.floor(hoursLeft / 24)} d ${Math.floor(hoursLeft % 24)} h` : `${Math.max(1, Math.floor(hoursLeft))} h`;
   return `Tienes ${noun}; la más urgente vence en ${when}.`;
 }
+
+/**
+ * Espejo de `CLASS_STATUS_TRANSITIONS` (backend/app/core/class_logic.py): a qué estados se puede pasar a mano desde cada
+ * uno. Estados terminales (cancelled, expired, rescheduled) no admiten ninguno. Si el backend cambia la tabla, cámbiala
+ * aquí también (hay un test que la compara con el contrato).
+ */
+export const CLASS_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
+  pending: ["confirmed", "cancelled", "completed", "no_show"],
+  pending_trial: ["confirmed", "cancelled", "completed", "no_show"],
+  pending_payment: ["confirmed", "cancelled", "completed", "no_show"],
+  confirmed: ["cancelled", "completed", "no_show", "finalized"],
+  finalized: ["completed", "no_show"],
+  completed: ["no_show", "finalized"],
+  no_show: ["completed", "finalized"],
+  cancelled: [],
+  expired: [],
+  rescheduled: [],
+};
+
+const MANUAL_TARGETS = ["completed", "no_show", "finalized"] as const;
+
+/**
+ * Estados que el PROFESOR puede poner a mano sobre una clase: solo los permitidos por el backend desde su estado
+ * actual, dentro de la ventana de 72 h, y sin marcar «completada/no asistió» una clase que aún no empezó.
+ */
+export function manualStatusTargets(status: string, startUtc: Date, endUtc: Date, now: Date = new Date()): string[] {
+  const hoursSinceEnd = (now.getTime() - endUtc.getTime()) / 3_600_000;
+  if (hoursSinceEnd > MANUAL_STATUS_WINDOW_HOURS) return [];
+  const allowed = CLASS_STATUS_TRANSITIONS[status] ?? [];
+  const started = startUtc.getTime() <= now.getTime();
+  return MANUAL_TARGETS.filter((t) => allowed.includes(t) && (started || t === "finalized"));
+}

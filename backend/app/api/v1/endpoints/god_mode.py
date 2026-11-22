@@ -40,7 +40,7 @@ from app.core.class_logic import (
     sync_student_lifetime_class_counter,
     count_completed_classes_with_teacher,
 )
-from app.models.payment import Payment, TeacherWallet
+from app.models.payment import Payment
 from app.models.student_teacher_link import StudentTeacherLink
 from app.core.teacher_students import link_student_to_teacher
 from app.schemas.payments import (

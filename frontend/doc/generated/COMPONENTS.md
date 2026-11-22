@@ -15,7 +15,7 @@
 - `components/chat/ChatThreadView.tsx` (214 líneas, referenciado en 5 archivos) — exports: ChatThreadView
 - `components/chat/ChatWidget.tsx` (100 líneas, referenciado en 6 archivos) — exports: ChatWidget
 - `components/chat/ConversationList.tsx` (87 líneas, referenciado en 3 archivos) — exports: ConversationList
-- `components/chipi/ChipiWidget.tsx` (542 líneas, referenciado en 48 archivos) — exports: ChipiWidget
+- `components/chipi/ChipiWidget.tsx` (550 líneas, referenciado en 48 archivos) — exports: ChipiWidget
 - `components/classes/ClassCard.tsx` (873 líneas, referenciado en 8 archivos) — exports: ClassCardData, ClassCard
 - `components/classes/GroupWaitingPanel.tsx` (180 líneas, referenciado en 2 archivos) — exports: GroupWaitingPanel — frontend/components/classes/GroupWaitingPanel.tsx
 - `components/classes/MeetLinkModal.tsx` (194 líneas, referenciado en 1 archivos) — exports: MeetLinkModalClassItem, MeetLinkModal
@@ -68,7 +68,7 @@
 ## hooks/
 
 - `hooks/useAdminClasses.ts` (65 líneas, referenciado en 2 archivos) — exports: AdminClass, AdminClassFilters, useAdminClasses, LookupTeacher, useLookupTeachers
-- `hooks/useAdminData.ts` (596 líneas, referenciado en 9 archivos) — exports: PendingPayment, Teacher, Student, WithdrawalRecord, PaymentHistoryItem, usePaymentsHistory, useStudents, useStudentDetail, useWithdrawals, ManualGrantRequestRecord, useManualGrantRequests, useAdminStats
+- `hooks/useAdminData.ts` (592 líneas, referenciado en 9 archivos) — exports: PendingPayment, Teacher, Student, WithdrawalRecord, PaymentHistoryItem, usePaymentsHistory, useStudents, useStudentDetail, useWithdrawals, ManualGrantRequestRecord, useManualGrantRequests, useAdminStats
 - `hooks/useAdminMaterials.ts` (21 líneas, referenciado en 1 archivos) — exports: AdminMaterial, useAdminMaterials
 - `hooks/useBusinessRules.ts` (66 líneas, referenciado en 10 archivos) — exports: BusinessRules, CLASS_DURATION_OPTIONS, useBusinessRules
 - `hooks/useChat.ts` (270 líneas, referenciado en 13 archivos) — exports: ChatConversation, ChatMessage, markConversationRead, CONNECTED_SAFETY_POLL_MS, fallbackPollInterval, useChatConversations, useUnreadChatCount, openDirectConversation, openGroupConversation, useChatSocketBootstrap, useChatThread
@@ -81,8 +81,8 @@
 - `hooks/useLoadMoreList.ts` (47 líneas, referenciado en 5 archivos) — exports: useLoadMoreList
 - `hooks/useRevealOnScroll.ts` (45 líneas, referenciado en 1 archivos) — exports: useRevealOnScroll
 - `hooks/useSpokenLanguages.ts` (53 líneas, referenciado en 2 archivos) — exports: MY_SPOKEN_LANGUAGES_KEY, useMySpokenLanguages
-- `hooks/useStudentData.ts` (729 líneas, referenciado en 26 archivos) — exports: AVAILABLE_SLOTS_QUERY_PREFIX, invalidateAvailableSlots, BookingStage, RejectedPaymentInfo, PendingRechargeInfo, StudentClass, AvailableSlot, PackageInfo, StudentEnrollment, StudentMaterial, StudentHomework, TeacherResolution
-- `hooks/useSupport.ts` (89 líneas, referenciado en 3 archivos) — exports: SupportCategory, SupportTicketStatus, SupportTicket, useMySupportTickets, createSupportTicket, markSupportTicketSeen, useUnreadSupportCount, useSupportQueryInvalidation
+- `hooks/useStudentData.ts` (678 líneas, referenciado en 26 archivos) — exports: AVAILABLE_SLOTS_QUERY_PREFIX, invalidateAvailableSlots, BookingStage, RejectedPaymentInfo, PendingRechargeInfo, StudentClass, AvailableSlot, PackageInfo, StudentEnrollment, StudentHomework, TeacherPublicProfile, Review
+- `hooks/useSupport.ts` (82 líneas, referenciado en 3 archivos) — exports: SupportCategory, SupportTicketStatus, SupportTicket, useMySupportTickets, createSupportTicket, markSupportTicketSeen, useUnreadSupportCount
 - `hooks/useSystemCatalogs.ts` (56 líneas, referenciado en 9 archivos) — exports: StudentGoal, PaymentMethodOption, ThemePreset, SubjectTheme, GoalCategoryKey, StudentGoalsCatalog, SystemCatalogs, SYSTEM_CATALOGS_QUERY_KEY, useSystemCatalogs
 - `hooks/useTeacherData.ts` (661 líneas, referenciado en 12 archivos) — exports: TeacherClass, TeacherProfile, WeeklySlot, WalletData, CalendarStatus, StudentEnrollmentSummary, StudentMaterialSummary, TeacherStudentFull, WithdrawalHistoryItem, IncomeHistoryItem, TeacherMaterial, TeacherPaymentEntry
 - `hooks/useTeacherNotifications.ts` (47 líneas, referenciado en 2 archivos) — exports: TeacherNotification, useTeacherUnreadNotificationCount, useTeacherNotifications
@@ -108,7 +108,7 @@
 - `lib/errorMessage.ts` (41 líneas, referenciado en 51 archivos) — exports: getErrorMessage
 - `lib/errorReporting.ts` (99 líneas, referenciado en 6 archivos) — exports: FrontendErrorReport, reportFrontendError, installGlobalErrorReporting
 - `lib/godModeActions.ts` (387 líneas, referenciado en 3 archivos) — exports: GodModeFieldType, GodModeField, GodModeAction, GOD_MODE_ACTIONS, GOD_MODE_CATEGORIES — Registro declarativo de todas las acciones del Modo Dios. En vez de construir 13 pantallas separadas (una por endpoint), cada acción se describe acá como datos:
-- `lib/gradientTitle.tsx` (94 líneas, referenciado en 3 archivos) — exports: GradientPreset, GRADIENT_PRESETS, getGradientPreset, renderGradientTitle, stripGradientMarkers — frontend/lib/gradientTitle.tsx Soporte para "títulos con color" en el landing (config del superadmin): el admin escribe el texto normal y envuelve las palabras 
+- `lib/gradientTitle.tsx` (89 líneas, referenciado en 3 archivos) — exports: GradientPreset, GRADIENT_PRESETS, getGradientPreset, renderGradientTitle — frontend/lib/gradientTitle.tsx Soporte para "títulos con color" en el landing (config del superadmin): el admin escribe el texto normal y envuelve las palabras 
 - `lib/imageLoader.ts` (14 líneas, referenciado en 1 archivos) — exports: imageLoader
 - `lib/landingServer.ts` (107 líneas, referenciado en 4 archivos) — exports: getLandingDataServer, buildDefaultSiteTitle
 - `lib/loadMore.ts` (49 líneas, referenciado en 14 archivos) — exports: LOAD_MORE_PAGE_SIZE, LoadMorePage, PageShape, fetchPage, nextOffset

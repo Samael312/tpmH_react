@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import datetime
 from app.core.email import send_homework_graded_email, send_homework_submitted_email
 from app.db.base import get_db
 from app.auth.dependencies import get_current_teacher, get_current_student, get_current_approved_teacher

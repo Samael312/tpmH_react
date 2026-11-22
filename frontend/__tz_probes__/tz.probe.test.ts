@@ -2,13 +2,14 @@
 // Ejecutar: cd frontend && npx vitest run --config __tz_probes__/vitest.config.ts
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { utcTimeToLocal } from "@/lib/scheduleUtc";
-import { localRangeCells } from "@/lib/weeklyLocal";
-import { getDateKeyTz, formatCalendarDateHuman, formatTimeTz } from "@/lib/tzFormat";
-import { TIMEZONE_OPTIONS } from "@/lib/timezones";
+import { localRangeCells, hoursFromBlock } from "@/lib/weeklyLocal";
 import {
-  withBrowserTz, toUtcDateStr, getWeekDates, localDateTimeToUtcIso, getTimezoneDiffLabel,
-  hoursFromBlock, backendLocalToUtc,
-} from "./helpers";
+  getDateKeyTz, formatCalendarDateHuman, formatTimeTz, formatDateHuman, zonedLocalToUtcIso,
+  localDateTimeToUtcIso, getTimezoneDiffLabel,
+} from "@/lib/tzFormat";
+import { toUtcDateStr, getWeekDates } from "@/lib/weekDates";
+import { TIMEZONE_OPTIONS } from "@/lib/timezones";
+import { withBrowserTz, backendLocalToUtc } from "./helpers";
 
 afterEach(() => { vi.useRealTimers(); });
 
@@ -83,47 +84,34 @@ describe("U4 · Mis clases (profesor y alumno) agrupa por día UTC, no por día 
   });
 });
 
-describe("U5 · RescheduleCalendar / calendario de tareas: hoy sale como pasado en husos negativos", () => {
-  it("Caracas: new Date(YYYY-MM-DD) < new Date(today.toDateString()) para hoy", () => {
-    withBrowserTz("America/Caracas", () => {
-      const today = new Date("2026-11-19T15:00:00Z"); // 11:00 Caracas
-      const dateStr = "2026-11-19";
-      const isPast = new Date(dateStr) < new Date(today.toDateString()); // RescheduleModal.tsx:105, homework/page.tsx:172
-      expect(isPast).toBe(true);
-    });
-  });
-  it("isToday con toISOString marca mañana como hoy desde las 20:00 Caracas", () => {
-    withBrowserTz("America/Caracas", () => {
-      const today = new Date("2026-11-20T00:30:00Z"); // 19 nov 20:30 Caracas
-      expect(today.toISOString().split("T")[0]).toBe("2026-11-20"); // RescheduleModal.tsx:106
-    });
-  });
-});
+// U5 (RescheduleCalendar marcaba «hoy» como pasado en husos negativos) está CORREGIDO: su regresión es un test de
+// componente (tests/components/classModals.test.tsx · «el día de hoy se puede elegir…»), porque el código vive en un componente.
 
 describe("U6 · formatDateHuman de RescheduleModal / GodModeAvailabilityPicker muestra el día anterior", () => {
   it("2026-11-23 (lunes) se muestra como domingo 22 en Caracas", () => {
     withBrowserTz("America/Caracas", () => {
-      const out = new Date("2026-11-23").toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" });
+      const out = formatDateHuman("2026-11-23"); // la función REAL que usan RescheduleModal y GodModeAvailabilityPicker
       expect(out).toBe("domingo, 22 de noviembre");
       expect(formatCalendarDateHuman("2026-11-23")).toBe("lunes, 23 de noviembre"); // la utilidad correcta ya existe
     });
   });
 });
 
-describe("U7 · editar una tarea corre la fecha de entrega en cada guardado", () => {
-  it("vence jue 19 23:59 Caracas; abrir y guardar sin tocar => vie 20 03:59 Caracas (+4h)", () => {
-    withBrowserTz("America/Caracas", () => {
-      const original = new Date("2026-11-19T23:59:00-04:00").toISOString(); // 2026-11-20T03:59:00.000Z
-      const due = original.slice(0, 10);       // homework/page.tsx:370
-      const dueTime = original.slice(11, 16);  // homework/page.tsx:371
-      const saved = new Date(`${due}T${dueTime}:00`).toISOString(); // homework/page.tsx:382
-      expect(new Date(saved).getTime() - new Date(original).getTime()).toBe(4 * 3600_000);
-    });
+describe("U7-fixed · editar una tarea ya NO corre la fecha de entrega (usa zonedLocalToUtcIso con la zona del perfil)", () => {
+  it("vence jue 19 23:59 Caracas; abrir y guardar sin tocar => el mismo instante, desde cualquier zona del navegador", () => {
+    const original = "2026-11-20T03:59:00.000Z"; // jue 19 nov 23:59 Caracas
+    for (const bz of ["America/Caracas", "Europe/Madrid", "Asia/Tokyo"]) {
+      withBrowserTz(bz, () => {
+        const due = new Date(original).toLocaleDateString("en-CA", { timeZone: "America/Caracas" }); // 2026-11-19
+        const dueTime = formatTimeTz(original, "America/Caracas");                                    // 23:59
+        expect(zonedLocalToUtcIso(`${due}T${dueTime}`, "America/Caracas")).toBe(original);
+      });
+    }
   });
-  it("crear tarea usa la zona del NAVEGADOR, no la del perfil (viajero en Madrid, perfil Caracas)", () => {
+  it("crear tarea usa la zona del PERFIL, no la del navegador (viajero en Madrid, perfil Caracas)", () => {
     withBrowserTz("Europe/Madrid", () => {
-      const iso = new Date(`2026-11-19T23:59:00`).toISOString(); // homework/page.tsx:621
-      expect(formatTimeTz(iso, "America/Caracas")).toBe("18:59");
+      const iso = zonedLocalToUtcIso("2026-11-19T23:59", "America/Caracas")!;
+      expect(formatTimeTz(iso, "America/Caracas")).toBe("23:59");
     });
   });
 });

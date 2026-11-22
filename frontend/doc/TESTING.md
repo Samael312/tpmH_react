@@ -1,7 +1,22 @@
 # Pruebas del frontend
 
-## Tests automáticos (`npm test`, Vitest, F10)
-- `tests/auth.test.ts`, `tests/proxy.test.ts` (guards por rol con cookies `tpm_access`/`tpm_session`), `tests/api.test.ts` (cookies, un solo refresh en vuelo, sin bucles), `tests/csp.test.ts`. 22 tests, sin red ni backend. Falta Playwright (flujo login/logout en navegador real).
+## Tests automáticos (`npm test`, Vitest)
+Dos proyectos (`vitest.config.ts`): **`unit`** (node, `tests/*.test.ts`: lógica pura, guards, cliente API, cookies, fechas/zonas horarias) y **`components`** (jsdom, `tests/components/**`: pantallas y componentes con Testing Library). 690 pruebas, sin red ni backend (la API se sustituye por `tests/components/fakeApi.ts`).
+
+Capas de `tests/components/` (qué prueban):
+- `pages.test.tsx` — **descubre solas todas las `app/**/page.tsx`** (62) y las monta en 3 escenarios: sin datos, con datos y API caída (500). Exige que no haya error fatal, ni pantalla en blanco, ni la pantalla de recuperación del `ErrorBoundary`. `/admin/users` está saltada (bug F12).
+- `layouts.test.tsx` — guards y menús de los tres layouts (alumno, profesor, admin) por rol.
+- `authPages`, `register`, `appShell` — login (roles, errores, Google), recuperar/restablecer contraseña, verificar correo, registro en dos pasos, páginas de error/404 y `Providers`.
+- `packageCheckout`, `payments`, `changePackage` — compra, cuotas, ilimitados, cambio/mejora/rebaja con reembolso, recargas, métodos de pago.
+- `classCard`, `classModals` — matriz de acciones de la tarjeta por rol/estado, reagendar (antelación mínima, tope, grupales), link de videollamada, panel de espera de grupo.
+- `chat`, `support`, `ui`, `spokenLanguages`, `googleSignIn`, `landingCarousels`, `adminPanels`, `godModeRunner`, `godModePickers` — el resto de componentes. El Modo Dios se prueba con un test guiado por datos sobre **todas** las acciones del registro.
+- Los bugs conocidos se dejan como `it.fails`/`it.skip` con su motivo: pasan mientras el bug exista y se ponen en rojo al corregirlo (entonces hay que cambiarlos por `it`).
+
+Se verificó con **mutaciones** (romper la regla en producción y ver que el test falla) en `layouts`, `packageCheckout`, `classModals` y `chat`.
+
+Helpers: `render.tsx` (`renderScreen(ui, {role, route, search})` monta el mismo árbol que `app/providers.tsx`), `fakeApi.ts` (`mockApi`, `mockApiError`, `callsTo`, `FIXTURE`), `richData.ts` (`seedRichData()` para pantallas con datos), `router.ts` (router simulado).
+Cobertura (`npx vitest run --coverage`): líneas **57,8 %** (antes 35,7 %): `components` 84 %, `hooks` 91,5 %, `lib` 90 %, `app` 44 % (las páginas gigantes —`schedule`, `materials`, `homework`, `packages`, `settings`, onboardings— solo tienen la prueba de humo de `pages.test.tsx`, no sus interacciones).
+Sondas de zonas horarias aparte: `npx vitest run --config __tz_probes__/vitest.config.ts` (24; ver `ANALISIS.md`).
 
 ## Ejecutadas
 - `npx tsc --noEmit` ✅ · `npx eslint .` ✅ · `npx next build` ✅ (60 rutas).
@@ -21,7 +36,6 @@ E2E en navegador (la extensión de Chrome no conectó en la auditoría): registr
 ## E2E con Playwright (`npm run test:e2e`)
 - `e2e/smoke.spec.ts` (8 pruebas, Chromium): portada, login (bueno y malo), ruta privada sin sesión, dashboard del alumno, idiomas con nivel (aviso, nivel obligatorio, guardado y persistencia), filtro «Habla» del directorio, onboarding de alumno nuevo y pestaña «Correos» del superadmin.
 - `playwright.config.ts` levanta el **backend semilla** (`backend/tests/audit/run_server.py`: SQLite temporal, nunca una BD real; cuentas `admin`, `profe`, `alumno`, `nuevo` con contraseña `Password123`) y el frontend (`next dev`; en CI `build` + `start`). En Windows: `E2E_PYTHON=venv\Scripts\python.exe` (el comando corre dentro de `backend/`); la primera vez `npx playwright install chromium`.
-- Vitest: 79 pruebas (incluye `tests/spokenLanguages.test.ts`, `tests/emailSettings.test.ts` y `tests/pagination.test.ts`).
 
 ## CI (`.github/workflows/frontend.yml`)
 En cada PR que toque `frontend/`: `npm ci`, `npm run lint`, `npx tsc --noEmit`, `npm test` (Vitest) y `npm run build`. Playwright no corre en CI (necesita el backend con Python).

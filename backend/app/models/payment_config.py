@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, Foreig
 from sqlalchemy.sql import func
 from app.db.base import Base
 from sqlalchemy.dialects.postgresql import JSONB
-from app.schemas.classes import CLASS_DURATION_OPTIONS, DEFAULT_BUFFER_MINUTES
+from app.schemas.classes import DEFAULT_BUFFER_MINUTES
 
 class PlatformConfig(Base):
     """

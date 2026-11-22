@@ -20,10 +20,8 @@ from app.core import chat as chat_core
 from app.core.chat_ws import chat_manager
 from app.core.god_mode_audit import log_god_mode_action
 from app.core.rate_limit import limiter
-from app.core.config import settings
 from app.db.base import ChatSessionLocal, get_db
 from app.models.chat import ChatConversation, ChatConversationType, ChatMessage
-from app.models.group_cohort import GroupCohort
 from app.models.teacher import TeacherProfile
 from app.models.student import StudentProfile
 from app.models.user import User, UserRole

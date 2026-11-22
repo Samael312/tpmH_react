@@ -1,7 +1,7 @@
 import os
 
 from openai import AsyncOpenAI
-from typing import AsyncGenerator, List, Optional
+from typing import AsyncGenerator, List
 from app.core.config import settings
 import logging
 
@@ -42,7 +42,7 @@ async def get_chipi_response(
             model="gpt-4o-mini",
             messages=messages,
             temperature=0.7,
-            max_tokens=500,
+            max_tokens=600,
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -70,7 +70,7 @@ async def stream_chipi_response(
             model="gpt-4o-mini",
             messages=messages,
             temperature=0.7,
-            max_tokens=500,
+            max_tokens=600,
             stream=True,
         )
 

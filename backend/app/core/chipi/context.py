@@ -1,5 +1,4 @@
 from sqlalchemy.orm import Session
-from typing import Optional
 from app.models.user import User
 from app.models.class_ import Class
 from app.models.homework import HomeworkAssignment

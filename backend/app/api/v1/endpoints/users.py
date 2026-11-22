@@ -1,5 +1,3 @@
-from datetime import datetime
-from zoneinfo import ZoneInfo
 import logging
 from typing import List
 
@@ -14,7 +12,6 @@ from app.core.rate_limit import limiter, user_or_ip_key
 from app.auth.dependencies import get_current_student, get_current_user
 from app.auth.passwords import hash_password, verify_password
 from app.models.user import User
-from app.models.student import StudentProfile
 from app.schemas.user import (
     UserResponse, UpdateProfileRequest, ChangePasswordRequest, StudentProfileResponse, DeleteAccountRequest,
 )
@@ -25,7 +22,6 @@ from app.schemas.preferences import SetPreferencesRequest, PreferenceSlotRespons
 from app.core.storage import upload_file_stream, delete_file, ALLOWED_IMAGE_TYPES, MAX_AVATAR_SIZE
 from app.models.teacher import TeacherProfile, TeacherStatus
 from app.core.teacher_students import link_student_to_teacher
-from app.models.payment_config import PlatformConfig
 from app.models.student_teacher_link import StudentTeacherLink
 from app.models.payment import Payment
 from app.core.class_logic import get_student_booking_stage

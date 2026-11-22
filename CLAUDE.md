@@ -8,4 +8,5 @@ Antes de auditar o explorar a ciegas, lee la documentación ya hecha (describe e
 - Informe de auditoría completo: `ANALISIS.md`.
 - Tras cambiar código, regenera lo automático: `cd backend && python doc/generate_docs.py`; actualiza a mano `KNOWN_ISSUES.md` y `BUSINESS_RULES.md` si cambia una regla o se corrige un bug.
 - Tests sin `.env` ni PostgreSQL: `cd backend && python -m pytest tests/audit -q`. Servidor local con datos semilla: `python -m tests.audit.run_server`.
+- Chipi (asistente IA): su conocimiento son fichas `.md` en `backend/app/core/chipi/knowledge/` (`screens/` por pantalla, `topics/` por tema). Al cambiar una regla de negocio o una pantalla, actualiza su ficha y ejecuta `cd backend && venv/Scripts/python.exe -m pytest tests/audit/test_chipi_knowledge.py -q`.
 - Frontend: lee `frontend/AGENTS.md` (Next 16 con cambios incompatibles) antes de escribir código Next.

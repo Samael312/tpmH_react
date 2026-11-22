@@ -51,3 +51,45 @@ describe("pendingToMark", () => {
     expect(pendingToMarkText({ count: 2, hoursLeft: -1 })).toMatch(/venció/);
   });
 });
+
+// ── F13: acciones manuales de estado del profesor ─────────────────────────────────────────────────────────────────
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { CLASS_STATUS_TRANSITIONS, manualStatusTargets } from "@/lib/classStatusNotice";
+
+describe("CLASS_STATUS_TRANSITIONS (contrato con el backend)", () => {
+  it("es idéntica a CLASS_STATUS_TRANSITIONS de backend/app/core/class_logic.py", () => {
+    const src = readFileSync(resolve(__dirname, "../../backend/app/core/class_logic.py"), "utf-8");
+    const block = src.slice(src.indexOf("CLASS_STATUS_TRANSITIONS: dict"), src.indexOf("STATUS_LABELS_ES"));
+    const backend: Record<string, string[]> = {};
+    for (const m of block.matchAll(/"(\w+)":\s*(set\(\)|\{([^}]*)\})/g)) {
+      backend[m[1]] = m[3] ? [...m[3].matchAll(/"(\w+)"/g)].map((x) => x[1]).sort() : [];
+    }
+    const front = Object.fromEntries(Object.entries(CLASS_STATUS_TRANSITIONS).map(([k, v]) => [k, [...v].sort()]));
+    expect(Object.keys(backend).length).toBeGreaterThan(5);
+    expect(front).toEqual(backend);
+  });
+});
+
+describe("manualStatusTargets", () => {
+  const now = new Date("2026-11-23T15:00:00Z");
+  const h = (n: number) => new Date(now.getTime() + n * 3_600_000);
+
+  it("clase en curso confirmada: las tres opciones", () => {
+    expect(manualStatusTargets("confirmed", h(-0.5), h(0.5), now)).toEqual(["completed", "no_show", "finalized"]);
+  });
+  it("clase futura: solo «sin resolver» (no se puede completar lo que no empezó)", () => {
+    expect(manualStatusTargets("confirmed", h(24), h(25), now)).toEqual(["finalized"]);
+  });
+  it.each(["cancelled", "expired", "rescheduled", "estado_raro"])("%s: ninguna", (s) => {
+    expect(manualStatusTargets(s, h(-3), h(-2), now)).toEqual([]);
+  });
+  it("pending*: sin «finalized»", () => {
+    expect(manualStatusTargets("pending", h(-3), h(-2), now)).toEqual(["completed", "no_show"]);
+  });
+  it("pasadas 72 h del fin: ninguna", () => {
+    expect(manualStatusTargets("completed", h(-100), h(-99), now)).toEqual([]);
+    expect(manualStatusTargets("completed", h(-75), h(-73), now)).toEqual([]);
+    expect(manualStatusTargets("completed", h(-71), h(-70), now)).toEqual(["no_show", "finalized"]);
+  });
+});
