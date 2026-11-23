@@ -328,3 +328,118 @@ describe("Materiales · editar, palabras y borrar", () => {
     expect(await screen.findByText("El material está asignado")).toBeInTheDocument();
   });
 });
+
+describe("Materiales · huecos de cobertura", () => {
+  /** Cambia un <select> a su última opción (distinta de la actual). */
+  const pickLast = (sel: HTMLElement) => {
+    const s = sel as HTMLSelectElement;
+    const opts = Array.from(s.options).map((o) => o.value);
+    const value = opts.find((v) => v !== s.value) ?? opts[0];
+    fireEvent.change(s, { target: { value } });
+    return value;
+  };
+  async function openForm(user: ReturnType<typeof userEvent.setup>) {
+    await screen.findByText("Guía de gramática");
+    await user.click(screen.getByRole("button", { name: /Nuevo material/ }));
+    await screen.findByPlaceholderText("Ej: Guía de gramática B1");
+  }
+
+  it("una descripción larga se expande con «Ver más» y se recoge con «Ver menos»", async () => {
+    setup([{ ...DOC, description: "Texto largo ".repeat(40) }]);
+    await screen.findByText("Guía de gramática");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Ver más" }));
+    expect(screen.getByRole("button", { name: "Ver menos" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Ver menos" }));
+    expect(screen.getByRole("button", { name: "Ver más" })).toBeInTheDocument();
+  });
+
+  it("si fallan los materiales, Reintentar los vuelve a pedir", async () => {
+    const { user } = setup([], () => mockApiError("get", "/materials/my-materials", 500, "x"));
+    const retry = await screen.findByRole("button", { name: /Reintentar/ });
+    mockApi("get", "/materials/my-materials", [DOC]);
+    await user.click(retry);
+    expect(await screen.findByText("Guía de gramática")).toBeInTheDocument();
+  });
+
+  it("si fallan los estudiantes, Reintentar los vuelve a pedir y se pueden asignar", async () => {
+    const { user } = setup([DOC, VOCAB], () => mockApiError("get", /^\/teachers\/me\/students/, 500, "x"));
+    await screen.findByText("Guía de gramática");
+    await user.click(inCard("Guía de gramática", "Asignar"));
+    const retry = await screen.findByRole("button", { name: /Reintentar/ });
+    mockApi("get", /^\/teachers\/me\/students/, STUDENTS);
+    await user.click(retry);
+    expect(await screen.findByText(/Ana/)).toBeInTheDocument();
+  });
+
+  it("editar palabras: quitar una palabra existente y guardar", async () => {
+    mockApi("post", "/materials/2/vocabulary", {});
+    const { user } = setup();
+    await screen.findByText("Guía de gramática");
+    await user.click(screen.getByRole("button", { name: "Vocabulario" }));
+    await user.click(inCard("Viajes", "Palabras"));
+    await screen.findByText("Editar palabras");
+    const chip = screen.getAllByText("Avión").find((e) => e.closest("span")?.querySelector("button"))!;
+    await user.click(chip.closest("span")!.querySelector("button") as HTMLElement);
+    await user.click(screen.getByRole("button", { name: /Guardar/ }));
+    await waitFor(() => expect(callsTo("post", "/materials/2/vocabulary")).toHaveLength(1));
+    expect(callsTo("post", "/materials/2/vocabulary")[0].body).toEqual({ words: ["Hotel"] });
+  });
+
+  it("editar detalles: descripción, categoría y nivel se envían", async () => {
+    mockApi("patch", "/materials/1", DOC);
+    const { user } = setup();
+    await screen.findByText("Guía de gramática");
+    await user.click(inCard("Guía de gramática", "Detalles"));
+    await screen.findByPlaceholderText("Título del material");
+    fireEvent.change(screen.getByPlaceholderText(/Breve descripción de qué trata/), { target: { value: "Nueva descripción" } });
+    const [catSel, levelSel] = screen.getAllByRole("combobox");
+    const cat = pickLast(catSel);
+    const level = pickLast(levelSel);
+    await user.click(screen.getByRole("button", { name: /Guardar/ }));
+    await waitFor(() => expect(callsTo("patch", "/materials/1")).toHaveLength(1));
+    expect(callsTo("patch", "/materials/1")[0].body).toMatchObject({ description: "Nueva descripción", category: cat, level });
+  });
+
+  it("subir documento: categoría, nivel, cambiar de pestaña, clic en la zona de archivo y archivo demasiado grande", async () => {
+    const { user, container } = setup();
+    await openForm(user);
+    const [catSel, levelSel] = screen.getAllByRole("combobox");
+    pickLast(catSel);
+    pickLast(levelSel);
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const click = vi.spyOn(input, "click").mockImplementation(() => {});
+    await user.click(container.querySelector("div[class*='border-dashed']") as HTMLElement);
+    expect(click).toHaveBeenCalled();
+    const big = new File(["x"], "enorme.pdf", { type: "application/pdf" });
+    Object.defineProperty(big, "size", { value: 11 * 1024 * 1024 });
+    fireEvent.change(input, { target: { files: [big] } });
+    expect(await screen.findByText("El archivo supera el límite permitido de 10 MB.")).toBeInTheDocument();
+    await user.click(screen.getByText("El archivo supera el límite permitido de 10 MB.").closest("div")!.parentElement!.querySelector("button:last-of-type") as HTMLElement);
+    await waitFor(() => expect(screen.queryByText("El archivo supera el límite permitido de 10 MB.")).not.toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Crear vocabulario" }));
+    expect(await screen.findByPlaceholderText("Ej: Vocabulario de viajes")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Subir documento" }));
+    expect(await screen.findByPlaceholderText("Ej: Guía de gramática B1")).toBeInTheDocument();
+  });
+
+  it("crear vocabulario: descripción, nivel y botón + para añadir palabras", async () => {
+    mockApi("post", "/materials/", { id: 50 });
+    mockApi("post", "/materials/50/vocabulary", {});
+    const { user } = setup();
+    await openForm(user);
+    await user.click(screen.getByRole("button", { name: "Crear vocabulario" }));
+    await user.type(await screen.findByPlaceholderText("Ej: Vocabulario de viajes"), "Comida");
+    fireEvent.change(screen.getByPlaceholderText(/Breve descripción de este set/), { target: { value: "Platos" } });
+    await user.click(screen.getByRole("button", { name: "B2" }));
+    await user.type(screen.getByPlaceholderText("Escribe una palabra y presiona Enter..."), "pan");
+    const plus = screen.getByPlaceholderText("Escribe una palabra y presiona Enter...").parentElement!.querySelector("button[type='button']") as HTMLElement;
+    await user.click(plus);
+    expect(screen.getByText("Pan")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Crear set de vocabulario" }));
+    await waitFor(() => expect(callsTo("post", "/materials/50/vocabulary")).toHaveLength(1));
+    const form = callsTo("post", "/materials/")[0].body as FormData;
+    expect(form.get("description")).toBe("Platos");
+    expect(form.get("level")).toBe("B2");
+  });
+});

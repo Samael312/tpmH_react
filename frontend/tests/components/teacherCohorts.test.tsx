@@ -354,3 +354,138 @@ describe("Grupos · cerrar y agendar sesión", () => {
     expect(await screen.findByText("Fuera de tu disponibilidad")).toBeInTheDocument();
   });
 });
+
+describe("Grupos · cierres de modales, pestañas y duración", () => {
+  /** Pulsa la X de la cabecera de un modal a pantalla completa. */
+  const closeByHeader = async (user: ReturnType<typeof userEvent.setup>, title: string) => {
+    await user.click(screen.getByText(title, { selector: "h2" }).parentElement!.querySelector("button") as HTMLElement);
+  };
+  const RULES = { allowed_class_durations: [50, 80], min_booking_hours: 1 };
+  const withRules = () => mockApi("get", "/system-catalogs/business-rules", RULES);
+  const expandCard = async (user: ReturnType<typeof userEvent.setup>) => {
+    await screen.findByText("Grupal B1");
+    const card = screen.getByText("Grupal B1").closest("div[class*='rounded']") as HTMLElement;
+    const toggle = within(card.parentElement as HTMLElement).getAllByRole("button").find((b) => b.querySelector("svg") && !b.textContent?.trim() && b.title !== "Chat grupal")!;
+    await user.click(toggle);
+  };
+
+  it("Reintentar vuelve a pedir los grupos y los muestra", async () => {
+    const { user } = setup([], () => mockApiError("get", /^\/cohorts\/teacher/, 500, "Sin conexión"));
+    const retry = await screen.findByRole("button", { name: /Reintentar/ });
+    mockApi("get", /^\/cohorts\/teacher/, [COHORT()]);
+    await user.click(retry);
+    expect(await screen.findByText("Grupal B1")).toBeInTheDocument();
+  });
+
+  it("se puede volver de Historial a Activos", async () => {
+    const { user } = setup([COHORT(), COHORT({ id: 2, status: "completed" })]);
+    await user.click(await screen.findByText(/Historial \(1\)/));
+    await screen.findByText("Completado");
+    await user.click(screen.getByText(/Activos \(1\)/));
+    expect(await screen.findByText("Llenándose")).toBeInTheDocument();
+  });
+
+  it("actualizar los integrantes vuelve a pedirlos", async () => {
+    const { user } = setup();
+    await expandCard(user);
+    const heading = await screen.findByText(/Integrantes \(2\/6\)/);
+    const before = callsTo("get", "/cohorts/1/members").length;
+    await user.click(heading.parentElement!.querySelector("button") as HTMLElement);
+    await waitFor(() => expect(callsTo("get", "/cohorts/1/members").length).toBeGreaterThan(before));
+  });
+
+  it("cerrar con la X los modales de crear, cerrar grupo y editar cupo no llama a nada", async () => {
+    withRules();
+    mockApi("get", /^\/availability\/.*\/slots/, []);
+    const { user } = setup();
+    await user.click(await screen.findByRole("button", { name: /Nuevo grupo/ }));
+    await screen.findByText("Nuevo Grupo", { selector: "h2" });
+    await closeByHeader(user, "Nuevo Grupo");
+    await waitFor(() => expect(screen.queryByText("Nuevo Grupo", { selector: "h2" })).not.toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /Cerrar con integrantes actuales/ }));
+    await screen.findByText("Cerrar grupo", { selector: "h2" });
+    await closeByHeader(user, "Cerrar grupo");
+    await waitFor(() => expect(screen.queryByText("Cerrar grupo", { selector: "h2" })).not.toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /Editar cupo/ }));
+    await screen.findByText("Editar cupo", { selector: "h2" });
+    await closeByHeader(user, "Editar cupo");
+    await waitFor(() => expect(screen.queryByText("Editar cupo", { selector: "h2" })).not.toBeInTheDocument());
+    expect(callsTo("post", "/cohorts/")).toHaveLength(0);
+    expect(callsTo("post", "/cohorts/1/close")).toHaveLength(0);
+    expect(callsTo("patch", "/cohorts/1")).toHaveLength(0);
+  });
+
+  it("editar el mínimo de alumnos se envía junto al máximo", async () => {
+    mockApi("patch", "/cohorts/1", {});
+    const { user } = setup();
+    await user.click(await screen.findByRole("button", { name: /Editar cupo/ }));
+    await screen.findByText(/No puede ser menor/);
+    const [min] = screen.getAllByRole("spinbutton");
+    await user.clear(min);
+    await user.type(min, "2");
+    await user.click(screen.getByRole("button", { name: /Guardar cambios/ }));
+    await waitFor(() => expect(callsTo("patch", "/cohorts/1")).toHaveLength(1));
+    expect(callsTo("patch", "/cohorts/1")[0].body).toMatchObject({ min_students: 2, max_students: 6 });
+  });
+
+  it("agendar sesión: cambiar la duración y cerrar con la X", async () => {
+    withRules();
+    mockApi("get", /^\/availability\/.*\/slots/, []);
+    const { user } = setup([COHORT({ status: "confirmed", current_students: 3 })]);
+    await user.click(await screen.findByRole("button", { name: /Agendar sesión/ }));
+    await screen.findByText("Agendar sesión grupal", { selector: "h2" });
+    const d80 = await screen.findByRole("button", { name: "80 min" });
+    await user.click(d80);
+    expect(d80.className).toMatch(/border-pink-400/);
+    await closeByHeader(user, "Agendar sesión grupal");
+    await waitFor(() => expect(screen.queryByText("Agendar sesión grupal", { selector: "h2" })).not.toBeInTheDocument());
+  });
+
+  it("cerrar grupo: cambiar la duración marca la nueva", async () => {
+    withRules();
+    mockApi("get", /^\/availability\/.*\/slots/, []);
+    const { user } = setup();
+    await user.click(await screen.findByRole("button", { name: /Cerrar con integrantes actuales/ }));
+    const d80 = await screen.findByRole("button", { name: "80 min" });
+    await user.click(d80);
+    expect(d80.className).toMatch(/border-pink-400/);
+  });
+
+  it("los diálogos de abortar, finalizar y reabrir se cancelan sin llamar", async () => {
+    const { user } = setup([COHORT(), COHORT({ id: 2, status: "confirmed", current_students: 3, package_name: "Grupal C1" })]);
+    await user.click(await screen.findByRole("button", { name: /Abortar \/ Cancelar/ }));
+    await user.click(await screen.findByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Abortar grupo" })).not.toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /Finalizar grupo/ }));
+    await user.click(await screen.findByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Finalizar" })).not.toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /Reabrir/ }));
+    await user.click(await screen.findByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Reabrir", hidden: false })).toBeInTheDocument());
+    expect(callsTo("post", /\/cohorts\/\d+\/(cancel|complete|reopen)/)).toHaveLength(0);
+  });
+
+  it("los modales de asistencia se cierran con la X", async () => {
+    mockApi("get", "/cohorts/sessions/31/participants", [{ student_id: 7, student_name: "Ana Pérez", attendance_status: "cancelled" }]);
+    mockApi("get", "/cohorts/1/attendance-summary", [{ student_id: 7, student_name: "Ana Pérez", sessions_total: 1, sessions_confirmed: 1, sessions_no_show: 0 }]);
+    const { user } = setup();
+    await expandCard(user);
+    await user.click(await screen.findByText(/2 alumno\(s\)/));
+    await screen.findByText("Asistencia de la sesión", { selector: "h2" });
+    await closeByHeader(user, "Asistencia de la sesión");
+    await waitFor(() => expect(screen.queryByText("Asistencia de la sesión", { selector: "h2" })).not.toBeInTheDocument());
+    await user.click(await screen.findByRole("button", { name: /Ver historial de asistencia/ }));
+    await screen.findByText("Historial de asistencia", { selector: "h2" });
+    await closeByHeader(user, "Historial de asistencia");
+    await waitFor(() => expect(screen.queryByText("Historial de asistencia", { selector: "h2" })).not.toBeInTheDocument());
+  });
+});
+
+describe("Grupos · editar cupo desde confirmado y en curso", () => {
+  it.each([["confirmed"], ["in_progress"]])("con el grupo en estado %s se abre el editor con los cupos actuales", async (status) => {
+    const { user } = setup([COHORT({ status, current_students: 3, min_students: 3, max_students: 6 })]);
+    await user.click(await screen.findByRole("button", { name: /Editar cupo/ }));
+    expect(await screen.findByText(/No puede ser menor que los 3 ya inscritos/)).toBeInTheDocument();
+    expect(screen.getAllByRole("spinbutton").map((i) => (i as HTMLInputElement).value)).toEqual(["3", "6"]);
+  });
+});

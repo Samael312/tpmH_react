@@ -232,3 +232,98 @@ describe("Admin · pagos · errores de carga y de rechazo", () => {
     expect(screen.getByText("rara")).toBeInTheDocument();
   });
 });
+
+describe("Admin · pagos · etiquetas por tipo, reintentos y cierres de diálogos", () => {
+  it("cada tipo de pago sin cuotas muestra su etiqueta", async () => {
+    setup({ payments: [
+      PAY({ payment_id: 21, payment_type: "renewal", student_name: "S1" }),
+      PAY({ payment_id: 22, payment_type: "package_renewal", student_name: "S2" }),
+      PAY({ payment_id: 23, payment_type: "package_change", student_name: "S3" }),
+      PAY({ payment_id: 24, payment_type: "installment", installment_index: null, installment_total: null, student_name: "S4" }),
+      PAY({ payment_id: 25, payment_type: "unlimited_recharge", installment_index: 5, student_name: "S5" }),
+      PAY({ payment_id: 26, payment_type: "unlimited_recharge", installment_index: null, student_name: "S6" }),
+      PAY({ payment_id: 27, payment_type: "refund", student_name: "S7" }),
+      PAY({ payment_id: 28, payment_type: "group_enrollment", student_name: "S8" }),
+    ] });
+    await screen.findByText("S1");
+    expect(screen.getAllByText("Renovación").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("Cambio · Paquete Completo")).toBeInTheDocument();
+    expect(screen.getByText("Cuota 1/1")).toBeInTheDocument();
+    expect(screen.getByText("Recarga 5 clases")).toBeInTheDocument();
+    expect(screen.getByText("Recarga Ilimitada")).toBeInTheDocument();
+    expect(screen.getByText("Reembolso a favor del estudiante")).toBeInTheDocument();
+    expect(screen.getByText("Inscripción a grupo")).toBeInTheDocument();
+  });
+
+  it("los pagos en cuotas indican el número de cuota", async () => {
+    setup({ payments: [
+      PAY({ payment_id: 31, payment_type: "renewal", installment_index: 2, installment_total: 4, student_name: "C1" }),
+      PAY({ payment_id: 32, payment_type: "package_renewal", installment_index: null, installment_total: 3, student_name: "C2" }),
+      PAY({ payment_id: 33, payment_type: "package_change", installment_index: 1, installment_total: 2, student_name: "C3" }),
+      PAY({ payment_id: 34, payment_type: "installment", installment_index: 2, installment_total: 6, student_name: "C4" }),
+    ] });
+    await screen.findByText("C1");
+    expect(screen.getByText("Renovación (Cuota 2/4)")).toBeInTheDocument();
+    expect(screen.getByText("Renovación (Cuota 1/3)")).toBeInTheDocument();
+    expect(screen.getByText("Cambio (Cuota 1/2)")).toBeInTheDocument();
+    expect(screen.getByText("Cuota 2/6")).toBeInTheDocument();
+  });
+
+  it("si fallan los pagos pendientes, Reintentar los vuelve a pedir", async () => {
+    const { user } = setup({}, () => mockApiError("get", "/payments/pending-review", 500, "x"));
+    expect(await screen.findByText("No se pudieron cargar los pagos pendientes.")).toBeInTheDocument();
+    mockApi("get", "/payments/pending-review", [PAY()]);
+    await user.click(screen.getByRole("button", { name: /Reintentar/ }));
+    expect(await screen.findByText("Ana Pérez")).toBeInTheDocument();
+  });
+
+  it("el botón de actualizar vuelve a pedir pagos, retiros y profesores", async () => {
+    const { user } = setup();
+    await screen.findByText("Ana Pérez");
+    const before = callsTo("get", "/payments/pending-review").length;
+    await user.click(screen.getAllByRole("button", { name: "Actualizar datos" })[0]);
+    await waitFor(() => expect(callsTo("get", "/payments/pending-review").length).toBeGreaterThan(before));
+  });
+
+  it("cancelar los diálogos de aprobar y rechazar un pago no llama a nada", async () => {
+    const { user } = setup();
+    await user.click(await screen.findByRole("button", { name: "Confirmar pago" }));
+    await screen.findByRole("button", { name: "Aprobar pago" });
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Aprobar pago" })).not.toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Rechazar" }));
+    await screen.findByText("Rechazar pago");
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByText("Rechazar pago")).not.toBeInTheDocument());
+    expect(callsTo("patch", "/payments/11/validate")).toHaveLength(0);
+  });
+
+  it("el modal de marcar retiro pagado se cierra con Cancelar y con la X", async () => {
+    const { user } = setup();
+    await user.click(await tab(/Retiros/));
+    await user.click(await screen.findByRole("button", { name: "Marcar Pagado" }));
+    await screen.findByText("Marcar retiro como pagado");
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByText("Marcar retiro como pagado")).not.toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Marcar Pagado" }));
+    const title = await screen.findByText("Marcar retiro como pagado", { selector: "h2" });
+    await user.click(title.parentElement!.querySelector("button") as HTMLElement);
+    await waitFor(() => expect(screen.queryByText("Marcar retiro como pagado")).not.toBeInTheDocument());
+    expect(callsTo("post", "/payments/admin/withdrawals/3/process")).toHaveLength(0);
+  });
+
+  it("cancelar los diálogos de un paquete gratis (aprobar y rechazar) no resuelve nada", async () => {
+    const { user } = setup();
+    await user.click(await tab(/Paquetes gratis/));
+    await screen.findByText("Beca acordada");
+    await user.click(screen.getByRole("button", { name: "Aprobar" }));
+    await screen.findByText("Aprobar paquete gratis");
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByText("Aprobar paquete gratis")).not.toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Rechazar" }));
+    await screen.findByText("Rechazar solicitud de paquete gratis");
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByText("Rechazar solicitud de paquete gratis")).not.toBeInTheDocument());
+    expect(callsTo("patch", "/payments/manual-grant-requests/9/resolve")).toHaveLength(0);
+  });
+});

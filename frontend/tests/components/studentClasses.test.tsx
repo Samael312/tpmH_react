@@ -5,7 +5,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import userEvent from "@testing-library/user-event";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import MyClassesPage from "@/app/(student)/dashboard/classes/page";
 import { renderScreen } from "./render";
 import { routerState } from "./router";
@@ -158,5 +158,68 @@ describe("Mis clases (alumno) · cancelar", () => {
     const { user } = setup([cls(1, "confirmed", 2)]);
     await openCancel(user);
     expect(await screen.findByText(/el sistema no te dejará cancelarla/)).toBeInTheDocument();
+  });
+});
+
+describe("Mis clases (alumno) · calendario, filtros y reagendar", () => {
+  it("el calendario cambia de mes hacia atrás y adelante, también cruzando el año", async () => {
+    const { user } = setup([]);
+    await user.click(await screen.findByText("Elegir fecha"));
+    const header = screen.getByText(/^(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre) \d{4}$/i).parentElement as HTMLElement;
+    const [prev, next] = Array.from(header.querySelectorAll("button"));
+    for (let i = 0; i < 13; i++) await user.click(prev); // pasa por enero → diciembre del año anterior
+    const year = new Date().getFullYear();
+    expect(screen.getByText(new RegExp(`${year - 1}`))).toBeInTheDocument();
+    for (let i = 0; i < 26; i++) await user.click(next); // cruza diciembre → enero
+    expect(screen.getByText(new RegExp(`${year + 1}`))).toBeInTheDocument();
+  });
+
+  it("elegir un día del calendario filtra por esa fecha y «Ver todas las próximas» la quita", async () => {
+    const { user } = setup([cls(1, "confirmed", 48)]);
+    await user.click(await screen.findByText("Elegir fecha"));
+    const day15 = screen.getAllByRole("button").find((b) => b.textContent === "15") as HTMLElement;
+    await user.click(day15);
+    expect(await screen.findByText(/Mostrando:/)).toBeInTheDocument();
+    expect(screen.queryByText("¿Cancelar clase?")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Ver todas las próximas/ }));
+    await waitFor(() => expect(screen.queryByText(/Mostrando:/)).not.toBeInTheDocument());
+  });
+
+  it("volver a «Todos los profesores» y «Todas las asignaturas» limpia el filtro", async () => {
+    const { user } = setup([
+      cls(1, "confirmed", 48),
+      cls(2, "confirmed", 50, { teacher_username: "profe2", teacher_name: "Profe Dos", subject: "Inglés" }),
+    ]);
+    await user.click(await screen.findByText("Todos los profesores"));
+    await user.click(await screen.findByRole("button", { name: "Profe Dos" }));
+    await waitFor(() => expect(screen.queryByText("Profe Uno")).not.toBeInTheDocument());
+    await user.click(screen.getAllByRole("button", { name: /Profe Dos/ })[0]);
+    await user.click(await screen.findByRole("button", { name: "Todos los profesores" }));
+    expect(await screen.findByText("Profe Uno")).toBeInTheDocument();
+    await user.click(screen.getByText("Todas las asignaturas"));
+    await user.click(await screen.findByRole("button", { name: "Inglés" }));
+    await user.click(screen.getAllByRole("button", { name: /Inglés/ })[0]);
+    await user.click(await screen.findByRole("button", { name: "Todas las asignaturas" }));
+    expect(await screen.findByText("Profe Uno")).toBeInTheDocument();
+  });
+
+  it("con la carga fallida aparece «Reintentar» y vuelve a pedir las clases", async () => {
+    const { user } = setup([], () => mockApiError("get", "/classes/my-classes", 500, "x"));
+    const retry = await screen.findByRole("button", { name: /Reintentar/ });
+    const before = callsTo("get", "/classes/my-classes").length;
+    await user.click(retry);
+    await waitFor(() => expect(callsTo("get", "/classes/my-classes").length).toBeGreaterThan(before));
+  });
+
+  it("Reagendar abre el modal con el profesor de la clase y se puede cerrar", async () => {
+    mockApi("get", /^\/availability\/profe1\/slots/, []);
+    const { user } = setup([cls(1, "confirmed", 72)]);
+    await screen.findAllByText(/Español/);
+    const menu = screen.queryByRole("button", { name: /Acciones/ });
+    if (menu) await user.click(menu);
+    await user.click(await screen.findByRole("button", { name: "Reagendar" }));
+    expect(await screen.findByText("Reagendar clase")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cerrar" }));
+    await waitFor(() => expect(screen.queryByText("Reagendar clase")).not.toBeInTheDocument());
   });
 });

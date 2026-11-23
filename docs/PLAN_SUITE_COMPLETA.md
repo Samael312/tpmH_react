@@ -2,7 +2,14 @@
 
 Estado a noviembre de 2026. Este documento recoge lo que falta para tener una suite que pruebe **todas las pantallas del frontend** y, en paralelo, una suite equivalente del **backend**, ejecutables juntas.
 
-## 1. Punto de partida (frontend)
+## 0. Estado actual (frontend, cerrado el punto 1 y el inventario de 2.4)
+
+- 1838 pruebas Vitest en 108 archivos, todas en verde. Cobertura: líneas **97,93 %**, funciones **96,14 %**, ramas **92,82 %** (criterio del plan: 97 / 90 / 92, cumplido).
+- `tests/screenInventory.test.ts` falla si una `app/**/page.tsx` no tiene una prueba de flujo que la importe (hoy sin exenciones).
+- Lo que sigue sin cubrir es sobre todo código inalcanzable o defensivo (manejadores tras botones deshabilitados, `||{}`/`??`) y los dos archivos WebGL.
+- Pendiente real: Playwright (flujos largos, móvil, WebKit, axe, Lighthouse) y la suite del backend (secciones 2.4-2.5 y 3).
+
+## 1. Punto de partida (frontend, al empezar el trabajo)
 
 - 1520 pruebas Vitest en 84 archivos, todas en verde. Cobertura: líneas **96,3 %**, ramas **89,6 %**, funciones **81,1 %**.
 - Smoke E2E con Playwright (8 pruebas, backend semilla SQLite) y 22 sondas de zona horaria (`__tz_probes__`).
