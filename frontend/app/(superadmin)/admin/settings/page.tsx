@@ -725,6 +725,9 @@ export default function SettingsPage() {
                       ...paymentConfig,
                       paypal_enabled: !paymentConfig.paypal_enabled
                     })}
+                    role="switch"
+                    aria-checked={!!paymentConfig.paypal_enabled}
+                    aria-label="Activar PayPal"
                     className={`
                       relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none
                       ${paymentConfig.paypal_enabled ? 'bg-emerald-500 shadow-inner' : 'bg-slate-200'}
@@ -772,6 +775,9 @@ export default function SettingsPage() {
                       ...paymentConfig,
                       binance_enabled: !paymentConfig.binance_enabled
                     })}
+                    role="switch"
+                    aria-checked={!!paymentConfig.binance_enabled}
+                    aria-label="Activar Binance (USDT)"
                     className={`
                       relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none
                       ${paymentConfig.binance_enabled ? 'bg-emerald-500 shadow-inner' : 'bg-slate-200'}
@@ -829,6 +835,9 @@ export default function SettingsPage() {
                       ...paymentConfig,
                       bank_transfer_enabled: !paymentConfig.bank_transfer_enabled
                     })}
+                    role="switch"
+                    aria-checked={!!paymentConfig.bank_transfer_enabled}
+                    aria-label="Activar transferencia bancaria"
                     className={`
                       relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none
                       ${paymentConfig.bank_transfer_enabled ? 'bg-emerald-500 shadow-inner' : 'bg-slate-200'}
@@ -876,6 +885,9 @@ export default function SettingsPage() {
                       ...paymentConfig,
                       mobile_payment_enabled: !paymentConfig.mobile_payment_enabled
                     })}
+                    role="switch"
+                    aria-checked={!!paymentConfig.mobile_payment_enabled}
+                    aria-label="Activar pago móvil / Bizum"
                     className={`
                       relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none
                       ${paymentConfig.mobile_payment_enabled ? 'bg-emerald-500 shadow-inner' : 'bg-slate-200'}
@@ -941,6 +953,7 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-3 max-w-xs">
                   <input
                     type="number"
+                    aria-label="Comisión por defecto (0 a 1)"
                     step="0.01"
                     min="0"
                     max="1"
@@ -1057,6 +1070,9 @@ export default function SettingsPage() {
                     ...platformConfig,
                     is_single_tenant: !platformConfig.is_single_tenant
                   })}
+                  role="switch"
+                  aria-checked={!!platformConfig.is_single_tenant}
+                  aria-label="Modo profesora única"
                   className={`
                     relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none shrink-0 ml-4
                     ${platformConfig.is_single_tenant ? 'bg-pink-500 shadow-inner' : 'bg-slate-200'}
@@ -1092,6 +1108,9 @@ export default function SettingsPage() {
                     ...platformConfig,
                     show_teacher_whatsapp: !platformConfig.show_teacher_whatsapp
                   })}
+                  role="switch"
+                  aria-checked={!!platformConfig.show_teacher_whatsapp}
+                  aria-label="Mostrar WhatsApp de los profesores"
                   className={`
                     relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none shrink-0 ml-4
                     ${platformConfig.show_teacher_whatsapp ? 'bg-emerald-500 shadow-inner' : 'bg-slate-200'}
@@ -1329,6 +1348,9 @@ export default function SettingsPage() {
                     ...platformConfig,
                     chat_enabled: !platformConfig.chat_enabled
                   })}
+                  role="switch"
+                  aria-checked={!!platformConfig.chat_enabled}
+                  aria-label="Activar el chat"
                   className={`
                     relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none shrink-0 ml-4
                     ${platformConfig.chat_enabled ? 'bg-blue-500 shadow-inner' : 'bg-slate-200'}

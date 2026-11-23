@@ -547,6 +547,7 @@ function ThemeColorSection({ initialColor, onSaved }: { initialColor?: string | 
         <div className="flex items-center gap-3">
           <input
             type="color"
+            aria-label="Color del tema"
             value={color}
             onChange={e => save(e.target.value)}
             disabled={saving}
@@ -1290,7 +1291,7 @@ export default function TeacherProfilePage() {
                         placeholder="••••••••"
                         className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-10 pr-10 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
                       />
-                      <button type="button" onClick={() => setShowOld(p => !p)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500 transition-colors">
+                      <button type="button" onClick={() => setShowOld(p => !p)} aria-label={showOld ? "Ocultar contraseña actual" : "Mostrar contraseña actual"} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500 transition-colors">
                         {showOld ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
@@ -1308,7 +1309,7 @@ export default function TeacherProfilePage() {
                         placeholder="Mínimo 8 caracteres"
                         className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-800 pl-10 pr-10 py-3 focus:outline-none focus:bg-white focus:border-pink-500 focus:ring-4 focus:ring-pink-50 transition-all disabled:opacity-60"
                       />
-                      <button type="button" onClick={() => setShowNew(p => !p)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500 transition-colors">
+                      <button type="button" onClick={() => setShowNew(p => !p)} aria-label={showNew ? "Ocultar contraseña nueva" : "Mostrar contraseña nueva"} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500 transition-colors">
                         {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>

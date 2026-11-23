@@ -103,5 +103,9 @@ def seed():
 
 if __name__ == "__main__":
     seed()
+    # Solo en este servidor de pruebas: las suites E2E (varios proyectos, muchos logins desde la misma IP) agotan
+    # el 10/minuto del login. En producción el límite sigue activo.
+    from app.core.rate_limit import limiter
+    limiter.enabled = False
     import uvicorn
     uvicorn.run("app.main:app", host="127.0.0.1", port=int(sys.argv[1]) if len(sys.argv) > 1 else 8000)

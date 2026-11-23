@@ -13,9 +13,11 @@ async function apiAuth(request: APIRequestContext, user: string) {
 
 async function login(page: Page, user: string, password = PASSWORD) {
   await page.goto("/login");
+  // WebKit (lento con `next dev`) rellena antes de hidratar y React borra lo escrito: se espera a que la red se calme.
+  await page.waitForLoadState("networkidle");
   await page.getByPlaceholder("Tu usuario").fill(user);
   await page.getByPlaceholder("••••••••").fill(password);
-  await page.getByRole("button", { name: /Iniciar sesión/ }).click();
+  await page.locator("button[type=submit]").click();
 }
 
 test.describe("público", () => {
@@ -43,7 +45,11 @@ test.describe("alumno", () => {
     await expect(page).toHaveURL(/\/dashboard/);
   });
 
-  test("aviso de idiomas y guardado en el perfil (Fase 8)", async ({ page }) => {
+  test("aviso de idiomas y guardado en el perfil (Fase 8)", async ({ page, request }) => {
+    // los proyectos (escritorio, móvil, WebKit) comparten backend: se parte siempre sin idiomas
+    const student = await apiAuth(request, "alumno");
+    const reset = await request.patch(`${API}/users/me`, { headers: student, data: { spoken_languages: [] } });
+    expect(reset.ok()).toBeTruthy();
     await login(page, "alumno");
     await expect(page).toHaveURL(/\/dashboard/);
 
@@ -125,13 +131,14 @@ test.describe("superadmin", () => {
     // los esenciales no se pueden apagar
     await expect(page.getByRole("switch", { name: /Esenciales .*siempre activo/ })).toBeDisabled();
     // apagar una categoría y guardar
+    // el estado inicial depende de qué proyecto corrió antes (backend compartido): se invierte lo que haya
     const welcome = page.getByRole("switch", { name: "Enviar: Bienvenida" });
-    await expect(welcome).toHaveAttribute("aria-checked", "true");
+    const before = (await welcome.getAttribute("aria-checked")) === "true";
     await welcome.click();
     await page.getByRole("button", { name: "Guardar correos" }).click();
     await expect(page.getByText("Configuración de correos guardada")).toBeVisible();
     await page.reload();
     await page.getByRole("button", { name: /Correos/ }).click();
-    await expect(page.getByRole("switch", { name: "Enviar: Bienvenida" })).toHaveAttribute("aria-checked", "false");
+    await expect(page.getByRole("switch", { name: "Enviar: Bienvenida" })).toHaveAttribute("aria-checked", String(!before));
   });
 });

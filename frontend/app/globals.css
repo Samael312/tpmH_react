@@ -47,3 +47,27 @@ input[type="password"]::-webkit-strong-password-auto-fill-button {
 @media (prefers-reduced-motion: reduce) {
   .chat-pulse-ring { animation: none; }
 }
+
+/*
+ * Accesibilidad · contraste de texto (WCAG AA, 4,5:1).
+ * Los tonos de texto de la paleta (slate-400, pink-400/500, emerald-500/600, rose-500) quedaban entre 2,4 y 4,3:1
+ * sobre fondos claros. Se oscurecen aquí en un único sitio en vez de tocar ~1.500 usos.
+ * Solo afectan al color del texto (los fondos, bordes e iconos con bg-/border- no cambian).
+ * Sobre fondos oscuros se restauran tonos claros (más abajo). Comprobado con e2e/a11y.spec.ts.
+ */
+@layer utilities {
+  .text-slate-400 { color: #5b6b82; }
+  .text-slate-500 { color: #586a80; }
+  .text-pink-400, .text-pink-500 { color: #c81e68; }
+  .text-pink-600 { color: #be185d; }
+  .text-emerald-500, .text-emerald-600 { color: #047857; }
+  .text-rose-500, .text-rose-600 { color: #be123c; }
+  /* texto blanco sobre fondos de color medio: se oscurece el fondo hasta 4,5:1 */
+  .text-white.bg-pink-500 { background-color: #db2777; }
+  .text-white.bg-amber-500 { background-color: #b45309; }
+
+  /* fondos oscuros: tonos claros (el contraste ya era bueno con la paleta original) */
+  :is(.bg-slate-800, .bg-slate-900, .bg-slate-950, [class*="bg-slate-900"], [class*="bg-slate-950"], [class*="from-slate-9"], [class*="from-slate-8"]) :is(.text-slate-400, .text-slate-500, .text-slate-600) { color: #94a3b8; }
+  :is(.bg-slate-800, .bg-slate-900, .bg-slate-950, [class*="bg-slate-900"], [class*="bg-slate-950"], [class*="from-slate-9"], [class*="from-slate-8"]) :is(.text-pink-400, .text-pink-500) { color: #f472b6; }
+  :is(.bg-slate-800, .bg-slate-900, .bg-slate-950, [class*="bg-slate-900"], [class*="bg-slate-950"], [class*="from-slate-9"], [class*="from-slate-8"]) :is(.text-emerald-500, .text-emerald-600) { color: #34d399; }
+}

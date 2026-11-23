@@ -972,7 +972,7 @@ export default function TeacherPackagesPage() {
                       <div className="mb-4">
                         <div className="flex items-center gap-2 mb-1.5">
                           <span className="text-lg">{pkg.icon || "📦"}</span>
-                          <h3 className="text-base font-black" style={{ color: accent }}>
+                          <h3 className="text-base font-black" style={{ color: `color-mix(in srgb, ${accent} 70%, black)` }}>
                             {pkg.name}
                           </h3>
                         </div>
@@ -1016,6 +1016,7 @@ export default function TeacherPackagesPage() {
                         {pkg.is_active && (
                           <button
                             onClick={() => deactivatePackage(pkg.id)}
+                            aria-label={`Desactivar paquete ${pkg.name}`}
                             className="w-10 flex items-center justify-center bg-slate-50 text-red-400
                                        hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors flex-shrink-0
                                        border border-slate-200"
@@ -1038,7 +1039,7 @@ export default function TeacherPackagesPage() {
               <h2 className="text-lg font-black text-slate-800">
                 Seguimiento de estudiantes ({enrollments.length})
               </h2>
-              <button onClick={fetchAll} className="ml-auto text-slate-400 hover:text-pink-500 transition-colors">
+              <button onClick={fetchAll} aria-label="Actualizar seguimiento" className="ml-auto text-slate-400 hover:text-pink-500 transition-colors">
                 <RefreshCw className="w-4 h-4" />
               </button>
             </div>

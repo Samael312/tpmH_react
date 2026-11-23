@@ -121,7 +121,9 @@ function SelectCell({
   options,
   dirty,
   onChange,
+  label,
 }: {
+  label: string;
   value: string;
   options: string[];
   dirty: boolean;
@@ -131,6 +133,7 @@ function SelectCell({
     <div className="relative">
       <select
         value={value}
+        aria-label={label}
         onChange={(e) => onChange(e.target.value)}
         className={`
           w-full appearance-none text-xs font-bold px-2.5 py-1.5 pr-7
@@ -440,6 +443,7 @@ export default function BulkEditStudentsPage() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => router.push("/admin/students")}
+                aria-label="Volver a estudiantes"
                 className="w-10 h-10 rounded-2xl bg-white border border-slate-200/80
                            flex items-center justify-center shadow-sm hover:bg-slate-50
                            hover:border-slate-300 transition-all duration-200 active:scale-95"
@@ -592,6 +596,7 @@ export default function BulkEditStudentsPage() {
               <div className="relative">
                 <select
                   value={filterRole}
+                  aria-label="Filtrar por rol"
                   onChange={(e) => setFilterRole(e.target.value)}
                   className="appearance-none bg-slate-100/80 border-2 border-transparent rounded-2xl
                              text-xs font-bold text-slate-700 pl-3.5 pr-8 py-2.5 cursor-pointer
@@ -612,6 +617,7 @@ export default function BulkEditStudentsPage() {
               <div className="relative">
                 <select
                   value={filterActive}
+                  aria-label="Filtrar por estado"
                   onChange={(e) => setFilterActive(e.target.value)}
                   className="appearance-none bg-slate-100/80 border-2 border-transparent rounded-2xl
                              text-xs font-bold text-slate-700 pl-3.5 pr-8 py-2.5 cursor-pointer
@@ -785,6 +791,9 @@ export default function BulkEditStudentsPage() {
                       <th className="w-10 px-4 py-3.5 text-left">
                         <button
                           onClick={toggleAll}
+                          role="checkbox"
+                          aria-checked={allSelected}
+                          aria-label="Seleccionar todos"
                           className={`
                             w-4 h-4 rounded-md border-2 flex items-center justify-center transition-all duration-200
                             ${
@@ -837,6 +846,9 @@ export default function BulkEditStudentsPage() {
                         <td className="px-4 py-2.5">
                           <button
                             onClick={() => toggleSelect(row.id)}
+                            role="checkbox"
+                            aria-checked={selectedIds.has(row.id)}
+                            aria-label={`Seleccionar a @${row.username}`}
                             className={`
                               w-4 h-4 rounded-md border-2 flex items-center justify-center transition-all duration-200
                               ${
@@ -922,6 +934,7 @@ export default function BulkEditStudentsPage() {
                         <td className="px-3 py-2.5 min-w-[120px]">
                           <div className="space-y-1">
                             <SelectCell
+                              label={`Rol de @${row.username}`}
                               value={row.role}
                               options={ROLES}
                               dirty={

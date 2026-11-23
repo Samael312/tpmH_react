@@ -362,9 +362,10 @@ export default function ChipiWidget({ screenName, raised }: ChipiWidgetProps) {
               e.stopPropagation();
               setIdleVisible(false);
             }}
+            aria-label="Cerrar aviso de Chipi"
             className="text-slate-400 hover:text-slate-600 p-0.5"
           >
-            <X className="w-3 h-3" />
+            <X className="w-3 h-3" aria-hidden="true" />
           </button>
         </div>
         <p className="text-xs font-bold text-slate-700 leading-snug">
@@ -422,6 +423,7 @@ export default function ChipiWidget({ screenName, raised }: ChipiWidgetProps) {
             </button>
             <button
               onClick={() => setOpen(false)}
+              aria-label="Minimizar chat"
               className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/90 hover:text-white transition-colors"
             >
               <Minimize2 className="w-3.5 h-3.5" />
@@ -482,6 +484,7 @@ export default function ChipiWidget({ screenName, raised }: ChipiWidgetProps) {
             <button
               onClick={() => sendMessage()}
               disabled={!input.trim() || sending}
+              aria-label="Enviar mensaje"
               className="w-8 h-8 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 flex items-center justify-center text-white shadow-sm shadow-pink-500/20 hover:shadow-pink-500/30 hover:scale-105 active:scale-95 transition-all disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed flex-shrink-0"
             >
               {sending ? (

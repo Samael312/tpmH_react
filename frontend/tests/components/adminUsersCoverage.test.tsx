@@ -76,7 +76,7 @@ describe("Admin · usuarios · nacionalidad y cambio en lote", () => {
   it("el lote de nacionalidad usa el texto libre y la X cierra el panel", async () => {
     const { user } = setup();
     await screen.findByText("Nombre1 Apellido1");
-    await user.click(within(rowOf("Nombre1 Apellido1")).getAllByRole("button")[0]);
+    await user.click(within(rowOf("Nombre1 Apellido1")).getByRole("checkbox"));
     await user.click(await screen.findByRole("button", { name: /Cambiar valor en lote/ }));
     await user.selectOptions(screen.getByRole("option", { name: "Seleccionar campo..." }).closest("select")!, "nationality");
     const box = screen.getAllByPlaceholderText("España")[0] as HTMLInputElement;
@@ -88,7 +88,7 @@ describe("Admin · usuarios · nacionalidad y cambio en lote", () => {
   it("la X del panel de cambio en lote lo cierra sin aplicar nada", async () => {
     const { user } = setup();
     await screen.findByText("Nombre1 Apellido1");
-    await user.click(within(rowOf("Nombre1 Apellido1")).getAllByRole("button")[0]);
+    await user.click(within(rowOf("Nombre1 Apellido1")).getByRole("checkbox"));
     await user.click(await screen.findByRole("button", { name: /Cambiar valor en lote/ }));
     const apply = await screen.findByRole("button", { name: "Aplicar" });
     await user.click(apply.parentElement!.querySelector("button:last-of-type") as HTMLElement);

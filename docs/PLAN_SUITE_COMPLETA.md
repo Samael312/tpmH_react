@@ -7,7 +7,8 @@ Estado a noviembre de 2026. Este documento recoge lo que falta para tener una su
 - 1838 pruebas Vitest en 108 archivos, todas en verde. Cobertura: líneas **97,93 %**, funciones **96,14 %**, ramas **92,82 %** (criterio del plan: 97 / 90 / 92, cumplido).
 - `tests/screenInventory.test.ts` falla si una `app/**/page.tsx` no tiene una prueba de flujo que la importe (hoy sin exenciones).
 - Lo que sigue sin cubrir es sobre todo código inalcanzable o defensivo (manejadores tras botones deshabilitados, `||{}`/`??`) y los dos archivos WebGL.
-- Pendiente real: Playwright (flujos largos, móvil, WebKit, axe, Lighthouse) y la suite del backend (secciones 2.4-2.5 y 3).
+- Playwright hecho: 4 proyectos (escritorio, móvil, WebKit, iPhone), smoke, barrido axe de 24 pantallas sin excepciones (se corrigieron `button-name`, `label`, `select-name` y `color-contrast`) y comprobación del canvas 3D.
+- Pendiente real: flujos largos y chat WebSocket en Playwright, Lighthouse, y la suite del backend (secciones 2.4-2.5 y 3).
 
 ## 1. Punto de partida (frontend, al empezar el trabajo)
 
@@ -52,7 +53,7 @@ Tareas:
 4. Accesibilidad (axe) y rendimiento del landing 3D (Lighthouse). Detalle en 2.5.
 
 ### 2.5 Pruebas de UI en navegador real (siguen siendo necesarias)
-Lo hecho en noviembre de 2026 (1520 pruebas en jsdom) cubre la lógica de cada pantalla: qué pasa al pulsar, escribir, fallar o venir vacía, validaciones, mensajes y permisos por rol. **No cubre lo que depende de un navegador real:**
+Lo hecho en noviembre de 2026 (1838 pruebas en jsdom) cubre la lógica de cada pantalla: qué pasa al pulsar, escribir, fallar o venir vacía, validaciones, mensajes y permisos por rol. **No cubre lo que depende de un navegador real:**
 
 | # | Hueco | Por qué jsdom no lo ve | Prueba propuesta |
 |---|---|---|---|

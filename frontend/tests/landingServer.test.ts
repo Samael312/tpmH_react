@@ -28,7 +28,7 @@ describe("getLandingDataServer", () => {
     vi.stubGlobal("fetch", okFetch(BODY));
     const d = await getLandingDataServer();
     expect(d).toMatchObject({ isSingleTenant: true, platformName: "Mi Plataforma", platformTagline: null });
-    expect(d?.landingContent.hero_title).toBe("Hola");
+    expect((d?.landingContent as Record<string, unknown> | undefined)?.hero_title).toBe("Hola");
   });
 
   it("completa con valores por defecto lo que falta", async () => {

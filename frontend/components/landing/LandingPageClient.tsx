@@ -78,7 +78,7 @@ function Navbar({ platformName, navItems }: { platformName: string; navItems: Na
           </Link>
         </div>
 
-        <button onClick={() => setMobileOpen(p => !p)} className="md:hidden w-9 h-9 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-600">
+        <button onClick={() => setMobileOpen(p => !p)} aria-label={mobileOpen ? "Cerrar menú" : "Abrir menú"} aria-expanded={mobileOpen} className="md:hidden w-9 h-9 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-600">
           {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
         </button>
       </div>
@@ -659,7 +659,7 @@ export default function LandingPageClient({ initialData }: { initialData?: Landi
             </div>
           ) : reviews.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-slate-400 font-bold">Sé el primero en dejar una reseña tras tu clase</p>
+              <p className="text-slate-600 font-bold">Sé el primero en dejar una reseña tras tu clase</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

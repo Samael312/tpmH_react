@@ -91,6 +91,7 @@ export default function CalendarPicker({
         <button
           type="button"
           onClick={prevMonth}
+          aria-label="Mes anterior"
           className="w-6 h-6 rounded-md bg-slate-50 hover:bg-slate-100 flex items-center justify-center transition-colors"
         >
           <ChevronLeft className="w-3.5 h-3.5 text-slate-600" />
@@ -99,6 +100,7 @@ export default function CalendarPicker({
         <button
           type="button"
           onClick={nextMonth}
+          aria-label="Mes siguiente"
           className="w-6 h-6 rounded-md bg-slate-50 hover:bg-slate-100 flex items-center justify-center transition-colors"
         >
           <ChevronRight className="w-3.5 h-3.5 text-slate-600" />

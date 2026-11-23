@@ -19,14 +19,20 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   fullyParallel: false, // un solo backend con SQLite compartido
   workers: 1,
-  retries: process.env.CI ? 1 : 0,
+  retries: 1, // `next dev` compila cada ruta en frío: la primera visita puede agotar el tiempo
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: "http://localhost:3000",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // Escritorio y móvil, Chromium y WebKit (Safari/iOS). Para correr uno: `npx playwright test --project=mobile-chrome`.
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    { name: "mobile-chrome", use: { ...devices["Pixel 5"] } },
+    { name: "webkit", use: { ...devices["Desktop Safari"] } },
+    { name: "mobile-safari", use: { ...devices["iPhone 13"] } },
+  ],
   webServer: [
     {
       command: `${python} -m tests.audit.run_server 8000`,

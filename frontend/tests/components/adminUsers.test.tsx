@@ -22,8 +22,8 @@ function setup(users: unknown[] = [U(1), U(2, { role: "teacher", nationality: "C
   return { ...view, user: userEvent.setup() };
 }
 const rowOf = (name: string) => screen.getByText(name).closest("tr") as HTMLElement;
-const selectAll = () => within(document.querySelector("thead") as HTMLElement).getAllByRole("button")[0];
-const selectRow = (name: string) => within(rowOf(name)).getAllByRole("button")[0];
+const selectAll = () => within(document.querySelector("thead") as HTMLElement).getByRole("checkbox", { name: "Seleccionar todos" });
+const selectRow = (name: string) => within(rowOf(name)).getByRole("checkbox");
 const selects = () => screen.getAllByRole("combobox") as HTMLSelectElement[];
 
 afterEach(() => { vi.restoreAllMocks(); });
