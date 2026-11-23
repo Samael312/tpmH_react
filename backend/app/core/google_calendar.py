@@ -932,6 +932,7 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
     updated_count = 0
     deleted_count = 0
     error_count = 0
+    quota_hit = False
 
     # G1: las clases `external` (Preply) son de solo lectura: NUNCA se empujan
     # (ni update/create/delete) sobre el evento original de Preply.
@@ -1001,6 +1002,7 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
             if kind == "quota":
                 logger.warning(f"Cuota de la API de Google agotada sincronizando teacher_id={teacher_id}: {e}")
                 token.last_error = "Límite de cuota de la API de Google alcanzado; se reintenta en la próxima sync"
+                quota_hit = True
                 db.commit()
                 break
             if kind == "permission":
@@ -1014,7 +1016,7 @@ def sync_calendar_logic(teacher_id: int, db: Session) -> dict:
             error_count += 1
 
     token.last_synced_at = utc_now()
-    if error_count == 0:
+    if error_count == 0 and not quota_hit:
         token.last_error = None
     db.commit()
 

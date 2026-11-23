@@ -377,8 +377,8 @@ def test_sync_logic_error_kinds(world, db, monkeypatch):
     # cuota agotada
     patch_service(monkeypatch, Service(get=raiser(http_error(429)), **base))
     gc.sync_calendar_logic(world["tp"].id, db)
-    # el mensaje de cuota se borra al final porque error_count queda en 0 (ver KNOWN_ISSUES)
-    assert tok.last_error is None
+    # el aviso de cuota debe persistir (antes se borraba al final porque error_count quedaba en 0)
+    assert "cuota" in tok.last_error
     # error genérico de Google y error inesperado
     patch_service(monkeypatch, Service(get=raiser(http_error(500)), **base))
     assert gc.sync_calendar_logic(world["tp"].id, db)["error_count"] == 1

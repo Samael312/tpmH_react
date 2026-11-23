@@ -9,8 +9,10 @@ Estado a noviembre de 2026. Este documento recoge lo que falta para tener una su
 - Lo que sigue sin cubrir es sobre todo código inalcanzable o defensivo (manejadores tras botones deshabilitados, `||{}`/`??`) y los dos archivos WebGL.
 - Playwright hecho: 4 proyectos (escritorio, móvil, WebKit, iPhone), smoke, barrido axe de 24 pantallas sin excepciones (se corrigieron `button-name`, `label`, `select-name` y `color-contrast`) y comprobación del canvas 3D.
 - Playwright, además: flujo largo de 6 pasos (prueba → pago → aprobación → agenda → reagendado → retiro), Lighthouse (rendimiento 1,00 en portada, login y registro) y workflow `e2e.yml` en CI (sin ejecutar aún en GitHub).
+- Ejecución conjunta: `node scripts/test-all.mjs` escrito (ver §4) pero **sin verificar de punta a punta**: la prueba con `--unit` se detuvo por falta de memoria (backend + Vitest + sondas a la vez). Pendiente: lanzarlo con la máquina libre (o por partes) y comprobar `--cov` y `--e2e`.
+- Backend: inventario «una prueba por ruta» hecho (230 rutas, 0 exenciones): `conftest.pytest_sessionfinish` registra las peticiones y en una ejecución completa de `tests/audit` falla si alguna ruta no recibió ninguna (exenciones con motivo en `route_inventory_allowlist.txt`).
 - Backend medido con cobertura: **97 %** de líneas (antes 77,5 %), 1364 pruebas en verde; el CI exige 95 %. Quedan 374 líneas (ver `backend/doc/TESTING.md`). Informe completo, bugs y puntuaciones: `docs/INFORME_COBERTURA_BACKEND.md`.
-- Pendiente real: chat WebSocket con dos sesiones y zonas horarias en navegador, el inventario «una prueba por ruta» de las 211 rutas del backend (`god_mode`, `cohorts`, `homework` y `reviews` son lo más flojo) y el script de ejecución conjunta.
+- Pendiente real: chat WebSocket con dos sesiones y zonas horarias en navegador, los workflows de CI sin ejecutar en GitHub.
 
 ## 1. Punto de partida (frontend, al empezar el trabajo)
 
@@ -111,6 +113,8 @@ Propuesta de un único punto de entrada (script o job de CI) que lance ambas sui
 | Frontend zonas horarias | `cd frontend && npx vitest run --config __tz_probes__/vitest.config.ts` | sin `.env` |
 | Backend auditoría | `cd backend && venv/Scripts/python.exe -m pytest tests/audit -q` | SQLite, sin `.env` |
 | E2E | `cd frontend && E2E_PYTHON='venv\Scripts\python.exe' npm run test:e2e` | levanta backend semilla + `next dev` |
+
+**Hecho:** `node scripts/test-all.mjs` (solo Node, sin dependencias). Opciones: `--unit`, `--e2e`, `--cov` (umbrales: backend 95 %, frontend 97/90/92), `--e2e-projects chromium,mobile-chrome`, `--e2e-anyway`. Lanza backend + Vitest + sondas de zonas horarias a la vez y después Playwright; imprime un resumen y sale con código ≠ 0 si algo falla. Busca el Python en `E2E_PYTHON`, `PYTHON` o `backend/venv`.
 
 Reglas:
 - Las suites unitarias (frontend y backend) corren **en paralelo** y no comparten estado.

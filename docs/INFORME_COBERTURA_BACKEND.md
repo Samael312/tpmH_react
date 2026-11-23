@@ -32,8 +32,8 @@ Resume lo hecho, los bugs encontrados, la reestimación de puntuaciones y lo pen
 
 | # | Hallazgo | Estado |
 |---|---|---|
-| 1 | **Aviso de cuota de Google que se borra solo.** En `core/google_calendar.py::sync_calendar_logic`, con cuota agotada se guarda `token.last_error = "Límite de cuota…"` y se hace `break`; como `error_count` sigue en 0, `if error_count == 0: token.last_error = None` lo borra en la misma ejecución. El profesor y el admin nunca ven el aviso. | **Abierto**, sin corregir. Fijado por `test_g11::test_sync_logic_error_kinds`; al arreglarlo, ese assert cambia. |
-| 2 | **Código inalcanzable** en `endpoints/teachers.py::submit_appeal` (líneas 556-561): el estado «apelaciones agotadas» ya se rechaza antes. | **Abierto**; conviene borrar la rama. |
+| 1 | **Aviso de cuota de Google que se borra solo.** En `core/google_calendar.py::sync_calendar_logic`, con cuota agotada se guarda `token.last_error = "Límite de cuota…"` y se hace `break`; como `error_count` sigue en 0, `if error_count == 0: token.last_error = None` lo borra en la misma ejecución. El profesor y el admin nunca ven el aviso. | **Corregido**: flag `quota_hit` evita el borrado. `test_g11::test_sync_logic_error_kinds` ahora exige que el aviso persista. |
+| 2 | **Código inalcanzable** en `endpoints/teachers.py::submit_appeal` (líneas 556-561): el estado «apelaciones agotadas» ya se rechaza antes. | **Corregido**: rama duplicada borrada. |
 | 3 | **Ramas defensivas duplicadas** en `god_mode.py` (~8 líneas) que repiten comprobaciones previas. | Abierto, bajo impacto. |
 
 No se hallaron fallos de seguridad ni de dinero en las rutas que ahora tienen prueba. Cada prueba nueva fija el comportamiento actual (no hubo que cambiar reglas).
@@ -55,14 +55,10 @@ Misma rúbrica de `ANALISIS.md` (columna nueva «Tras cobertura backend»). Esti
 **Backend (≈374 líneas, 3 %):**
 - `payments.py` (~67): reembolsos, cohortes, cuotas, recargas de ilimitado, duplicados de notificación.
 - `class_logic.py` (22), servicios de IA y voz (`chipi/service.py` 23, `tts_service.py` 23, `ai_debug.py` 15, `chipi/prompts.py` 13, `chipi/context.py` 7), OAuth de `calendar.py` (14) y `auth.py` (12), restos de `users.py`, `teachers.py`, `cohorts.py`, `chat.py`.
-- Corregir los bugs 1 y 2 (y su prueba).
 - El 100 % exacto no es realista: parte es código inalcanzable.
-
-**Inventario «una prueba por ruta»:** test que falle si una de las 211 rutas de `generated/API_REFERENCE.md` no tiene prueba.
 
 **Interfaz y navegador:**
 - Chat WebSocket con dos sesiones en Playwright; zonas horarias en el navegador; registro por la pantalla real; Lighthouse en listas grandes; rerun de WebKit/iPhone de los flujos largos.
-- Script de ejecución conjunta (backend + Vitest + Playwright).
 - Ejecutar `backend.yml` y `e2e.yml` en GitHub.
 
 **Frontend:** ramas restantes (~7 %), `ChipiMascot3D`, `HeroScene`, `app/layout.tsx`.

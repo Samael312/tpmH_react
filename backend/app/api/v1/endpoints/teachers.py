@@ -553,13 +553,6 @@ def submit_appeal(
             "Ya usaste tus 2 apelaciones. Sube un nuevo video para reiniciar la revisión."
         )
 
-    existing_pending = db.query(TeacherAppeal).filter(
-        TeacherAppeal.teacher_id == profile.id,
-        TeacherAppeal.status == "pending",
-    ).first()
-    if existing_pending:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ya tienes una apelación pendiente de revisión")
-
     appeal_number = (profile.appeal_count or 0) + 1
     appeal = TeacherAppeal(
         teacher_id=profile.id,

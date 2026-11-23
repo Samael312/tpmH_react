@@ -149,3 +149,112 @@ def world(db):
 def future(hours=48, minute=0):
     d = utc_now() + timedelta(hours=hours)
     return d.replace(minute=minute, second=0, microsecond=0)
+
+
+# ── Inventario «una prueba por ruta» ─────────────────────────────────────────────────────────
+# Registra qué rutas de la API recibieron al menos una petición durante la sesión. Al terminar una
+# ejecución COMPLETA de tests/audit (>= _FULL_RUN_MIN pruebas, sin -k/-m), la sesión falla si alguna ruta
+# no se ejercitó y no figura en route_inventory_allowlist.txt (con motivo). Ver docs/PLAN_SUITE_COMPLETA.md.
+from starlette.routing import Match as _Match  # noqa: E402
+
+_FULL_RUN_MIN = 1000
+_ROUTES_HIT: set = set()
+_ALLOWLIST_FILE = os.path.join(os.path.dirname(__file__), "route_inventory_allowlist.txt")
+
+
+def _api_routes():
+    return [r for r in app.routes if getattr(r, "path", "").startswith("/api/v1") and hasattr(r, "endpoint")]
+
+
+def _record_hit(scope_type: str, method: str, path: str):
+    scope = {"type": scope_type, "path": path, "method": method, "root_path": ""}
+    for r in _api_routes():
+        if getattr(r, "path", "").endswith("{path:path}"):
+            continue
+        try:
+            m, _ = r.matches(scope)
+        except Exception:
+            continue
+        if m == _Match.FULL:
+            _ROUTES_HIT.add(("WS" if scope_type == "websocket" else method.upper(), r.path))
+            return
+
+
+_orig_tc_request = TestClient.request
+_orig_tc_ws = TestClient.websocket_connect
+
+
+def _tc_request(self, method, url, *a, **k):
+    resp = _orig_tc_request(self, method, url, *a, **k)
+    try:
+        from urllib.parse import urlsplit
+        _record_hit("http", method, urlsplit(str(url)).path)
+    except Exception:
+        pass
+    return resp
+
+
+def _tc_ws(self, url, *a, **k):
+    try:
+        from urllib.parse import urlsplit
+        _record_hit("websocket", "GET", urlsplit(str(url)).path)
+    except Exception:
+        pass
+    return _orig_tc_ws(self, url, *a, **k)
+
+
+TestClient.request = _tc_request
+TestClient.websocket_connect = _tc_ws
+
+
+def _all_route_keys():
+    keys = set()
+    for r in _api_routes():
+        for m in (getattr(r, "methods", None) or ["WS"]):
+            if m in ("HEAD", "OPTIONS"):
+                continue
+            keys.add((m, r.path))
+    return keys
+
+
+def _read_allowlist():
+    out = {}
+    try:
+        for line in open(_ALLOWLIST_FILE, encoding="utf-8"):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            head, _, why = line.partition("#")
+            parts = head.split()
+            if len(parts) == 2:
+                out[(parts[0].upper(), parts[1])] = why.strip()
+    except FileNotFoundError:
+        pass
+    return out
+
+
+def route_inventory():
+    """(todas, sin_prueba_ni_exencion, exenciones_obsoletas)."""
+    allkeys, allow = _all_route_keys(), _read_allowlist()
+    missing = sorted(k for k in allkeys if k not in _ROUTES_HIT and k not in allow)
+    stale = sorted(k for k in allow if k not in allkeys or k in _ROUTES_HIT)
+    return allkeys, missing, stale
+
+
+def pytest_sessionfinish(session, exitstatus):
+    cfg = session.config
+    if cfg.getoption("-k", default="") or cfg.getoption("-m", default=""):
+        return
+    if session.testscollected < _FULL_RUN_MIN or exitstatus not in (0, 1):
+        return
+    allkeys, missing, stale = route_inventory()
+    lines = [f"Inventario de rutas: {len(allkeys) - len(missing)}/{len(allkeys)} con prueba o exención."]
+    if missing:
+        lines.append("RUTAS SIN PRUEBA (añade una prueba o una exención con motivo en route_inventory_allowlist.txt):")
+        lines += [f"  {m} {p}" for m, p in missing]
+    if stale:
+        lines.append("EXENCIONES OBSOLETAS (la ruta ya tiene prueba o ya no existe; bórralas):")
+        lines += [f"  {m} {p}" for m, p in stale]
+    print("\n" + "\n".join(lines))
+    if missing or stale:
+        session.exitstatus = 1

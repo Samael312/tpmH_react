@@ -204,8 +204,8 @@ Las que empiezan por `_` son privadas del módulo.
 - `update_calendar_event(service, calendar_id: str, event_id: str, start_utc: Optional[datetime]=None, end_utc: Optional[datetime]=None, meet_link: Optional[str]=Non)` — L805
 - `delete_calendar_event(service, calendar_id: str, event_id: str)` — L867
 - `sync_calendar_logic(teacher_id: int, db: Session)` — L885
-- `_teachers_needing_sync(db: Session, tokens: List[GoogleCalendarToken], now: datetime)` — L1048: Solo los profesores con una clase propia (no Preply) en curso o en la ventana activa, o cuya ultima sync es antigua (ciclo ocioso: importar Preply / refrescar). El resto se salta: cero llamadas a Google.
-- `run_calendar_sync_for_all_teachers(db: Session)` — L1072
+- `_teachers_needing_sync(db: Session, tokens: List[GoogleCalendarToken], now: datetime)` — L1050: Solo los profesores con una clase propia (no Preply) en curso o en la ventana activa, o cuya ultima sync es antigua (ciclo ocioso: importar Preply / refrescar). El resto se salta: cero llamadas a Google.
+- `run_calendar_sync_for_all_teachers(db: Session)` — L1074
 
 ## app/core/grant_emails.py
 
