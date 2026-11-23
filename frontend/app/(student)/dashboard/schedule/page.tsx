@@ -106,13 +106,13 @@ function MiniCalendar({
         </div>
       )}
       <div className={`flex items-center justify-between mb-5 ${disabled ? "pointer-events-none opacity-40" : ""}`}>
-        <button onClick={prev} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
+        <button onClick={prev} aria-label="Mes anterior" className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
           <ChevronLeft className="w-4 h-4 text-slate-600" />
         </button>
         <span className="text-base font-black text-slate-800">
           {MONTHS[month]} {year}
         </span>
-        <button onClick={next} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
+        <button onClick={next} aria-label="Mes siguiente" className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
           <ChevronRight className="w-4 h-4 text-slate-600" />
         </button>
       </div>

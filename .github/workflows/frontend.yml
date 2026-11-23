@@ -1,7 +1,7 @@
 name: frontend
 
 # Comprobaciones del frontend en cada PR que lo toque: lint, tipos, tests unitarios (Vitest) y build de produccion.
-# Los E2E de Playwright (npm run test:e2e) no corren aqui: necesitan levantar el backend con Python.
+# Los E2E de Playwright (npm run test:e2e) corren en .github/workflows/e2e.yml: necesitan levantar el backend con Python.
 
 on:
   pull_request:

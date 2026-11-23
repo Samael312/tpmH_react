@@ -101,6 +101,46 @@ def seed():
     db.commit(); db.close()
 
 
+def e2e_hooks():
+    """Ganchos SOLO de pruebas (este servidor nunca es produccion): lo que un E2E no puede hacer por la interfaz.
+    - POST /__e2e__/student/{username}: crea un alumno verificado y con onboarding hecho (idempotente).
+    - POST /__e2e__/age-class/{class_id}: mueve una clase al pasado para poder completarla (AUD-04)."""
+    from datetime import datetime, timedelta, timezone
+    from fastapi import APIRouter
+    from app.models.class_ import Class
+    router = APIRouter(prefix="/__e2e__")
+
+    @router.post("/student/{username}")
+    def make_student(username: str):
+        db = SessionLocal()
+        try:
+            u = db.query(User).filter(User.username == username).first()
+            if not u:
+                u = User(email=f"{username}@audit-tpm.com", username=username, name=username.title(), surname="E2E",
+                         password_hash=hash_password("Password123"), role=UserRole("student"),
+                         is_active=True, onboarding_completed=True, is_verified=True)
+                db.add(u); db.flush()
+                db.add(StudentProfile(user_id=u.id, user_username=username, timezone="UTC"))
+                db.commit()
+            return {"username": username}
+        finally:
+            db.close()
+
+    @router.post("/age-class/{class_id}")
+    def age_class(class_id: int, hours: int = 3):
+        db = SessionLocal()
+        try:
+            c = db.get(Class, class_id)
+            c.start_time_utc = datetime.now(timezone.utc) - timedelta(hours=hours)
+            c.end_time_utc = c.start_time_utc + timedelta(minutes=c.duration)
+            db.commit()
+            return {"class_id": class_id}
+        finally:
+            db.close()
+
+    return router
+
+
 if __name__ == "__main__":
     seed()
     # Solo en este servidor de pruebas: las suites E2E (varios proyectos, muchos logins desde la misma IP) agotan
@@ -108,4 +148,6 @@ if __name__ == "__main__":
     from app.core.rate_limit import limiter
     limiter.enabled = False
     import uvicorn
-    uvicorn.run("app.main:app", host="127.0.0.1", port=int(sys.argv[1]) if len(sys.argv) > 1 else 8000)
+    from app.main import app
+    app.include_router(e2e_hooks())
+    uvicorn.run(app, host="127.0.0.1", port=int(sys.argv[1]) if len(sys.argv) > 1 else 8000)

@@ -176,3 +176,10 @@ Pendiente: T1 (créditos con otros profesores invisibles en single; `legacy` en 
 - El alumno (check de solape propio) y los participantes de grupo siguen usando la ventana ±3 h por inicio; vale con las duraciones actuales (máx. 110 + margen).
 
 - **Zona nula y recordatorios tardíos (Fase 27, corregido):** `timezone: null` ya no se guarda por API (422) y las reservas con < 23 h reciben un recordatorio (una clase que empieza en < 30 min no recibe ninguno; no hay recordatorio de 1 h). _Tests: `test_f27_tz_null_reminders.py`._
+
+## Hallazgos de la subida de cobertura (2026-11-23, `tests/audit/test_g1_*` … `test_g18_*`)
+
+- **Cuota de Google agotada borra su propio aviso:** en `core/google_calendar.py::sync_calendar_logic`, cuando Google responde con cuota agotada se guarda `token.last_error = "Límite de cuota…"` y se hace `break`. Como `error_count` sigue en 0, la línea `if error_count == 0: token.last_error = None` lo borra en la misma ejecución, así que el aviso nunca se ve. Abierto. _Test que lo fija: `test_g11_google_calendar.py::test_sync_logic_error_kinds`._
+- **Código inalcanzable en `teachers.py::submit_appeal` (líneas 556-561):** el estado «agotado» ya se rechaza antes, así que esa rama no se puede ejecutar. Abierto; conviene borrarla.
+- **God mode:** quedan ramas sin cobertura en `god_mode.py` (8 líneas) que son comprobaciones defensivas duplicadas de otras previas.
+- **Cobertura que sigue sin llegar al 100 %:** ver `backend/doc/TESTING.md` (lista de lo pendiente: bloques de `payments.py` con ramas de reembolso/cohorte, `class_logic.py`, `ai_debug.py`, servicios de OpenAI/TTS y algunos caminos de OAuth de Google).

@@ -28,10 +28,12 @@ export default defineConfig({
   },
   // Escritorio y móvil, Chromium y WebKit (Safari/iOS). Para correr uno: `npx playwright test --project=mobile-chrome`.
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "mobile-chrome", use: { ...devices["Pixel 5"] } },
-    { name: "webkit", use: { ...devices["Desktop Safari"] } },
-    { name: "mobile-safari", use: { ...devices["iPhone 13"] } },
+    { name: "chromium", testIgnore: /lighthouse\.spec/, use: { ...devices["Desktop Chrome"] } },
+    { name: "mobile-chrome", testIgnore: /lighthouse\.spec/, use: { ...devices["Pixel 5"] } },
+    { name: "webkit", testIgnore: /lighthouse\.spec/, use: { ...devices["Desktop Safari"] } },
+    { name: "mobile-safari", testIgnore: /lighthouse\.spec/, use: { ...devices["iPhone 13"] } },
+    // Lighthouse: solo Chromium y solo ese spec. Mide bien contra la compilación de producción (`CI=true`).
+    { name: "lighthouse", testMatch: /lighthouse\.spec/, use: { ...devices["Desktop Chrome"] } },
   ],
   webServer: [
     {

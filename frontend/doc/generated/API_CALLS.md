@@ -64,7 +64,7 @@ Llamadas `api.<verbo>(...)` por archivo (regex; las URLs construidas dinámicame
 - `hooks/useStudentData.ts`: GET /admin/platform-config, GET /availability/featured-teacher/username, GET /homework/student/my-homework, GET /materials/student/my-materials, GET /packages/my-enrollments, GET /packages/teacher/{x}, GET /payments/booking-status, GET /payments/booking-status{x}, GET /reviews/{x}/summary, GET /teachers, GET /users/me/preferences, GET /users/me/student-profile, GET /users/me/teachers
 - `hooks/useSupport.ts`: GET /support/tickets/me/unread-count, PATCH /support/tickets/{x}/seen, POST /support/tickets
 - `hooks/useSystemCatalogs.ts`: GET /system-catalogs
-- `hooks/useTeacherData.ts`: GET /availability/me/weekly, GET /calendar/status, GET /cohorts/{x}/members, GET /homework/my-homework, GET /homework/{x}/submissions, GET /materials/my-materials, GET /packages/my-packages, GET /payments/my-wallet, GET /payments/pending-review, GET /reviews/{x}, GET /teachers/me/profile
+- `hooks/useTeacherData.ts`: GET /availability/me/weekly, GET /calendar/status, GET /cohorts/{x}/members, GET /homework/my-homework, GET /homework/{x}/submissions, GET /materials/my-materials, GET /packages/my-packages, GET /payments/my-wallet, GET /payments/pending-review, GET /reviews/{x}, GET /teachers/me/profile, GET /users/me
 - `hooks/useTeacherNotifications.ts`: GET /teachers/me/notifications/unread-count, PATCH /teachers/me/notifications/{x}/read, POST /teachers/me/notifications/mark-all-read
 - `lib/me.ts`: GET /users/me
 - `lib/platformTenantMode.ts`: GET /admin/platform-config

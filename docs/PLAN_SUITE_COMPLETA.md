@@ -8,7 +8,9 @@ Estado a noviembre de 2026. Este documento recoge lo que falta para tener una su
 - `tests/screenInventory.test.ts` falla si una `app/**/page.tsx` no tiene una prueba de flujo que la importe (hoy sin exenciones).
 - Lo que sigue sin cubrir es sobre todo código inalcanzable o defensivo (manejadores tras botones deshabilitados, `||{}`/`??`) y los dos archivos WebGL.
 - Playwright hecho: 4 proyectos (escritorio, móvil, WebKit, iPhone), smoke, barrido axe de 24 pantallas sin excepciones (se corrigieron `button-name`, `label`, `select-name` y `color-contrast`) y comprobación del canvas 3D.
-- Pendiente real: flujos largos y chat WebSocket en Playwright, Lighthouse, y la suite del backend (secciones 2.4-2.5 y 3).
+- Playwright, además: flujo largo de 6 pasos (prueba → pago → aprobación → agenda → reagendado → retiro), Lighthouse (rendimiento 1,00 en portada, login y registro) y workflow `e2e.yml` en CI (sin ejecutar aún en GitHub).
+- Backend medido con cobertura: **97 %** de líneas (antes 77,5 %), 1364 pruebas en verde; el CI exige 95 %. Quedan 374 líneas (ver `backend/doc/TESTING.md`). Informe completo, bugs y puntuaciones: `docs/INFORME_COBERTURA_BACKEND.md`.
+- Pendiente real: chat WebSocket con dos sesiones y zonas horarias en navegador, el inventario «una prueba por ruta» de las 211 rutas del backend (`god_mode`, `cohorts`, `homework` y `reviews` son lo más flojo) y el script de ejecución conjunta.
 
 ## 1. Punto de partida (frontend, al empezar el trabajo)
 

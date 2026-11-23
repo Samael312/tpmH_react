@@ -4,17 +4,17 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 
 | URL | Archivo | Guard (rol) | Líneas | Nota |
 |---|---|---|---|---|
-| `/forgot-password` | `app/(auth)/forgot-password/page.tsx` | pública | 208 |  |
+| `/forgot-password` | `app/(auth)/forgot-password/page.tsx` | pública | 214 |  |
 | `/reset-password` | `app/(auth)/reset-password/page.tsx` | pública | 215 |  |
 | `/verify-email` | `app/(auth)/verify-email/page.tsx` | pública | 107 |  |
 | `/login` | `app/(public)/login/page.tsx` | pública | 340 |  |
 | `/privacy` | `app/(public)/privacy/page.tsx` | pública | 17 |  |
 | `/register/google-complete` | `app/(public)/register/google-complete/page.tsx` | pública | 252 |  |
-| `/register` | `app/(public)/register/page.tsx` | pública | 697 |  |
+| `/register` | `app/(public)/register/page.tsx` | pública | 695 |  |
 | `/terms` | `app/(public)/terms/page.tsx` | pública | 17 |  |
-| `/dashboard/availability` | `app/(student)/dashboard/availability/page.tsx` | student | 448 |  |
+| `/dashboard/availability` | `app/(student)/dashboard/availability/page.tsx` | student | 439 |  |
 | `/dashboard/chat` | `app/(student)/dashboard/chat/page.tsx` | student | 147 |  |
-| `/dashboard/classes` | `app/(student)/dashboard/classes/page.tsx` | student | 733 |  |
+| `/dashboard/classes` | `app/(student)/dashboard/classes/page.tsx` | student | 720 |  |
 | `/dashboard/homework` | `app/(student)/dashboard/homework/page.tsx` | student | 611 |  |
 | `/dashboard/materials` | `app/(student)/dashboard/materials/page.tsx` | student | 494 | app/student/materials/page.tsx |
 | `/dashboard/onboarding` | `app/(student)/dashboard/onboarding/page.tsx` | student | 895 |  |
@@ -32,24 +32,24 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/admin/logs` | `app/(superadmin)/admin/logs/page.tsx` | superadmin, teacher_admin | 31 |  |
 | `/admin/materials` | `app/(superadmin)/admin/materials/page.tsx` | superadmin, teacher_admin | 91 |  |
 | `/admin/payments` | `app/(superadmin)/admin/payments/page.tsx` | superadmin, teacher_admin | 749 |  |
-| `/admin/settings` | `app/(superadmin)/admin/settings/page.tsx` | superadmin, teacher_admin | 1647 |  |
+| `/admin/settings` | `app/(superadmin)/admin/settings/page.tsx` | superadmin, teacher_admin | 1669 |  |
 | `/admin/students/banned` | `app/(superadmin)/admin/students/banned/page.tsx` | superadmin, teacher_admin | 167 |  |
 | `/admin/students` | `app/(superadmin)/admin/students/page.tsx` | superadmin, teacher_admin | 474 |  |
 | `/admin/support` | `app/(superadmin)/admin/support/page.tsx` | superadmin, teacher_admin | 281 |  |
 | `/admin/teachers` | `app/(superadmin)/admin/teachers/page.tsx` | superadmin, teacher_admin | 706 |  |
-| `/admin/users` | `app/(superadmin)/admin/users/page.tsx` | superadmin, teacher_admin | 1065 | frontend/app/(superadmin)/admin/users/page.tsx |
+| `/admin/users` | `app/(superadmin)/admin/users/page.tsx` | superadmin, teacher_admin | 1078 | frontend/app/(superadmin)/admin/users/page.tsx |
 | `/teacher/availability` | `app/(teacher)/teacher/availability/page.tsx` | teacher, teacher_admin | 408 |  |
 | `/teacher/calendar/callback` | `app/(teacher)/teacher/calendar/callback/page.tsx` | teacher, teacher_admin | 137 |  |
 | `/teacher/chat` | `app/(teacher)/teacher/chat/page.tsx` | teacher, teacher_admin | 143 |  |
 | `/teacher/cohorts` | `app/(teacher)/teacher/cohorts/page.tsx` | teacher, teacher_admin | 1334 |  |
-| `/teacher/dashboard` | `app/(teacher)/teacher/dashboard/page.tsx` | teacher, teacher_admin | 973 |  |
-| `/teacher/homework` | `app/(teacher)/teacher/homework/page.tsx` | teacher, teacher_admin | 1262 |  |
+| `/teacher/dashboard` | `app/(teacher)/teacher/dashboard/page.tsx` | teacher, teacher_admin | 960 |  |
+| `/teacher/homework` | `app/(teacher)/teacher/homework/page.tsx` | teacher, teacher_admin | 1264 |  |
 | `/teacher/materials` | `app/(teacher)/teacher/materials/page.tsx` | teacher, teacher_admin | 1567 |  |
 | `/teacher/notifications` | `app/(teacher)/teacher/notifications/page.tsx` | teacher, teacher_admin | 86 |  |
 | `/teacher/onboarding` | `app/(teacher)/teacher/onboarding/page.tsx` | teacher, teacher_admin | 1135 |  |
-| `/teacher/packages` | `app/(teacher)/teacher/packages/page.tsx` | teacher, teacher_admin | 1171 |  |
+| `/teacher/packages` | `app/(teacher)/teacher/packages/page.tsx` | teacher, teacher_admin | 1172 |  |
 | `/teacher/payments` | `app/(teacher)/teacher/payments/page.tsx` | teacher, teacher_admin | 259 |  |
-| `/teacher/profile` | `app/(teacher)/teacher/profile/page.tsx` | teacher, teacher_admin | 1439 |  |
+| `/teacher/profile` | `app/(teacher)/teacher/profile/page.tsx` | teacher, teacher_admin | 1440 |  |
 | `/teacher/profile/preview` | `app/(teacher)/teacher/profile/preview/page.tsx` | teacher, teacher_admin | 86 |  |
 | `/teacher/students` | `app/(teacher)/teacher/students/page.tsx` | teacher, teacher_admin | 503 |  |
 | `/teacher/support` | `app/(teacher)/teacher/support/page.tsx` | teacher, teacher_admin | 21 |  |

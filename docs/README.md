@@ -37,3 +37,4 @@ frontend/doc/                      referencia técnica del frontend
 5. Cita siempre `archivo:línea` y comprueba que sigue siendo cierto antes de fiarte de una cifra de líneas: cambian.
 6. Idioma: español; comentarios y mensajes de la API en español.
 - [Plan de la suite completa de pruebas (frontend + backend)](PLAN_SUITE_COMPLETA.md): trabajo pendiente de cobertura y ejecución conjunta.
+- [Informe de la subida de cobertura del backend](INFORME_COBERTURA_BACKEND.md): lo hecho, bugs hallados, reestimación de puntuaciones y pendiente (2026-11-23).
