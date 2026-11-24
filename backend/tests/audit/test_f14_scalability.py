@@ -222,7 +222,7 @@ def test_dashboard_and_booking_query_budget(client, world, monkeypatch):
     assert r.status_code == 200 and len(stmts) <= 10, len(stmts)  # antes 11
     r, stmts = _sql(lambda: book(client, world, future(96), enrollment_id=eid))
     assert r.status_code == 201, r.text
-    assert len(stmts) <= 26, len(stmts)  # antes 29; +1 Fase 17: comprobar si el profesor tiene Calendar activo (G3)
+    assert len(stmts) <= 27, len(stmts)  # antes 29; +1 Fase 17: comprobar si el profesor tiene Calendar activo (G3); +1 AUD-24: profesor activo
     assert sum("FROM platform_config" in s for s in stmts) == 1  # antes 4 lecturas de la misma fila
 
 

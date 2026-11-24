@@ -382,7 +382,8 @@ export default function DashboardSidebar() {
                 <NavItem href="/admin/support" icon={<LifeBuoy size={20} />} label="Soporte" active={isActive("/admin/support")} collapsed={collapsed} />
                 <NavItem href="/admin/logs" icon={<AlertOctagon size={20} />} label="Logs" active={isActive("/admin/logs")} collapsed={collapsed} />
                 <NavItem href="/admin/settings" icon={<Settings size={20} />} label="Configuración" active={isActive("/admin/settings")} collapsed={collapsed} />
-                {isSuperadmin && (
+                {/* F11: el Flow Tester solo corre en un backend de desarrollo; en producción no se ofrece en el menú. */}
+                {isSuperadmin && process.env.NODE_ENV !== "production" && (
                   <NavItem href="/admin/flow-tester" icon={<CheckCheck size={20} />} label="Flow Tester" active={isActive("/admin/flow-tester")} collapsed={collapsed} />
                 )}
               </nav>

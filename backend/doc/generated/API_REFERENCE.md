@@ -131,8 +131,8 @@ Total de rutas: **230**
 |---|---|---|---|---|---|
 | GET | `/admin/appeals` | get_current_staff, get_current_user |  | `list_appeals` (app/api/v1/endpoints/admin.py:609) | Bandeja global de apelaciones — usada en Visión Global y en la pestaña Rechazados de Profesores. Por defecto muestra todas; filtrable por status. |
 | PATCH | `/admin/appeals/{appeal_id}/resolve` | get_current_staff, get_current_user |  | `resolve_appeal` (app/api/v1/endpoints/admin.py:651) | Resuelve una apelación pendiente. - approve: el profesor vuelve a "approved" (perfil público). - reject: incrementa el conteo de apelaciones agotadas. Al llegar a 2,   el perfil permanece "rejected" pero se marca appeal_exhausted=True,   lo que habilita en el dashboard del profesor la opción de subi |
-| GET | `/admin/email-settings` | get_current_user |  | `get_email_settings` (app/api/v1/endpoints/admin.py:1465) | Interruptores por categoria, uso de hoy contra la cuota y estado del modo ahorro. Solo superadmin. |
-| PUT | `/admin/email-settings` | get_current_user |  | `update_email_settings` (app/api/v1/endpoints/admin.py:1474) | Actualiza interruptores, limite diario y modo ahorro. Solo superadmin. Las categorias esenciales no se pueden apagar (422); una categoria desconocida tambien es 422. |
+| GET | `/admin/email-settings` | get_current_user |  | `get_email_settings` (app/api/v1/endpoints/admin.py:1468) | Interruptores por categoria, uso de hoy contra la cuota y estado del modo ahorro. Solo superadmin. |
+| PUT | `/admin/email-settings` | get_current_user |  | `update_email_settings` (app/api/v1/endpoints/admin.py:1477) | Actualiza interruptores, limite diario y modo ahorro. Solo superadmin. Las categorias esenciales no se pueden apagar (422); una categoria desconocida tambien es 422. |
 | GET | `/admin/notifications` | get_current_staff, get_current_user |  | `list_notifications` (app/api/v1/endpoints/admin.py:889) |  |
 | POST | `/admin/notifications/mark-all-read` | get_current_staff, get_current_user |  | `mark_all_notifications_read` (app/api/v1/endpoints/admin.py:929) |  |
 | GET | `/admin/notifications/unread-count` | get_current_staff, get_current_user |  | `unread_notification_count` (app/api/v1/endpoints/admin.py:902) |  |
@@ -214,28 +214,28 @@ Total de rutas: **230**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| GET | `/payments/admin/withdrawals/pending` | get_current_staff, get_current_user |  | `get_pending_withdrawals` (app/api/v1/endpoints/payments.py:2662) |  |
-| POST | `/payments/admin/withdrawals/{withdrawal_id}/process` | get_current_staff, get_current_user |  | `process_withdrawal_v2` (app/api/v1/endpoints/payments.py:1793) |  |
+| GET | `/payments/admin/withdrawals/pending` | get_current_staff, get_current_user |  | `get_pending_withdrawals` (app/api/v1/endpoints/payments.py:2669) |  |
+| POST | `/payments/admin/withdrawals/{withdrawal_id}/process` | get_current_staff, get_current_user |  | `process_withdrawal_v2` (app/api/v1/endpoints/payments.py:1800) |  |
 | POST | `/payments/book` | get_current_student, get_current_user |  | `book_class` (app/api/v1/endpoints/payments.py:530) |  |
-| GET | `/payments/booking-status` | get_current_student, get_current_user |  | `get_booking_status` (app/api/v1/endpoints/payments.py:1845) |  |
+| GET | `/payments/booking-status` | get_current_student, get_current_user |  | `get_booking_status` (app/api/v1/endpoints/payments.py:1852) |  |
 | GET | `/payments/config` | get_current_user |  | `get_payment_config` (app/api/v1/endpoints/payments.py:462) | Fase 20 (S5): ya no es publico. Requiere sesion; la comision por defecto solo la ve el staff; el GET no crea la fila (sin configuracion devuelve los valores por defecto sin escribir). |
 | PATCH | `/payments/config` | get_current_staff, get_current_user |  | `update_payment_config` (app/api/v1/endpoints/payments.py:500) |  |
-| GET | `/payments/history` | get_current_staff_or_teacher, get_current_user |  | `get_payments_history` (app/api/v1/endpoints/payments.py:973) | Historial de pagos ya resueltos (aprobados o rechazados). Teacher solo ve los suyos; staff ve todos. |
-| POST | `/payments/manual-grant` | get_current_staff, get_current_user |  | `manual_grant_payment` (app/api/v1/endpoints/payments.py:1474) | Otorgamiento directo: SOLO staff. Los profesores lo piden con POST /manual-grant-requests (Fase 20, D5). |
-| GET | `/payments/manual-grant-requests` | get_current_staff, get_current_user |  | `list_manual_grant_requests` (app/api/v1/endpoints/payments.py:1580) |  |
-| POST | `/payments/manual-grant-requests` | get_current_teacher_or_teacher_admin, get_current_user |  | `create_manual_grant_request` (app/api/v1/endpoints/payments.py:1516) |  |
-| PATCH | `/payments/manual-grant-requests/{request_id}/resolve` | get_current_staff, get_current_user |  | `resolve_manual_grant_request` (app/api/v1/endpoints/payments.py:1596) |  |
-| GET | `/payments/my-income` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_income` (app/api/v1/endpoints/payments.py:1680) |  |
-| GET | `/payments/my-manual-grant-requests` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_manual_grant_requests` (app/api/v1/endpoints/payments.py:1567) |  |
-| GET | `/payments/my-payments` | get_current_student, get_current_user |  | `get_my_payments_student` (app/api/v1/endpoints/payments.py:1667) |  |
-| GET | `/payments/my-wallet` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_wallet` (app/api/v1/endpoints/payments.py:1701) |  |
-| GET | `/payments/my-withdrawals` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_withdrawals` (app/api/v1/endpoints/payments.py:1727) |  |
-| POST | `/payments/notify-payment` | get_current_student, get_current_user |  | `notify_payment` (app/api/v1/endpoints/payments.py:1944) |  |
-| GET | `/payments/pending-review` | get_current_staff_or_teacher, get_current_user |  | `get_payments_pending_review` (app/api/v1/endpoints/payments.py:917) |  |
-| POST | `/payments/request-refund-cohort-cancelled` | get_current_student, get_current_user |  | `request_refund_cohort_cancelled` (app/api/v1/endpoints/payments.py:2581) | Reembolso por una cohorte grupal que el profesor canceló (F3 del roadmap de verificación). A diferencia del reembolso por profesor suspendido, acá siempre es el 100% de lo pagado: el grupo nunca llegó a arrancar (o se abortó), no hay "clases ya tomadas" que descontar. Mientras este reembolso esté pe |
-| POST | `/payments/request-refund-teacher-suspended` | get_current_student, get_current_user |  | `request_refund_teacher_suspended` (app/api/v1/endpoints/payments.py:2444) | Reembolso disparado por la suspensión/rechazo del profesor del estudiante (no por un downgrade de paquete). Reutiliza el mismo mecanismo que el "reembolso completo" de cambio de paquete (Payment payment_type="refund" sin ningún paquete nuevo solicitado): al aprobarse, /payments/validate/{id} cancela |
-| POST | `/payments/request-withdrawal` | get_current_teacher_or_teacher_admin, get_current_user |  | `request_withdrawal_v2` (app/api/v1/endpoints/payments.py:1740) |  |
-| PATCH | `/payments/{payment_id}/validate` | get_current_staff, get_current_user |  | `validate_payment` (app/api/v1/endpoints/payments.py:1037) | NEG-01: solo `superadmin` y `teacher_admin` aprueban/rechazan pagos (los profesores normales ven el pago como «pendiente de revisión»). Un `teacher_admin` no valida los pagos de sus propias clases: los resuelve el `superadmin`. |
+| GET | `/payments/history` | get_current_staff_or_teacher, get_current_user |  | `get_payments_history` (app/api/v1/endpoints/payments.py:980) | Historial de pagos ya resueltos (aprobados o rechazados). Teacher solo ve los suyos; staff ve todos. |
+| POST | `/payments/manual-grant` | get_current_staff, get_current_user |  | `manual_grant_payment` (app/api/v1/endpoints/payments.py:1481) | Otorgamiento directo: SOLO staff. Los profesores lo piden con POST /manual-grant-requests (Fase 20, D5). |
+| GET | `/payments/manual-grant-requests` | get_current_staff, get_current_user |  | `list_manual_grant_requests` (app/api/v1/endpoints/payments.py:1587) |  |
+| POST | `/payments/manual-grant-requests` | get_current_teacher_or_teacher_admin, get_current_user |  | `create_manual_grant_request` (app/api/v1/endpoints/payments.py:1523) |  |
+| PATCH | `/payments/manual-grant-requests/{request_id}/resolve` | get_current_staff, get_current_user |  | `resolve_manual_grant_request` (app/api/v1/endpoints/payments.py:1603) |  |
+| GET | `/payments/my-income` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_income` (app/api/v1/endpoints/payments.py:1687) |  |
+| GET | `/payments/my-manual-grant-requests` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_manual_grant_requests` (app/api/v1/endpoints/payments.py:1574) |  |
+| GET | `/payments/my-payments` | get_current_student, get_current_user |  | `get_my_payments_student` (app/api/v1/endpoints/payments.py:1674) |  |
+| GET | `/payments/my-wallet` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_wallet` (app/api/v1/endpoints/payments.py:1708) |  |
+| GET | `/payments/my-withdrawals` | get_current_teacher_or_teacher_admin, get_current_user |  | `get_my_withdrawals` (app/api/v1/endpoints/payments.py:1734) |  |
+| POST | `/payments/notify-payment` | get_current_student, get_current_user |  | `notify_payment` (app/api/v1/endpoints/payments.py:1951) |  |
+| GET | `/payments/pending-review` | get_current_staff_or_teacher, get_current_user |  | `get_payments_pending_review` (app/api/v1/endpoints/payments.py:924) |  |
+| POST | `/payments/request-refund-cohort-cancelled` | get_current_student, get_current_user |  | `request_refund_cohort_cancelled` (app/api/v1/endpoints/payments.py:2588) | Reembolso por una cohorte grupal que el profesor canceló (F3 del roadmap de verificación). A diferencia del reembolso por profesor suspendido, acá siempre es el 100% de lo pagado: el grupo nunca llegó a arrancar (o se abortó), no hay "clases ya tomadas" que descontar. Mientras este reembolso esté pe |
+| POST | `/payments/request-refund-teacher-suspended` | get_current_student, get_current_user |  | `request_refund_teacher_suspended` (app/api/v1/endpoints/payments.py:2451) | Reembolso disparado por la suspensión/rechazo del profesor del estudiante (no por un downgrade de paquete). Reutiliza el mismo mecanismo que el "reembolso completo" de cambio de paquete (Payment payment_type="refund" sin ningún paquete nuevo solicitado): al aprobarse, /payments/validate/{id} cancela |
+| POST | `/payments/request-withdrawal` | get_current_teacher_or_teacher_admin, get_current_user |  | `request_withdrawal_v2` (app/api/v1/endpoints/payments.py:1747) |  |
+| PATCH | `/payments/{payment_id}/validate` | get_current_staff, get_current_user |  | `validate_payment` (app/api/v1/endpoints/payments.py:1044) | NEG-01: solo `superadmin` y `teacher_admin` aprueban/rechazan pagos (los profesores normales ven el pago como «pendiente de revisión»). Un `teacher_admin` no valida los pagos de sus propias clases: los resuelve el `superadmin`. |
 
 ## Clases grupales
 

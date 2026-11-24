@@ -896,8 +896,8 @@ def notify_teachers_unconfirmed_trials(db: Session, classes: list[Class]) -> Non
             for c in sorted(items, key=lambda x: x.start_time_utc)[:AUTO_NO_SHOW_MAX_LISTED]
         ]
         lines.append(
-            f"Marca si se dio o no en las próximas {CLASS_STATUS_WINDOW_HOURS} h. Pasado ese plazo la prueba se "
-            "cancela sin gastar la prueba gratis del alumno."
+            f"Marca si se dio o no en las próximas {CLASS_STATUS_WINDOW_HOURS} h. Pasado ese plazo la prueba "
+            "queda como «No asistió» y cuenta como usada; para cambiarla tendrás que pedirlo a soporte."
         )
         n = len(items)
         create_notification(
@@ -962,8 +962,8 @@ def finalize_past_classes(db: Session) -> int:
     auto_no_show: list[Class] = []
     for c in unresolved:
         count += 1
-        # Nota (Fase 22, E6): sin una marca en el esquema no se distingue una prueba que nunca se confirmo de una que
-        # si; se mantiene la decision del dueno (2026-11-17): una prueba sin marcar tras 72 h cuenta como usada.
+        # E6 (decision del dueno, confirmada el 2026-11-24): una prueba sin marcar tras 72 h pasa a `no_show` y
+        # cuenta como usada. Si el profesor quiere cambiarla, lo pide a soporte (ticket NEG-02).
         sync_student_lifetime_class_counter(c, "finalized", "no_show", db=db)
         c.status = "no_show"
         auto_no_show.append(c)

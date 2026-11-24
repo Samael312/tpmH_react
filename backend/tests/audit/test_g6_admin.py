@@ -214,6 +214,24 @@ def test_user_status_and_update(client, world, db):
     assert client.patch(f"{A}/users/{uid}", json={"role": "teacher"}, headers=ta).status_code in (400, 403)
 
 
+def test_admin_update_user_deactivation_closes_chat_sockets(client, world, db, monkeypatch):
+    """Desactivar por PATCH /admin/users/{id} corta los websockets de chat, igual que /status."""
+    from app.api.v1.endpoints import admin as admin_ep
+    closed = []
+
+    async def fake_close(user_id, code=4401):
+        closed.append(user_id)
+        return 0
+
+    monkeypatch.setattr(admin_ep.chat_manager, "close_user", fake_close)
+    h = ah(world)
+    uid = world["s_user"].id
+    assert client.patch(f"{A}/users/{uid}", json={"phone_number": "+584140000001"}, headers=h).status_code == 200
+    assert closed == []  # sin desactivar no se cierra nada
+    assert client.patch(f"{A}/users/{uid}", json={"is_active": False}, headers=h).status_code == 200
+    assert closed == [uid]
+
+
 def test_ban_unban_and_student_detail(client, world, db):
     h = ah(world)
     uid = world["s_user"].id

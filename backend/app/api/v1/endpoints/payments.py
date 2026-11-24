@@ -556,6 +556,13 @@ def book_class(
             detail="No se pudo determinar con qué profesor deseas agendar"
         )
 
+    # AUD-24: un profesor desactivado no puede entrar a dar la clase; no se le agendan reservas.
+    if teacher.user is not None and not teacher.user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este profesor no está disponible en este momento; no se pueden agendar clases.",
+        )
+
     # AUD-02b/23: serializa reservas concurrentes del mismo alumno/profesor (lock de fila).
     lock_booking_rows(db, teacher.id, student_id)
 

@@ -149,7 +149,6 @@ def test_fixed_deactivated_teacher_not_listed(client, world, db):
     assert client.get(f"{API}/teachers/profe").status_code != 200
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-24: un profesor desactivado (is_active=False) aun recibe reservas de prueba")
 def test_deactivated_teacher_cannot_receive_bookings(client, world, db):
     r = client.patch(f"{API}/admin/users/{world['t_user'].id}/status", json={"is_active": False},
                      headers=hdr(world["admin"]))

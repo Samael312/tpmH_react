@@ -14,7 +14,7 @@ Backend: `../../backend/doc/KNOWN_ISSUES.md`. Informe completo: `../../ANALISIS.
 | F8 | Páginas gigantes: `student/schedule` 1796, `admin/settings` 1611, `teacher/materials` 1566 líneas | |
 | F9 | `"mar12"` hardcodeado como profesor destacado por defecto | `next.config.ts:136` | **corregido** (Fase 4) |
 | F10 | 0 tests; sin script `test` | `package.json` | **corregido** (Vitest, 79 tests, Playwright: `npm run test:e2e`, ver `frontend/e2e/`; CI en `.github/workflows/frontend.yml`) |
-| F11 | `/admin/flow-tester` presente en producción (el backend lo bloquea con `ENVIRONMENT=production`) | `app/(superadmin)/admin/flow-tester` |
+| F11 | `/admin/flow-tester` presente en producción (el backend lo bloquea con `ENVIRONMENT=production`) | `app/(superadmin)/admin/flow-tester` | **corregido** (2026-11-24): el ítem del menú se oculta si `NODE_ENV === "production"` (`NavBar.tsx`). La URL sigue existiendo, pero el backend responde 403/desactivado. |
 | UX-01 | Con cookie `access_token` válida pero `localStorage` vacío (store sin `user`), `/teacher/*` queda en spinner infinito: el layout hace `router.push('/login')` y `proxy.ts` devuelve al dashboard por la cookie (bucle). Confirmado en navegador | `app/(teacher)/teacher/layout.tsx`, `proxy.ts` | **corregido** (Fase 4) |
 | UX-02 | Botones sin nombre accesible en login (ojo de contraseña, widget Chipi) | `(public)/login` | **corregido** (Fase 4) |
 | UX-03 | El dashboard del alumno dice «clase de prueba de 30 minutos»; el backend usa `trial_duration_minutes` (25 por defecto) | `student/dashboard` | **corregido** (Fase 4) |

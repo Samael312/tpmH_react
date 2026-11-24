@@ -1357,6 +1357,7 @@ def update_platform_config(
 def admin_update_user(
     user_id: int,
     data: AdminUserUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_staff),
 ):
@@ -1408,8 +1409,10 @@ def admin_update_user(
                 if existing:
                     raise HTTPException(400, "Este número de teléfono ya está en uso por otro usuario")
             user.phone_number = normalized
-            
+
     db.commit()
+    if data.is_active is False:
+        background_tasks.add_task(chat_manager.close_user, user.id)  # corta sus websockets de chat ya
     return {"ok": True}
 
 # ─── CONTROL DE CORREOS (Fase 7) ─────────────────────────────────────────────

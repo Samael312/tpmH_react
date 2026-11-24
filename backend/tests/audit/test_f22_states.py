@@ -391,6 +391,22 @@ def test_e6_unconfirmed_trial_goes_finalized_with_72h_grace_and_teacher_notice(c
     assert db.get(Class, cid).status == "completed"
 
 
+def test_e6_unmarked_trial_after_72h_is_no_show_and_counts_as_used(client, db, world):
+    """Decisión del dueño (confirmada 2026-11-24): sin marcar a las 72 h -> no_show y prueba usada; se corrige por soporte."""
+    from app.core.class_logic import finalize_past_classes, get_student_booking_stage
+    from app.core.timezone import utc_now
+    cid = book(client, world, future(24)).json()["class_id"]
+    c = db.get(Class, cid)
+    c.start_time_utc = utc_now() - timedelta(hours=75)
+    c.end_time_utc = utc_now() - timedelta(hours=74)
+    db.commit()
+    assert finalize_past_classes(db) >= 1
+    db.expire_all()
+    assert db.get(Class, cid).status == "no_show"
+    assert get_student_booking_stage(world["sp"].id, world["tp"].id, db) == "needs_package"  # la prueba ya se usó
+    assert finalize_past_classes(db) == 0
+
+
 # ─── m3: calificar tareas ────────────────────────────────────────────────────
 
 def _homework(db, world, status="pending", active=True):
