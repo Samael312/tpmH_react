@@ -45,6 +45,7 @@ async def get_word_audio(
             word=data.word,
             voice=data.voice,
             speed=data.speed,
+            language=data.language,
         )
         return TTSWordResponse(
             word=data.word,
@@ -60,11 +61,11 @@ async def get_word_audio(
         )
 
 
-async def _batch_response(words: list[str], voice: str, speed: float) -> TTSBatchResponse:
+async def _batch_response(words: list[str], voice: str, speed: float, language: Optional[str] = None) -> TTSBatchResponse:
     """Genera el lote y cuenta cuántas ya estaban en caché (se mide ANTES de generar)."""
-    already_cached = count_cached(words, voice, speed)
+    already_cached = count_cached(words, voice, speed, language)
     try:
-        audio_urls = await generate_batch_audio(words=words, voice=voice, speed=speed)
+        audio_urls = await generate_batch_audio(words=words, voice=voice, speed=speed, language=language)
     except Exception:
         # No se devuelve str(e): puede traer detalles de OpenAI/Cloudinary.
         logger.exception("TTS: fallo generando el lote")
@@ -100,7 +101,7 @@ async def get_batch_audio(
     El frontend puede mostrar una barra de progreso
     mientras espera el resultado.
     """
-    return await _batch_response(data.words, data.voice, data.speed)
+    return await _batch_response(data.words, data.voice, data.speed, data.language)
 
 
 def _can_use_vocabulary(db: Session, user: User, material_id: int) -> tuple[Optional[Material], bool]:
@@ -144,7 +145,8 @@ async def get_vocabulary_audio(
     Genera audio para las palabras de un material de tipo vocabulario (máximo 50 por petición).
 
     Acceso: el profesor dueño del material, un alumno al que se le asignó, o el superadmin.
-    Voz y velocidad se validan igual que en /word.
+    Voz y velocidad se validan igual que en /word. El idioma es el del material (`Material.language`): con él la
+    palabra se pronuncia con acento nativo; los vocabularios antiguos sin idioma suenan como antes.
     """
     if voice not in TTS_VOICES:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Voz inválida. Opciones: {TTS_VOICES}")
@@ -160,4 +162,4 @@ async def get_vocabulary_audio(
     if not words:
         return TTSBatchResponse(audio_urls={}, generated=0, cached=0, failed=0)
 
-    return await _batch_response(words, voice, speed)
+    return await _batch_response(words, voice, speed, material.language)

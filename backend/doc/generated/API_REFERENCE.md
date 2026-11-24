@@ -100,17 +100,17 @@ Total de rutas: **230**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| POST | `/materials/` | get_current_teacher, get_current_user |  | `create_material` (app/api/v1/endpoints/materials.py:30) | El profesor crea un material. Puede ser un archivo subido o solo metadatos (para sets de vocabulario que se crean por separado). |
-| GET | `/materials/admin/list` | get_current_user |  | `list_materials_admin` (app/api/v1/endpoints/materials.py:291) | Superadmin: materiales activos de cualquier profesor (descarga vía /{id}/stream). |
-| GET | `/materials/my-materials` | get_current_teacher, get_current_user |  | `get_my_materials_teacher` (app/api/v1/endpoints/materials.py:279) | Devuelve todos los materiales del profesor |
-| GET | `/materials/quota` | get_current_teacher, get_current_user |  | `get_my_materials_quota` (app/api/v1/endpoints/materials.py:270) | Espacio usado y limite de materiales del profesor (bytes). |
-| GET | `/materials/student/my-materials` | get_current_student, get_current_user |  | `get_my_materials_student` (app/api/v1/endpoints/materials.py:345) | Devuelve los materiales asignados al estudiante |
-| PATCH | `/materials/student/{assignment_id}/progress` | get_current_student, get_current_user |  | `update_material_progress` (app/api/v1/endpoints/materials.py:360) | El estudiante actualiza su progreso en un material |
-| DELETE | `/materials/{material_id}` | get_current_teacher, get_current_user |  | `delete_material` (app/api/v1/endpoints/materials.py:311) | Elimina un material. Borra el archivo de Cloudinary y desactiva el material en BD. |
-| PATCH | `/materials/{material_id}` | get_current_teacher, get_current_user |  | `update_material` (app/api/v1/endpoints/materials.py:102) | Edita los datos de un material existente: título, descripción, categoría y/o nivel. No reemplaza el archivo ni las palabras de vocabulario — eso se maneja desde sus propios endpoints. |
-| POST | `/materials/{material_id}/assign` | get_current_approved_teacher, get_current_user |  | `assign_material` (app/api/v1/endpoints/materials.py:176) | Asigna un material a uno o varios de TUS estudiantes (StudentProfile.id) y/o a todos los integrantes de una de tus cohortes grupales (cohort_id). |
-| GET | `/materials/{material_id}/stream` | get_current_user |  | `stream_material_file` (app/api/v1/endpoints/materials.py:396) | Redirige directamente al archivo en Cloudinary de forma segura |
-| POST | `/materials/{material_id}/vocabulary` | get_current_teacher, get_current_user |  | `set_vocabulary_words` (app/api/v1/endpoints/materials.py:136) | Establece las palabras de un set de vocabulario. Las palabras se capitalizan automáticamente. |
+| POST | `/materials/` | get_current_teacher, get_current_user |  | `create_material` (app/api/v1/endpoints/materials.py:31) | El profesor crea un material. Puede ser un archivo subido o solo metadatos (para sets de vocabulario que se crean por separado). |
+| GET | `/materials/admin/list` | get_current_user |  | `list_materials_admin` (app/api/v1/endpoints/materials.py:306) | Superadmin: materiales activos de cualquier profesor (descarga vía /{id}/stream). |
+| GET | `/materials/my-materials` | get_current_teacher, get_current_user |  | `get_my_materials_teacher` (app/api/v1/endpoints/materials.py:294) | Devuelve todos los materiales del profesor |
+| GET | `/materials/quota` | get_current_teacher, get_current_user |  | `get_my_materials_quota` (app/api/v1/endpoints/materials.py:285) | Espacio usado y limite de materiales del profesor (bytes). |
+| GET | `/materials/student/my-materials` | get_current_student, get_current_user |  | `get_my_materials_student` (app/api/v1/endpoints/materials.py:360) | Devuelve los materiales asignados al estudiante |
+| PATCH | `/materials/student/{assignment_id}/progress` | get_current_student, get_current_user |  | `update_material_progress` (app/api/v1/endpoints/materials.py:375) | El estudiante actualiza su progreso en un material |
+| DELETE | `/materials/{material_id}` | get_current_teacher, get_current_user |  | `delete_material` (app/api/v1/endpoints/materials.py:326) | Elimina un material. Borra el archivo de Cloudinary y desactiva el material en BD. |
+| PATCH | `/materials/{material_id}` | get_current_teacher, get_current_user |  | `update_material` (app/api/v1/endpoints/materials.py:103) | Edita los datos de un material existente: título, descripción, categoría y/o nivel. No reemplaza el archivo ni las palabras de vocabulario — eso se maneja desde sus propios endpoints. |
+| POST | `/materials/{material_id}/assign` | get_current_approved_teacher, get_current_user |  | `assign_material` (app/api/v1/endpoints/materials.py:191) | Asigna un material a uno o varios de TUS estudiantes (StudentProfile.id) y/o a todos los integrantes de una de tus cohortes grupales (cohort_id). |
+| GET | `/materials/{material_id}/stream` | get_current_user |  | `stream_material_file` (app/api/v1/endpoints/materials.py:411) | Redirige directamente al archivo en Cloudinary de forma segura |
+| POST | `/materials/{material_id}/vocabulary` | get_current_teacher, get_current_user |  | `set_vocabulary_words` (app/api/v1/endpoints/materials.py:137) | Establece las palabras de un set de vocabulario. Las palabras se capitalizan automáticamente. |
 
 ## Tareas
 
@@ -175,8 +175,8 @@ Total de rutas: **230**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| POST | `/tts/batch` | get_current_user | 6/minute;60/day | `get_batch_audio` (app/api/v1/endpoints/tts.py:84) | Genera audio para múltiples palabras de una vez. Ideal para precargar un set de vocabulario completo. |
-| POST | `/tts/vocabulary/{material_id}` | get_current_user | 6/minute;60/day | `get_vocabulary_audio` (app/api/v1/endpoints/tts.py:133) | Genera audio para las palabras de un material de tipo vocabulario (máximo 50 por petición). |
+| POST | `/tts/batch` | get_current_user | 6/minute;60/day | `get_batch_audio` (app/api/v1/endpoints/tts.py:85) | Genera audio para múltiples palabras de una vez. Ideal para precargar un set de vocabulario completo. |
+| POST | `/tts/vocabulary/{material_id}` | get_current_user | 6/minute;60/day | `get_vocabulary_audio` (app/api/v1/endpoints/tts.py:134) | Genera audio para las palabras de un material de tipo vocabulario (máximo 50 por petición). |
 | POST | `/tts/word` | get_current_user | 60/minute;1000/day | `get_word_audio` (app/api/v1/endpoints/tts.py:29) | Genera o recupera el audio de alta calidad para una palabra. Cualquier usuario autenticado puede usarlo. |
 
 ## Paquetes

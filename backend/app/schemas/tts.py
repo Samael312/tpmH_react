@@ -6,6 +6,19 @@ TTS_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
 TTS_MIN_SPEED = 0.25
 TTS_MAX_SPEED = 2.0
 TTS_MAX_WORDS = 50  # tope por peticion (control de costes)
+TTS_MAX_LANGUAGE_LEN = 40
+
+
+def check_tts_language(v):
+    """Idioma opcional (nombre del catálogo): sin espacios sobrantes; vacío -> None; tope de longitud."""
+    if v is None:
+        return None
+    v = v.strip()
+    if not v:
+        return None
+    if len(v) > TTS_MAX_LANGUAGE_LEN:
+        raise ValueError(f"El idioma puede tener como máximo {TTS_MAX_LANGUAGE_LEN} caracteres")
+    return v
 
 
 class TTSWordRequest(BaseModel):
@@ -13,6 +26,12 @@ class TTSWordRequest(BaseModel):
     word: str
     voice: str = "nova"
     speed: float = 0.9
+    language: Optional[str] = None  # nombre del catálogo de idiomas; sin él, comportamiento anterior
+
+    @field_validator("language")
+    @classmethod
+    def validate_language(cls, v):
+        return check_tts_language(v)
 
     @field_validator("word")
     @classmethod
@@ -54,6 +73,12 @@ class TTSBatchRequest(BaseModel):
     words: List[str]
     voice: str = "nova"
     speed: float = 0.9
+    language: Optional[str] = None  # nombre del catálogo de idiomas; sin él, comportamiento anterior
+
+    @field_validator("language")
+    @classmethod
+    def validate_language(cls, v):
+        return check_tts_language(v)
 
     @field_validator("words")
     @classmethod

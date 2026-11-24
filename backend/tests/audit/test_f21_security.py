@@ -501,7 +501,7 @@ def _vocab(db, world, n=3, owner=None):
 def tts_stub(monkeypatch):
     calls = []
 
-    async def fake_batch(words, voice, speed):
+    async def fake_batch(words, voice, speed, language=None):
         calls.append(list(words))
         return {w: "http://audio/" + w for w in words}
     monkeypatch.setattr("app.api.v1.endpoints.tts.generate_batch_audio", fake_batch)
@@ -544,7 +544,7 @@ def test_m4_vocabulary_rate_limited(client, world, db, tts_stub):
 
 
 def test_m4_tts_errors_do_not_leak_details(client, world, db, monkeypatch):
-    async def boom(words, voice, speed):
+    async def boom(words, voice, speed, language=None):
         raise RuntimeError("sk-SECRET-key leaked from openai")
     monkeypatch.setattr("app.api.v1.endpoints.tts.generate_batch_audio", boom)
     r = client.post(f"{API}/tts/batch", json={"words": ["a"]}, headers=hdr(world["s_user"]))
@@ -559,7 +559,7 @@ def test_m4_batch_cached_counter(client, world, monkeypatch):
     tts_service._audio_cache.clear()
     tts_service._audio_cache[tts_service._get_cache_key("uno", "nova", 0.9)] = "http://audio/uno"
 
-    async def fake_batch(words, voice, speed):
+    async def fake_batch(words, voice, speed, language=None):
         return {w: "http://audio/" + w for w in words}
     monkeypatch.setattr("app.api.v1.endpoints.tts.generate_batch_audio", fake_batch)
     r = client.post(f"{API}/tts/batch", json={"words": ["uno", "dos", "tres"]}, headers=hdr(world["s_user"]))

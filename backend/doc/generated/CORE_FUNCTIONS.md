@@ -341,11 +341,13 @@ Las que empiezan por `_` son privadas del módulo.
 
 - `class SpokenLanguagesError()` — L35: Entrada invalida; el mensaje es apto para mostrar al usuario (HTTP 422).
 - `_key(text: str)` — L39: Clave de comparacion: sin tildes, sin mayusculas, sin espacios sobrantes.
-- `get_catalog(db: Session)` — L45
-- `read_spoken_languages(raw)` — L51: Lee lo guardado (formato nuevo o textos sueltos de la Fase 8) como [{language, level|None}]. Nunca lanza.
-- `language_names(raw)` — L63
-- `speaks(raw, language: str)` — L67: True si la lista incluye ese idioma (sin distinguir mayusculas ni tildes).
-- `normalize_spoken_languages(raw, catalog: list[str])` — L73: Valida y normaliza. Devuelve [{language, level}] con la ortografia del catalogo; lanza SpokenLanguagesError si no es valida. Cada elemento debe ser {"language": ..., "level": ...} con un nivel de LEVELS.
+- `language_key(text: str)` — L45: Clave pública para comparar nombres de idioma (sin tildes, sin mayúsculas, sin espacios sobrantes).
+- `find_in_catalog(language: str, catalog: list[str])` — L50: El nombre del catálogo que coincide con `language` (ortografía del catálogo), o None si no está.
+- `get_catalog(db: Session)` — L56
+- `read_spoken_languages(raw)` — L62: Lee lo guardado (formato nuevo o textos sueltos de la Fase 8) como [{language, level|None}]. Nunca lanza.
+- `language_names(raw)` — L74
+- `speaks(raw, language: str)` — L78: True si la lista incluye ese idioma (sin distinguir mayusculas ni tildes).
+- `normalize_spoken_languages(raw, catalog: list[str])` — L84: Valida y normaliza. Devuelve [{language, level}] con la ortografia del catalogo; lanza SpokenLanguagesError si no es valida. Cada elemento debe ser {"language": ..., "level": ...} con un nivel de LEVELS.
 
 ## app/core/storage.py
 
@@ -387,10 +389,12 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/tts_service.py
 
-- `_get_cache_key(word: str, voice: str, speed: float)` — L28: Genera una clave única para cada combinación de palabra + voz + velocidad. Usamos hash para tener claves cortas y consistentes.
-- `count_cached(words: list[str], voice: str=DEFAULT_VOICE, speed: float=DEFAULT_SPEED)` — L37: Cuantas de estas palabras ya tienen audio en cache (consultar ANTES de generar, para informar cached).
-- `async generate_word_audio(word: str, voice: str=DEFAULT_VOICE, speed: float=DEFAULT_SPEED)` — L42: Genera audio de alta calidad para una palabra usando OpenAI TTS. Cachea el resultado en Cloudinary para no regenerar.
-- `async generate_batch_audio(words: list[str], voice: str=DEFAULT_VOICE, speed: float=DEFAULT_SPEED)` — L108: Genera audio para múltiples palabras de forma eficiente. Solo genera las que no están en caché.
+- `_clean_language(language: str | None)` — L42: Idioma sin espacios sobrantes; vacío o nulo -> None (comportamiento anterior).
+- `english_language_name(language: str)` — L48: Nombre en inglés de un idioma del catálogo, para la instrucción del TTS.
+- `_get_cache_key(word: str, voice: str, speed: float, language: str | None=None)` — L53: Genera una clave única para cada combinación de palabra + voz + velocidad (+ idioma). Usamos hash para tener claves cortas y consistentes. Sin idioma la clave es la de siempre (los audios ya generados se siguen reutilizando); con idioma, la misma palabra en dos idiomas no comparte audio.
+- `count_cached(words: list[str], voice: str=DEFAULT_VOICE, speed: float=DEFAULT_SPEED, language: str | None=None)` — L66: Cuantas de estas palabras ya tienen audio en cache (consultar ANTES de generar, para informar cached).
+- `async generate_word_audio(word: str, voice: str=DEFAULT_VOICE, speed: float=DEFAULT_SPEED, language: str | None=None)` — L72: Genera audio de alta calidad para una palabra usando OpenAI TTS. Cachea el resultado en Cloudinary para no regenerar.
+- `async generate_batch_audio(words: list[str], voice: str=DEFAULT_VOICE, speed: float=DEFAULT_SPEED, language: str | None=None)` — L147: Genera audio para múltiples palabras de forma eficiente. Solo genera las que no están en caché.
 
 ## app/core/upload_quota.py
 

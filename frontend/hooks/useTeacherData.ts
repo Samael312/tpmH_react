@@ -149,6 +149,7 @@ export interface TeacherMaterial {
   file_type: string | null
   created_at: string
   vocabulary_words: string[] | null
+  language?: string | null  // idioma del vocabulario (para el audio TTS)
 }
 
 // ─── Pagos del profesor (validación) ─────────────────────────────────────────

@@ -1,6 +1,7 @@
 from openai import AsyncOpenAI
 from app.core.config import settings
 from app.core.storage import upload_file
+from app.core.spoken_languages import language_key
 import hashlib
 import os
 import logging
@@ -20,29 +21,59 @@ client = AsyncOpenAI(
 DEFAULT_VOICE = "nova"       # Voz femenina natural — ideal para inglés
 DEFAULT_SPEED = 0.9          # Ligeramente más lento para aprendizaje
 
+# Sin idioma: `tts-1`, que solo recibe la palabra y adivina el idioma (bien en inglés; una palabra suelta en otro
+# idioma suena con fonética inglesa). Con idioma: un modelo que acepta `instructions` para fijar la pronunciación.
+LEGACY_MODEL = "tts-1"
+LANGUAGE_MODEL = "gpt-4o-mini-tts"
+
+# El catálogo de idiomas (`spoken_languages`) está en español; la instrucción se da en inglés. Un idioma que el
+# administrador añada al catálogo y no esté aquí se pasa tal cual (el modelo entiende «Catalán», «Hindi»…).
+_ENGLISH_NAMES = {
+    "espanol": "Spanish", "ingles": "English", "portugues": "Portuguese", "frances": "French",
+    "italiano": "Italian", "aleman": "German", "chino": "Chinese (Mandarin)", "arabe": "Arabic",
+    "ruso": "Russian", "japones": "Japanese", "coreano": "Korean", "neerlandes": "Dutch",
+}
+
 # Caché en memoria por sesión del servidor
-# Mapea: hash(palabra+voz) → url de Cloudinary
+# Mapea: hash(palabra+voz+velocidad[+idioma]) → url de Cloudinary
 _audio_cache: dict[str, str] = {}
 
 
-def _get_cache_key(word: str, voice: str, speed: float) -> str:
+def _clean_language(language: str | None) -> str | None:
+    """Idioma sin espacios sobrantes; vacío o nulo -> None (comportamiento anterior)."""
+    language = (language or "").strip()
+    return language or None
+
+
+def english_language_name(language: str) -> str:
+    """Nombre en inglés de un idioma del catálogo, para la instrucción del TTS."""
+    return _ENGLISH_NAMES.get(language_key(language), language.strip())
+
+
+def _get_cache_key(word: str, voice: str, speed: float, language: str | None = None) -> str:
     """
-    Genera una clave única para cada combinación de palabra + voz + velocidad.
-    Usamos hash para tener claves cortas y consistentes.
+    Genera una clave única para cada combinación de palabra + voz + velocidad (+ idioma).
+    Usamos hash para tener claves cortas y consistentes. Sin idioma la clave es la de siempre (los audios ya
+    generados se siguen reutilizando); con idioma, la misma palabra en dos idiomas no comparte audio.
     """
     raw = f"{word.lower().strip()}_{voice}_{speed}"
+    language = _clean_language(language)
+    if language:
+        raw += f"_{language_key(language)}"
     return hashlib.md5(raw.encode()).hexdigest()
 
 
-def count_cached(words: list[str], voice: str = DEFAULT_VOICE, speed: float = DEFAULT_SPEED) -> int:
+def count_cached(words: list[str], voice: str = DEFAULT_VOICE, speed: float = DEFAULT_SPEED,
+                 language: str | None = None) -> int:
     """Cuantas de estas palabras ya tienen audio en cache (consultar ANTES de generar, para informar cached)."""
-    return sum(1 for w in words if _get_cache_key(w, voice, speed) in _audio_cache)
+    return sum(1 for w in words if _get_cache_key(w, voice, speed, language) in _audio_cache)
 
 
 async def generate_word_audio(
     word: str,
     voice: str = DEFAULT_VOICE,
     speed: float = DEFAULT_SPEED,
+    language: str | None = None,
 ) -> str:
     """
     Genera audio de alta calidad para una palabra usando OpenAI TTS.
@@ -52,6 +83,8 @@ async def generate_word_audio(
         word: la palabra a pronunciar
         voice: voz de OpenAI (nova, alloy, echo, fable, onyx, shimmer)
         speed: velocidad (0.25 - 4.0)
+        language: idioma de la palabra (nombre del catálogo, p. ej. "Español"). Opcional: sin él se usa el
+            modelo de siempre.
 
     Returns:
         URL del audio en Cloudinary
@@ -62,7 +95,8 @@ async def generate_word_audio(
         1000 palabras únicas = ~$0.09
         Con caché solo pagas una vez por palabra
     """
-    cache_key = _get_cache_key(word, voice, speed)
+    language = _clean_language(language)
+    cache_key = _get_cache_key(word, voice, speed, language)
 
     # 1. Revisar caché en memoria
     if cache_key in _audio_cache:
@@ -71,14 +105,19 @@ async def generate_word_audio(
 
     # 2. Generar con OpenAI TTS
     try:
-        logger.info(f"Generando TTS para: '{word}' voz={voice} speed={speed}")
+        logger.info(f"Generando TTS para: '{word}' voz={voice} speed={speed} idioma={language}")
 
-        response = await client.audio.speech.create(
-            model="tts-1",          # tts-1 = rápido y económico
-            voice=voice,            # tts-1-hd = mayor calidad pero más caro
-            input=word,
-            speed=speed,
-        )
+        request = {"voice": voice, "input": word, "speed": speed}
+        if language:
+            name = english_language_name(language)
+            request["model"] = LANGUAGE_MODEL
+            request["instructions"] = (
+                f"Pronounce this single {name} word clearly and naturally, with a native {name} accent. "
+                "Say only the word, nothing else."
+            )
+        else:
+            request["model"] = LEGACY_MODEL  # tts-1 = rápido y económico
+        response = await client.audio.speech.create(**request)
 
         # 3. Obtener los bytes del audio
         audio_bytes = response.content
@@ -109,6 +148,7 @@ async def generate_batch_audio(
     words: list[str],
     voice: str = DEFAULT_VOICE,
     speed: float = DEFAULT_SPEED,
+    language: str | None = None,
 ) -> dict[str, str]:
     """
     Genera audio para múltiples palabras de forma eficiente.
@@ -122,7 +162,7 @@ async def generate_batch_audio(
 
     # Separar palabras en caché vs nuevas
     for word in words:
-        cache_key = _get_cache_key(word, voice, speed)
+        cache_key = _get_cache_key(word, voice, speed, language)
         if cache_key in _audio_cache:
             result[word] = _audio_cache[cache_key]
         else:
@@ -136,7 +176,7 @@ async def generate_batch_audio(
     # Generar las que faltan
     import asyncio
     tasks = [
-        generate_word_audio(word, voice, speed)
+        generate_word_audio(word, voice, speed, language)
         for word in words_to_generate
     ]
 

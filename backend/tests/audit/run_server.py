@@ -150,7 +150,4 @@ if __name__ == "__main__":
     import uvicorn
     from app.main import app
     app.include_router(e2e_hooks())
-    # E2E_BACKEND_HOST: en Linux "::" acepta IPv4 e IPv6 a la vez (WebKit puede resolver `localhost` a ::1). Por
-    # defecto solo 127.0.0.1: en Windows "::" no acepta IPv4.
-    uvicorn.run(app, host=os.environ.get("E2E_BACKEND_HOST", "127.0.0.1"),
-                port=int(sys.argv[1]) if len(sys.argv) > 1 else 8000)
+    uvicorn.run(app, host="127.0.0.1", port=int(sys.argv[1]) if len(sys.argv) > 1 else 8000)

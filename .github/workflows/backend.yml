@@ -59,8 +59,13 @@ jobs:
       - run: pip install -r requirements.txt pytest pytest-cov
 
       - name: Tests de auditoria (SQLite)
-        # Suelo de cobertura 75 %: medido 77,5 % el 2026-11-23 (el resto sin cubrir es sobre todo god_mode, cohorts y google_calendar).
+        # Suelo de cobertura 95 %: medido 97,2 % el 2026-11-24.
         run: python -m pytest tests/audit -q --ignore=tests/audit/concurrency_live.py --cov=app --cov-report=term:skip-covered --cov-fail-under=95
+
+      - name: Sondas de modo single/multi-tenant y de zonas horarias (SQLite)
+        # Aparte de tests/audit: otra sesion de pytest (el inventario «una prueba por ruta» solo aplica a la auditoria).
+        # Incluye las pruebas que fijan bugs corregidos (p. ej. AUD-24) y las que documentan los que siguen abiertos.
+        run: python -m pytest tests/tenant_probes tests/tz_probes -q
 
       - name: Migraciones Alembic sobre PostgreSQL vacio
         run: |

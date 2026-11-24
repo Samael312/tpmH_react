@@ -19,6 +19,7 @@ from app.schemas.materials import (
 )
 from pydantic import ValidationError
 from app.core.storage import upload_file_stream, delete_file
+from app.core.spoken_languages import find_in_catalog, get_catalog
 from app.core.upload_quota import ensure_quota, get_upload_size, usage as quota_usage
 
 router = APIRouter()
@@ -137,12 +138,16 @@ def update_material(
 def set_vocabulary_words(
     material_id: int,
     words: List[str] = Body(..., embed=True),
+    language: Optional[str] = Body(None, embed=True),
     current_user: User = Depends(get_current_teacher),
     db: Session = Depends(get_db)
 ):
     """
     Establece las palabras de un set de vocabulario.
     Las palabras se capitalizan automáticamente.
+
+    `language` (opcional): idioma de las palabras, del catálogo de idiomas. Lo usa el audio (TTS) para
+    pronunciarlas bien. Sin el campo se conserva el que hubiera; una cadena vacía lo quita.
     """
     material = db.query(Material).filter(
         Material.id == material_id,
@@ -159,6 +164,15 @@ def set_vocabulary_words(
     if len(words) > 500 or any(len(w) > 100 for w in words):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Máximo 500 palabras de hasta 100 caracteres")
 
+    new_language = material.language
+    if language is not None:
+        if not language.strip():
+            new_language = None
+        else:
+            new_language = find_in_catalog(language, get_catalog(db))
+            if new_language is None:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Idioma no válido: elige uno de la lista")
+
     seen = set()
     clean_words = []
     for word in words:
@@ -168,10 +182,11 @@ def set_vocabulary_words(
             clean_words.append(word_clean)
 
     material.vocabulary_words = clean_words
+    material.language = new_language
     material.category = "vocabulary"
     db.commit()
 
-    return {"message": f"{len(clean_words)} palabras guardadas", "words": clean_words}
+    return {"message": f"{len(clean_words)} palabras guardadas", "words": clean_words, "language": new_language}
 
 @router.post("/{material_id}/assign")
 def assign_material(

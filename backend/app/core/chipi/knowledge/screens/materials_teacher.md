@@ -10,7 +10,7 @@ El profesor puede:
 - Asignar materiales a estudiantes específicos o a un grupo completo
 
 ## Pasos
-«Subir documento» (arrastra un archivo) o «Crear vocabulario» (nombre y palabras) → «Asignar» a estudiantes o a un grupo.
+«Subir documento» (arrastra un archivo) o «Crear vocabulario» (nombre, idioma de las palabras y palabras; con el idioma el audio las pronuncia bien) → «Asignar» a estudiantes o a un grupo.
 
 ## Reglas
 Documentos hasta 10 MB (PDF, DOC, DOCX, JPG, PNG), video hasta 100 MB, cuota de 500 MB.

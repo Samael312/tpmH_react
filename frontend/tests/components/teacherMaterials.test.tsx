@@ -151,6 +151,20 @@ describe("Materiales · crear vocabulario", () => {
     expect(screen.getAllByText("Casa")).toHaveLength(1);
   });
 
+  it("envía el idioma elegido del catálogo al guardar las palabras", async () => {
+    mockApi("get", "/system-catalogs/", { spoken_languages: ["Español", "Inglés"] });
+    mockApi("post", "/materials/", { id: 45 });
+    mockApi("post", "/materials/45/vocabulary", {});
+    const { user } = setup();
+    const title = await openVocab(user);
+    await user.type(title, "Frutas");
+    await user.type(screen.getByPlaceholderText("Escribe una palabra y presiona Enter..."), "pera{enter}");
+    await user.selectOptions(await screen.findByRole("option", { name: "Español" }).then(o => o.closest("select")!), "Español");
+    await user.click(screen.getByRole("button", { name: "Crear set de vocabulario" }));
+    await waitFor(() => expect(callsTo("post", "/materials/45/vocabulary")).toHaveLength(1));
+    expect(callsTo("post", "/materials/45/vocabulary")[0].body).toEqual({ words: ["Pera"], language: "Español" });
+  });
+
   it("crea el set: primero el material y luego sus palabras", async () => {
     mockApi("post", "/materials/", { id: 44 });
     mockApi("post", "/materials/44/vocabulary", {});
@@ -160,7 +174,7 @@ describe("Materiales · crear vocabulario", () => {
     await user.type(screen.getByPlaceholderText("Escribe una palabra y presiona Enter..."), "gato{enter}");
     await user.click(screen.getByRole("button", { name: "Crear set de vocabulario" }));
     await waitFor(() => expect(callsTo("post", "/materials/44/vocabulary")).toHaveLength(1));
-    expect(callsTo("post", "/materials/44/vocabulary")[0].body).toEqual({ words: ["Gato"] });
+    expect(callsTo("post", "/materials/44/vocabulary")[0].body).toEqual({ words: ["Gato"], language: "" });
     expect((callsTo("post", "/materials/")[0].body as FormData).get("category")).toBe("Vocabulary");
     expect(await screen.findByText("Vocabulario creado correctamente")).toBeInTheDocument();
   });
@@ -294,7 +308,7 @@ describe("Materiales · editar, palabras y borrar", () => {
     expect(screen.getByText("Tren")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Guardar/ }));
     await waitFor(() => expect(callsTo("post", "/materials/2/vocabulary")).toHaveLength(1));
-    expect(callsTo("post", "/materials/2/vocabulary")[0].body).toEqual({ words: ["Avión", "Hotel", "Tren"] });
+    expect(callsTo("post", "/materials/2/vocabulary")[0].body).toEqual({ words: ["Avión", "Hotel", "Tren"], language: "" });
   });
 
   it("borrar pide confirmación; confirmar llama a DELETE y avisa", async () => {
@@ -383,7 +397,7 @@ describe("Materiales · huecos de cobertura", () => {
     await user.click(chip.closest("span")!.querySelector("button") as HTMLElement);
     await user.click(screen.getByRole("button", { name: /Guardar/ }));
     await waitFor(() => expect(callsTo("post", "/materials/2/vocabulary")).toHaveLength(1));
-    expect(callsTo("post", "/materials/2/vocabulary")[0].body).toEqual({ words: ["Hotel"] });
+    expect(callsTo("post", "/materials/2/vocabulary")[0].body).toEqual({ words: ["Hotel"], language: "" });
   });
 
   it("editar detalles: descripción, categoría y nivel se envían", async () => {

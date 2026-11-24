@@ -87,7 +87,7 @@ def test_logs_screen_edge(client):
 
 
 def test_tts_batch_word_length_edges(client, world, monkeypatch):
-    async def fake_batch(words, voice, speed):
+    async def fake_batch(words, voice, speed, language=None):
         return {w: "http://audio/" + w[:5] for w in words}
     monkeypatch.setattr("app.api.v1.endpoints.tts.generate_batch_audio", fake_batch)
     h = hdr(world["s_user"])
@@ -180,7 +180,7 @@ def test_chipi_stream_error_does_not_leak_details(client, world, monkeypatch):
 
 
 def test_tts_word_is_rate_limited(client, world, monkeypatch):
-    async def fake(word, voice, speed):
+    async def fake(word, voice, speed, language=None):
         return "http://audio/x"
     monkeypatch.setattr("app.api.v1.endpoints.tts.generate_word_audio", fake)
     codes = [client.post(f"{API}/tts/word", json={"word": "hola"}, headers=hdr(world["s_user"])).status_code

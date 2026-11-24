@@ -69,6 +69,7 @@ class MaterialResponse(BaseModel):
     file_type: Optional[str]
     file_size: Optional[int] = None
     vocabulary_words: Optional[List[str]]
+    language: Optional[str] = None  # idioma del vocabulario (catálogo); nulo en los antiguos
     is_active: bool
     created_at: datetime
 

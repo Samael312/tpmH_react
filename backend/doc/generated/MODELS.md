@@ -264,6 +264,7 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | file_type | VARCHAR | ? |
 | file_size | BIGINT | ? |
 | vocabulary_words | JSONB | ? |
+| language | VARCHAR | ? |
 | is_active | BOOLEAN | ? default=True |
 | created_at | DATETIME | ? |
 

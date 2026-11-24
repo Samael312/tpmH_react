@@ -7,7 +7,8 @@ name: e2e
 #    portada 3D) y Lighthouse en su propio proyecto;
 #  - job `webkit` (NO bloqueante, `continue-on-error`): Safari de escritorio e iPhone 13. En Linux todas las pruebas
 #    que llaman a la API agotaban el tiempo (el login no completaba) y consumian los 45 min del job; queda aparte y
-#    con corte rapido hasta aclarar la causa (sospecha: WebKit resuelve `localhost` a ::1 y el backend escucha en IPv4).
+#    con corte rapido hasta aclarar la causa (sospecha sin confirmar: WebKit resuelve `localhost` a ::1 y el backend
+#    escucha en IPv4; el job imprime a que direccion resuelve).
 # Se ejecuta en PRs que toquen frontend o backend, y a mano desde Actions.
 
 on:
@@ -92,8 +93,6 @@ jobs:
     env:
       CI: "true"
       E2E_PYTHON: python
-      # Escucha en IPv4 e IPv6 a la vez (Linux): WebKit puede resolver `localhost` a ::1.
-      E2E_BACKEND_HOST: "::"
       NEXT_TELEMETRY_DISABLED: "1"
       NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ci-dummy
@@ -124,6 +123,9 @@ jobs:
       - run: npm ci
       - name: Navegadores de Playwright
         run: npx playwright install --with-deps webkit
+      - name: Diagnostico - a que direccion resuelve localhost
+        # Si lista ::1 antes que 127.0.0.1, WebKit intentara IPv6 y el backend (solo IPv4) no responderia.
+        run: getent ahosts localhost; cat /etc/hosts | head -5
       - name: E2E WebKit (corte rapido tras 3 fallos)
         run: npx playwright test --project=webkit --project=mobile-safari --max-failures=3
       - name: Informe HTML

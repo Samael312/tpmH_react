@@ -369,7 +369,9 @@ function VocabModal({
   onSaved: () => void;
 }) {
   const words = material.vocabulary_words ?? [];
+  const { catalogs } = useSystemCatalogs();
   const [list, setList]       = useState<string[]>(words);
+  const [language, setLanguage] = useState(material.language ?? "");
   const [input, setInput]     = useState("");
   const [saving, setSaving]   = useState(false);
   const toast = useToast();
@@ -386,7 +388,7 @@ function VocabModal({
   const save = async () => {
     setSaving(true);
     try {
-      await api.post(`/materials/${material.id}/vocabulary`, { words: list });
+      await api.post(`/materials/${material.id}/vocabulary`, { words: list, language });
       toast.success("Vocabulario guardado correctamente");
       onSaved();
       onClose();
@@ -416,6 +418,21 @@ function VocabModal({
             <X className="w-4 h-4 text-slate-500" />
           </button>
         </div>
+
+        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+          Idioma de las palabras
+        </label>
+        <select
+          aria-label="Idioma de las palabras"
+          value={language}
+          onChange={e => setLanguage(e.target.value)}
+          className="w-full mb-4 bg-slate-50 border-2 border-transparent rounded-xl text-sm
+                     font-bold text-slate-800 px-4 py-3 focus:outline-none focus:bg-white
+                     focus:border-pink-500"
+        >
+          <option value="">Sin indicar (audio automático)</option>
+          {catalogs.spoken_languages.map(l => <option key={l} value={l}>{l}</option>)}
+        </select>
 
         <div className="flex gap-2 mb-4">
           <div className="group relative flex-1">
@@ -810,6 +827,7 @@ export default function MaterialsPage() {
   const [vocabLevel, setVocabLevel]             = useState(LEVELS[0]);
   const [vocabWords, setVocabWords]             = useState<string[]>([]);
   const [vocabWordInput, setVocabWordInput]     = useState("");
+  const [vocabLanguage, setVocabLanguage]       = useState("");
 
   usePageTopBar({
     title: "Materiales",
@@ -873,7 +891,7 @@ export default function MaterialsPage() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      await api.post(`/materials/${res.data.id}/vocabulary`, { words: vocabWords });
+      await api.post(`/materials/${res.data.id}/vocabulary`, { words: vocabWords, language: vocabLanguage });
 
       setVocabTitle("");
       setVocabDescription("");
@@ -1292,6 +1310,27 @@ export default function MaterialsPage() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="text-[10px] font-black text-slate-400
+                                    uppercase tracking-widest block mb-1.5">
+                    Idioma de las palabras
+                  </label>
+                  <select
+                    aria-label="Idioma de las palabras"
+                    value={vocabLanguage}
+                    onChange={e => setVocabLanguage(e.target.value)}
+                    className="w-full bg-slate-50 border-2 border-transparent rounded-xl text-sm
+                               font-bold text-slate-800 px-4 py-3.5 focus:outline-none
+                               focus:bg-white focus:border-pink-500"
+                  >
+                    <option value="">Sin indicar (audio automático)</option>
+                    {catalogs.spoken_languages.map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Con el idioma, el audio pronuncia bien cada palabra suelta.
+                  </p>
                 </div>
 
                 <div className="sm:col-span-2">

@@ -42,6 +42,17 @@ def _key(text: str) -> str:
     return "".join(c for c in decomposed if not unicodedata.combining(c)).casefold()
 
 
+def language_key(text: str) -> str:
+    """Clave pública para comparar nombres de idioma (sin tildes, sin mayúsculas, sin espacios sobrantes)."""
+    return _key(text)
+
+
+def find_in_catalog(language: str, catalog: list[str]) -> str | None:
+    """El nombre del catálogo que coincide con `language` (ortografía del catálogo), o None si no está."""
+    k = _key(language)
+    return next((name for name in catalog if _key(name) == k), None)
+
+
 def get_catalog(db: Session) -> list[str]:
     row = db.query(SystemCatalog).filter(SystemCatalog.key == CATALOG_KEY).first()
     value = row.value if row and isinstance(row.value, list) else DEFAULT_SPOKEN_LANGUAGES

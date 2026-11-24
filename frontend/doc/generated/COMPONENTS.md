@@ -84,7 +84,7 @@
 - `hooks/useStudentData.ts` (678 líneas, referenciado en 26 archivos) — exports: AVAILABLE_SLOTS_QUERY_PREFIX, invalidateAvailableSlots, BookingStage, RejectedPaymentInfo, PendingRechargeInfo, StudentClass, AvailableSlot, PackageInfo, StudentEnrollment, StudentHomework, TeacherPublicProfile, Review
 - `hooks/useSupport.ts` (82 líneas, referenciado en 3 archivos) — exports: SupportCategory, SupportTicketStatus, SupportTicket, useMySupportTickets, createSupportTicket, markSupportTicketSeen, useUnreadSupportCount
 - `hooks/useSystemCatalogs.ts` (56 líneas, referenciado en 9 archivos) — exports: StudentGoal, PaymentMethodOption, ThemePreset, SubjectTheme, GoalCategoryKey, StudentGoalsCatalog, SystemCatalogs, SYSTEM_CATALOGS_QUERY_KEY, useSystemCatalogs
-- `hooks/useTeacherData.ts` (660 líneas, referenciado en 12 archivos) — exports: TeacherClass, TeacherProfile, WeeklySlot, WalletData, CalendarStatus, StudentEnrollmentSummary, StudentMaterialSummary, TeacherStudentFull, WithdrawalHistoryItem, IncomeHistoryItem, TeacherMaterial, TeacherPaymentEntry
+- `hooks/useTeacherData.ts` (661 líneas, referenciado en 12 archivos) — exports: TeacherClass, TeacherProfile, WeeklySlot, WalletData, CalendarStatus, StudentEnrollmentSummary, StudentMaterialSummary, TeacherStudentFull, WithdrawalHistoryItem, IncomeHistoryItem, TeacherMaterial, TeacherPaymentEntry
 - `hooks/useTeacherNotifications.ts` (47 líneas, referenciado en 2 archivos) — exports: TeacherNotification, useTeacherUnreadNotificationCount, useTeacherNotifications
 - `hooks/useToast.ts` (16 líneas, referenciado en 41 archivos) — exports: useToast
 

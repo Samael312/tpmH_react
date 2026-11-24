@@ -31,6 +31,9 @@ class Material(Base):
     # Para sets de vocabulario
     vocabulary_words = Column(JSONB, nullable=True)
     # ["apple", "banana", "cherry"]
+    # Idioma de las palabras (nombre del catálogo `spoken_languages`, p. ej. "Español"). Lo usa el TTS para
+    # pronunciarlas bien. Nulo en los vocabularios antiguos: se leen como antes (sin indicar idioma).
+    language = Column(String, nullable=True)
 
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

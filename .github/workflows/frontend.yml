@@ -37,7 +37,11 @@ jobs:
         run: npm run lint
       - name: Tipos
         run: npx tsc --noEmit
-      - name: Tests unitarios (Vitest)
-        run: npm test
+      - name: Tests unitarios y de componentes (Vitest, con umbrales de cobertura)
+        # Umbrales del plan de pruebas (medido el 2026-11-24: 97,9 % lineas / 96,1 % funciones / 92,8 % ramas).
+        # 3 hilos: con mas, studentSchedule falla alguna vez por tiempo.
+        run: npx vitest run --maxWorkers=3 --coverage --coverage.thresholds.lines=97 --coverage.thresholds.functions=90 --coverage.thresholds.branches=92
+      - name: Sondas de zonas horarias (Vitest)
+        run: npx vitest run --config __tz_probes__/vitest.config.ts
       - name: Build de produccion
         run: npm run build

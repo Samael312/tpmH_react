@@ -116,7 +116,7 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 ## schemas/materials.py
 
 - **MaterialCreate** — title: str; description: Optional[str] = None; category: str; level: Optional[str] = None; vocabulary_words: Optional[List[str]] = None  _(validadores: validate_category, validate_level, validate_title, validate_description)_
-- **MaterialResponse** — id: int; teacher_id: int; title: str; description: Optional[str]; category: str; level: Optional[str]; file_url: Optional[str]; file_type: Optional[str]; file_size: Optional[int] = None; vocabulary_words: Optional[List[str]]; is_active: bool; created_at: datetime
+- **MaterialResponse** — id: int; teacher_id: int; title: str; description: Optional[str]; category: str; level: Optional[str]; file_url: Optional[str]; file_type: Optional[str]; file_size: Optional[int] = None; vocabulary_words: Optional[List[str]]; language: Optional[str] = None; is_active: bool; created_at: datetime
 - **AssignMaterialRequest** — student_ids: List[int] = []; cohort_id: Optional[int] = None
 - **MaterialAssignmentResponse** — id: int; material_id: int; student_id: int; progress: str; assigned_at: datetime; completed_at: Optional[datetime]; material: MaterialResponse
 - **UpdateProgressRequest** — progress: str  _(validadores: validate_progress)_
@@ -206,9 +206,9 @@ Modelos Pydantic (`app/schemas`) con campos y validadores.
 
 ## schemas/tts.py
 
-- **TTSWordRequest** — word: str; voice: str = 'nova'; speed: float = 0.9  _(validadores: validate_word, validate_voice, validate_speed)_
+- **TTSWordRequest** — word: str; voice: str = 'nova'; speed: float = 0.9; language: Optional[str] = None  _(validadores: validate_language, validate_word, validate_voice, validate_speed)_
 - **TTSWordResponse** — word: str; audio_url: str; voice: str; speed: float
-- **TTSBatchRequest** — words: List[str]; voice: str = 'nova'; speed: float = 0.9  _(validadores: validate_words)_
+- **TTSBatchRequest** — words: List[str]; voice: str = 'nova'; speed: float = 0.9; language: Optional[str] = None  _(validadores: validate_language, validate_words)_
 - **TTSBatchResponse** — audio_urls: Dict[str, Optional[str]]; generated: int; cached: int; failed: int
 
 ## schemas/user.py
