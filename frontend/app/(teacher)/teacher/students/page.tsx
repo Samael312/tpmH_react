@@ -80,9 +80,14 @@ function StudentCard({ student }: { student: TeacherStudentFull }) {
     <div className="bg-white/85 backdrop-blur-xl rounded-2xl border border-white
                     shadow-lg shadow-slate-100 overflow-hidden
                     hover:shadow-xl transition-all duration-300">
+      {/* El botón de expandir y el de Chat son hermanos: un <button> dentro de otro es HTML inválido y axe lo marca
+          (nested-interactive). */}
+      <div className="flex items-center gap-3 p-5">
       <button
+        type="button"
+        aria-expanded={expanded}
         onClick={() => setExpanded(p => !p)}
-        className="w-full flex items-center gap-4 p-5 text-left"
+        className="flex flex-1 min-w-0 items-center gap-4 text-left"
       >
         <StudentAvatar s={student} className="w-14 h-14 rounded-2xl flex-shrink-0 text-sm shadow-md" />
 
@@ -98,20 +103,6 @@ function StudentCard({ student }: { student: TeacherStudentFull }) {
                                px-2.5 py-0.5 rounded-full">
                 {getFlagForNationality(student.nationality)} {student.nationality}
               </span>
-            )}
-            {(platformConfig?.chat_enabled ?? true) && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  router.push(`/teacher/chat?student=${encodeURIComponent(student.username)}`);
-                }}
-                className="inline-flex items-center gap-1.5 text-xs font-black text-white
-                           bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500
-                           px-3 py-1.5 rounded-full shadow-sm shadow-pink-200 transition-colors"
-              >
-                <MessagesSquare className="w-3.5 h-3.5" /> Chat
-              </button>
             )}
           </div>
 
@@ -150,6 +141,18 @@ function StudentCard({ student }: { student: TeacherStudentFull }) {
 
         <ChevronDown className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} />
       </button>
+      {(platformConfig?.chat_enabled ?? true) && (
+        <button
+          type="button"
+          onClick={() => router.push(`/teacher/chat?student=${encodeURIComponent(student.username)}`)}
+          className="inline-flex items-center gap-1.5 text-xs font-black text-white flex-shrink-0
+                     bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500
+                     px-3 py-1.5 rounded-full shadow-sm shadow-pink-200 transition-colors"
+        >
+          <MessagesSquare className="w-3.5 h-3.5" /> Chat
+        </button>
+      )}
+      </div>
 
       {/* Barra de progreso siempre visible si hay enrollment */}
       {activeEnr && progressPct !== null && (

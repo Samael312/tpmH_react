@@ -257,7 +257,11 @@ def test_group_session_conflicts_and_availability(client, world, db):
     db.commit()
     assert client.post(f"{C}/{co.id}/sessions", json={"start_time_utc": s2.isoformat(), "duration_minutes": 50}, headers=h).status_code == 409
     restrict_availability(db, world, "01:00", "02:00")
-    assert client.post(f"{C}/{co.id}/sessions", json=session_body(200), headers=h).status_code == 400
+    # Hora fija (12:00 UTC; el profesor de prueba está en UTC): con `session_body(200)` la hora dependía de cuándo
+    # corriera la prueba y, a ciertas horas del día, caía dentro de la ventana 01:00-02:00 y se aceptaba (201).
+    outside = future(200).replace(hour=12)
+    assert client.post(f"{C}/{co.id}/sessions", json={"start_time_utc": outside.isoformat(), "duration_minutes": 50},
+                       headers=h).status_code == 400
 
 
 def test_sessions_listing_access_attendance(client, world, db):

@@ -221,6 +221,14 @@ export default function StudentProfilePage() {
   const [uploading, setUploading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
+  // Temporizadores que borran los avisos: se cancelan al salir de la pantalla (si no, actualizan un componente
+  // ya desmontado).
+  const feedbackTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const clearFeedbackLater = useCallback((clear: () => void, ms: number) => {
+    feedbackTimers.current.push(setTimeout(clear, ms));
+  }, []);
+  useEffect(() => () => { feedbackTimers.current.forEach(clearTimeout); }, []);
+
   // ─── Normalización de opciones ────────────────────────────────────────────────
   // Los objetivos están agrupados por categoría (idiomas vs. otras materias),
   // ya que la plataforma no es solo de idiomas.
@@ -359,9 +367,9 @@ export default function StudentProfilePage() {
       });
     } finally {
       setSavingInfo(false);
-      setTimeout(() => setInfoFeedback(null), 4000);
+      clearFeedbackLater(() => setInfoFeedback(null), 4000);
     }
-  }, [timezone, username, name, surname, email, phoneCountry.dialCode, phoneRest, nationality, goal, payMethods, populateFields, user, setUser, avatarUrl, refetchProfile]);
+  }, [timezone, username, name, surname, email, phoneCountry.dialCode, phoneRest, nationality, goal, payMethods, populateFields, user, setUser, avatarUrl, refetchProfile, clearFeedbackLater]);
 
   // ─── POST: Cambiar Contraseña ────────────────────────────────────────────────
   const savePw = useCallback(async () => {
@@ -389,9 +397,9 @@ export default function StudentProfilePage() {
       });
     } finally {
       setSavingPw(false);
-      setTimeout(() => setPwFeedback(null), 5000);
+      clearFeedbackLater(() => setPwFeedback(null), 5000);
     }
-  }, [oldPw, newPw, confirmPw]);
+  }, [oldPw, newPw, confirmPw, clearFeedbackLater]);
 
   // ─── DELETE: Eliminar cuenta ────────────────────────────────────────────────
   const deleteAccount = useCallback(async () => {

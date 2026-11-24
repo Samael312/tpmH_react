@@ -127,7 +127,8 @@ test.describe("superadmin", () => {
     await page.goto("/admin/settings");
     await page.getByRole("button", { name: /Correos/ }).click();
     await expect(page.getByText("Notificaciones por email")).toBeVisible();
-    await expect(page.getByTestId("email-usage")).toHaveText("0 / 100");
+    // El contador depende de lo que enviaron antes los otros specs (flujos largos) y de qué proyecto corrió antes.
+    await expect(page.getByTestId("email-usage")).toHaveText(/^\d+ \/ 100$/);
     // los esenciales no se pueden apagar
     await expect(page.getByRole("switch", { name: /Esenciales .*siempre activo/ })).toBeDisabled();
     // apagar una categoría y guardar
