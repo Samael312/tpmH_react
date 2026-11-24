@@ -505,10 +505,17 @@ def send_teacher_video_review_email(to_email: str, teacher_name: str, approved: 
         if approved else
         "Tu video anterior sigue visible en tu perfil. Puedes subir otro video cuando quieras."
     )
+    # Fuera del f-string de abajo: reutilizar la misma comilla dentro de un f-string solo es válido en Python 3.12+
+    # y producción (Dockerfile) usa 3.11.
+    reason_html = (
+        f'<p style="font-size:13px;color:{COLOR_MUTED};white-space:pre-wrap;">'
+        f'<strong>Motivo:</strong> {_html_escape(reason or "")}</p>'
+        if reason else ""
+    )
     body = f"""
       <p>Hola {teacher_name}, revisamos el video nuevo de tu perfil.</p>
       {_detail_table([_detail_row("Resultado", label)])}
-      {f'<p style="font-size:13px;color:{COLOR_MUTED};white-space:pre-wrap;"><strong>Motivo:</strong> {_html_escape(reason or '')}</p>' if reason else ""}
+      {reason_html}
       <p>{next_step}</p>
       {_cta_button("Ir a mi perfil", f"{settings.FRONTEND_URL}/teacher/profile")}
     """

@@ -20,6 +20,7 @@ import glob
 import inspect
 import os
 import re
+import subprocess
 import sys
 import tempfile
 
@@ -203,17 +204,35 @@ def gen_front_routes():
     w(os.path.join(FRONT, "doc", "generated", "ROUTES.md"), "\n".join(out) + "\n")
 
 
+def _front_sources() -> dict:
+    """{ruta absoluta: texto} de los .ts/.tsx VERSIONADOS del frontend.
+
+    Debe depender solo de lo que está en git: antes se recorría `**/*.ts*`, que incluía archivos ignorados que solo
+    existen en la máquina de quien genera (p. ej. `tsconfig.tsbuildinfo`, que lista todos los nombres de archivo) y
+    hacía que el resultado cambiara entre Windows y el CI de Linux.
+    """
+    try:
+        listed = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.ts", "*.tsx"], cwd=FRONT, capture_output=True,
+                                text=True, encoding="utf8", check=True).stdout.split("\n")
+        paths = [os.path.normpath(os.path.join(FRONT, p)) for p in listed if p.strip()]
+    except (OSError, subprocess.CalledProcessError):  # sin git: recorrido por extensión exacta
+        paths = [g for g in glob.glob(os.path.join(FRONT, "**", "*"), recursive=True)
+                 if g.endswith((".ts", ".tsx")) and "node_modules" not in g and ".next" not in g]
+    return {p: open(p, encoding="utf8", errors="ignore").read() for p in sorted(paths) if os.path.isfile(p)}
+
+
 def gen_front_components():
     out = ["# COMPONENTS / HOOKS / STORES / LIB (generado)\n"]
+    sources = _front_sources()
     for d in ("components", "hooks", "store", "lib"):
         out.append(f"\n## {d}/\n")
-        for f in sorted(glob.glob(os.path.join(FRONT, d, "**", "*.ts*"), recursive=True)):
-            src = open(f, encoding="utf8").read()
+        prefix = os.path.join(FRONT, d) + os.sep
+        for f in sorted(p for p in sources if p.startswith(prefix)):
+            src = sources[f]
             rel = os.path.relpath(f, FRONT).replace("\\", "/")
             exports = re.findall(r"export\s+(?:default\s+)?(?:async\s+)?(?:function|const|class|interface|type)\s+(\w+)", src)
-            used_by = sum(1 for g in glob.glob(os.path.join(FRONT, "**", "*.ts*"), recursive=True)
-                          if "node_modules" not in g and ".next" not in g and g != f
-                          and re.search(r"\b" + re.escape(os.path.splitext(os.path.basename(f))[0]) + r"\b", open(g, encoding="utf8", errors="ignore").read()))
+            name_re = re.compile(r"\b" + re.escape(os.path.splitext(os.path.basename(f))[0]) + r"\b")
+            used_by = sum(1 for g, text in sources.items() if g != f and name_re.search(text))
             out.append(f"- `{rel}` ({src.count(chr(10)) + 1} líneas, referenciado en {used_by} archivos) — exports: {', '.join(exports[:12]) or '—'}"
                        + (f" — {_comment_head(src)[:160]}" if _comment_head(src) else ""))
     w(os.path.join(FRONT, "doc", "generated", "COMPONENTS.md"), "\n".join(out) + "\n")
@@ -230,10 +249,12 @@ def gen_front_api_calls():
                     routes.add((m, re.sub(r"\{[^}]*\}", "{x}", p[len("/api/v1"):]).rstrip("/") or "/"))
     pat = re.compile(r"\b(?:api|axios)\.(get|post|put|patch|delete)\(\s*([`'\"])(.+?)\2", re.S)
     per, bad = {}, []
+    sources = _front_sources()
     for d in ("app", "components", "hooks", "lib", "store"):
-        for f in glob.glob(os.path.join(FRONT, d, "**", "*.ts*"), recursive=True):
+        prefix = os.path.join(FRONT, d) + os.sep
+        for f in (p for p in sources if p.startswith(prefix)):
             rel = os.path.relpath(f, FRONT).replace("\\", "/")
-            src = open(f, encoding="utf8").read()
+            src = sources[f]
             for m in pat.finditer(src):
                 url = re.sub(r"\$\{[^}]*\}", "{x}", m.group(3)).split("?")[0]
                 key = (m.group(1).upper(), url.rstrip("/") or "/")

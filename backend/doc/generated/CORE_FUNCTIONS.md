@@ -127,28 +127,28 @@ Las que empiezan por `_` son privadas del módulo.
 - `send_payment_failed_email(to_email: str, student_name: str, concept: str, amount: float, rejection_reason: str)` — L457
 - `send_teacher_status_update_email(to_email: str, teacher_name: str, new_status: str, reason: str | None=None)` — L477
 - `send_teacher_video_review_email(to_email: str, teacher_name: str, approved: bool, reason: str | None=None)` — L501
-- `send_support_ticket_response_email(to_email: str, user_name: str, subject: str, admin_response: str, portal_path: str)` — L519
-- `send_new_booking_teacher_email(to_email: str, teacher_name: str, student_first_name: str, student_last_name: str, student_nationality: str | None, student_phone: str | Non)` — L532
-- `send_class_rescheduled_teacher_email(to_email: str, teacher_name: str, student_name: str, old_start_local: str, new_start_local: str, changed_by: str)` — L555
-- `send_class_reminder_teacher_email(to_email: str, teacher_name: str, student_name: str, subject: str, class_start_local: str, hours_before: int=24)` — L572
-- `send_class_reminders_teacher_digest_email(to_email: str, teacher_name: str, items: list[tuple[str, str, str]], hours_before: int=24)` — L590: Un solo correo con TODAS las clases que el profesor tiene en la ventana de recordatorio, en vez de uno por clase. `items`: (alumno, materia, fecha y hora local).
-- `send_chat_digest_teacher_email(to_email: str, teacher_name: str, items: list[tuple[str, int, str]], conversation_url: str)` — L608: Un solo correo con los mensajes nuevos de varias conversaciones, en vez de uno por alumno. `items`: (alumno, mensajes sin leer, vista previa del ultimo).
-- `send_class_cancelled_teacher_email(to_email: str, teacher_name: str, student_name: str, class_start_local: str, cancelled_by: str, reason: str | None=None)` — L627
-- `send_homework_submitted_email(to_email: str, teacher_name: str, student_name: str, homework_title: str, submitted_at_local: str)` — L645
-- `send_new_review_received_email(to_email: str, teacher_name: str, student_name: str, rating: float, comment: str | None)` — L660
-- `send_calendar_reauth_teacher_email(to_email: str, teacher_name: str)` — L674
-- `send_withdrawal_requested_teacher_email(to_email: str, teacher_name: str, amount: float, destination_method: str)` — L685
-- `send_withdrawal_processed_email(to_email: str, teacher_name: str, status: str, amount: float, reference: str | None=None, rejection_reason: str | None=None)` — L701
-- `send_admin_new_support_ticket_email(to_email: str, user_name: str, user_role_label: str, category_label: str, subject: str, message: str)` — L725
-- `send_admin_new_teacher_pending_email(to_email: str, teacher_name: str, teacher_email: str, subjects_or_languages: list[str])` — L741
-- `send_admin_payment_pending_email(to_email: str, student_name: str, amount: float, concept: str, payment_method: str, transaction_reference: str | None=None)` — L757
-- `send_admin_withdrawal_requested_email(to_email: str, teacher_name: str, amount: float, destination_details: str)` — L778
-- `send_package_expiring_email(to_email: str, student_name: str, package_name: str, classes_remaining: int)` — L793
-- `send_new_chat_message_teacher_email(to_email: str, teacher_name: str, student_name: str, message_preview: str, conversation_url: str)` — L810
-- `send_class_confirmed_email(to_email: str, student_name: str, teacher_name: str, subject: str, class_start_local: str, duration_minutes: int, buffer_minutes: int=0)` — L824
-- `send_class_confirmed_teacher_email(to_email: str, teacher_name: str, student_name: str, subject: str, class_start_local: str, duration_minutes: int)` — L841
-- `_escape_value(v)` — L867
-- `_escaped_args(fn)` — L875
+- `send_support_ticket_response_email(to_email: str, user_name: str, subject: str, admin_response: str, portal_path: str)` — L526
+- `send_new_booking_teacher_email(to_email: str, teacher_name: str, student_first_name: str, student_last_name: str, student_nationality: str | None, student_phone: str | Non)` — L539
+- `send_class_rescheduled_teacher_email(to_email: str, teacher_name: str, student_name: str, old_start_local: str, new_start_local: str, changed_by: str)` — L562
+- `send_class_reminder_teacher_email(to_email: str, teacher_name: str, student_name: str, subject: str, class_start_local: str, hours_before: int=24)` — L579
+- `send_class_reminders_teacher_digest_email(to_email: str, teacher_name: str, items: list[tuple[str, str, str]], hours_before: int=24)` — L597: Un solo correo con TODAS las clases que el profesor tiene en la ventana de recordatorio, en vez de uno por clase. `items`: (alumno, materia, fecha y hora local).
+- `send_chat_digest_teacher_email(to_email: str, teacher_name: str, items: list[tuple[str, int, str]], conversation_url: str)` — L615: Un solo correo con los mensajes nuevos de varias conversaciones, en vez de uno por alumno. `items`: (alumno, mensajes sin leer, vista previa del ultimo).
+- `send_class_cancelled_teacher_email(to_email: str, teacher_name: str, student_name: str, class_start_local: str, cancelled_by: str, reason: str | None=None)` — L634
+- `send_homework_submitted_email(to_email: str, teacher_name: str, student_name: str, homework_title: str, submitted_at_local: str)` — L652
+- `send_new_review_received_email(to_email: str, teacher_name: str, student_name: str, rating: float, comment: str | None)` — L667
+- `send_calendar_reauth_teacher_email(to_email: str, teacher_name: str)` — L681
+- `send_withdrawal_requested_teacher_email(to_email: str, teacher_name: str, amount: float, destination_method: str)` — L692
+- `send_withdrawal_processed_email(to_email: str, teacher_name: str, status: str, amount: float, reference: str | None=None, rejection_reason: str | None=None)` — L708
+- `send_admin_new_support_ticket_email(to_email: str, user_name: str, user_role_label: str, category_label: str, subject: str, message: str)` — L732
+- `send_admin_new_teacher_pending_email(to_email: str, teacher_name: str, teacher_email: str, subjects_or_languages: list[str])` — L748
+- `send_admin_payment_pending_email(to_email: str, student_name: str, amount: float, concept: str, payment_method: str, transaction_reference: str | None=None)` — L764
+- `send_admin_withdrawal_requested_email(to_email: str, teacher_name: str, amount: float, destination_details: str)` — L785
+- `send_package_expiring_email(to_email: str, student_name: str, package_name: str, classes_remaining: int)` — L800
+- `send_new_chat_message_teacher_email(to_email: str, teacher_name: str, student_name: str, message_preview: str, conversation_url: str)` — L817
+- `send_class_confirmed_email(to_email: str, student_name: str, teacher_name: str, subject: str, class_start_local: str, duration_minutes: int, buffer_minutes: int=0)` — L831
+- `send_class_confirmed_teacher_email(to_email: str, teacher_name: str, student_name: str, subject: str, class_start_local: str, duration_minutes: int)` — L848
+- `_escape_value(v)` — L874
+- `_escaped_args(fn)` — L882
 
 ## app/core/email_settings.py
 
