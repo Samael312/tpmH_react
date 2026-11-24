@@ -75,7 +75,8 @@ def seed():
     db = SessionLocal()
     mk = lambda role, u: User(email=f"{u}@audit-tpm.com", username=u, name=u.title(), surname="Audit",
                               password_hash=hash_password("Password123"), role=UserRole(role),
-                              is_active=True, onboarding_completed=True, is_verified=True)
+                              is_active=True, onboarding_completed=True, is_verified=True,
+                              tour_completed=True)   # la guia del menu taparia los clics de los E2E; tour.spec crea su propio alumno
     admin, tu, su = mk("superadmin", "admin"), mk("teacher", "profe"), mk("student", "alumno")
     nuevo = mk("student", "nuevo")          # alumno que aun no termino el onboarding (pruebas E2E)
     nuevo.onboarding_completed = False
@@ -103,7 +104,8 @@ def seed():
 
 def e2e_hooks():
     """Ganchos SOLO de pruebas (este servidor nunca es produccion): lo que un E2E no puede hacer por la interfaz.
-    - POST /__e2e__/student/{username}: crea un alumno verificado y con onboarding hecho (idempotente).
+    - POST /__e2e__/student/{username}: crea un alumno verificado y con onboarding hecho (idempotente). Por defecto con la
+      guia del menu ya vista; con ?tour=1 la guia queda pendiente (y se reinicia si el alumno ya existia).
     - POST /__e2e__/age-class/{class_id}: mueve una clase al pasado para poder completarla (AUD-04)."""
     from datetime import datetime, timedelta, timezone
     from fastapi import APIRouter
@@ -111,16 +113,19 @@ def e2e_hooks():
     router = APIRouter(prefix="/__e2e__")
 
     @router.post("/student/{username}")
-    def make_student(username: str):
+    def make_student(username: str, tour: bool = False):
         db = SessionLocal()
         try:
             u = db.query(User).filter(User.username == username).first()
             if not u:
                 u = User(email=f"{username}@audit-tpm.com", username=username, name=username.title(), surname="E2E",
                          password_hash=hash_password("Password123"), role=UserRole("student"),
-                         is_active=True, onboarding_completed=True, is_verified=True)
+                         is_active=True, onboarding_completed=True, is_verified=True, tour_completed=not tour)
                 db.add(u); db.flush()
                 db.add(StudentProfile(user_id=u.id, user_username=username, timezone="UTC"))
+                db.commit()
+            elif u.tour_completed == tour:     # reinicio idempotente de la guia (reintentos de Playwright)
+                u.tour_completed = not tour
                 db.commit()
             return {"username": username}
         finally:

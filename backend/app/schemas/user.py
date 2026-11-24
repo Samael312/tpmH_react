@@ -31,6 +31,7 @@ class UserResponse(UserBase):
     phone_number: Optional[str] = None
     nationality: Optional[str] = None
     onboarding_completed: bool = False
+    tour_completed: bool = False
     spoken_languages: List[SpokenLanguageItem] = []
 
     @field_validator("spoken_languages", mode="before")
@@ -99,6 +100,7 @@ class UpdateProfileRequest(BaseModel):
     timezone: Optional[str] = None
     nationality: Optional[str] = None
     onboarding_completed: Optional[bool] = None
+    tour_completed: Optional[bool] = None
     # Fase 8: se valida contra el catalogo `spoken_languages` en el endpoint (core/spoken_languages.py)
     spoken_languages: Optional[List[Any]] = None
 

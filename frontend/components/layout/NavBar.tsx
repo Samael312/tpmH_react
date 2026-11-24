@@ -20,6 +20,8 @@ import { useUnreadChatCount } from "@/hooks/useChat";
 import { useMobileTopBar } from "@/lib/mobileTopBar";
 import RefreshButton from "@/components/ui/RefreshButton";
 import BottomSheet from "@/components/ui/BottomSheet";
+import TourHost from "@/components/tour/TourHost";
+import { useTourStore } from "@/components/tour/tourStore";
 
 interface TabItem { href: string; label: string; icon: React.ReactNode; }
 
@@ -107,7 +109,10 @@ function BottomTabBar({
   mainItems, moreItems, badges, onLogout,
 }: { mainItems: TabItem[]; moreItems: TabItem[]; badges: Record<string, number>; onLogout: () => void }) {
   const pathname = usePathname();
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [moreOpenLocal, setMoreOpen] = useState(false);
+  // La guía abre «Más» para resaltar sus ítems en móvil.
+  const forceMoreOpen = useTourStore(s => s.forceMoreOpen);
+  const moreOpen = moreOpenLocal || forceMoreOpen;
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
   // El chat/soporte viven dentro de "Más": sin esto un mensaje nuevo no se
   // notaba en mobile hasta abrir el sheet.
@@ -126,6 +131,7 @@ function BottomTabBar({
             <Link
               key={item.href}
               href={item.href}
+              data-tour={`nav-${item.href}`}
               className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-bold transition-colors
                 ${active ? "text-pink-600" : "text-slate-400"}`}
             >
@@ -162,6 +168,7 @@ function BottomTabBar({
               <Link
                 key={item.href}
                 href={item.href}
+                data-tour={`nav-${item.href}`}
                 onClick={() => setMoreOpen(false)}
                 className="relative flex flex-col items-center justify-center gap-1 px-1 py-2.5 rounded-2xl bg-slate-50
                            hover:bg-pink-50 text-slate-600 hover:text-pink-600 transition-colors
@@ -432,6 +439,9 @@ export default function DashboardSidebar() {
         }}
         onLogout={handleLogout}
       />
+
+      {/* Guía del menú para cuentas nuevas (se abre solo si user.tour_completed === false). */}
+      <TourHost />
     </>
   );
 }
@@ -444,6 +454,7 @@ function NavItem({
   return (
     <Link
       href={href}
+      data-tour={`nav-${href}`}
       title={collapsed ? label : undefined}
       className={`relative flex items-center gap-3 px-4 py-3 rounded-2xl text-sm transition-all duration-300 group ${
         active 

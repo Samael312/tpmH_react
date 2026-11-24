@@ -185,6 +185,8 @@ def update_profile(
             setattr(data, field, _check(clean_person_name, value))
 
     update_data = data.model_dump(exclude_unset=True)
+    if update_data.get("tour_completed", True) is None:
+        update_data.pop("tour_completed")   # la columna es NOT NULL: un null explícito se ignora
     if "username" in update_data and update_data["username"] is not None:
         update_data["username"] = update_data["username"].lower()
 

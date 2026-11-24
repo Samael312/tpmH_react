@@ -30,6 +30,8 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     onboarding_completed = Column(Boolean, default=False)
+    # Guía interactiva del menú: False = pendiente de mostrar (cuentas nuevas); la migración dejó en True a las existentes.
+    tour_completed = Column(Boolean, nullable=False, default=False, server_default="false")
     # Fase 8: idiomas que HABLA el usuario (alumno y profesor). Distinto de TeacherProfile.languages (los que ensena).
     spoken_languages = Column(JSONB, nullable=False, default=list, server_default="[]")
 

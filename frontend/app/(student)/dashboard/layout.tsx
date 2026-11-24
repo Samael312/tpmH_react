@@ -83,6 +83,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         ...latestUser,
         id: userData.id ?? latestUser.id, // el login no trae el id; el chat lo necesita (antes salía del JWT)
         onboarding_completed: onboardingCompleted,
+        tour_completed: userData.tour_completed ?? latestUser.tour_completed, // guía del menú (undefined = no mostrar)
         // solo sobreescribe si el perfil trae un valor real — nunca con "UTC" falso
         timezone: studentData?.timezone || latestUser.timezone,
         goal: studentData?.goal ?? latestUser.goal,

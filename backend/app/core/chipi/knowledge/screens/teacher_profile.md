@@ -25,5 +25,8 @@ Video: MP4 hasta 100 MB. Si ya estás aprobado, el video nuevo queda «en revisi
 ## Casos límite
 Video rechazado: «Apelar esta decisión» (hasta 2 veces). Borrar la cuenta oculta tu perfil.
 
+## Guía de la plataforma
+Si quieres volver a ver el recorrido por el menú, en tu perfil pulsa «Ver guía de la plataforma». Se puede saltar en cualquier momento.
+
 ## Cuándo escalar
 Si no se resuelve, abrir un ticket: enlace «Habla con soporte» del chat o «Nuevo ticket» en Soporte.

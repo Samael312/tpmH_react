@@ -84,6 +84,7 @@ export default function TeacherLayout({
       ...latestUser,
       id: data.id ?? latestUser.id, // el login no trae el id; el chat lo necesita (antes salía del JWT)
       onboarding_completed: done,
+      tour_completed: data.tour_completed ?? latestUser.tour_completed, // guía del menú (undefined = no mostrar)
       timezone: teacherData?.timezone ?? latestUser.timezone,
     });
 

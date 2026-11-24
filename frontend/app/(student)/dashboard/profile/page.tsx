@@ -27,6 +27,7 @@ import { usePageTopBar } from "@/lib/mobileTopBar";
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 import SpokenLanguagesSection from "@/components/SpokenLanguagesSection";
+import ReplayTourButton from "@/components/tour/ReplayTourButton";
 
 // ─── Helpers & Formateadores de Errores ──────────────────────────────────────
 function formatErrorMessage(error: unknown, fallbackMessage: string): string {
@@ -835,6 +836,8 @@ export default function StudentProfilePage() {
             
             {/* ─── Idiomas que hablo (Fase 8) ─── */}
             <SpokenLanguagesSection audience="student" profileHref="/dashboard/profile" />
+
+            <ReplayTourButton />
 
             {/* ─── Seguridad ─── */}
             <Section title="Seguridad" subtitle="Actualiza tu contraseña de acceso">

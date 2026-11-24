@@ -16,6 +16,7 @@ export interface User {
   nationality?: string;
   preferred_payment_methods?: string[];
   onboarding_completed?: boolean;
+  tour_completed?: boolean;
   spoken_languages?: SpokenLanguage[];
   avatar_url?: string | null;
   is_google_account?: boolean;

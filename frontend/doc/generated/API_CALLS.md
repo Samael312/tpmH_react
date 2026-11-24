@@ -52,6 +52,7 @@ Llamadas `api.<verbo>(...)` por archivo (regex; las URLs construidas dinámicame
 - `components/layout/VerifyEmailBanner.tsx`: POST /auth/resend-verification
 - `components/payments/BuyCreditsModal.tsx`: POST /payments/notify-payment
 - `components/payments/PackageCheckout.tsx`: POST /payments/notify-payment
+- `components/tour/TourHost.tsx`: PATCH /users/me
 - `hooks/useAdminData.ts`: GET /admin/notifications, GET /admin/notifications/unread-count, GET /admin/platform-config, GET /admin/stats, GET /admin/teachers/{x}/appeals, GET /admin/users, GET /payments/config, GET /payments/pending-review, GET /system-catalogs/business-rules
 - `hooks/useBusinessRules.ts`: GET /system-catalogs/business-rules
 - `hooks/useChat.ts`: GET /chat/conversations/direct/{x}, GET /chat/conversations/group/{x}, GET /chat/conversations/unread-count

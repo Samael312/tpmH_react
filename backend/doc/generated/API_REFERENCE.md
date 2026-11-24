@@ -26,24 +26,24 @@ Total de rutas: **230**
 
 | Método | Ruta | Auth | Límite | Función (archivo:línea) | Qué hace |
 |---|---|---|---|---|---|
-| DELETE | `/users/me` | get_current_user |  | `delete_account` (app/api/v1/endpoints/users.py:386) | Elimina la cuenta del usuario. |
+| DELETE | `/users/me` | get_current_user |  | `delete_account` (app/api/v1/endpoints/users.py:388) | Elimina la cuenta del usuario. |
 | GET | `/users/me` | get_current_user |  | `get_me` (app/api/v1/endpoints/users.py:117) | Devuelve los datos del usuario autenticado |
 | PATCH | `/users/me` | get_current_user |  | `update_profile` (app/api/v1/endpoints/users.py:123) | Actualiza datos básicos del perfil. Solo actualiza los campos que se envían (PATCH parcial). |
-| GET | `/users/me/avatar` | get_current_user |  | `get_avatar` (app/api/v1/endpoints/users.py:466) | Obtiene la URL del avatar/foto del usuario autenticado. |
-| PATCH | `/users/me/avatar` | get_current_user | 20/hour | `upload_avatar_patch` (app/api/v1/endpoints/users.py:501) | Actualiza la foto de perfil (PATCH /me/avatar). |
-| POST | `/users/me/avatar` | get_current_user | 20/hour | `upload_avatar_post` (app/api/v1/endpoints/users.py:489) | Sube o reemplaza la foto de perfil (POST /me/avatar). |
-| POST | `/users/me/change-password` | get_current_user | 10/hour | `change_password` (app/api/v1/endpoints/users.py:253) | Cambia la contraseña verificando la actual |
-| GET | `/users/me/photo` | get_current_user |  | `get_photo` (app/api/v1/endpoints/users.py:483) | Alias para obtener la foto de perfil (GET /me/photo). |
-| PATCH | `/users/me/photo` | get_current_user | 20/hour | `upload_photo_patch` (app/api/v1/endpoints/users.py:525) | Alias de compatibilidad para actualizar foto (PATCH /me/photo). |
-| POST | `/users/me/photo` | get_current_user | 20/hour | `upload_photo_post` (app/api/v1/endpoints/users.py:513) | Alias de compatibilidad para subir foto (POST /me/photo). |
-| GET | `/users/me/preferences` | get_current_student, get_current_user |  | `get_schedule_preferences` (app/api/v1/endpoints/users.py:671) | Devuelve las preferencias de horario del estudiante en UTC para que el frontend las adapte |
-| POST | `/users/me/preferences` | get_current_student, get_current_user |  | `set_schedule_preferences` (app/api/v1/endpoints/users.py:617) | El estudiante configura sus horas preferidas. Reemplaza todas las preferencias anteriores. |
-| PUT | `/users/me/preferences` | get_current_student, get_current_user |  | `update_schedule_preferences` (app/api/v1/endpoints/users.py:689) | Actualiza (reemplaza) las preferencias de horario del estudiante vía PUT. |
-| GET | `/users/me/student-profile` | get_current_user |  | `get_student_profile` (app/api/v1/endpoints/users.py:539) | Devuelve los datos del perfil de estudiante del usuario autenticado |
-| PATCH | `/users/me/student-profile` | get_current_user |  | `update_student_profile` (app/api/v1/endpoints/users.py:560) | Actualiza datos del perfil de estudiante (timezone, goal, etc.). Si cambia la zona horaria, se recalculan las preferencias de horario (StudentSchedulePreference) para preservar la hora LOCAL configurada por el estudiante — solo se recalcula el UTC equivalente. Ver core/schedule_recalc.py. |
-| GET | `/users/me/teachers` | get_current_student, get_current_user |  | `get_my_teachers` (app/api/v1/endpoints/users.py:741) | Profesores vinculados al estudiante, cada uno con su relación independiente (stage de reserva propio, enrollment activo si existe). En single-tenant siempre devuelve solo al featured teacher, para que el frontend use la misma forma de respuesta en ambos modos. |
-| DELETE | `/users/me/teachers/{teacher_username}` | get_current_student, get_current_user |  | `unlink_teacher` (app/api/v1/endpoints/users.py:856) | Termina la relación con un profesor (solo multi-tenant). Bloqueado si hay un enrollment activo o cualquier solicitud pendiente (renovación o cambio de paquete) con ese profesor. |
-| POST | `/users/me/teachers/{teacher_username}` | get_current_student, get_current_user |  | `link_teacher` (app/api/v1/endpoints/users.py:819) | Vincula al estudiante con un profesor adicional (solo multi-tenant). Idempotente — si el vínculo ya existe, no falla. |
+| GET | `/users/me/avatar` | get_current_user |  | `get_avatar` (app/api/v1/endpoints/users.py:468) | Obtiene la URL del avatar/foto del usuario autenticado. |
+| PATCH | `/users/me/avatar` | get_current_user | 20/hour | `upload_avatar_patch` (app/api/v1/endpoints/users.py:503) | Actualiza la foto de perfil (PATCH /me/avatar). |
+| POST | `/users/me/avatar` | get_current_user | 20/hour | `upload_avatar_post` (app/api/v1/endpoints/users.py:491) | Sube o reemplaza la foto de perfil (POST /me/avatar). |
+| POST | `/users/me/change-password` | get_current_user | 10/hour | `change_password` (app/api/v1/endpoints/users.py:255) | Cambia la contraseña verificando la actual |
+| GET | `/users/me/photo` | get_current_user |  | `get_photo` (app/api/v1/endpoints/users.py:485) | Alias para obtener la foto de perfil (GET /me/photo). |
+| PATCH | `/users/me/photo` | get_current_user | 20/hour | `upload_photo_patch` (app/api/v1/endpoints/users.py:527) | Alias de compatibilidad para actualizar foto (PATCH /me/photo). |
+| POST | `/users/me/photo` | get_current_user | 20/hour | `upload_photo_post` (app/api/v1/endpoints/users.py:515) | Alias de compatibilidad para subir foto (POST /me/photo). |
+| GET | `/users/me/preferences` | get_current_student, get_current_user |  | `get_schedule_preferences` (app/api/v1/endpoints/users.py:673) | Devuelve las preferencias de horario del estudiante en UTC para que el frontend las adapte |
+| POST | `/users/me/preferences` | get_current_student, get_current_user |  | `set_schedule_preferences` (app/api/v1/endpoints/users.py:619) | El estudiante configura sus horas preferidas. Reemplaza todas las preferencias anteriores. |
+| PUT | `/users/me/preferences` | get_current_student, get_current_user |  | `update_schedule_preferences` (app/api/v1/endpoints/users.py:691) | Actualiza (reemplaza) las preferencias de horario del estudiante vía PUT. |
+| GET | `/users/me/student-profile` | get_current_user |  | `get_student_profile` (app/api/v1/endpoints/users.py:541) | Devuelve los datos del perfil de estudiante del usuario autenticado |
+| PATCH | `/users/me/student-profile` | get_current_user |  | `update_student_profile` (app/api/v1/endpoints/users.py:562) | Actualiza datos del perfil de estudiante (timezone, goal, etc.). Si cambia la zona horaria, se recalculan las preferencias de horario (StudentSchedulePreference) para preservar la hora LOCAL configurada por el estudiante — solo se recalcula el UTC equivalente. Ver core/schedule_recalc.py. |
+| GET | `/users/me/teachers` | get_current_student, get_current_user |  | `get_my_teachers` (app/api/v1/endpoints/users.py:743) | Profesores vinculados al estudiante, cada uno con su relación independiente (stage de reserva propio, enrollment activo si existe). En single-tenant siempre devuelve solo al featured teacher, para que el frontend use la misma forma de respuesta en ambos modos. |
+| DELETE | `/users/me/teachers/{teacher_username}` | get_current_student, get_current_user |  | `unlink_teacher` (app/api/v1/endpoints/users.py:858) | Termina la relación con un profesor (solo multi-tenant). Bloqueado si hay un enrollment activo o cualquier solicitud pendiente (renovación o cambio de paquete) con ese profesor. |
+| POST | `/users/me/teachers/{teacher_username}` | get_current_student, get_current_user |  | `link_teacher` (app/api/v1/endpoints/users.py:821) | Vincula al estudiante con un profesor adicional (solo multi-tenant). Idempotente — si el vínculo ya existe, no falla. |
 
 ## Profesores
 

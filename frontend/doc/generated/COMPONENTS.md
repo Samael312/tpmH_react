@@ -32,7 +32,7 @@
 - `components/landing/TeacherVideosCarousel.tsx` (135 líneas, referenciado en 2 archivos) — exports: VideoTeacher, TeacherVideosCarousel
 - `components/layout/CalendarPicker.tsx` (156 líneas, referenciado en 1 archivos) — exports: CalendarPicker
 - `components/layout/DashboardTopbar.tsx` (100 líneas, referenciado en 3 archivos) — exports: DashboardTopbarVariant, DashboardTopbar
-- `components/layout/NavBar.tsx` (478 líneas, referenciado en 7 archivos) — exports: DashboardSidebar
+- `components/layout/NavBar.tsx` (489 líneas, referenciado en 8 archivos) — exports: DashboardSidebar
 - `components/layout/VerifyEmailBanner.tsx` (68 líneas, referenciado en 3 archivos) — exports: VerifyEmailBanner
 - `components/legal/PrivacyContent.tsx` (483 líneas, referenciado en 2 archivos) — exports: PrivacyContent
 - `components/legal/TermsContent.tsx` (418 líneas, referenciado en 2 archivos) — exports: TermsContent
@@ -47,6 +47,12 @@
 - `components/support/SupportTicketModal.tsx` (187 líneas, referenciado en 3 archivos) — exports: SupportTicketModal
 - `components/support/SupportTicketsView.tsx` (147 líneas, referenciado en 3 archivos) — exports: SupportTicketsView
 - `components/teacher/PublicProfileView.tsx` (480 líneas, referenciado en 3 archivos) — exports: PublicProfileTeacher, PublicProfileReview, displayTeacherName, PublicProfileView
+- `components/tour/ProductTour.tsx` (240 líneas, referenciado en 2 archivos) — exports: ProductTour
+- `components/tour/ReplayTourButton.tsx` (24 líneas, referenciado en 3 archivos) — exports: ReplayTourButton
+- `components/tour/TourHost.tsx` (32 líneas, referenciado en 3 archivos) — exports: TourHost
+- `components/tour/resolveTarget.ts` (24 líneas, referenciado en 3 archivos) — exports: resolveVisibleTarget, waitForVisibleTarget — Primer elemento que coincide con `selector` y está visible. Sidebar y pestañas móviles comparten `data-tour`, y el  que no corresponde al tamaño de pantalla est
+- `components/tour/tourSteps.ts` (62 líneas, referenciado en 6 archivos) — exports: TourStep, navTarget, STUDENT_STEPS, TEACHER_STEPS, stepsForRole
+- `components/tour/tourStore.ts` (13 líneas, referenciado en 4 archivos) — exports: useTourStore
 - `components/ui/Badge.tsx` (29 líneas, referenciado en 19 archivos) — exports: Badge
 - `components/ui/BottomSheet.tsx` (50 líneas, referenciado en 3 archivos) — exports: BottomSheet
 - `components/ui/Button.tsx` (52 líneas, referenciado en 18 archivos) — exports: Button
@@ -63,7 +69,7 @@
 - `components/ui/Skeleton.tsx` (7 líneas, referenciado en 46 archivos) — exports: Skeleton
 - `components/ui/StatCard.tsx` (56 líneas, referenciado en 5 archivos) — exports: StatCard
 - `components/ui/Toast.tsx` (94 líneas, referenciado en 6 archivos) — exports: Toaster
-- `components/ui/index.ts` (14 líneas, referenciado en 2 archivos) — exports: —
+- `components/ui/index.ts` (14 líneas, referenciado en 3 archivos) — exports: —
 
 ## hooks/
 
@@ -90,14 +96,14 @@
 
 ## store/
 
-- `store/authStore.ts` (93 líneas, referenciado en 45 archivos) — exports: User, useAuthStore
+- `store/authStore.ts` (94 líneas, referenciado en 49 archivos) — exports: User, useAuthStore
 - `store/chatStore.ts` (581 líneas, referenciado en 13 archivos) — exports: ChatMessageStatus, ChatMessage, reconnectDelay, onChatMessage, useChatStore — store/chatStore.ts N3: reemplaza la conexión WS "por conversación" de hooks/useChat.ts por UNA sola conexión GLOBAL por sesión (ver backend/app/core/chat_ws.py 
 - `store/chatWidgetPresenceStore.ts` (28 líneas, referenciado en 2 archivos) — exports: useChatWidgetPresenceStore — store/chatWidgetPresenceStore.ts N2 (ubicación del ChatWidget): puente mínimo para que ChipiWidget sepa, SIN que cada una de las ~40 páginas que lo montan tenga
 - `store/toastStore.ts` (66 líneas, referenciado en 6 archivos) — exports: ToastVariant, ToastItem, ToastOptions, useToastStore, toast
 
 ## lib/
 
-- `lib/api.ts` (108 líneas, referenciado en 91 archivos) — exports: refreshSession
+- `lib/api.ts` (108 líneas, referenciado en 93 archivos) — exports: refreshSession
 - `lib/auth.ts` (25 líneas, referenciado en 29 archivos) — exports: decodeToken, isTokenExpired
 - `lib/classStatusNotice.ts` (86 líneas, referenciado en 3 archivos) — exports: MANUAL_STATUS_WINDOW_HOURS, finalizedNotice, PendingToMark, pendingToMark, pendingToMarkText, CLASS_STATUS_TRANSITIONS, manualStatusTargets — Misma ventana que `CLASS_STATUS_WINDOW_HOURS` del backend (`class_logic.py`).
 - `lib/cloudinaryImage.ts` (41 líneas, referenciado en 3 archivos) — exports: withWidthParam, cloudinaryOptimized — Imágenes de Cloudinary optimizadas por el propio Cloudinary (Fase 11). Con el optimizador de Next.js cada imagen se descarga de Cloudinary, se recodifica en el 
@@ -112,7 +118,7 @@
 - `lib/imageLoader.ts` (14 líneas, referenciado en 1 archivos) — exports: imageLoader
 - `lib/landingServer.ts` (107 líneas, referenciado en 5 archivos) — exports: getLandingDataServer, buildDefaultSiteTitle
 - `lib/loadMore.ts` (49 líneas, referenciado en 14 archivos) — exports: LOAD_MORE_PAGE_SIZE, LoadMorePage, PageShape, fetchPage, nextOffset
-- `lib/me.ts` (20 líneas, referenciado en 67 archivos) — exports: ME_QUERY_KEY, fetchMe
+- `lib/me.ts` (20 líneas, referenciado en 70 archivos) — exports: ME_QUERY_KEY, fetchMe
 - `lib/mobileTopBar.tsx` (67 líneas, referenciado en 41 archivos) — exports: MobileTopBarProvider, useMobileTopBar, usePageTopBar
 - `lib/nationalities.ts` (43 líneas, referenciado en 11 archivos) — exports: countryCodeToFlag, NationalityOption, NATIONALITIES, getFlagForNationality — Lista de nacionalidades con bandera generada por código ISO 3166-1 alpha-2. Se guarda el NOMBRE del país (no el código) en la BD, para que sea legible directame
 - `lib/packageThemes.ts` (47 líneas, referenciado en 5 archivos) — exports: PackageTheme, SUBJECT_THEME_MAP, DEFAULT_PACKAGE_THEME, getSuggestedTheme, ICON_PICKER_OPTIONS, priceLabelSuffix

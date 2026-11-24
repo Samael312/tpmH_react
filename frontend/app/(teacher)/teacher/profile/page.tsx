@@ -26,6 +26,7 @@ import { SUBJECTS as FALLBACK_SUBJECTS, LANGUAGES as FALLBACK_LANGUAGES, SKILL_S
 import { useToast } from "@/hooks/useToast";
 import { getErrorMessage } from "@/lib/errorMessage";
 import SpokenLanguagesSection from "@/components/SpokenLanguagesSection";
+import ReplayTourButton from "@/components/tour/ReplayTourButton";
 
 const MAX_VIDEO_SIZE_MB = 100;
 const ALLOWED_VIDEO_MIME_TYPES = ["video/mp4", "video/quicktime"];
@@ -1261,6 +1262,8 @@ export default function TeacherProfilePage() {
 
               {/* ─── Idiomas que hablo (Fase 8) ─── */}
               <SpokenLanguagesSection audience="teacher" profileHref="/teacher/profile" />
+
+              <ReplayTourButton />
 
               <Section title="Seguridad" subtitle="Actualiza tu contraseña de acceso" icon={<Lock className="w-5 h-5" />}>
                 {isGoogleAccount ? (

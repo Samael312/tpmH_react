@@ -599,6 +599,7 @@ Tablas SQLAlchemy y columnas. FK = clave foránea; `?` = nullable.
 | created_at | DATETIME | ? |
 | updated_at | DATETIME | ? |
 | onboarding_completed | BOOLEAN | ? default=False |
+| tour_completed | BOOLEAN | default=False |
 | spoken_languages | JSONB |  |
 | is_banned | BOOLEAN | ? default=False |
 | ban_reason | VARCHAR | ? |

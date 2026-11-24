@@ -28,6 +28,9 @@ next.config.ts  cabeceras de seguridad estáticas (HSTS, X-Frame DENY...), rewri
 React Query para datos del servidor (un hook por rol); Zustand solo para sesión, chat y toasts.
 Chat: un único WebSocket por sesión (`store/chatStore.ts`, `/chat/ws`) arrancado desde los layouts de student/teacher; mensajes optimistas `sending -> sent -> delivered/read`.
 
+## Guía del menú (2026-11-24)
+`components/tour/` (`ProductTour`, `TourHost`, `ReplayTourButton`, `tourSteps`, `tourStore`, `resolveTarget`). Los ítems del menú llevan `data-tour="nav-<href>"`; sidebar y pestañas móviles comparten el atributo, así que `resolveVisibleTarget` elige el elemento con `getClientRects().length > 0`. `TourHost` (montado dentro de `NavBar`) es derivado del store: se abre con `onboarding_completed === true && tour_completed === false` (`undefined` no la abre). `tourStore.forceMoreOpen` abre el panel «Más» desde la guía (overlay z-80 sobre el `BottomSheet` z-70).
+
 ## Fechas y zonas horarias
 Backend en UTC. `lib/scheduleUtc.ts` (`getNextWeekdayDate`, `utcTimeToLocal`…) replica la lógica del backend para horarios semanales; `lib/tzFormat.ts` formatea con la zona del usuario.
 Las pantallas pesadas (`student/schedule`, ~1800 líneas) duplican reglas del backend (estado de reserva, duraciones): al cambiar reglas, revisa ambos lados (`hooks/useBusinessRules.ts` trae las configurables).
