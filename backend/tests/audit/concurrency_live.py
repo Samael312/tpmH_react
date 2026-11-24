@@ -155,9 +155,39 @@ def enroll(c, db, admin, tu, pkg, su, hours=3):
     return row[0], pid
 
 
+def ensure_payment_method(db):
+    """Garantiza un método de pago habilitado (una BD recién migrada, como la de CI, no trae PaymentConfig).
+    Devuelve una función que deja la configuración como estaba."""
+    from app.models.payment_config import PaymentConfig
+    flags = ("bank_transfer_enabled", "paypal_enabled", "binance_enabled", "mobile_payment_enabled")
+    row = db.query(PaymentConfig).first()
+    if row and any(getattr(row, f) for f in flags):
+        return lambda: None                      # ya hay uno: no se toca nada
+    if row is None:
+        row = PaymentConfig(bank_transfer_enabled=True, paypal_enabled=False, binance_enabled=False,
+                            mobile_payment_enabled=False, bank_transfer_details="CONC")
+        db.add(row)
+        db.commit()
+        rid = row.id
+        def undo():
+            db.rollback()
+            db.query(PaymentConfig).filter(PaymentConfig.id == rid).delete()
+            db.commit()
+        return undo
+    row.bank_transfer_enabled = True
+    db.commit()
+    rid = row.id
+    def undo():
+        db.rollback()
+        db.query(PaymentConfig).filter(PaymentConfig.id == rid).update({"bank_transfer_enabled": False})
+        db.commit()
+    return undo
+
+
 def main():
     db = SessionLocal()
     c = httpx.Client(timeout=120)
+    undo_payment = ensure_payment_method(db)
     try:
         admin, tu, tp, pkg = setup_world(db)
         print("etiqueta", TAG, "| profesor", tp.id, flush=True)
@@ -228,6 +258,7 @@ def main():
         check("R5 cancelación simultánea x3", "1 éxito, classes_used >= 0", f"{ok200} éxitos, classes_used={used}", ok200 == 1 and used >= 0)
     finally:
         cleanup(db)
+        undo_payment()
         c.close()
     bad = [r for r in RESULTS if not r[3]]
     print(f"\nRESUMEN: {len(RESULTS) - len(bad)} OK, {len(bad)} FALLO", flush=True)
