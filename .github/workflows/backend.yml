@@ -1,10 +1,12 @@
 name: backend
 
-# Tests del backend en cada PR que toque el backend:
-#  1. tests/audit (SQLite, sin servicios externos).
-#  2. Migraciones Alembic sobre PostgreSQL vacio (deben llegar a un unico head sin errores).
-#  3. Concurrencia real (tests/audit/concurrency_live.py) contra un servidor y un PostgreSQL desechables.
-# El PostgreSQL es el contenedor del job: nunca toca Neon ni produccion.
+# Tests del backend en cada PR que toque el backend, en tres jobs que corren en paralelo:
+#  audit    tests/audit (SQLite, sin servicios externos): una sola ejecucion para que la cobertura y el inventario de
+#           rutas «una prueba por ruta» se midan sobre todo el conjunto.
+#  probes   sondas de modo single/multi-tenant y de zonas horarias (SQLite).
+#  postgres migraciones Alembic sobre PostgreSQL vacio (un unico head, sin errores) y concurrencia real
+#           (tests/audit/concurrency_live.py) contra un servidor y un PostgreSQL desechables.
+# El PostgreSQL es el contenedor del job `postgres`: nunca toca Neon ni produccion.
 
 on:
   pull_request:
@@ -16,13 +18,60 @@ on:
     paths:
       - "backend/**"
 
+defaults:
+  run:
+    working-directory: backend
+
+env:
+  DATABASE_URL: postgresql://tpm:tpm@localhost:5432/tpm_ci
+  SECRET_KEY: ci-secret-key-not-used-anywhere-else
+  ALGORITHM: HS256
+  OPENAI_API_KEY: ci-dummy
+  ENVIRONMENT: development
+  FRONTEND_URL: http://localhost:3000
+  BACKEND_URL: http://127.0.0.1:8000
+  RESEND_API_KEY: ci-dummy
+  CLOUDINARY_CLOUD_NAME: ci-dummy
+  CLOUDINARY_API_KEY: ci-dummy
+  CLOUDINARY_API_SECRET: ci-dummy
+
 jobs:
-  tests:
+  audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
-    defaults:
-      run:
-        working-directory: backend
+    timeout-minutes: 60   # ~35 min medidos el 2026-11-24
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt pytest pytest-cov
+
+      - name: Tests de auditoria (SQLite)
+        # Suelo de cobertura 95 %: medido 97,2 % el 2026-11-24.
+        run: python -m pytest tests/audit -q --ignore=tests/audit/concurrency_live.py --cov=app --cov-report=term:skip-covered --cov-fail-under=95
+
+  probes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt pytest pytest-cov
+
+      - name: Sondas de modo single/multi-tenant y de zonas horarias (SQLite)
+        # Aparte de tests/audit: otra sesion de pytest (el inventario «una prueba por ruta» solo aplica a la auditoria).
+        # Incluye las pruebas que fijan bugs corregidos (p. ej. AUD-24) y las que documentan los que siguen abiertos.
+        run: python -m pytest tests/tenant_probes tests/tz_probes -q
+
+  postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -37,18 +86,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-    env:
-      DATABASE_URL: postgresql://tpm:tpm@localhost:5432/tpm_ci
-      SECRET_KEY: ci-secret-key-not-used-anywhere-else
-      ALGORITHM: HS256
-      OPENAI_API_KEY: ci-dummy
-      ENVIRONMENT: development
-      FRONTEND_URL: http://localhost:3000
-      BACKEND_URL: http://127.0.0.1:8000
-      RESEND_API_KEY: ci-dummy
-      CLOUDINARY_CLOUD_NAME: ci-dummy
-      CLOUDINARY_API_KEY: ci-dummy
-      CLOUDINARY_API_SECRET: ci-dummy
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -56,16 +93,7 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: backend/requirements.txt
-      - run: pip install -r requirements.txt pytest pytest-cov
-
-      - name: Tests de auditoria (SQLite)
-        # Suelo de cobertura 95 %: medido 97,2 % el 2026-11-24.
-        run: python -m pytest tests/audit -q --ignore=tests/audit/concurrency_live.py --cov=app --cov-report=term:skip-covered --cov-fail-under=95
-
-      - name: Sondas de modo single/multi-tenant y de zonas horarias (SQLite)
-        # Aparte de tests/audit: otra sesion de pytest (el inventario «una prueba por ruta» solo aplica a la auditoria).
-        # Incluye las pruebas que fijan bugs corregidos (p. ej. AUD-24) y las que documentan los que siguen abiertos.
-        run: python -m pytest tests/tenant_probes tests/tz_probes -q
+      - run: pip install -r requirements.txt
 
       - name: Migraciones Alembic sobre PostgreSQL vacio
         run: |
