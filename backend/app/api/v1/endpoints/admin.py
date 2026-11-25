@@ -87,8 +87,6 @@ class PlatformConfigUpdate(BaseModel):
     # (todas las claves de LANDING_CONTENT_DEFAULTS) — se guarda tal cual,
     # se completa contra los defaults recién al leer (ver get_landing_content).
     landing_content: Optional[dict] = None
-    # multi->single: confirma aun habiendo alumnos con profesores distintos de la destacada (si no, 409).
-    force: Optional[bool] = False
 
 
 # ─── DEPENDENCIES ───────────────────────────────────────────────────────────
@@ -1255,6 +1253,35 @@ def _students_outside_featured(db: Session, featured_id: int) -> list:
     return [{"student_username": names.get(sid), "teachers": by_student[sid]} for sid in students]
 
 
+@router.get("/platform-config/single-blockers")
+def single_tenant_blockers(
+    featured_teacher_username: Optional[str] = None,
+    current_user: User = Depends(require_superadmin),
+    db: Session = Depends(get_db),
+):
+    """¿Se puede activar single-tenant (o cambiar la destacada) con esa profesora? Es la misma comprobación que
+    hace el PATCH, para que el panel bloquee la opción antes de intentarlo.
+
+    Sin `featured_teacher_username` usa la destacada guardada (o la del entorno). Sin ninguna, no hay nada que
+    comprobar: `blocked` es False y `target` None (el PATCH rechazará single sin destacada por su cuenta).
+    """
+    if featured_teacher_username:
+        target = db.query(TeacherProfile).filter(TeacherProfile.user_username == featured_teacher_username).first()
+        if not target:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profesor no encontrado")
+    else:
+        target = resolve_featured_teacher(db, load_platform_config(db))
+    if target is None:
+        return {"blocked": False, "target": None, "affected_students": 0, "sample": []}
+    affected = _students_outside_featured(db, target.id)
+    return {
+        "blocked": bool(affected),
+        "target": target.user_username,
+        "affected_students": len(affected),
+        "sample": affected[:10],
+    }
+
+
 @router.patch("/platform-config")
 def update_platform_config(
     data: PlatformConfigUpdate,
@@ -1328,16 +1355,21 @@ def update_platform_config(
                 detail="No se puede activar el modo single-tenant sin una profesora destacada "
                        "(featured_teacher_username o FEATURED_TEACHER_USERNAME).",
             )
-        if not was_single_tenant and not data.force:
-            affected = _students_outside_featured(db, featured_now.id)
+    if new_single:
+        # Bloqueo (sin force): entrar en single, o cambiar la destacada dentro de single, no se permite mientras
+        # haya alumnos con paquete vivo o clase futura con profesores distintos de la nueva destacada. Cuando ya no
+        # quede ninguno, la opción se vuelve a habilitar sola.
+        featured_target = resolve_featured_teacher(db, config)
+        if featured_target is not None and (not was_single_tenant or featured_target.id != previous_featured_id):
+            affected = _students_outside_featured(db, featured_target.id)
             if affected:
                 db.rollback()
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail={
-                        "message": "Hay alumnos con paquetes vivos o clases futuras con profesores distintos de la "
-                                   "destacada. En single-tenant quedarán inutilizables en la UI. Reenvía con "
-                                   "force=true para confirmar (no se migra ni cancela nada).",
+                        "message": "No se puede activar single-tenant ni cambiar la destacada: hay alumnos con "
+                                   "paquetes vivos o clases futuras con otros profesores. Cuando terminen o se "
+                                   "resuelvan, la opción se habilita de nuevo.",
                         "affected_students": len(affected),
                         "sample": affected[:10],
                     },

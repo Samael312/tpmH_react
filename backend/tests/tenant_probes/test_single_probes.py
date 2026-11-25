@@ -240,7 +240,8 @@ def test_change_featured_then_multi_loses_a(client, world, db):
     assert client.post("/api/v1/payments/book", json=_trial_body(), headers=hdr(world["s_user"])).status_code == 201
     _, b = _teacher(db, "profeb")
     assert client.patch("/api/v1/admin/platform-config", json={"featured_teacher_username": "profeb"},
-                        headers=hdr(world["admin"])).status_code == 200
+                        headers=hdr(world["admin"])).status_code == 409  # bloqueo: A tiene una clase futura
+    _single(db, b.id)  # estado previo al bloqueo
     r = client.get("/api/v1/users/me/teachers", headers=hdr(world["s_user"])).json()
     assert [t["teacher_username"] for t in r] == ["profeb"]  # su prueba pendiente con profe desaparece
     assert client.patch("/api/v1/admin/platform-config", json={"is_single_tenant": False},

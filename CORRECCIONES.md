@@ -293,7 +293,7 @@ Origen: hallazgos A1-A4 de `docs/TENANT_MODES_AUDIT.md` §6. Un `teacher_admin` 
 - Backfill single->multi atómico/idempotente (`backfill_student_teacher_links`), para cualquier profesor, repara link/lista/conversación; corre siempre que se pide multi; `PlatformConfig` con `FOR UPDATE`; `ensure_student_teacher_link` tolera la restricción única.
 - `link_student_to_teacher(commit=False)` y `ensure_direct_conversation(commit=False)`.
 - `_sync_student_teacher_username` ya no quita al alumno del profesor anterior; `/users/me/teachers` usa `resolve_featured_teacher`.
-- `PATCH /admin/platform-config`: 400 single sin destacada; 409 multi->single con alumnos afectados salvo `force=true` (confirmación en `/admin/settings`). Nada se migra ni cancela al forzar.
+- `PATCH /admin/platform-config`: 400 single sin destacada; 409 multi->single con alumnos afectados (desde 2026-11-25 es un bloqueo sin `force`, también para A->B dentro de single; el panel `/admin/settings` avisa y no reintenta).
 - Sondas obsoletas de `tests/tenant_probes` actualizadas.
 
 ## Decisiones y tareas pendientes

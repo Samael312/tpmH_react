@@ -5,7 +5,7 @@
 - Los creadores de links toleran la restricción única (nunca 500).
 - `_sync_student_teacher_username` ya no saca al alumno de la lista del profesor anterior.
 - /users/me/teachers usa la destacada resuelta (BD o entorno); single sin destacada -> 400.
-- multi->single: 409 con alumnos afectados salvo force=true; PATCH solo superadmin.
+- multi->single y cambio de destacada A->B: 409 con alumnos afectados (sin force) hasta que no queden vivos; PATCH solo superadmin.
 """
 from datetime import timedelta
 
@@ -237,7 +237,7 @@ def test_single_without_featured_is_rejected(client, db, world, monkeypatch):
     assert _patch(client, world, {"is_single_tenant": True, "featured_teacher_username": "profe"}).status_code == 200
 
 
-# ─── 3. multi -> single: 409 salvo force ────────────────────────────────────
+# ─── 3. multi -> single y A -> B: bloqueo (409) ────────────────────────────────────
 
 def test_multi_to_single_409_lists_affected_students(client, db, world):
     wb = _second_teacher(db, world)
@@ -253,16 +253,74 @@ def test_multi_to_single_409_lists_affected_students(client, db, world):
     assert client.get(f"{API}/admin/platform-config").json()["is_single_tenant"] is False
 
 
-def test_multi_to_single_force_applies_and_migrates_nothing(client, db, world):
+def test_multi_to_single_blocked_until_other_teachers_have_no_live_students(client, db, world):
     wb = _second_teacher(db, world)
     e = _enroll(db, world, wb)
     c = _cls(db, wb, world["sp"])
-    r = _patch(client, world, {"is_single_tenant": True, "featured_teacher_username": "profe", "force": True})
-    assert r.status_code == 200, r.text
+    body = {"is_single_tenant": True, "featured_teacher_username": "profe"}
+    assert _patch(client, world, body).status_code == 409
+    assert _patch(client, world, {**body, "force": True}).status_code == 409  # ya no existe force
     db.expire_all()
-    assert db.get(Enrollment, e.id).teacher_id == wb["tp"].id
-    assert db.get(Enrollment, e.id).status == EnrollmentStatus.active
-    assert db.get(Class, c.id).teacher_id == wb["tp"].id and db.get(Class, c.id).status == "confirmed"
+    assert db.get(Enrollment, e.id).teacher_id == wb["tp"].id and db.get(Class, c.id).status == "confirmed"
+    # sin alumnos vivos con otros profesores la opción se habilita de nuevo
+    db.get(Enrollment, e.id).status = EnrollmentStatus.cancelled
+    db.get(Class, c.id).status = "cancelled"
+    db.commit()
+    assert _patch(client, world, body).status_code == 200
+
+
+def test_single_blockers_endpoint_matches_the_patch(client, db, world, monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "FEATURED_TEACHER_USERNAME", "")
+    url = f"{API}/admin/platform-config/single-blockers"
+    wb = _second_teacher(db, world)
+    # sin destacada: nada que comprobar
+    r = client.get(url, headers=hdr(world["admin"]))
+    assert r.status_code == 200 and r.json() == {"blocked": False, "target": None, "affected_students": 0, "sample": []}
+    # alumno con paquete vivo y otro con clase futura con B
+    e = _enroll(db, world, wb)
+    s2 = _second_student(db, world, "alumno2")
+    c = _cls(db, wb, s2["sp"])
+    r = client.get(url, params={"featured_teacher_username": "profe"}, headers=hdr(world["admin"])).json()
+    assert r["blocked"] is True and r["target"] == "profe" and r["affected_students"] == 2
+    assert {x["student_username"] for x in r["sample"]} == {"alumno", "alumno2"}
+    # con B como destino, los alumnos de B no bloquean
+    assert client.get(url, params={"featured_teacher_username": wb["t_user"].username}, headers=hdr(world["admin"])).json()["blocked"] is False
+    # sin parámetro usa la destacada guardada
+    assert _patch(client, world, {"featured_teacher_username": "profe"}).status_code == 200
+    assert client.get(url, headers=hdr(world["admin"])).json()["target"] == "profe"
+    # el PATCH coincide con el endpoint y se desbloquea al resolverse
+    assert _patch(client, world, {"is_single_tenant": True}).status_code == 409
+    e.status = EnrollmentStatus.cancelled
+    c.status = "cancelled"
+    db.commit()
+    assert client.get(url, headers=hdr(world["admin"])).json()["blocked"] is False
+    assert _patch(client, world, {"is_single_tenant": True}).status_code == 200
+
+
+def test_single_blockers_endpoint_errors_and_permissions(client, db, world):
+    url = f"{API}/admin/platform-config/single-blockers"
+    assert client.get(url, params={"featured_teacher_username": "nadie"}, headers=hdr(world["admin"])).status_code == 404
+    ta = _mk_user(db, "teacher_admin", "tadmin")
+    db.commit()
+    assert client.get(url, headers=hdr(ta)).status_code == 403
+    assert client.get(url, headers=hdr(world["s_user"])).status_code == 403
+    assert client.get(url).status_code in (401, 403)
+
+
+def test_featured_change_inside_single_blocked_when_old_featured_has_live_students(client, db, world):
+    wb = _second_teacher(db, world)
+    _set_mode(client, world, True, featured="profe")
+    e = _enroll(db, world, world)  # alumno con paquete vivo con la destacada actual (A)
+    r = _patch(client, world, {"featured_teacher_username": wb["t_user"].username})
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"]["affected_students"] == 1
+    assert client.get(f"{API}/admin/platform-config").json()["featured_teacher"]["username"] == "profe"
+    # reenviar la misma destacada no es un cambio: pasa; al quedar A sin vivos, B también
+    assert _patch(client, world, {"featured_teacher_username": "profe", "platform_name": "X"}).status_code == 200
+    e.status = EnrollmentStatus.completed
+    db.commit()
+    assert _patch(client, world, {"featured_teacher_username": wb["t_user"].username}).status_code == 200
 
 
 def test_multi_to_single_no_conflict_when_only_featured_or_dead_data(client, db, world):

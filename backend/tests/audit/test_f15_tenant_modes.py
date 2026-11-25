@@ -45,11 +45,21 @@ def _second_student(db, w, username="alumno2"):
 
 
 def _set_mode(client, w, single, featured=None):
-    body = {"is_single_tenant": single, "force": True}  # Fase 18: multi->single pide confirmación (409) sin force
+    body = {"is_single_tenant": single}  # multi->single y A->B se bloquean (409) con alumnos vivos en otros profesores
     if featured is not None:
         body["featured_teacher_username"] = featured
     r = client.patch(f"{API}/admin/platform-config", json=body, headers=hdr(w["admin"]))
     assert r.status_code == 200, r.text
+
+
+def _set_mode_db(db, single, featured_tp_id):
+    """Fija el modo directo en la BD: reproduce estados anteriores al bloqueo (alumnos vivos con otros profesores)."""
+    from app.models.payment_config import PlatformConfig
+    cfg = db.query(PlatformConfig).first() or PlatformConfig()
+    cfg.is_single_tenant = single
+    cfg.featured_teacher_id = featured_tp_id
+    db.add(cfg)
+    db.commit()
 
 
 def _links(db, student_id):
@@ -103,7 +113,9 @@ def test_single_rejects_booking_with_a_package_of_another_teacher(client, db, wo
     other = _second_teacher(db, world)
     complete_trial(client, other)
     enrollment_id, _ = buy_package(client, other)
-    _set_mode(client, world, True, featured="profe")
+    assert client.patch(f"{API}/admin/platform-config", json={"is_single_tenant": True, "featured_teacher_username": "profe"},
+                        headers=hdr(world["admin"])).status_code == 409  # el bloqueo impide llegar aquí por la API
+    _set_mode_db(db, True, world["tp"].id)
     r = book(client, other, future(72), enrollment_id=enrollment_id)
     assert r.status_code in (400, 403), r.text
     # y el perfil del alumno no se reasigna a ese profesor
@@ -209,7 +221,7 @@ def test_switch_to_multi_links_students_of_a_former_featured_teacher(client, db,
     other = _second_teacher(db, world)
     _set_mode(client, world, True, featured="profe")
     book(client, world, future(30))                        # alumno con profe
-    _set_mode(client, world, True, featured="profe2")      # ahora la destacada es profe2
+    _set_mode_db(db, True, other["tp"].id)                 # ahora la destacada es profe2 (la API lo bloquearía)
     s2 = _second_student(db, world)
     book(client, {**other, "s_user": s2["s_user"]}, future(40))
     _set_mode(client, world, False)

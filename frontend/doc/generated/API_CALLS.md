@@ -27,7 +27,7 @@ Llamadas `api.<verbo>(...)` por archivo (regex; las URLs construidas dinámicame
 - `app/(superadmin)/admin/classes/page.tsx`: DELETE /classes/admin/{x}, PATCH /classes/admin/{x}/reschedule
 - `app/(superadmin)/admin/dashboard/page.tsx`: PATCH /admin/notifications/{x}/read, PATCH /payments/{x}/validate, POST /admin/notifications/mark-all-read
 - `app/(superadmin)/admin/payments/page.tsx`: PATCH /payments/manual-grant-requests/{x}/resolve, PATCH /payments/{x}/validate, POST /payments/admin/withdrawals/{x}/process
-- `app/(superadmin)/admin/settings/page.tsx`: PATCH /admin/platform-config, PATCH /payments/config, PATCH /system-catalogs/business-rules, PATCH /system-catalogs/{x}
+- `app/(superadmin)/admin/settings/page.tsx`: GET /admin/platform-config/single-blockers, PATCH /admin/platform-config, PATCH /payments/config, PATCH /system-catalogs/business-rules, PATCH /system-catalogs/{x}
 - `app/(superadmin)/admin/students/banned/page.tsx`: POST /admin/students/{x}/unban
 - `app/(superadmin)/admin/students/page.tsx`: POST /admin/students/{x}/ban
 - `app/(superadmin)/admin/support/page.tsx`: PATCH /admin/support-tickets/{x}/resolve
@@ -53,7 +53,7 @@ Llamadas `api.<verbo>(...)` por archivo (regex; las URLs construidas dinámicame
 - `components/payments/BuyCreditsModal.tsx`: POST /payments/notify-payment
 - `components/payments/PackageCheckout.tsx`: POST /payments/notify-payment
 - `components/tour/TourHost.tsx`: PATCH /users/me
-- `hooks/useAdminData.ts`: GET /admin/notifications, GET /admin/notifications/unread-count, GET /admin/platform-config, GET /admin/stats, GET /admin/teachers/{x}/appeals, GET /admin/users, GET /payments/config, GET /payments/pending-review, GET /system-catalogs/business-rules
+- `hooks/useAdminData.ts`: GET /admin/notifications, GET /admin/notifications/unread-count, GET /admin/platform-config, GET /admin/platform-config/single-blockers, GET /admin/stats, GET /admin/teachers/{x}/appeals, GET /admin/users, GET /payments/config, GET /payments/pending-review, GET /system-catalogs/business-rules
 - `hooks/useBusinessRules.ts`: GET /system-catalogs/business-rules
 - `hooks/useChat.ts`: GET /chat/conversations/direct/{x}, GET /chat/conversations/group/{x}, GET /chat/conversations/unread-count
 - `hooks/useChatAdmin.ts`: GET /chat/admin/conversations, GET /chat/admin/conversations/{x}/messages

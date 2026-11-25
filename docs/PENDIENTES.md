@@ -52,9 +52,9 @@ Al cierre aún no había runs de `21787be`.
       (hoy la pantalla de materiales solo muestra «cargando»).
 
 ## 5. Deudas de negocio ya documentadas (`docs/TENANT_MODES_AUDIT.md`)
-- [ ] **T1:** en modo single, los créditos con otros profesores quedan invisibles e inusables en la interfaz.
-- [ ] Cambiar el profesor destacado de A a B **dentro** de single no pasa por el aviso 409 con `affected_students`.
-- [ ] `backend/app/api/v1/endpoints/god_mode.py::transfer` crea el vínculo alumno-profesor sin savepoint.
+- [x] **T1: no es un fallo (2026-11-25).** En single los profesores no destacados quedan inhabilitados a propósito: el alumno no los ve ni los usa; solo aparecen en los paneles de admin. Sin cambios de código.
+- [x] Cambiar el destacado de A a B **dentro** de single (2026-11-25): mismo bloqueo 409 que multi→single, sin `force`; la opción se habilita cuando no quedan alumnos vivos con otros profesores (`admin.py::update_platform_config`). El panel lo comprueba antes con `GET /admin/platform-config/single-blockers`: deshabilita el interruptor y rechaza elegir otra destacada.
+- [x] `god_mode.py::god_mode_transfer_student` (2026-11-25): el vínculo destino se crea con `ensure_student_teacher_link` (tolera la carrera con la restricción única, sin 500) y todo (vínculo, lista del profesor, chat, reasignaciones y auditoría) se confirma en un único commit; antes `link_student_to_teacher` confirmaba a mitad.
 
 ## 6. Guía interactiva: menores diferidos de la revisión final
 - [ ] Girar el móvil a mitad de la guía (cruzar el corte `md` de 768 px): `measure` no vuelve a buscar el elemento visible y el recorte

@@ -42,7 +42,7 @@ from app.core.class_logic import (
 )
 from app.models.payment import Payment
 from app.models.student_teacher_link import StudentTeacherLink
-from app.core.teacher_students import link_student_to_teacher
+from app.core.teacher_students import ensure_student_teacher_link, link_student_to_teacher
 from app.schemas.payments import (
     GodModeEditPaymentRequest,
     GodModeCreatePaymentRequest,
@@ -1539,12 +1539,8 @@ def god_mode_transfer_student(
     if from_teacher.id == to_teacher.id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "El profesor de origen y destino son el mismo")
 
-    existing_link = db.query(StudentTeacherLink).filter(
-        StudentTeacherLink.student_id == student_id,
-        StudentTeacherLink.teacher_id == to_teacher.id,
-    ).first()
-    if not existing_link:
-        db.add(StudentTeacherLink(student_id=student_id, teacher_id=to_teacher.id))
+    # Tolera la carrera con otra petición que cree el mismo vínculo (restricción única): nunca 500.
+    ensure_student_teacher_link(db, student_id, to_teacher.id)
 
     if data.remove_old_link:
         old_link = db.query(StudentTeacherLink).filter(
@@ -1574,7 +1570,8 @@ def god_mode_transfer_student(
     for c in future_classes:
         c.teacher_id = to_teacher.id
 
-    link_student_to_teacher(db, student, to_teacher, old_teacher_username=from_teacher.user_username)
+    # commit=False: vínculo, lista del profesor, chat, reasignaciones y auditoría se confirman juntos (o ninguno).
+    link_student_to_teacher(db, student, to_teacher, old_teacher_username=from_teacher.user_username, commit=False)
 
     log_god_mode_action(
         db,

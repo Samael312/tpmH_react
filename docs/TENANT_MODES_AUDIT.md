@@ -113,7 +113,7 @@ excluye cuentas de test.
 
 ## 5. Transición entre modos
 
-> **Fase 18 (2026-11-21): T2, T3 (parte de `_sync`), T4 (validación/confirmación en backend + panel) y T5 corregidos**; ver `backend/doc/BUSINESS_RULES.md`. Pendientes: T1 (`legacy` en `/me/teachers`) y pre-check de A->B. La tabla siguiente describe el estado previo.
+> **Fase 18 (2026-11-21): T2, T3 (parte de `_sync`), T4 (validación/confirmación en backend + panel) y T5 corregidos**; ver `backend/doc/BUSINESS_RULES.md`. T1 descartado el 2026-11-25: es el comportamiento previsto (profesores no destacados inhabilitados en single, visibles solo para admin). Pre-check de A->B hecho el 2026-11-25, y ahora multi->single y A->B son un bloqueo sin `force`. La tabla siguiente describe el estado previo.
 
 Hoy el `PATCH` no valida nada. Única migración: al pasar single→multi, crea links para alumnos con
 historial con el **`featured_teacher_id` anterior** si no era NULL (`admin.py:1114-1165`, commit por

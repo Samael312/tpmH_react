@@ -24,12 +24,22 @@ def second_teacher(db, w, username="profeb", status=TeacherStatus.approved):
 
 
 def set_mode(client, w, single, featured=None):
-    body = {"is_single_tenant": single, "force": True}  # Fase 18: multi->single pide confirmación (409) sin force
+    body = {"is_single_tenant": single}  # multi->single y A->B se bloquean (409) con alumnos vivos en otros profesores
     if featured is not None:
         body["featured_teacher_username"] = featured
     r = client.patch(f"{API}/admin/platform-config", json=body, headers=hdr(w["admin"]))
     assert r.status_code == 200, r.text
     return r
+
+
+def set_mode_db(db, single, featured_tp_id):
+    """Fija el modo directo en la BD: estados previos al bloqueo (alumnos vivos con otros profesores)."""
+    from app.models.payment_config import PlatformConfig
+    cfg = db.query(PlatformConfig).first() or PlatformConfig()
+    cfg.is_single_tenant = single
+    cfg.featured_teacher_id = featured_tp_id
+    db.add(cfg)
+    db.commit()
 
 
 def links(db, sid):
@@ -82,7 +92,7 @@ def test_featured_change_in_single_then_multi_orphans_old_featured_students(clie
     set_mode(client, w, True, featured="profe")
     complete_trial(client, w)
     eid_a, _ = buy_package(client, w)
-    set_mode(client, w, True, featured="profeb")   # cambio de destacado A -> B
+    set_mode_db(db, True, wb["tp"].id)             # cambio de destacado A -> B (la API lo bloquea con paquete vivo en A)
     assert my_teachers(client, w) == ["profeb"]   # A desaparece de "Tus profesores"
     r = client.get(f"{API}/payments/booking-status", headers=hdr(w["s_user"]))
     assert r.json()["stage"] == "needs_trial"     # paquete con A no cuenta
@@ -113,7 +123,7 @@ def test_multi_to_single_hides_other_teachers_but_backend_still_allows(client, w
     complete_trial(client, w); buy_package(client, w)
     complete_trial(client, wb); eid_b, _ = buy_package(client, wb)
     assert sorted(my_teachers(client, w)) == ["profe", "profeb"]
-    set_mode(client, w, True, featured="profe")
+    set_mode_db(db, True, w["tp"].id)               # multi->single: la API lo bloquea con alumnos vivos en B
     assert my_teachers(client, w) == ["profe"]
     assert len(links(db, w["sp"].id)) == 2          # links quedan
     r = client.get(f"{API}/packages/my-enrollments", headers=hdr(w["s_user"]))
@@ -210,7 +220,7 @@ def test_multi_to_single_flipflop_removes_student_from_other_teacher(client, wor
     set_mode(client, w, False)
     complete_trial(client, w); eid_a, _ = buy_package(client, w)
     complete_trial(client, wb); eid_b, _ = buy_package(client, wb)
-    set_mode(client, w, True, featured="profe")
+    set_mode_db(db, True, w["tp"].id)               # multi->single: la API lo bloquea con alumnos vivos en B
     assert book(client, wb, future(120), enrollment_id=eid_b).status_code == 400  # single: solo la destacada
     assert book(client, w, future(150), enrollment_id=eid_a).status_code == 201
     db.expire_all()

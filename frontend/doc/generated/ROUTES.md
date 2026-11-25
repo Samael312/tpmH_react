@@ -32,7 +32,7 @@ Páginas del App Router. Guard = `proxy.ts` (solo UX: decodifica el JWT SIN veri
 | `/admin/logs` | `app/(superadmin)/admin/logs/page.tsx` | superadmin, teacher_admin | 31 |  |
 | `/admin/materials` | `app/(superadmin)/admin/materials/page.tsx` | superadmin, teacher_admin | 91 |  |
 | `/admin/payments` | `app/(superadmin)/admin/payments/page.tsx` | superadmin, teacher_admin | 749 |  |
-| `/admin/settings` | `app/(superadmin)/admin/settings/page.tsx` | superadmin, teacher_admin | 1669 |  |
+| `/admin/settings` | `app/(superadmin)/admin/settings/page.tsx` | superadmin, teacher_admin | 1701 |  |
 | `/admin/students/banned` | `app/(superadmin)/admin/students/banned/page.tsx` | superadmin, teacher_admin | 167 |  |
 | `/admin/students` | `app/(superadmin)/admin/students/page.tsx` | superadmin, teacher_admin | 474 |  |
 | `/admin/support` | `app/(superadmin)/admin/support/page.tsx` | superadmin, teacher_admin | 281 |  |

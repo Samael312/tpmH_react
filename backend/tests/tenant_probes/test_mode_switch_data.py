@@ -7,7 +7,7 @@ sigue pudiendo asignar material y tareas a sus alumnos (se apoya en `TeacherProf
 from app.models.material import Material
 from tests.audit.conftest import hdr, future
 from tests.audit.helpers import API, complete_trial, buy_package, book
-from tests.tenant_probes.test_tenant_transition import second_teacher, set_mode, my_teachers
+from tests.tenant_probes.test_tenant_transition import second_teacher, set_mode, set_mode_db, my_teachers
 
 MT = f"{API}/materials"
 HW = f"{API}/homework"
@@ -78,7 +78,10 @@ def test_multi_to_single_and_back_keeps_classes_materials_and_homework(client, w
     assert len(before["classes"]) >= 2 and before["materials"] == ["Mat de A", "Mat de B"]
     assert before["homework"] == ["Tarea de A", "Tarea de B"]
 
-    set_mode(client, w, True, featured="profe")
+    r = client.patch(f"{API}/admin/platform-config", json={"is_single_tenant": True, "featured_teacher_username": "profe"},
+                     headers=hdr(w["admin"]))
+    assert r.status_code == 409                            # la API lo bloquea con alumnos vivos en otros profesores
+    set_mode_db(db, True, w["tp"].id)                      # estado previo al bloqueo: se prueba que nada se pierde
     assert my_teachers(client, w) == ["profe"]            # la lista de profesores sí cambia...
     assert _snapshot(client, w) == before                  # ...pero lo que el alumno ya tiene, no
 
@@ -105,7 +108,7 @@ def test_single_to_multi_keeps_classes_materials_and_homework(client, world, db)
 def test_old_teacher_can_still_assign_after_multi_to_single(client, world, db):
     """B deja de ser el destacado, pero sigue en su lista de alumnos: puede asignar material y tareas nuevos."""
     w, wb = _world_with_two_teachers(client, world, db)
-    set_mode(client, w, True, featured="profe")
+    set_mode_db(db, True, w["tp"].id)  # la API lo bloquea con alumnos vivos; se reproduce el estado previo
     _assign_material(client, wb, w, "Mat nuevo de B", db)
     _assign_homework(client, wb, w, "Tarea nueva de B")
     snap = _snapshot(client, w)

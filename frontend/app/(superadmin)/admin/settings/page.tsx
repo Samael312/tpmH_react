@@ -8,7 +8,7 @@ import EmailSettingsPanel from '@/components/admin/EmailSettingsPanel'
 import { useAuthStore } from '@/store/authStore'
 
 import {
-  useAdminPaymentConfig, useAdminPlatformConfig, useAdminBusinessRules, useAllTeachers,
+  useAdminPaymentConfig, useAdminPlatformConfig, useAdminBusinessRules, useAllTeachers, useSingleTenantBlockers,
   AdminPaymentConfig, AdminPlatformConfig,
 } from '@/hooks/useAdminData'
 import type { BusinessRules } from '@/hooks/useBusinessRules'
@@ -436,6 +436,8 @@ export default function SettingsPage() {
     const { catalogs, loading: catLoading, isFetching: catFetching, isError: catError, refetch: refetchCatalogs } = useSystemCatalogs()
   const { businessRules: remoteBusinessRules, isFetching: brFetching, isError: brError, refetch: refetchBusinessRules } = useAdminBusinessRules()
   const { teachers: approvedTeachers } = useAllTeachers('approved')
+  // Multi -> single se bloquea mientras haya alumnos vivos con profesores distintos de la destacada.
+  const { blockers: singleBlockers, refetch: refetchBlockers } = useSingleTenantBlockers(isSuperadmin && remotePlatformConfig?.is_single_tenant === false)
   
   const [paymentConfig, setPaymentConfig] = useState<AdminPaymentConfig | null>(null)
   const [platformConfig, setPlatformConfig] = useState<AdminPlatformConfig | null>(null)
@@ -490,6 +492,30 @@ export default function SettingsPage() {
   const updatePlatformConfig = (next: AdminPlatformConfig) => {
     setPlatformConfig(next)
     setPlatformDirty(true)
+  }
+
+  const singleBlocked = !!singleBlockers?.blocked && !platformConfig?.is_single_tenant
+  const singleBlockerNames = (singleBlockers?.sample ?? []).map(s => s.student_username).filter(Boolean).join(', ')
+
+  // Dentro de single, cambiar la destacada A -> B se rechaza si A (u otro) tiene alumnos vivos: se comprueba al elegir.
+  const changeFeatured = async (username: string) => {
+    if (!platformConfig) return
+    if (username && username !== remotePlatformConfig?.featured_teacher_username) {
+      try {
+        const res = await api.get('/admin/platform-config/single-blockers', { params: { featured_teacher_username: username } })
+        if (res.data?.blocked) {
+          const names = (res.data.sample ?? []).map((s: { student_username?: string }) => s.student_username).filter(Boolean).join(', ')
+          toast.error(
+            `No se puede cambiar la destacada: hay ${res.data.affected_students} alumno(s) con paquetes vivos o clases futuras con otros profesores` +
+              (names ? ` (${names})` : '') + '.'
+          )
+          return
+        }
+      } catch {
+        // Si la comprobación falla, decide el servidor al guardar (devuelve 409 si hay alumnos afectados).
+      }
+    }
+    updatePlatformConfig({ ...platformConfig, featured_teacher_username: username })
   }
 
   const updateLandingField = (key: keyof AdminPlatformConfig['landing_content'], value: string) => {
@@ -580,11 +606,10 @@ export default function SettingsPage() {
     }
   }
 
-  const savePlatformConfig = async (force = false) => {
+  const savePlatformConfig = async () => {
     setSaving(true)
     try {
       await api.patch('/admin/platform-config', {
-        force,
         platform_name: platformConfig?.platform_name,
         platform_tagline: platformConfig?.platform_tagline,
         is_single_tenant: platformConfig?.is_single_tenant,
@@ -597,26 +622,26 @@ export default function SettingsPage() {
       })
       setPlatformDirty(false)
       await refetchPlatformConfig()
+      refetchBlockers()
       setSaved(true)
       toast.success('Configuración de la plataforma guardada correctamente')
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
-      // 409: pasar a single con alumnos que tienen paquetes vivos o clases futuras con otros profesores.
+      // 409: pasar a single (o cambiar la destacada) con alumnos que tienen paquetes vivos o clases futuras con
+      // otros profesores. Es un bloqueo, no una confirmación: se deshace el cambio local y se avisa.
       const resp = (e as { response?: { status?: number; data?: { detail?: unknown } } })?.response
       const detail = resp?.data?.detail as
         | { message?: string; affected_students?: number; sample?: { student_username?: string }[] }
         | undefined
       if (resp?.status === 409 && detail && typeof detail === 'object') {
         const names = (detail.sample ?? []).map((s) => s.student_username).filter(Boolean).join(', ')
-        const ok = window.confirm(
-          `${detail.message ?? 'Hay alumnos afectados.'}\n\nAlumnos afectados: ${detail.affected_students ?? 0}` +
-            (names ? ` (${names})` : '') +
-            '\n\n¿Guardar de todos modos?'
+        toast.error(
+          `${detail.message ?? 'Hay alumnos afectados.'} Alumnos afectados: ${detail.affected_students ?? 0}` +
+            (names ? ` (${names})` : '')
         )
-        if (ok) {
-          setSaving(false)
-          return await savePlatformConfig(true)
-        }
+        setPlatformDirty(false)
+        await refetchPlatformConfig()
+        refetchBlockers()
       } else {
         toast.error(getErrorMessage(e, 'No se pudo guardar la configuración de la plataforma'))
       }
@@ -1073,9 +1098,11 @@ export default function SettingsPage() {
                   role="switch"
                   aria-checked={!!platformConfig.is_single_tenant}
                   aria-label="Modo profesora única"
+                  disabled={singleBlocked}
                   className={`
                     relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none shrink-0 ml-4
                     ${platformConfig.is_single_tenant ? 'bg-pink-500 shadow-inner' : 'bg-slate-200'}
+                    ${singleBlocked ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
                 >
                   <span className={`
@@ -1084,6 +1111,14 @@ export default function SettingsPage() {
                   `}/>
                 </button>
               </div>
+
+              {singleBlocked && singleBlockers && (
+                <p role="alert" className="text-[11px] font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-4 py-2.5 -mt-2">
+                  No se puede activar el modo single-tenant: hay {singleBlockers.affected_students} alumno(s) con paquetes vivos o clases futuras con
+                  profesores distintos de la destacada
+                  {singleBlockerNames ? ` (${singleBlockerNames})` : ''}. La opción se habilita sola cuando se resuelvan.
+                </p>
+              )}
 
               {!platformConfig.is_single_tenant && approvedTeachers.length === 0 && (
                 <p className="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5 -mt-2">
@@ -1130,10 +1165,7 @@ export default function SettingsPage() {
                   </label>
                   <select
                     value={platformConfig.featured_teacher_username || ''}
-                    onChange={e => updatePlatformConfig({
-                      ...platformConfig,
-                      featured_teacher_username: e.target.value
-                    })}
+                    onChange={e => changeFeatured(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-pink-50 focus:border-pink-300 transition-all"
                   >
                     <option value="">Selecciona un profesor aprobado...</option>

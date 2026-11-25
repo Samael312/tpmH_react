@@ -576,6 +576,23 @@ export function useAdminPlatformConfig() {
   }
 }
 
+export interface SingleTenantBlockers {
+  blocked: boolean
+  target: string | null
+  affected_students: number
+  sample: { student_username?: string | null; teachers?: (string | null)[] }[]
+}
+
+/** ¿Hay alumnos con paquete vivo o clase futura con otros profesores que impidan pasar a single? (misma regla que el PATCH). */
+export function useSingleTenantBlockers(enabled: boolean) {
+  const query = useQuery({
+    queryKey: ["admin", "settings", "single-blockers"],
+    enabled,
+    queryFn: async () => (await api.get('/admin/platform-config/single-blockers')).data as SingleTenantBlockers,
+  })
+  return { blockers: query.data ?? null, refetch: query.refetch }
+}
+
 // ─── Reglas de negocio (edición, panel admin) ─────────────────────────────
 export function useAdminBusinessRules() {
   const query = useQuery({

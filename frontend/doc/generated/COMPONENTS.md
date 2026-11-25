@@ -74,7 +74,7 @@
 ## hooks/
 
 - `hooks/useAdminClasses.ts` (65 líneas, referenciado en 2 archivos) — exports: AdminClass, AdminClassFilters, useAdminClasses, LookupTeacher, useLookupTeachers
-- `hooks/useAdminData.ts` (596 líneas, referenciado en 9 archivos) — exports: PendingPayment, Teacher, Student, WithdrawalRecord, PaymentHistoryItem, usePaymentsHistory, useStudents, useStudentDetail, useWithdrawals, ManualGrantRequestRecord, useManualGrantRequests, useAdminStats
+- `hooks/useAdminData.ts` (613 líneas, referenciado en 9 archivos) — exports: PendingPayment, Teacher, Student, WithdrawalRecord, PaymentHistoryItem, usePaymentsHistory, useStudents, useStudentDetail, useWithdrawals, ManualGrantRequestRecord, useManualGrantRequests, useAdminStats
 - `hooks/useAdminMaterials.ts` (21 líneas, referenciado en 1 archivos) — exports: AdminMaterial, useAdminMaterials
 - `hooks/useBusinessRules.ts` (66 líneas, referenciado en 10 archivos) — exports: BusinessRules, CLASS_DURATION_OPTIONS, useBusinessRules
 - `hooks/useChat.ts` (270 líneas, referenciado en 15 archivos) — exports: ChatConversation, ChatMessage, markConversationRead, CONNECTED_SAFETY_POLL_MS, fallbackPollInterval, useChatConversations, useUnreadChatCount, openDirectConversation, openGroupConversation, useChatSocketBootstrap, useChatThread

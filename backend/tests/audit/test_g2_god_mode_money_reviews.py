@@ -200,6 +200,61 @@ def test_transfer_student(client, world, db):
     assert r2.status_code == 200 and r2.json()["enrollments_transferred"] == 0
 
 
+def test_transfer_student_creates_single_link_even_if_a_concurrent_request_won_the_race(client, world, db, monkeypatch):
+    """El vínculo destino se crea con el helper tolerante a la restricción única: nunca 500 ni duplicado."""
+    import app.api.v1.endpoints.god_mode as gm
+    from sqlalchemy.orm import Query
+    _, tp2 = mk_teacher(db, "profe_carrera")
+    db.add(StudentTeacherLink(student_id=world["sp"].id, teacher_id=world["tp"].id))
+    db.add(StudentTeacherLink(student_id=world["sp"].id, teacher_id=tp2.id))  # otra petición ya lo creó
+    db.commit()
+    real = gm.ensure_student_teacher_link
+
+    def blind(db_, sid, tid):
+        # la consulta previa del helper no ve el vínculo (carrera): el INSERT choca con la restricción única
+        orig = Query.first
+        Query.first = lambda self: None
+        try:
+            return real(db_, sid, tid)
+        finally:
+            Query.first = orig
+
+    monkeypatch.setattr(gm, "ensure_student_teacher_link", blind)
+    r = client.post(f"{API}/students/{world['sp'].id}/transfer-teacher",
+                    json={"reason": WHY, "from_teacher_id": world["tp"].id, "to_teacher_id": tp2.id, "remove_old_link": True},
+                    headers=admin(world))
+    assert r.status_code == 200, r.text
+    db.expire_all()
+    links = db.query(StudentTeacherLink).filter_by(student_id=world["sp"].id).all()
+    assert [l.teacher_id for l in links] == [tp2.id]  # destino una sola vez, origen borrado
+    assert world["sp"].id in (db.get(TeacherProfile, tp2.id).students or [])
+
+
+def test_transfer_student_is_atomic_when_the_audit_fails(client, world, db, monkeypatch):
+    """Si falla algo antes del commit final, no quedan ni vínculo, ni lista, ni chat, ni reasignaciones a medias."""
+    import app.api.v1.endpoints.god_mode as gm
+    from app.models.chat import ChatConversation
+    _, tp2 = mk_teacher(db, "profe_atomico")
+    e = mk_enrollment(db, world)
+
+    def boom(*a, **k):
+        raise RuntimeError("fallo de auditoría")
+
+    monkeypatch.setattr(gm, "log_god_mode_action", boom)
+    try:
+        r = client.post(f"{API}/students/{world['sp'].id}/transfer-teacher",
+                        json={"reason": WHY, "from_teacher_id": world["tp"].id, "to_teacher_id": tp2.id}, headers=admin(world))
+        assert r.status_code == 500
+    except RuntimeError:  # según la configuración del cliente de pruebas el error se relanza
+        pass
+    db.rollback()
+    db.expire_all()
+    assert db.get(Enrollment, e.id).teacher_id == world["tp"].id
+    assert db.query(StudentTeacherLink).filter_by(student_id=world["sp"].id, teacher_id=tp2.id).count() == 0
+    assert world["sp"].id not in (db.get(TeacherProfile, tp2.id).students or [])
+    assert db.query(ChatConversation).filter_by(student_id=world["sp"].id, teacher_id=tp2.id).count() == 0
+
+
 def test_transfer_student_errors(client, world, db):
     _, tp2 = mk_teacher(db, "profe_n2")
     b = {"reason": WHY, "from_teacher_id": world["tp"].id, "to_teacher_id": tp2.id}

@@ -117,8 +117,8 @@ Un `teacher_admin` tenía poderes de dinero y de plataforma que no le tocaban. A
 - **A5 (reseñas propias en Modo Dios): no es bug, decisión del propietario.** Se deja como está.
 
 ## Transición single/multi (Fase 18, corregido 2026-11-21, `tests/audit/test_f18_tenant_transition.py`)
-T2/T5: backfill atómico, completo (cualquier profesor) y re-ejecutable; T3: reservar en single ya no quita al alumno del profesor anterior; `/users/me/teachers` usa la destacada resuelta; single sin destacada -> 400; multi->single con alumnos de otros profesores -> 409 salvo `force=true`; creadores de links tolerantes a la restricción única.
-Pendiente: T1 (créditos con otros profesores invisibles en single; `legacy` en `/me/teachers`), pre-check al cambiar destacada A->B dentro de single, y `god_mode.py::transfer` aún crea el link sin savepoint.
+T2/T5: backfill atómico, completo (cualquier profesor) y re-ejecutable; T3: reservar en single ya no quita al alumno del profesor anterior; `/users/me/teachers` usa la destacada resuelta; single sin destacada -> 400; multi->single con alumnos de otros profesores -> 409 sin `force` (bloqueo; 2026-11-25); creadores de links tolerantes a la restricción única.
+T1 descartado (2026-11-25): en single los demás profesores quedan inhabilitados por diseño y solo se ven en paneles de admin. El cambio de destacada A->B dentro de single ya tiene el mismo bloqueo (2026-11-25). `god_mode.py::transfer` ya crea el link con `ensure_student_teacher_link` (tolera la carrera) y confirma todo en un único commit (2026-11-25). Sin pendientes de tenant conocidos.
 
 ## Revisión de los flujos de `teacher_admin` (verificada)
 - **Panel staff** (`get_current_staff`): superadmin y `teacher_admin`. Solo `superadmin` (`require_superadmin`; ampliado en la Fase 16, ver arriba): cambiar roles (`PATCH /admin/users/{id}` con `role`; el resto de la edición de usuarios es de staff; solo alterna `teacher`/`teacher_admin`), `email-settings`, resolver correcciones de clase, transferir alumnos (Modo Dios) y cambiar la comisión propia. Las páginas del frontend ocultan lo que solo ve el superadmin (`EmailSettingsPanel`, `EmailQuotaBanner`).

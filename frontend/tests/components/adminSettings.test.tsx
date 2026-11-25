@@ -34,6 +34,7 @@ const PLATFORM = (over: Record<string, unknown> = {}) => ({ ...FIXTURE.platformC
 function setup(role: "superadmin" | "teacher_admin" = "superadmin", over: { platform?: Record<string, unknown>; mocks?: () => void } = {}) {
   mockApi("get", "/payments/config", PAYMENT);
   mockApi("get", "/admin/platform-config", PLATFORM(over.platform));
+  mockApi("get", "/admin/platform-config/single-blockers", { blocked: false, target: "mar12", affected_students: 0, sample: [] });
   mockApi("get", "/system-catalogs/business-rules", RULES);
   mockApi("get", "/system-catalogs/", CATALOGS);
   mockApi("get", /^\/admin\/teachers/, []);
@@ -135,39 +136,33 @@ describe("Configuración · Plataforma", () => {
     await user.type(name, "Mi Academia");
     await user.click(screen.getByRole("button", { name: /Guardar plataforma/ }));
     await waitFor(() => expect(callsTo("patch", "/admin/platform-config")).toHaveLength(1));
-    expect(callsTo("patch", "/admin/platform-config")[0].body).toMatchObject({ platform_name: "Mi Academia", force: false });
+    expect(callsTo("patch", "/admin/platform-config")[0].body).toMatchObject({ platform_name: "Mi Academia" });
     expect(await screen.findByText("Configuración de la plataforma guardada correctamente")).toBeInTheDocument();
   });
 
-  it("un 409 por alumnos afectados pregunta y, si se acepta, reintenta con force", async () => {
-    let n = 0;
+  it("un 409 por alumnos afectados es un bloqueo: lo avisa, no reintenta y recarga la configuración", async () => {
     mockApi("patch", "/admin/platform-config", () => {
-      n += 1;
-      if (n === 1) {
-        const err = Object.assign(new Error("conflict"), { isAxiosError: true, response: { status: 409, data: { detail: { message: "Hay alumnos con paquetes", affected_students: 2, sample: [{ student_username: "ana" }] } } } });
-        throw err;
-      }
-      return {};
+      throw Object.assign(new Error("conflict"), { isAxiosError: true, response: { status: 409, data: { detail: { message: "Hay alumnos con paquetes", affected_students: 2, sample: [{ student_username: "ana" }, {}] } } } });
     });
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const confirm = vi.spyOn(window, "confirm");
     const { user } = setup();
     await screen.findByDisplayValue("TPM Test");
+    const before = callsTo("get", /^\/admin\/platform-config/).length;
     await user.click(screen.getByRole("button", { name: /Guardar plataforma/ }));
-    await waitFor(() => expect(callsTo("patch", "/admin/platform-config")).toHaveLength(2));
-    expect(confirm).toHaveBeenCalledTimes(1);
-    expect((confirm.mock.calls[0][0] as string)).toMatch(/Hay alumnos con paquetes[\s\S]*2[\s\S]*ana/);
-    expect(callsTo("patch", "/admin/platform-config")[1].body).toMatchObject({ force: true });
+    expect(await screen.findByText(/Hay alumnos con paquetes[\s\S]*2[\s\S]*ana/)).toBeInTheDocument();
+    expect(callsTo("patch", "/admin/platform-config")).toHaveLength(1);
+    expect(confirm).not.toHaveBeenCalled();
+    await waitFor(() => expect(callsTo("get", /^\/admin\/platform-config/).length).toBeGreaterThan(before));
   });
 
-  it("un 409 rechazado no guarda otra vez", async () => {
+  it("un 409 sin mensaje usa el texto por defecto", async () => {
     mockApi("patch", "/admin/platform-config", () => {
-      throw Object.assign(new Error("c"), { isAxiosError: true, response: { status: 409, data: { detail: { message: "x", affected_students: 1 } } } });
+      throw Object.assign(new Error("c"), { isAxiosError: true, response: { status: 409, data: { detail: { affected_students: 1 } } } });
     });
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     const { user } = setup();
     await screen.findByDisplayValue("TPM Test");
     await user.click(screen.getByRole("button", { name: /Guardar plataforma/ }));
-    await waitFor(() => expect(callsTo("patch", "/admin/platform-config")).toHaveLength(1));
+    expect(await screen.findByText(/Hay alumnos afectados\. Alumnos afectados: 1/)).toBeInTheDocument();
   });
 
   it("otro error se avisa con su mensaje", async () => {
@@ -176,6 +171,52 @@ describe("Configuración · Plataforma", () => {
     await screen.findByDisplayValue("TPM Test");
     await user.click(screen.getByRole("button", { name: /Guardar plataforma/ }));
     expect(await screen.findByText("Nombre inválido")).toBeInTheDocument();
+  });
+
+  it("multi -> single bloqueado: el interruptor se deshabilita y avisa con los alumnos afectados", async () => {
+    setup("superadmin", { mocks: () => mockApi("get", "/admin/platform-config/single-blockers", { blocked: true, target: "mar12", affected_students: 2, sample: [{ student_username: "ana" }, {}] }) });
+    expect(await screen.findByText(/hay 2 alumno\(s\)[\s\S]*\(ana\)/)).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Modo profesora única" })).toBeDisabled();
+  });
+
+  it("multi -> single sin alumnos que lo impidan: el interruptor está activo y no hay aviso", async () => {
+    setup();
+    await screen.findByDisplayValue("TPM Test");
+    expect(screen.getByRole("switch", { name: "Modo profesora única" })).toBeEnabled();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("bloqueo sin nombres de alumnos: el aviso sale igualmente", async () => {
+    setup("superadmin", { mocks: () => mockApi("get", "/admin/platform-config/single-blockers", { blocked: true, target: "mar12", affected_students: 1, sample: [] }) });
+    expect(await screen.findByText(/hay 1 alumno\(s\)/)).toBeInTheDocument();
+  });
+
+  describe("destacada dentro de single", () => {
+    const TEACHERS = [{ username: "mar12", name: "Mar", surname: "A" }, { username: "luz", name: "Luz", surname: "B" }];
+    const withTeachers = (blockers: unknown, fail = false) => () => {
+      mockApi("get", /^\/admin\/teachers/, TEACHERS.map((t) => ({ ...t, user_username: t.username, status: "approved" })));
+      if (fail) mockApiError("get", "/admin/platform-config/single-blockers", 500, "x");
+      else mockApi("get", "/admin/platform-config/single-blockers", blockers);
+    };
+
+    it("elegir otra destacada con alumnos vivos en A avisa y no cambia el valor", async () => {
+      const { user } = setup("superadmin", { platform: { is_single_tenant: true }, mocks: withTeachers({ blocked: true, target: "luz", affected_students: 3, sample: [{ student_username: "ana" }] }) });
+      const select = (await screen.findAllByRole("combobox"))[0] as HTMLSelectElement;
+      const before = select.value;
+      await user.selectOptions(select, "luz");
+      expect(await screen.findByText(/No se puede cambiar la destacada: hay 3 alumno\(s\)[\s\S]*\(ana\)/)).toBeInTheDocument();
+      expect(select.value).toBe(before);
+    });
+
+    it("elegir otra destacada sin bloqueo (o si falla la comprobación) cambia el valor", async () => {
+      for (const fail of [false, true]) {
+        const { user, unmount } = setup("superadmin", { platform: { is_single_tenant: true }, mocks: withTeachers({ blocked: false, target: "luz", affected_students: 0, sample: [] }, fail) });
+        const select = (await screen.findAllByRole("combobox"))[0] as HTMLSelectElement;
+        await user.selectOptions(select, "luz");
+        await waitFor(() => expect(select.value).toBe("luz"));
+        unmount();
+      }
+    });
   });
 
   it("en modo un-solo-profesor aparece el selector de profesor destacado", async () => {
