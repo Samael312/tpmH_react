@@ -34,7 +34,7 @@ function setup(cohorts: unknown[] = [COHORT()], extra?: () => void) {
   return { ...view, user: userEvent.setup() };
 }
 
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("Grupos · lista", () => {
   it("separa activos e historial", async () => {
@@ -310,6 +310,10 @@ describe("Grupos · cerrar y agendar sesión", () => {
 
   it("paquete de horario fijo: ofrece las coincidencias del patrón y agenda toda la serie", async () => {
     mockApi("post", "/cohorts/1/close", {});
+    // Fecha fija a mitad de mes: el calendario arranca en el mes actual y, con `Date.now() + 6 días`, a partir del
+    // día 25 la primera coincidencia caía en el mes siguiente y el calendario no tenía ningún día seleccionable.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 5, 10, 12, 0, 0));
     const first = new Date(Date.now() + 6 * 86_400_000);
     const { user } = setup([COHORT({ current_students: 3 })], () => {
       mockApi("get", "/packages/my-packages", [{ ...GROUP_PKG, group_schedule_mode: "fixed", group_recurring_days_of_week: [0], group_recurring_time_local: "18:00" }]);

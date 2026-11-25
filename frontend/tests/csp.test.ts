@@ -17,6 +17,16 @@ describe("lib/csp.ts", () => {
     expect(buildCsp("n", true)).not.toContain("upgrade-insecure-requests");
   });
 
+  it("producción añade upgrade-insecure-requests salvo con CSP_SKIP_UPGRADE=1 (solo Playwright)", () => {
+    expect(buildCsp("n", false)).toContain("upgrade-insecure-requests");
+    process.env.CSP_SKIP_UPGRADE = "1";
+    try {
+      expect(buildCsp("n", false)).not.toContain("upgrade-insecure-requests");
+    } finally {
+      delete process.env.CSP_SKIP_UPGRADE;
+    }
+  });
+
   it("las fuentes se sirven desde el propio sitio: style-src y font-src no abren Google Fonts", () => {
     const csp = buildCsp("n", false);
     expect(directive(csp, "font-src")).not.toContain("gstatic");

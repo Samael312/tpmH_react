@@ -50,6 +50,8 @@ export function buildCsp(nonce: string, isDev: boolean): string {
     // Nadie debería poder embeber el sitio en un <iframe> ajeno (clickjacking)
     `frame-ancestors 'none'`,
   ];
-  if (!isDev) directives.push("upgrade-insecure-requests");
+  // CSP_SKIP_UPGRADE=1 solo lo pone Playwright: WebKit sí convierte http://localhost en https://localhost con esta
+  // directiva (Chromium exime localhost) y la compilación de producción servida por http no cargaba ningún recurso.
+  if (!isDev && process.env.CSP_SKIP_UPGRADE !== "1") directives.push("upgrade-insecure-requests");
   return directives.join("; ");
 }

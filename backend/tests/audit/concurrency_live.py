@@ -141,7 +141,7 @@ def enroll(c, db, admin, tu, pkg, su, hours=3):
         if s == "completed":
             age_class(db, cid)
         assert c.patch(f"{BASE}/classes/{cid}/status", json={"status": s}, headers=tok(tu)).status_code == 200
-    cfg = c.get(BASE + "/payments/config").json()
+    cfg = c.get(BASE + "/payments/config", headers=tok(su)).json()  # Fase 20: la config exige sesion
     method = next((m for m, k in (("bank_transfer", "bank_transfer_enabled"), ("paypal", "paypal_enabled"),
                                   ("binance", "binance_enabled"), ("mobile_payment", "mobile_payment_enabled")) if cfg.get(k)), None)
     assert method, "no hay método de pago habilitado en PaymentConfig"
@@ -228,15 +228,17 @@ def main():
             if s == "completed":
                 age_class(db, cid)
             c.patch(f"{BASE}/classes/{cid}/status", json={"status": s}, headers=tok(tu))
-        cfg = c.get(BASE + "/payments/config").json()
+        cfg = c.get(BASE + "/payments/config", headers=tok(s4)).json()
         method = next(m for m, k in (("bank_transfer", "bank_transfer_enabled"), ("paypal", "paypal_enabled"),
                       ("binance", "binance_enabled"), ("mobile_payment", "mobile_payment_enabled")) if cfg.get(k))
         pid = post(c, "/payments/notify-payment", s4, json={"type": "package", "package_id": pkg.id, "payment_method": method,
                    "transaction_reference": "CONC3"}).json()["payment_id"]
         before = db.execute(text("select coalesce(total_earned,0) from teacher_wallets where teacher_id=:t"), {"t": tp.id}).scalar() or 0
+        before = float(before)  # PostgreSQL devuelve Decimal (en SQLite era float)
         res = parallel([lambda: c.patch(f"{BASE}/payments/{pid}/validate", json={"action": "approve"}, headers=tok(admin)) for _ in range(4)])
         db.expire_all()
         after = db.execute(text("select coalesce(total_earned,0) from teacher_wallets where teacher_id=:t"), {"t": tp.id}).scalar()
+        after = float(after or 0)
         check("R3 aprobar el mismo pago x4 a la vez", "+85.0 (una vez)", f"{after - before:+.2f} (HTTP {[code(r) for r in res]})", abs((after - before) - 85.0) < 0.01)
 
         # R4: 4 solicitudes de retiro del saldo completo a la vez
