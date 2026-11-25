@@ -18,15 +18,15 @@ Al cierre aún no había runs de `21787be`.
 - [ ] Repetirlo en producción al desplegar, en ese orden. `f28` deja en «vista» a todos los usuarios existentes.
 
 ## 3. Comprobaciones a ojo
-- [ ] Guía interactiva en un móvil real o emulado: colocación de la tarjeta, panel «Más» animado y recorte. Las pruebas cubren la
-      lógica pero no se vio en un navegador. El 2026-11-24 se vio en escritorio con la extensión de Chrome (12 pasos, recorte,
-      tarjeta arriba/al lado, scroll del menú, cierre «¡Listo!»); la versión móvil no se llegó a ver (la ventana no se achicó y la
-      extensión se desconectó).
-- [ ] Reproducir a mano: Perfil → «Ver guía de la plataforma». En la demo, tras pulsarlo el navegador terminó en `/dashboard` sin
-      guía visible. Causa desconocida (¿clic mío, overlay de errores de Next o desconexión?). Si se reproduce, es un bug real.
-- [ ] Aviso de hidratación de Next en dev («1 Issue», `A tree hydrated but some attributes…`): ya salía en `/login`, antes de que
-      hubiera guía, y sube a 3 en el perfil. Parece ajeno a la guía (¿atributos que inyecta la extensión de Chrome?); comprobar con
-      la extensión desactivada y mirar el diff del error.
+- [x] Guía interactiva (2026-11-25, Playwright con viewport de iPhone 13 a 390 px, 12 pasos, contra el servidor semilla): la tarjeta queda sobre
+      la barra inferior con el recorte en cada pestaña; el panel «Más» se abre solo y resalta Chat, Disponibilidad, Materiales, Tareas, Profesor y
+      Soporte con la tarjeta arriba; el último paso «Terminar» cierra la guía y se queda en la misma ruta; sin errores de página. En escritorio
+      también se vio con Chrome. Pendiente solo lo que no cubre el emulador: probar en un móvil físico (táctil real y teclado en pantalla).
+- [x] Perfil → «Ver guía de la plataforma» (2026-11-25): no se reproduce. En escritorio (Chrome) y en móvil emulado la guía arranca en `/dashboard/profile`,
+      avanza sin cambiar de ruta y «Saltar guía» la cierra sin salir de la página. El episodio del 2026-11-24 (acabar en `/dashboard`) quedó sin explicar;
+      si reaparece, anotar los pasos exactos.
+- [x] Aviso de hidratación de Next en dev (2026-11-25): causa encontrada. El diff cliente/servidor solo contiene `bis_skin_checked="1"`, un atributo que inyecta
+      una extensión de seguridad del navegador en 53 elementos del DOM. No es de la app; en Playwright (sin extensiones) no aparece.
 - [x] Audio TTS: sustituido por la prueba de Realtime (2026-11-25): escuchados español, francés, portugués y alemán; bien.
 - [ ] Probar un vocabulario real en otros idiomas del catálogo (francés, portugués, alemán…) y ajustar `_ENGLISH_NAMES` si falta alguno.
 
@@ -56,27 +56,28 @@ Al cierre aún no había runs de `21787be`.
 - [x] Cambiar el destacado de A a B **dentro** de single (2026-11-25): mismo bloqueo 409 que multi→single, sin `force`; la opción se habilita cuando no quedan alumnos vivos con otros profesores (`admin.py::update_platform_config`). El panel lo comprueba antes con `GET /admin/platform-config/single-blockers`: deshabilita el interruptor y rechaza elegir otra destacada.
 - [x] `god_mode.py::god_mode_transfer_student` (2026-11-25): el vínculo destino se crea con `ensure_student_teacher_link` (tolera la carrera con la restricción única, sin 500) y todo (vínculo, lista del profesor, chat, reasignaciones y auditoría) se confirma en un único commit; antes `link_student_to_teacher` confirmaba a mitad.
 
-## 6. Guía interactiva: menores diferidos de la revisión final
-- [ ] Girar el móvil a mitad de la guía (cruzar el corte `md` de 768 px): `measure` no vuelve a buscar el elemento visible y el recorte
-      acaba en (-8, -8). Arreglo: re-resolver el target en `resize`.
-- [ ] El foco solo queda atrapado mientras está dentro de la tarjeta; con un clic en el fondo, Tab entra al menú. Arreglo: `inert`
-      en el resto de la página mientras la guía está abierta.
-- [ ] `server_default="false"` en el modelo frente a `sa.false()` en la migración: inofensivo en PostgreSQL, pero `alembic autogenerate`
-      podría marcarlo como diferencia.
-- [ ] El test «saltar a mitad de la espera de un paso Más» se ajustó por razonamiento y no se vio fallar antes del arreglo.
-      Para confirmarlo: quitar la comprobación `run !== runRef.current` en `ProductTour.tsx` y comprobar que falla.
-- [ ] Reglas nuevas aún sin entrada en `frontend/doc/KNOWN_ISSUES.md` (no hay bugs abiertos de la guía conocidos; solo los menores anteriores).
+## 6. Guía interactiva: menores diferidos de la revisión final (cerrado el 2026-11-25)
+- [x] Girar el móvil a mitad de la guía (cruzar el corte `md`): `ProductTour` re-resuelve el paso en `resize` cuando el elemento medido deja de ser visible.
+      Prueba nueva en `tests/components/productTour.test.tsx` (falla sin el arreglo).
+- [x] El foco solo quedaba atrapado mientras estaba dentro de la tarjeta: ahora el resto de la página queda `inert` mientras la guía está abierta
+      (el aislamiento se retira antes de devolver el foco). Prueba nueva (falla sin el arreglo).
+- [x] `server_default="false"` en el modelo frente a `sa.false()` en la migración: no es un problema; `alembic/env.py` no activa `compare_server_default`,
+      así que `autogenerate` no lo compara, y el repo mezcla ambas formas.
+- [x] El test «saltar a mitad de la espera de un paso Más» se confirmó: quitando la comprobación `run !== runRef.current` falla (`forceMoreOpen` queda en true).
+- [x] Reglas nuevas anotadas en `frontend/doc/KNOWN_ISSUES.md` (sección «Guía interactiva»), `PAGES_AND_UX.md` y `ARCHITECTURE.md`.
+- Extra: en escritorio un paso «Más» ahora cierra el panel móvil que hubiera quedado abierto (`settle`); prueba nueva.
 
-## 6b. Guía interactiva: mejora de orden en escritorio
-- [ ] En escritorio los pasos siguen el orden de las pestañas móviles (Inicio, Horario, Clases, Perfil, Chat, Disponibilidad, Materiales,
-      Tareas, Profesor, Soporte), no el de la barra lateral (Inicio, Chat, Horario, Disponibilidad, Mis Clases, Materiales, Tareas,
-      Profesores, Soporte, Mi Perfil). La tarjeta salta arriba y abajo. Opción: ordenar los pasos según el menú que haya en pantalla
-      (en escritorio, el orden de `STUDENT_*`/`TEACHER_*` de `NavBar.tsx`; en móvil, tabs principales y luego «Más»). Cuidado con los
-      tests de `tourSteps.test.ts`, que fijan el orden actual.
+## 6b. Guía interactiva: orden en escritorio (hecho el 2026-11-25)
+- [x] En escritorio los pasos siguen ahora el orden de la barra lateral (`DESKTOP_ORDER` en `tourSteps.ts`; `TourHost` lo elige al abrir según el ancho).
+      En móvil se mantiene el orden de pestañas y «Más». Pruebas en `tests/tourSteps.test.ts` y `tests/components/tourHostOrder.test.tsx`.
 
 ## 7. Riesgos de mantenimiento
-- [ ] Cobertura de ramas del frontend en 92,79 % con suelo de 92 %: cualquier componente nuevo sin pruebas puede romper el CI.
-- [ ] Playwright en Windows necesita `E2E_PYTHON=venv\Scripts\python.exe` (anotado en `frontend/doc/TESTING.md`).
+- [x] Cobertura de ramas del frontend subida a 93,24 % (suelo 92 %) el 2026-11-25: pruebas nuevas de `lib/tzFormat.ts` (de 70 % a casi 100 %) y
+      casos límite de `chatStore` (`tests/components/chatStoreEdge.test.tsx`) y de `teacher/cohorts` (`teacherCohortsGaps.test.tsx`, de
+      44 a 25 ramas sin cubrir). Mayores huecos restantes: `dashboard/schedule`, `admin/settings` (~41 cada una), `teacher/materials` (38)
+      y `teacher/profile` (37).
+- [x] Playwright ya no exige `E2E_PYTHON`: `playwright.config.ts` usa `backend/venv` o `backend/.venv` si existen y, si no, `python` (2026-11-25).
+      `E2E_PYTHON` sigue mandando cuando se define.
 - [ ] Un `uvicorn --reload` o `next dev` local en los puertos 8000/3000 impide que Playwright arranque su backend semilla
       (`reuseExistingServer: false`): detenerlo antes de lanzar los E2E.
 - [ ] Flaky local de WebKit en `a11y.spec.ts` (2026-11-25): en una pasada de 24,6 min con Chromium, móvil y WebKit seguidos, el botón de

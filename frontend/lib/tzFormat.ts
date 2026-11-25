@@ -128,6 +128,10 @@ export function zonedLocalToUtcIso(local: string, timeZone: string): string | nu
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(local);
   if (!m) return null;
   const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+  // Date.UTC desborda (mes 13, hora 99…) en vez de fallar: se rechaza lo que no sobrevive al viaje de ida y vuelta.
+  const back = new Date(wall);
+  if (back.getUTCFullYear() !== +m[1] || back.getUTCMonth() !== +m[2] - 1 || back.getUTCDate() !== +m[3]
+    || back.getUTCHours() !== +m[4] || back.getUTCMinutes() !== +m[5]) return null;
   let utc = wall - tzOffsetMs(wall, timeZone);
   utc = wall - tzOffsetMs(utc, timeZone);
   const d = new Date(utc);
@@ -176,7 +180,8 @@ export function getUtcOffsetMinutes(timeZone: string, date = new Date()): number
       Number(parts.year), Number(parts.month) - 1, Number(parts.day),
       Number(parts.hour) % 24, Number(parts.minute), Number(parts.second)
     );
-    return (asUTC - date.getTime()) / 60000;
+    // Los milisegundos de `date` no están en `asUTC` (llega al segundo): sin truncarlos salían minutos fraccionarios.
+    return (asUTC - Math.floor(date.getTime() / 1000) * 1000) / 60000;
   } catch {
     return null;
   }

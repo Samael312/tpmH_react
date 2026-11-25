@@ -5,7 +5,8 @@ vi.mock("@/store/authStore", () => ({ useAuthStore: { getState: () => ({ user: a
 
 import {
   formatCalendarDateHuman, formatDateHumanTz, formatMonthShortTz, formatTimeTz, formatWeekdayShortTz, getDateKeyTz, getDayOfMonthTz,
-  getHourMinuteTz, getMyDisplayTimezone,
+  formatDateHuman, getHourMinuteTz, getMyDisplayTimezone, getTimezoneDiffLabel, getUtcOffsetMinutes, localDateTimeToUtcIso,
+  zonedLocalToUtcIso,
 } from "@/lib/tzFormat";
 
 const CARACAS = "America/Caracas"; // UTC-4 todo el año
@@ -83,5 +84,75 @@ describe("formatCalendarDateHuman", () => {
       expect(formatCalendarDateHuman("2026-11-19")).toMatch(/jueves,? 19 de noviembre/i);
     }
     process.env.TZ = original;
+  });
+});
+
+describe("zonedLocalToUtcIso (hora de pared en una zona → instante UTC)", () => {
+  it("convierte con el desfase de cada zona y de cada estación", () => {
+    expect(zonedLocalToUtcIso("2026-01-13T14:00", CARACAS)).toBe("2026-01-13T18:00:00.000Z");
+    expect(zonedLocalToUtcIso("2026-01-13T19:00", MADRID)).toBe("2026-01-13T18:00:00.000Z");
+    expect(zonedLocalToUtcIso("2026-07-13T20:00", MADRID)).toBe("2026-07-13T18:00:00.000Z");
+  });
+
+  it("acierta justo después del cambio de horario (Madrid, 29-mar-2026 03:30 = 01:30 UTC)", () => {
+    expect(zonedLocalToUtcIso("2026-03-29T03:30", MADRID)).toBe("2026-03-29T01:30:00.000Z");
+  });
+
+  it("devuelve null si el texto no es una fecha/hora válida", () => {
+    expect(zonedLocalToUtcIso("mañana", MADRID)).toBeNull();
+    expect(zonedLocalToUtcIso("", MADRID)).toBeNull();
+    expect(zonedLocalToUtcIso("2026-13-45T99:99", MADRID)).toBeNull();
+  });
+});
+
+describe("localDateTimeToUtcIso", () => {
+  it("fecha y hora de pared + zona → ISO UTC", () => {
+    expect(localDateTimeToUtcIso("2026-01-13", "14:00", CARACAS)).toBe("2026-01-13T18:00:00.000Z");
+    expect(localDateTimeToUtcIso("2026-07-13", "20:00", MADRID)).toBe("2026-07-13T18:00:00.000Z");
+  });
+
+  it("pasa al día anterior o siguiente cuando la zona lo exige", () => {
+    expect(localDateTimeToUtcIso("2026-01-12", "22:30", CARACAS)).toBe("2026-01-13T02:30:00.000Z");
+    expect(localDateTimeToUtcIso("2026-01-13", "00:30", MADRID)).toBe("2026-01-12T23:30:00.000Z");
+  });
+});
+
+describe("getUtcOffsetMinutes / getTimezoneDiffLabel", () => {
+  const winter = new Date("2026-01-13T12:00:00Z");
+  const summer = new Date("2026-07-13T12:00:00Z");
+
+  it("desfase en minutos respecto a UTC, con horario de verano y medias horas", () => {
+    expect(getUtcOffsetMinutes(CARACAS, winter)).toBe(-240);
+    expect(getUtcOffsetMinutes(MADRID, winter)).toBe(60);
+    expect(getUtcOffsetMinutes(MADRID, summer)).toBe(120);
+    expect(getUtcOffsetMinutes("Asia/Kolkata", winter)).toBe(330);
+  });
+
+  it("una zona inválida da null; sin fecha usa «ahora»", () => {
+    expect(getUtcOffsetMinutes("Mars/Olympus", winter)).toBeNull();
+    expect(getUtcOffsetMinutes("UTC")).toBe(0);
+  });
+
+  it("etiqueta la diferencia respecto a quien mira", () => {
+    expect(getTimezoneDiffLabel(MADRID, CARACAS, winter)).toBe("+5h respecto a ti");
+    expect(getTimezoneDiffLabel(CARACAS, MADRID, winter)).toBe("-5h respecto a ti");
+    expect(getTimezoneDiffLabel("Asia/Kolkata", MADRID, winter)).toBe("+4.5h respecto a ti");
+    expect(getTimezoneDiffLabel(MADRID, MADRID, winter)).toBe("Mismo huso horario");
+  });
+
+  it("sin alguna de las zonas, o con una inválida, no hay etiqueta", () => {
+    expect(getTimezoneDiffLabel(null, MADRID)).toBeNull();
+    expect(getTimezoneDiffLabel(MADRID, undefined)).toBeNull();
+    expect(getTimezoneDiffLabel("", "")).toBeNull();
+    expect(getTimezoneDiffLabel("Mars/Olympus", MADRID, winter)).toBeNull();
+    expect(getTimezoneDiffLabel(MADRID, "Mars/Olympus", winter)).toBeNull();
+    expect(getTimezoneDiffLabel(MADRID, CARACAS)).toMatch(/respecto a ti$/);          // «ahora» por defecto
+  });
+});
+
+describe("formatDateHuman", () => {
+  it("vacío da cadena vacía y una fecha ISO da «día, N de mes»", () => {
+    expect(formatDateHuman("")).toBe("");
+    expect(formatDateHuman("2026-01-13T12:00:00Z")).toMatch(/martes.*13.*enero/);
   });
 });

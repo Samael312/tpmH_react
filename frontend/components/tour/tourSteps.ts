@@ -54,8 +54,25 @@ export const TEACHER_STEPS: TourStep[] = [
   END,
 ];
 
-export function stepsForRole(role?: string): TourStep[] {
-  if (role === "student") return STUDENT_STEPS;
-  if (role === "teacher" || role === "teacher_admin") return TEACHER_STEPS;
+// En escritorio la guía sigue el orden de la barra lateral (NavBar.tsx); en móvil, el de las pestañas y luego «Más».
+// Bienvenida y cierre se quedan al principio y al final; un paso que no esté en la lista se queda tras los demás.
+const DESKTOP_ORDER: Record<"student" | "teacher", string[]> = {
+  student: ["home", "chat", "schedule", "availability", "classes", "materials", "homework", "teachers", "support", "profile"],
+  teacher: ["classes", "chat", "notifications", "availability", "students", "materials", "homework", "packages", "cohorts", "wallet", "support", "profile"],
+};
+
+function orderForDesktop(steps: TourStep[], order: string[]): TourStep[] {
+  const rank = (st: TourStep) => { const i = order.indexOf(st.id); return i === -1 ? order.length : i; };
+  const middle = steps.filter((st) => st.target !== null).sort((a, b) => rank(a) - rank(b));   // sort es estable
+  return [steps[0], ...middle, steps[steps.length - 1]];
+}
+
+export const STUDENT_STEPS_DESKTOP = orderForDesktop(STUDENT_STEPS, DESKTOP_ORDER.student);
+export const TEACHER_STEPS_DESKTOP = orderForDesktop(TEACHER_STEPS, DESKTOP_ORDER.teacher);
+
+/** `desktop`: orden de la barra lateral (≥ md). Por defecto, el orden móvil. */
+export function stepsForRole(role?: string, desktop = false): TourStep[] {
+  if (role === "student") return desktop ? STUDENT_STEPS_DESKTOP : STUDENT_STEPS;
+  if (role === "teacher" || role === "teacher_admin") return desktop ? TEACHER_STEPS_DESKTOP : TEACHER_STEPS;
   return [];
 }

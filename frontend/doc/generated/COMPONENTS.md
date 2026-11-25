@@ -32,7 +32,7 @@
 - `components/landing/TeacherVideosCarousel.tsx` (135 líneas, referenciado en 2 archivos) — exports: VideoTeacher, TeacherVideosCarousel
 - `components/layout/CalendarPicker.tsx` (156 líneas, referenciado en 1 archivos) — exports: CalendarPicker
 - `components/layout/DashboardTopbar.tsx` (100 líneas, referenciado en 3 archivos) — exports: DashboardTopbarVariant, DashboardTopbar
-- `components/layout/NavBar.tsx` (489 líneas, referenciado en 8 archivos) — exports: DashboardSidebar
+- `components/layout/NavBar.tsx` (489 líneas, referenciado en 9 archivos) — exports: DashboardSidebar
 - `components/layout/VerifyEmailBanner.tsx` (68 líneas, referenciado en 3 archivos) — exports: VerifyEmailBanner
 - `components/legal/PrivacyContent.tsx` (483 líneas, referenciado en 2 archivos) — exports: PrivacyContent
 - `components/legal/TermsContent.tsx` (418 líneas, referenciado en 2 archivos) — exports: TermsContent
@@ -47,11 +47,11 @@
 - `components/support/SupportTicketModal.tsx` (187 líneas, referenciado en 3 archivos) — exports: SupportTicketModal
 - `components/support/SupportTicketsView.tsx` (147 líneas, referenciado en 3 archivos) — exports: SupportTicketsView
 - `components/teacher/PublicProfileView.tsx` (480 líneas, referenciado en 3 archivos) — exports: PublicProfileTeacher, PublicProfileReview, displayTeacherName, PublicProfileView
-- `components/tour/ProductTour.tsx` (240 líneas, referenciado en 2 archivos) — exports: ProductTour
+- `components/tour/ProductTour.tsx` (263 líneas, referenciado en 3 archivos) — exports: ProductTour
 - `components/tour/ReplayTourButton.tsx` (24 líneas, referenciado en 3 archivos) — exports: ReplayTourButton
-- `components/tour/TourHost.tsx` (32 líneas, referenciado en 3 archivos) — exports: TourHost
+- `components/tour/TourHost.tsx` (39 líneas, referenciado en 4 archivos) — exports: TourHost
 - `components/tour/resolveTarget.ts` (24 líneas, referenciado en 3 archivos) — exports: resolveVisibleTarget, waitForVisibleTarget — Primer elemento que coincide con `selector` y está visible. Sidebar y pestañas móviles comparten `data-tour`, y el  que no corresponde al tamaño de pantalla est
-- `components/tour/tourSteps.ts` (62 líneas, referenciado en 6 archivos) — exports: TourStep, navTarget, STUDENT_STEPS, TEACHER_STEPS, stepsForRole
+- `components/tour/tourSteps.ts` (79 líneas, referenciado en 7 archivos) — exports: TourStep, navTarget, STUDENT_STEPS, TEACHER_STEPS, STUDENT_STEPS_DESKTOP, TEACHER_STEPS_DESKTOP, stepsForRole
 - `components/tour/tourStore.ts` (13 líneas, referenciado en 4 archivos) — exports: useTourStore
 - `components/ui/Badge.tsx` (29 líneas, referenciado en 19 archivos) — exports: Badge
 - `components/ui/BottomSheet.tsx` (50 líneas, referenciado en 3 archivos) — exports: BottomSheet
@@ -96,7 +96,7 @@
 
 ## store/
 
-- `store/authStore.ts` (94 líneas, referenciado en 49 archivos) — exports: User, useAuthStore
+- `store/authStore.ts` (94 líneas, referenciado en 50 archivos) — exports: User, useAuthStore
 - `store/chatStore.ts` (581 líneas, referenciado en 13 archivos) — exports: ChatMessageStatus, ChatMessage, reconnectDelay, onChatMessage, useChatStore — store/chatStore.ts N3: reemplaza la conexión WS "por conversación" de hooks/useChat.ts por UNA sola conexión GLOBAL por sesión (ver backend/app/core/chat_ws.py 
 - `store/chatWidgetPresenceStore.ts` (28 líneas, referenciado en 2 archivos) — exports: useChatWidgetPresenceStore — store/chatWidgetPresenceStore.ts N2 (ubicación del ChatWidget): puente mínimo para que ChipiWidget sepa, SIN que cada una de las ~40 páginas que lo montan tenga
 - `store/toastStore.ts` (66 líneas, referenciado en 6 archivos) — exports: ToastVariant, ToastItem, ToastOptions, useToastStore, toast

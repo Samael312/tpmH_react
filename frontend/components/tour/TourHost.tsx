@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import ProductTour from "./ProductTour";
@@ -15,8 +15,15 @@ import { stepsForRole } from "./tourSteps";
 export default function TourHost() {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
-  const steps = stepsForRole(user?.role);
-  const open = !!user && steps.length > 0 && user.onboarding_completed === true && user.tour_completed === false;
+  const role = user?.role;
+  const open = !!user && stepsForRole(role).length > 0 && user.onboarding_completed === true && user.tour_completed === false;
+  // El orden de los pasos se fija al abrir (escritorio: orden de la barra lateral; móvil: pestañas y «Más»); no cambia
+  // durante la guía aunque se gire el dispositivo. Sin matchMedia (jsdom, servidor) se usa el orden móvil.
+  const desktop = useMemo(
+    () => open && typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(min-width: 768px)").matches,
+    [open],
+  );
+  const steps = useMemo(() => stepsForRole(role, desktop), [role, desktop]);
 
   // Terminar y saltar hacen lo mismo. Un fallo del PATCH no bloquea: la guía ya se cerró y, si el servidor no se
   // enteró, volverá a salir en la próxima sesión.

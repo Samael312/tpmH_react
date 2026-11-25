@@ -35,6 +35,7 @@ export default function ProductTour({ steps, open, onFinish, onSkip }: Props) {
   const targetRef = useRef<HTMLElement | null>(null);
   const busy = useRef(false);
   const runRef = useRef(0);   // cada recorrido de pasos tiene su id; cerrar la guía lo invalida
+  const rootRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -61,7 +62,7 @@ export default function ProductTour({ steps, open, onFinish, onSkip }: Props) {
         return i;
       }
       // Un ítem de «Más» puede estar ya visible (escritorio, o panel abierto por el paso anterior): no se toca el panel.
-      if (!st.more) setMore(false);
+      if (!st.more || !isMobileLayout()) setMore(false);
       let el = resolveVisibleTarget(st.target);
       if (!el && st.more && isMobileLayout()) {
         setMore(true);
@@ -97,10 +98,24 @@ export default function ProductTour({ steps, open, onFinish, onSkip }: Props) {
   }, [settle, onFinish]);
 
   // Foco previo: se captura ANTES de que la tarjeta tome el foco (este efecto va antes que el de «Siguiente»).
+  // Mientras la guía está abierta el resto de la página queda `inert`: con un clic en el fondo, Tab ya no entra en el
+  // menú. El orden importa: primero se guarda el foco (inert lo sacaría) y al cerrar se quita inert antes de devolverlo.
   useLayoutEffect(() => {
     if (!open) return;
     previousFocus.current = document.activeElement as HTMLElement | null;
-    return () => previousFocus.current?.focus?.();
+    const root = rootRef.current;
+    const inerted: Element[] = [];
+    if (root) {
+      for (const el of Array.from(document.body.children)) {
+        if (el === root || el.contains(root) || el.hasAttribute("inert")) continue;
+        el.setAttribute("inert", "");
+        inerted.push(el);
+      }
+    }
+    return () => {
+      inerted.forEach((el) => el.removeAttribute("inert"));
+      previousFocus.current?.focus?.();
+    };
   }, [open]);
 
   // Apertura: cuántos pasos son utilizables (para «n de N») y primer paso.
@@ -126,14 +141,22 @@ export default function ProductTour({ steps, open, onFinish, onSkip }: Props) {
     const until = Date.now() + 450;
     const loop = () => { measure(); if (Date.now() < until) raf = requestAnimationFrame(loop); };
     loop();
-    window.addEventListener("resize", measure);
+    // Al cruzar el corte `md` (girar el móvil) el elemento medido pasa a display:none y el equivalente del otro
+    // diseño es otro nodo: se vuelve a resolver el paso en vez de medir un elemento oculto (recorte en -8,-8).
+    const relayout = () => {
+      const st = stepsRef.current[index];
+      const el = targetRef.current;
+      if (st?.target && (!el || !el.isConnected || el.getClientRects().length === 0)) { void go(index, 1); return; }
+      measure();
+    };
+    window.addEventListener("resize", relayout);
     window.addEventListener("scroll", measure, true);
     return () => {
       cancelAnimationFrame(raf);
-      window.removeEventListener("resize", measure);
+      window.removeEventListener("resize", relayout);
       window.removeEventListener("scroll", measure, true);
     };
-  }, [open, index, measure]);
+  }, [open, index, measure, go]);
 
   useLayoutEffect(() => {
     if (open) nextRef.current?.focus();
@@ -187,7 +210,7 @@ export default function ProductTour({ steps, open, onFinish, onSkip }: Props) {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[80]" data-testid="product-tour">
+    <div ref={rootRef} className="fixed inset-0 z-[80]" data-testid="product-tour">
       {/* Absorbe los clics: durante la guía el menú resaltado no navega. */}
       <div className={`absolute inset-0 ${box ? "" : "bg-slate-900/60"}`} />
       {box && (

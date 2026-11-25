@@ -201,6 +201,57 @@ describe("ProductTour", () => {
     expect(useTourStore.getState().forceMoreOpen).toBe(false);
   });
 
+  it("girar el móvil a mitad de la guía: el recorte pasa al elemento visible del otro diseño", async () => {
+    document.querySelectorAll("[data-tour]").forEach((n) => n.remove());
+    const tabs = el("a", true, { top: 700, left: 20, width: 60, height: 40 });      // pestaña móvil (< md)
+    const side = el("a", false, { top: 150, left: 10, width: 200, height: 40 });    // menú lateral (≥ md), oculto
+    const { user } = setup(STEPS.slice(0, 2));
+    await user.click(await screen.findByRole("button", { name: "Siguiente" }));
+    const spot = await screen.findByTestId("tour-spotlight");
+    await waitFor(() => expect(spot.style.top).toBe("692px"));
+    // se cruza el corte md: la pestaña pasa a display:none y aparece el lateral
+    tabs.getClientRects = (() => []) as unknown as () => DOMRectList;
+    side.getClientRects = (() => [{}]) as unknown as () => DOMRectList;
+    act(() => { window.dispatchEvent(new Event("resize")); });
+    await waitFor(() => expect(spot.style.top).toBe("142px"));
+    expect(spot.style.left).toBe("2px");
+    expect(screen.getByText("Opción A")).toBeInTheDocument();                         // sigue en el mismo paso
+  });
+
+  it("un cambio de tamaño con el elemento aún visible solo vuelve a medir", async () => {
+    document.querySelectorAll("[data-tour]").forEach((n) => n.remove());
+    const a = el("a", true, { top: 100, left: 50, width: 80, height: 40 });
+    const { user } = setup(STEPS.slice(0, 2));
+    await user.click(await screen.findByRole("button", { name: "Siguiente" }));
+    const spot = await screen.findByTestId("tour-spotlight");
+    a.getBoundingClientRect = () => ({ top: 300, left: 50, width: 80, height: 40, right: 130, bottom: 340, x: 50, y: 300, toJSON() {} }) as DOMRect;
+    act(() => { window.dispatchEvent(new Event("resize")); });
+    await waitFor(() => expect(spot.style.top).toBe("292px"));
+  });
+
+  it("mientras la guía está abierta el resto de la página es inert y se restaura al cerrar", async () => {
+    const outside = document.createElement("nav");
+    outside.setAttribute("data-opener", "1");
+    document.body.appendChild(outside);
+    const { reopen } = setup();
+    const root = await screen.findByTestId("product-tour");
+    expect(outside).toHaveAttribute("inert");
+    expect(root).not.toHaveAttribute("inert");
+    expect(root.parentElement).not.toHaveAttribute("inert");
+    act(() => reopen(false));
+    expect(outside).not.toHaveAttribute("inert");
+  });
+
+  it("escritorio: un paso «Más» con el elemento visible cierra el panel móvil que hubiera quedado abierto", async () => {
+    document.querySelectorAll("[data-tour]").forEach((n) => n.remove());
+    el("m");
+    useTourStore.setState({ forceMoreOpen: true });
+    const steps: TourStep[] = [{ id: "m", target: sel("m"), title: "En Más", body: "x", more: true }, STEPS[3]];
+    setup(steps);
+    expect(await screen.findByText("En Más")).toBeInTheDocument();
+    expect(useTourStore.getState().forceMoreOpen).toBe(false);
+  });
+
   it("el contador se corrige cuando un paso «Más» resulta no existir", async () => {
     asMobile();
     document.querySelectorAll("[data-tour]").forEach((n) => n.remove());

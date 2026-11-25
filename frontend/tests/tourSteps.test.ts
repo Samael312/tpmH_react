@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { STUDENT_STEPS, TEACHER_STEPS, stepsForRole, navTarget } from "@/components/tour/tourSteps";
+import { STUDENT_STEPS, TEACHER_STEPS, STUDENT_STEPS_DESKTOP, TEACHER_STEPS_DESKTOP, stepsForRole, navTarget } from "@/components/tour/tourSteps";
 
 const words = (s: string) => s.trim().split(/\s+/).length;
 
@@ -43,5 +43,34 @@ describe("stepsForRole", () => {
 
   it("navTarget arma el selector data-tour", () => {
     expect(navTarget("/dashboard/chat")).toBe('[data-tour="nav-/dashboard/chat"]');
+  });
+});
+
+describe("orden en escritorio (barra lateral)", () => {
+  const ids = (steps: { id: string }[]) => steps.map(s => s.id);
+
+  it("alumno: sigue el orden del menú lateral", () => {
+    expect(ids(STUDENT_STEPS_DESKTOP)).toEqual(
+      ["welcome", "home", "chat", "schedule", "availability", "classes", "materials", "homework", "teachers", "support", "profile", "end"]);
+  });
+
+  it("profesor: sigue el orden del menú lateral", () => {
+    expect(ids(TEACHER_STEPS_DESKTOP)).toEqual(
+      ["welcome", "classes", "chat", "notifications", "availability", "students", "materials", "homework", "packages", "cohorts", "wallet", "support", "profile", "end"]);
+  });
+
+  it.each([["student", STUDENT_STEPS, STUDENT_STEPS_DESKTOP], ["teacher", TEACHER_STEPS, TEACHER_STEPS_DESKTOP]])(
+    "%s: mismos pasos que en móvil, solo cambia el orden; bienvenida primero y cierre último", (_r, mobile, desktop) => {
+      expect([...desktop].map(s => s.id).sort()).toEqual([...mobile].map(s => s.id).sort());
+      expect(desktop[0].id).toBe("welcome");
+      expect(desktop[desktop.length - 1].id).toBe("end");
+      expect(desktop).not.toBe(mobile);
+    });
+
+  it("stepsForRole elige el orden según el diseño", () => {
+    expect(stepsForRole("student", true)).toBe(STUDENT_STEPS_DESKTOP);
+    expect(stepsForRole("student", false)).toBe(STUDENT_STEPS);
+    expect(stepsForRole("teacher_admin", true)).toBe(TEACHER_STEPS_DESKTOP);
+    expect(stepsForRole("superadmin", true)).toEqual([]);
   });
 });

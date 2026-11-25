@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 
 /**
@@ -8,10 +11,24 @@ import { defineConfig, devices } from "@playwright/test";
  *
  *   npm run test:e2e
  *
- * Variables: E2E_PYTHON = interprete con las dependencias del backend (por defecto `python`;
- * el comando corre dentro de `backend/`, asi que en Windows suele ser `venv\Scripts\python.exe`).
+ * Variables: E2E_PYTHON = interprete con las dependencias del backend. Si no se define, se usa el del entorno virtual
+ * del backend (`backend/venv` o `backend/.venv`) cuando existe y, si no, `python` (es lo que hace el CI).
  */
-const python = process.env.E2E_PYTHON ?? "python";
+const BACKEND = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../backend");
+
+function findPython(): string {
+  const fromEnv = process.env.E2E_PYTHON?.trim().replace(/^["']|["']$/g, "");
+  if (fromEnv) return fromEnv;
+  for (const venv of ["venv", ".venv"]) {
+    for (const rel of ["Scripts/python.exe", "bin/python"]) {
+      const candidate = path.join(BACKEND, venv, rel);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+  }
+  return "python";
+}
+// Entre comillas: la ruta del entorno virtual puede llevar espacios (cmd.exe y sh lo admiten).
+const python = `"${findPython()}"`;
 
 export default defineConfig({
   testDir: "./e2e",
