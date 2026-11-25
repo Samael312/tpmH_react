@@ -72,14 +72,19 @@ Al cierre aún no había runs de `21787be`.
       En móvil se mantiene el orden de pestañas y «Más». Pruebas en `tests/tourSteps.test.ts` y `tests/components/tourHostOrder.test.tsx`.
 
 ## 7. Riesgos de mantenimiento
-- [x] Cobertura de ramas del frontend subida a 93,24 % (suelo 92 %) el 2026-11-25: pruebas nuevas de `lib/tzFormat.ts` (de 70 % a casi 100 %) y
+- [x] Cobertura de ramas del frontend subida a 94,0 % (suelo 92 %) el 2026-11-25: pruebas nuevas de `lib/tzFormat.ts` (de 70 % a casi 100 %) y
       casos límite de `chatStore` (`tests/components/chatStoreEdge.test.tsx`) y de `teacher/cohorts` (`teacherCohortsGaps.test.tsx`, de
-      44 a 25 ramas sin cubrir). Mayores huecos restantes: `dashboard/schedule`, `admin/settings` (~41 cada una), `teacher/materials` (38)
-      y `teacher/profile` (37).
+      44 a 25 ramas sin cubrir). `teacher/materials` (de 38 a 21), `dashboard/schedule` (41 a 28), `admin/settings` (41 a 33) y `teacher/profile` (37 a 23): ficheros
+      `*Gaps.test.tsx`. Queda margen de 1,8 puntos; lo que falta en esas páginas son guardas defensivas y `??` por defecto. `admin/payments` (21 a 9). `teacher/onboarding` (24 a 20; lo que
+      queda son validaciones que el botón desactivado hace inalcanzables). y `dashboard/profile` del alumno (22 a 19).
+      Trabajo de ramas cerrado el 2026-11-25: lo que queda son guardas y valores por defecto sin forma de alcanzarlos desde la interfaz.
 - [x] Playwright ya no exige `E2E_PYTHON`: `playwright.config.ts` usa `backend/venv` o `backend/.venv` si existen y, si no, `python` (2026-11-25).
       `E2E_PYTHON` sigue mandando cuando se define.
 - [ ] Un `uvicorn --reload` o `next dev` local en los puertos 8000/3000 impide que Playwright arranque su backend semilla
       (`reuseExistingServer: false`): detenerlo antes de lanzar los E2E.
+- [ ] Flaky de Vitest (2026-11-25): `studentSchedule.test.tsx` › «un error al reservar la prueba se muestra» falló 2 de 5 veces al correr el
+      fichero entero (timeout de 4 s en un `findBy`) y 0 de 6 corriéndolo solo; el fichero no está modificado. Probable lentitud acumulada del
+      renderizado de la página, no lógica. Si reaparece en el CI, subir el `timeout` de ese test o partir el fichero.
 - [ ] Flaky local de WebKit en `a11y.spec.ts` (2026-11-25): en una pasada de 24,6 min con Chromium, móvil y WebKit seguidos, el botón de
       login quedó sin habilitar en `/dashboard/homework` (falló también el reintento), `/teacher/dashboard` y `/teacher/profile`
       (pasaron al reintentar). Repetido solo `a11y.spec.ts --project=webkit`: 24 de 24 en verde (3 min). Causa sin investigar (`next dev`
