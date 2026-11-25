@@ -30,6 +30,10 @@ ALLOWED_AUDIO_TYPES = {
     "audio/mp3",
 }
 
+# Audio que genera el propio servidor (TTS en WAV). Solo lo acepta `upload_file`, que no recibe archivos del
+# usuario: NO está en ALL_ALLOWED_TYPES, así que un profesor no puede subir un .wav como material.
+INTERNAL_AUDIO_TYPES = {"audio/wav"}
+
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg",
     "image/png",
@@ -73,6 +77,7 @@ _EXT_BY_TYPE = {
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
     "audio/mpeg": "mp3",
     "audio/mp3": "mp3",
+    "audio/wav": "wav",
     "image/jpeg": "jpg",
     "image/png": "png",
     "image/webp": "webp",
@@ -134,6 +139,9 @@ def _matches_declared_type(file_bytes: bytes, content_type: str) -> bool:
         # Frame header MPEG: byte de sync (0xFF) + versión/capa válidos
         return len(head) >= 2 and head[0] == 0xFF and (head[1] & 0xE0) == 0xE0
 
+    if content_type == "audio/wav":
+        return head[:4] == b"RIFF" and head[8:12] == b"WAVE"
+
     if content_type == "application/msword":
         # Formato binario OLE (.doc viejo)
         return head.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
@@ -176,7 +184,7 @@ def upload_file(
     folder: str = "materials",
     display_name: str | None = None
 ) -> dict:
-    if content_type not in ALL_ALLOWED_TYPES:
+    if content_type not in ALL_ALLOWED_TYPES and content_type not in INTERNAL_AUDIO_TYPES:
         raise ValueError(f"Tipo de archivo no permitido: {content_type}")
 
     _validate_upload(file_bytes[:16], len(file_bytes), content_type)

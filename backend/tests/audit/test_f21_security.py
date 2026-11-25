@@ -576,20 +576,10 @@ def test_m4_tts_upload_does_not_block_event_loop(monkeypatch):
     tts_service._audio_cache.clear()
     seen = {}
 
-    class Resp:
-        content = b"ID3" + b"\x00" * 20
+    async def fake_pcm(word, voice, language):
+        return b"\x00\x00" * 100  # la sesión Realtime se sustituye: solo importa el hilo de la subida
 
-    class Speech:
-        async def create(self, **kw):
-            return Resp()
-
-    class Audio:
-        speech = Speech()
-
-    class Client:
-        audio = Audio()
-
-    monkeypatch.setattr(tts_service, "client", Client())
+    monkeypatch.setattr(tts_service, "_synthesize_pcm", fake_pcm)
 
     def fake_upload(**kw):
         seen["thread"] = threading.current_thread()

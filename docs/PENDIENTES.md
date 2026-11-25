@@ -27,15 +27,29 @@ Al cierre aún no había runs de `21787be`.
 - [ ] Aviso de hidratación de Next en dev («1 Issue», `A tree hydrated but some attributes…`): ya salía en `/login`, antes de que
       hubiera guía, y sube a 3 en el perfil. Parece ajeno a la guía (¿atributos que inyecta la extensión de Chrome?); comprobar con
       la extensión desactivada y mirar el diff del error.
-- [ ] Audio TTS en español: escuchar los mp3 de «pera» generados con `tts-1` y con `gpt-4o-mini-tts`
-      (en el scratchpad de la sesión del 2026-11-24: `old_tts1_pera.mp3`, `new_mini_pera_es.mp3`, `new_mini_pera_es_speed.mp3`).
+- [x] Audio TTS: sustituido por la prueba de Realtime (2026-11-25): escuchados español, francés, portugués y alemán; bien.
 - [ ] Probar un vocabulario real en otros idiomas del catálogo (francés, portugués, alemán…) y ajustar `_ENGLISH_NAMES` si falta alguno.
 
 ## 4. TTS: decisiones abiertas
-- [ ] Los vocabularios existentes quedan sin idioma (suenan como antes) hasta que el profesor lo elija en «Editar palabras».
-      Opción: asignación masiva de idioma (script o pantalla de admin).
-- [ ] Verificar el precio de `gpt-4o-mini-tts` frente a `tts-1` antes de generar audios en volumen
-      (ver `backend/doc/RESOURCE_COSTS.md`, que hoy solo describe `tts-1`).
+- [x] Asignación masiva de idioma a vocabularios existentes: no necesaria. Al lanzar se formatea la BD y se configura de cero.
+- [x] Precio de `gpt-4o-mini-tts` frente a `tts-1` (2026-11-25): documentado en `backend/doc/RESOURCE_COSTS.md` §6 y en `tts_service.py`.
+- [x] **Migración del TTS a la API Realtime (2026-11-25).** OpenAI apaga `tts-1`, `tts-1-hd` y `gpt-4o-mini-tts` el 2027-01-06; el
+      sustituto, `gpt-realtime-2.1-mini`, no sirve para `/v1/audio/speech`. Hecho en `core/tts_service.py`: sesión Realtime por
+      palabra (solo audio, voz `marin` para `nova`, idioma del vocabulario en la instrucción; sin idioma la palabra se dice en su
+      propio idioma), audio en WAV (`core/storage.py::INTERNAL_AUDIO_TYPES`, no admitido como subida de usuario), cola global de
+      `TTS_MAX_CONCURRENCY` (5, ajustable) sesiones simultáneas, tiempo máximo por palabra y 1 reintento. `speed` ya no se usa
+      (solo en la clave de caché). Pruebas: `tests/audit/test_h1_tts_language.py` (servicio con sesión Realtime simulada: WAV válido, voces, cola de 5 en 5, reintento, tiempo máximo, lote con fallos).
+      Prueba previa (4 palabras): ~$0,00038 por palabra (~$0,38 por 1000), latencia 3,5-5,6 s, sin cargo aparte por abrir sesión.
+      Reproducción comprobada en Chromium y WebKit con un `<audio>` como el de `materials/page.tsx` (WAV servido con
+      `Content-Type: audio/wav` y Range).
+- [x] Cloudinary real (2026-11-25): un WAV subido con `core.storage.upload_file` (`resource_type="auto"`) queda como `video`/`wav`,
+      se sirve con `Content-Type: audio/wav`, `Accept-Ranges: bytes` (responde 206 a `Range`) y CORS `*`; empieza por `RIFF…WAVE`.
+      `media-src` de la CSP ya permite `res.cloudinary.com`. La prueba se borró de Cloudinary al terminar.
+- [ ] Probar un vocabulario real de 20-50 palabras a través de la API
+      (`POST /tts/vocabulary/{id}`) para medir el tiempo total con la cola de 5 y ver si la cuenta de OpenAI aguanta 5 sesiones a la vez.
+- [ ] Confirmar el cargo real de las pruebas en el panel de uso de OpenAI (el coste de arriba es el calculado con las tarifas publicadas).
+- [ ] Valorar un indicador de progreso en el frontend: un vocabulario de 50 palabras sin caché tarda ~40-50 s con la cola de 5
+      (hoy la pantalla de materiales solo muestra «cargando»).
 
 ## 5. Deudas de negocio ya documentadas (`docs/TENANT_MODES_AUDIT.md`)
 - [ ] **T1:** en modo single, los créditos con otros profesores quedan invisibles e inusables en la interfaz.
@@ -65,3 +79,8 @@ Al cierre aún no había runs de `21787be`.
 - [ ] Playwright en Windows necesita `E2E_PYTHON=venv\Scripts\python.exe` (anotado en `frontend/doc/TESTING.md`).
 - [ ] Un `uvicorn --reload` o `next dev` local en los puertos 8000/3000 impide que Playwright arranque su backend semilla
       (`reuseExistingServer: false`): detenerlo antes de lanzar los E2E.
+- [ ] Flaky local de WebKit en `a11y.spec.ts` (2026-11-25): en una pasada de 24,6 min con Chromium, móvil y WebKit seguidos, el botón de
+      login quedó sin habilitar en `/dashboard/homework` (falló también el reintento), `/teacher/dashboard` y `/teacher/profile`
+      (pasaron al reintentar). Repetido solo `a11y.spec.ts --project=webkit`: 24 de 24 en verde (3 min). Causa sin investigar (`next dev`
+      compilando en frío con la máquina cargada). El job `webkit` del CI (compilación de producción) pasa. Si reaparece, mirar la traza
+      (`npx playwright show-trace`) para ver qué petición de login queda colgada.

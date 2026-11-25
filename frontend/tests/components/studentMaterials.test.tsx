@@ -117,14 +117,14 @@ describe("Materiales (alumno) · progreso", () => {
 });
 
 describe("Materiales (alumno) · vocabulario con audio", () => {
-  const urls = { manzana: "https://a/m.mp3", pera: null, uva: "https://a/u.mp3" };
+  const urls = { manzana: "https://a/m.wav", pera: null, uva: "https://a/u.wav" };
 
   it("una palabra pide el audio una vez, lo reproduce y lo marca mientras suena", async () => {
     mockApi("post", "/tts/vocabulary/50", { audio_urls: urls });
     const { user } = setup([VOCAB]);
     await user.click(await screen.findByRole("button", { name: /manzana/ }));
     await waitFor(() => expect(play).toHaveBeenCalledTimes(1));
-    expect(audio().src).toBe("https://a/m.mp3");
+    expect(audio().src).toBe("https://a/m.wav");
     expect(callsTo("post", "/tts/vocabulary/50")).toHaveLength(1);
     act(() => { audio().onended?.(new Event("ended")); });
     await user.click(screen.getByRole("button", { name: /uva/ }));
@@ -153,11 +153,11 @@ describe("Materiales (alumno) · vocabulario con audio", () => {
     const { user } = setup([VOCAB]);
     await user.click(await screen.findByRole("button", { name: /Escuchar todo/ }));
     await waitFor(() => expect(play).toHaveBeenCalledTimes(1));
-    expect(audio().src).toBe("https://a/m.mp3");
+    expect(audio().src).toBe("https://a/m.wav");
     expect(screen.getByRole("button", { name: /Detener/ })).toBeInTheDocument();
     act(() => { audio().onended?.(new Event("ended")); }); // pasa a «pera» (sin audio) y salta a «uva»
     await waitFor(() => expect(play).toHaveBeenCalledTimes(2));
-    expect(audio().src).toBe("https://a/u.mp3");
+    expect(audio().src).toBe("https://a/u.wav");
     act(() => { audio().onended?.(new Event("ended")); });
     await waitFor(() => expect(screen.getByRole("button", { name: /Escuchar todo/ })).toBeInTheDocument());
   });

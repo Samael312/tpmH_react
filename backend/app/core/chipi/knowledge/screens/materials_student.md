@@ -21,6 +21,7 @@ Solo ves lo que tu profesor te asignó. La barra de progreso cuenta los marcados
 
 ## Casos límite
 «No se encontraron materiales»: nada asignado aún o el filtro es muy estricto.
+El audio del vocabulario se genera la primera vez que lo pides: puede tardar unos segundos (hasta casi un minuto en sets de 50 palabras). Espera a que termine la carga; después responde más rápido. Si una palabra no suena, vuelve a pulsar «Escuchar todo» pasado un momento.
 
 ## Cuándo escalar
 Si no se resuelve, abrir un ticket: enlace «Habla con soporte» del chat o «Nuevo ticket» en Soporte.

@@ -70,6 +70,10 @@ Cuenta de prueba sin tocar la BD real: `python -m tests.audit.run_server` (SQLit
 | `API_GZIP_MIN_BYTES` | `1000` | no | tamaño mínimo (bytes) para comprimir con gzip las respuestas de la API (`app/main.py`); `0` la desactiva | no comprime `text/event-stream` (streaming de Chipi) |
 | `SLOW_REQUEST_MS` | `1500` | no | umbral (ms) para avisar en el log de las peticiones lentas (`app/core/request_timing.py`); `0` desactiva el aviso (la cabecera `Server-Timing` se envía siempre) | busca `Peticion lenta` en los logs de Railway |
 | `TTS_CACHE_FOLDER` | `tts_cache` | no | carpeta Cloudinary del audio cacheado | |
+| `TTS_REALTIME_MODEL` | `gpt-realtime-2.1-mini` | no | modelo Realtime que genera el audio de las palabras (`core/tts_service.py`); sustituye a `tts-1`/`gpt-4o-mini-tts`, que OpenAI apaga el 2027-01-06 | |
+| `TTS_MAX_CONCURRENCY` | `5` | no | sesiones Realtime simultáneas en todo el servidor; un lote de 20 palabras se genera de 5 en 5 | subirlo acelera los lotes pero consume los límites de OpenAI |
+| `TTS_WORD_TIMEOUT_SECONDS` | `45` | no | tiempo máximo por palabra (abrir sesión + generar) | |
+| `TTS_WORD_ATTEMPTS` | `2` | no | intentos por palabra ante un fallo de red o de sesión | |
 | `GOOGLE_CLIENT_ID` | definida | para Google | login GSI y Calendar | debe ser el **mismo** que `NEXT_PUBLIC_GOOGLE_CLIENT_ID` |
 | `GOOGLE_CLIENT_SECRET` | definida | Calendar | intercambio OAuth | |
 | `GOOGLE_REDIRECT_URI` | `http://localhost:3000/teacher/calendar/callback` (antes `http://tuprofemaria.com/...`) | Calendar | callback OAuth | ver ⚠5 |

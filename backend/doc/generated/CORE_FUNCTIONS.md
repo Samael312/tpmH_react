@@ -351,14 +351,14 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/storage.py
 
-- `_slugify(text: str)` — L88
-- `_matches_declared_type(file_bytes: bytes, content_type: str)` — L109
-- `_resource_type_for(content_type: str)` — L156: Determina el resource_type correcto de Cloudinary según el content_type. Crítico para video: si se sube con resource_type="auto" (o "raw"), Cloudinary puede aplicarle el límite de tamaño de imagen/raw del plan (mucho más bajo) en vez del límite específico para video.
-- `upload_file(file_bytes: bytes, filename: str, content_type: str, folder: str='materials', display_name: str | None=None)` — L172
-- `_validate_upload(head: bytes, size: int, content_type: str, max_bytes: int | None=None)` — L186: Valida tamano y firma (magic bytes) sin necesitar el archivo completo.
-- `upload_file_stream(fileobj, filename: str, content_type: str, folder: str='materials', display_name: str | None=None, allowed_types: set | frozenset | None=Non)` — L209: Igual que upload_file, pero recibe un objeto tipo archivo (p. ej. `UploadFile.file`, que Starlette ya guarda en disco si pasa de 1 MB) en vez de bytes: el archivo nunca se carga entero en RAM. Valida tamano y firma ANTES de enviar nada, y los videos se suben por trozos (`upload_large`).
-- `_send_to_cloudinary(data, filename: str, content_type: str, folder: str, display_name: str | None)` — L242: `data` puede ser bytes o un objeto tipo archivo.
-- `delete_file(public_id: str, resource_type: str='image')` — L278
+- `_slugify(text: str)` — L93
+- `_matches_declared_type(file_bytes: bytes, content_type: str)` — L114
+- `_resource_type_for(content_type: str)` — L164: Determina el resource_type correcto de Cloudinary según el content_type. Crítico para video: si se sube con resource_type="auto" (o "raw"), Cloudinary puede aplicarle el límite de tamaño de imagen/raw del plan (mucho más bajo) en vez del límite específico para video.
+- `upload_file(file_bytes: bytes, filename: str, content_type: str, folder: str='materials', display_name: str | None=None)` — L180
+- `_validate_upload(head: bytes, size: int, content_type: str, max_bytes: int | None=None)` — L194: Valida tamano y firma (magic bytes) sin necesitar el archivo completo.
+- `upload_file_stream(fileobj, filename: str, content_type: str, folder: str='materials', display_name: str | None=None, allowed_types: set | frozenset | None=Non)` — L217: Igual que upload_file, pero recibe un objeto tipo archivo (p. ej. `UploadFile.file`, que Starlette ya guarda en disco si pasa de 1 MB) en vez de bytes: el archivo nunca se carga entero en RAM. Valida tamano y firma ANTES de enviar nada, y los videos se suben por trozos (`upload_large`).
+- `_send_to_cloudinary(data, filename: str, content_type: str, folder: str, display_name: str | None)` — L250: `data` puede ser bytes o un objeto tipo archivo.
+- `delete_file(public_id: str, resource_type: str='image')` — L286
 
 ## app/core/student_overlap.py
 
@@ -389,12 +389,17 @@ Las que empiezan por `_` son privadas del módulo.
 
 ## app/core/tts_service.py
 
-- `_clean_language(language: str | None)` — L42: Idioma sin espacios sobrantes; vacío o nulo -> None (comportamiento anterior).
-- `english_language_name(language: str)` — L48: Nombre en inglés de un idioma del catálogo, para la instrucción del TTS.
-- `_get_cache_key(word: str, voice: str, speed: float, language: str | None=None)` — L53: Genera una clave única para cada combinación de palabra + voz + velocidad (+ idioma). Usamos hash para tener claves cortas y consistentes. Sin idioma la clave es la de siempre (los audios ya generados se siguen reutilizando); con idioma, la misma palabra en dos idiomas no comparte audio.
-- `count_cached(words: list[str], voice: str=DEFAULT_VOICE, speed: float=DEFAULT_SPEED, language: str | None=None)` — L66: Cuantas de estas palabras ya tienen audio en cache (consultar ANTES de generar, para informar cached).
-- `async generate_word_audio(word: str, voice: str=DEFAULT_VOICE, speed: float=DEFAULT_SPEED, language: str | None=None)` — L72: Genera audio de alta calidad para una palabra usando OpenAI TTS. Cachea el resultado en Cloudinary para no regenerar.
-- `async generate_batch_audio(words: list[str], voice: str=DEFAULT_VOICE, speed: float=DEFAULT_SPEED, language: str | None=None)` — L147: Genera audio para múltiples palabras de forma eficiente. Solo genera las que no están en caché.
+- `_semaphore()` — L60
+- `_clean_language(language: str | None)` — L68: Idioma sin espacios sobrantes; vacío o nulo -> None (la palabra se dice en su propio idioma).
+- `english_language_name(language: str)` — L74: Nombre en inglés de un idioma del catálogo, para la instrucción del TTS.
+- `realtime_voice(voice: str)` — L79: Voz Realtime equivalente a una voz de nuestra API.
+- `_instructions(language: str | None)` — L84: Instrucción de sesión: dice SOLO la palabra, una vez, con acento nativo.
+- `pcm_to_wav(pcm: bytes, sample_rate: int=PCM_SAMPLE_RATE)` — L98: PCM de 16 bits mono -> archivo WAV (lo reproduce cualquier navegador con <audio>, sin librerías extra).
+- `_get_cache_key(word: str, voice: str, speed: float, language: str | None=None)` — L109: Genera una clave única para cada combinación de palabra + voz + velocidad (+ idioma). Usamos hash para tener claves cortas y consistentes. Sin idioma la clave es la de siempre; con idioma, la misma palabra en dos idiomas no comparte audio.
+- `count_cached(words: list[str], voice: str=DEFAULT_VOICE, speed: float=DEFAULT_SPEED, language: str | None=None)` — L122: Cuantas de estas palabras ya tienen audio en cache (consultar ANTES de generar, para informar cached).
+- `async _synthesize_pcm(word: str, voice: str, language: str | None)` — L128: Una sesión Realtime (solo audio) que dice la palabra. Devuelve el PCM de 16 bits a 24 kHz.
+- `async generate_word_audio(word: str, voice: str=DEFAULT_VOICE, speed: float=DEFAULT_SPEED, language: str | None=None)` — L160: Genera audio para una palabra con la API Realtime de OpenAI (sesión por palabra, solo audio, formato WAV). Cachea el resultado en Cloudinary para no regenerar.
+- `async generate_batch_audio(words: list[str], voice: str=DEFAULT_VOICE, speed: float=DEFAULT_SPEED, language: str | None=None)` — L232: Genera audio para múltiples palabras de forma eficiente. Solo genera las que no están en caché. Se generan en cola de `TTS_MAX_CONCURRENCY` en `TTS_MAX_CONCURRENCY` (por defecto de 5 en 5): las demás esperan su turno dentro de `generate_word_audio`.
 
 ## app/core/upload_quota.py
 

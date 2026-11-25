@@ -108,7 +108,7 @@
 - `lib/classStatusNotice.ts` (86 líneas, referenciado en 3 archivos) — exports: MANUAL_STATUS_WINDOW_HOURS, finalizedNotice, PendingToMark, pendingToMark, pendingToMarkText, CLASS_STATUS_TRANSITIONS, manualStatusTargets — Misma ventana que `CLASS_STATUS_WINDOW_HOURS` del backend (`class_logic.py`).
 - `lib/cloudinaryImage.ts` (41 líneas, referenciado en 3 archivos) — exports: withWidthParam, cloudinaryOptimized — Imágenes de Cloudinary optimizadas por el propio Cloudinary (Fase 11). Con el optimizador de Next.js cada imagen se descarga de Cloudinary, se recodifica en el 
 - `lib/color.ts` (36 líneas, referenciado en 30 archivos) — exports: hexToRgb, shadeColor, DEFAULT_THEME_COLOR, THEME_PRESETS
-- `lib/csp.ts` (56 líneas, referenciado en 4 archivos) — exports: buildCsp — Content-Security-Policy con nonce por petición (SEC-05, paso final). La construye proxy.ts en cada respuesta de página (ver node_modules/next/dist/docs/01-app/0
+- `lib/csp.ts` (58 líneas, referenciado en 4 archivos) — exports: buildCsp — Content-Security-Policy con nonce por petición (SEC-05, paso final). La construye proxy.ts en cada respuesta de página (ver node_modules/next/dist/docs/01-app/0
 - `lib/displayName.ts` (11 líneas, referenciado en 6 archivos) — exports: displayName
 - `lib/emailSettings.ts` (86 líneas, referenciado en 4 archivos) — exports: EmailProbability, EmailCategory, EmailSettings, PROBABILITY_LABEL, PROBABILITY_STYLE, quotaPercent, usageLabel, alertMessage, buildUpdate — Fase 7: lógica pura del panel de control de correos (sin React, testeable con Vitest).
 - `lib/errorMessage.ts` (41 líneas, referenciado en 51 archivos) — exports: getErrorMessage

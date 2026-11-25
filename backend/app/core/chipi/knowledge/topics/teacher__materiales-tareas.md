@@ -8,7 +8,7 @@ Subes materiales en /teacher/materials: documentos hasta 10 MB y videos hasta 10
 
 ## Casos límite
 - Los archivos PowerPoint desde el navegador pueden fallar al subirse.
-- El audio de vocabulario (TTS) permite hasta 50 palabras por petición.
+- El audio de vocabulario (TTS) permite hasta 50 palabras por petición. Se genera con IA la primera vez que se reproduce (unas 5 palabras a la vez, así que un set grande tarda hasta casi un minuto) y el idioma elegido en el vocabulario fija la pronunciación.
 
 ## Cuándo escalar
 Si un archivo válido no sube, ticket a Soporte con el nombre y tamaño del archivo.
