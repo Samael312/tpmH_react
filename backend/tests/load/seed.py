@@ -100,7 +100,7 @@ def main(n_students: int, n_teachers: int) -> None:
     db.commit()
 
     def hdr(user):
-        return {"Authorization": f"Bearer {create_access_token(user.id, user.role.value)}"}
+        return {"Cookie": f"tpm_access={create_access_token(user.id, user.role.value)}"}
 
     # El primer método de pago habilitado en esta BD (no se toca la configuración).
     cfg = db.query(PaymentConfig).first()

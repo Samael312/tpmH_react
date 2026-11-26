@@ -300,7 +300,8 @@ def test_ws_frame_and_rate_limits(client, world, db):
     from app.api.v1.endpoints import chat as chat_mod
     assert chat_mod.WS_MAX_FRAME_CHARS == 20_000 and chat_mod.WS_MAX_SENDS_PER_WINDOW == 20
     token = create_access_token(world["s_user"].id, "student")
-    with client.websocket_connect(f"{API}/chat/ws?token={token}") as ws:
+    from app.auth.session import ACCESS_COOKIE
+    with client.websocket_connect(f"{API}/chat/ws", headers={"cookie": f"{ACCESS_COOKIE}={token}"}) as ws:
         ws.send_text("x" * (chat_mod.WS_MAX_FRAME_CHARS + 1))
         assert "grande" in ws.receive_json()["detail"].lower()
         # 20 envíos (sin conversación -> error de falta de conversation_id) y el 21º se frena por frecuencia

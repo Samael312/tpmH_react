@@ -63,11 +63,10 @@ app.add_middleware(
 )
 
 # SEC-05 (CSRF): con sesion por cookie, una peticion que MUTA datos y trae un Origin ajeno se rechaza. SameSite=Lax ya
-# bloquea el envio de cookies en POST entre sitios; esto cubre ademas subdominios/navegadores antiguos. Las
-# peticiones con cabecera Authorization (clientes API) no usan cookies, asi que no estan sujetas a CSRF.
+# bloquea el envio de cookies en POST entre sitios; esto cubre ademas subdominios/navegadores antiguos.
 @app.middleware("http")
 async def reject_foreign_origin_with_cookies(request: Request, call_next):
-    if request.method in ("POST", "PUT", "PATCH", "DELETE") and "authorization" not in request.headers:
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
         uses_cookies = ACCESS_COOKIE in request.cookies or REFRESH_COOKIE in request.cookies
         origin = (request.headers.get("origin") or "").rstrip("/")
         if uses_cookies and origin and origin not in allowed_origins():

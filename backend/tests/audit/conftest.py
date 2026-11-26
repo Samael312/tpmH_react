@@ -118,7 +118,7 @@ def _mk_user(db, role, username):
 
 
 def hdr(user):
-    return {"Authorization": f"Bearer {create_access_token(user.id, user.role.value if hasattr(user.role,'value') else user.role)}"}
+    return {"Cookie": f"tpm_access={create_access_token(user.id, user.role.value if hasattr(user.role,'value') else user.role)}"}
 
 
 @pytest.fixture

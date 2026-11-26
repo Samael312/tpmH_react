@@ -66,7 +66,7 @@ def allowed_origins() -> list[str]:
 
 
 def set_auth_cookies(response: Response, user: User, db: Session, family_id: Optional[str] = None) -> str:
-    """Crea access + refresh, guarda el hash del refresh y fija las cookies. Devuelve el access token."""
+    """Crea access + refresh, guarda el hash del refresh y fija las cookies. Devuelve el access token (solo para uso interno/tests; no se envia en el JSON)."""
     access = create_access_token(user.id, user.role)
     raw_refresh = secrets.token_urlsafe(48)
     refresh_seconds = int(settings.REFRESH_TOKEN_EXPIRE_DAYS) * 86400
@@ -157,8 +157,5 @@ def revoke_refresh_family(db: Session, raw: Optional[str]) -> None:
 
 
 def token_from_request(request: Request) -> Optional[str]:
-    """Token de acceso de la peticion: cabecera Authorization (clientes API / transicion) o cookie."""
-    auth = request.headers.get("authorization", "")
-    if auth.lower().startswith("bearer ") and auth[7:].strip():
-        return auth[7:].strip()
+    """Token de acceso de la peticion: solo la cookie HttpOnly (SEC-05; ya no se acepta Authorization)."""
     return request.cookies.get(ACCESS_COOKIE)

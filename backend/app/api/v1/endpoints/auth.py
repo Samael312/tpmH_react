@@ -160,9 +160,8 @@ def register(request: Request, response: Response, data: RegisterRequest, db: Se
 
     send_welcome_email(to_email=user.email, user_name=user.name, role=user.role)
     _issue_verification_email(user, db)
-    token = set_auth_cookies(response, user, db)  # SEC-05: sesion en cookies HttpOnly (el JSON se mantiene en la transicion)
+    set_auth_cookies(response, user, db)  # SEC-05: sesion solo en cookies HttpOnly; el JSON ya no lleva el token
     return TokenResponse(
-        access_token=token,
         user_id=user.id,
         role=user.role,
         name=user.name,
@@ -226,7 +225,7 @@ def login(request: Request, response: Response, data: LoginRequest, db: Session 
             detail="Cuenta desactivada, contacta con soporte."
         )
 
-    token = set_auth_cookies(response, user, db)
+    set_auth_cookies(response, user, db)
 
     # La foto "real" (la que el usuario subió como estudiante/profesor) tiene
     # prioridad sobre el avatar de Google, que puede estar desactualizado o
@@ -238,7 +237,6 @@ def login(request: Request, response: Response, data: LoginRequest, db: Session 
     )
 
     return TokenResponse(
-        access_token=token,
         user_id=user.id,
         role=user.role,
         name=user.name,
@@ -299,14 +297,13 @@ async def google_login(request: Request, response: Response, data: GoogleAuthReq
         user.google_id = google_data["google_id"]
         db.commit()
 
-    token = set_auth_cookies(response, user, db)
+    set_auth_cookies(response, user, db)
     avatar_url = (
         (user.teacher_profile.profile_photo_url if user.teacher_profile else None)
         or (user.student_profile.profile_photo_url if user.student_profile else None)
         or user.avatar
     )
     return GoogleAuthResponse(
-        access_token=token,
         user_id=user.id,
         role=user.role,
         name=user.name,
@@ -361,9 +358,8 @@ async def google_register(request: Request, response: Response, data: GoogleRegi
     db.commit()
     db.refresh(user)
     send_welcome_email(to_email=user.email, user_name=user.name, role=user.role)
-    token = set_auth_cookies(response, user, db)
+    set_auth_cookies(response, user, db)
     return GoogleAuthResponse(
-        access_token=token,
         user_id=user.id,
         role=user.role,
         name=user.name,

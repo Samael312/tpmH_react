@@ -12,10 +12,8 @@ class Settings(BaseSettings):
     # JWT
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    # SEC-05: con la cookie HttpOnly + refresh el access token puede (y debe) ser corto: 30 min en produccion.
-    # El valor por defecto sigue siendo el antiguo para no cerrar sesiones hasta que el frontend con refresh
-    # este desplegado; luego basta con poner ACCESS_TOKEN_EXPIRE_MINUTES=30 en el entorno.
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 10080)
+    # SEC-05: con la cookie HttpOnly + refresh el access token es corto (30 min); el frontend renueva con /auth/refresh.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
     REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 30))
 
     # Bloqueo por cuenta tras logins fallidos (Fase 13, A1). Se complementa con el limite por IP del endpoint.

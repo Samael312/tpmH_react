@@ -715,7 +715,8 @@ def test_m8_banned_user_socket_is_closed(client, world, db, monkeypatch):
     from app.auth.jwt import create_access_token
     monkeypatch.setattr(chat_mod, "WS_ACTIVE_RECHECK_SECONDS", 0)
     token = create_access_token(world["s_user"].id, "student")
-    with client.websocket_connect(f"{API}/chat/ws?token={token}") as ws:
+    from app.auth.session import ACCESS_COOKIE
+    with client.websocket_connect(f"{API}/chat/ws", headers={"cookie": f"{ACCESS_COOKIE}={token}"}) as ws:
         ws.send_json({"type": "ping"})
         assert ws.receive_json()["type"] == "pong"
         world["s_user"].is_active = False

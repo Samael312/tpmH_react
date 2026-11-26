@@ -357,10 +357,7 @@ async def post_message(
 # layouts de student/teacher/admin) y se mantiene viva mientras navegás
 # por CUALQUIER pantalla de la app, no solo /dashboard/chat.
 #
-# El navegador no permite mandar headers custom (Authorization) al abrir
-# un WebSocket, y frontend/backend son servicios distintos (no hay cookie
-# same-site que viaje sola) — por eso el token va como query param sobre
-# wss:// (va cifrado por TLS igual que cualquier header).
+# La autenticación va en la cookie HttpOnly `tpm_access` que el navegador envía en el handshake (ver chat_websocket).
 #
 # Protocolo (frames JSON):
 #   Cliente → servidor:
@@ -422,17 +419,15 @@ WS_MAX_SENDS_PER_WINDOW = 20
 
 
 @router.websocket("/ws")
-async def chat_websocket(websocket: WebSocket, token: Optional[str] = Query(None)):
-    # SEC-05: el token ya no hace falta en la URL (acaba en logs y en el historial): el navegador envia la cookie
-    # HttpOnly en el handshake. Con cookie se exige que el Origin sea el del frontend (un sitio ajeno podria
-    # abrir el socket con las cookies del usuario: "cross-site WebSocket hijacking"). `?token=` se conserva
-    # solo durante la transicion.
-    if not token:
-        token = websocket.cookies.get(ACCESS_COOKIE)
-        origin = (websocket.headers.get("origin") or "").rstrip("/")
-        if origin and origin not in allowed_origins():
-            await websocket.close(code=4403)
-            return
+async def chat_websocket(websocket: WebSocket):
+    # SEC-05: el token viaja solo en la cookie HttpOnly del handshake (nunca en la URL: acabaria en logs e historial).
+    # Se exige que el Origin sea el del frontend (un sitio ajeno podria abrir el socket con las cookies del usuario:
+    # "cross-site WebSocket hijacking").
+    token = websocket.cookies.get(ACCESS_COOKIE)
+    origin = (websocket.headers.get("origin") or "").rstrip("/")
+    if origin and origin not in allowed_origins():
+        await websocket.close(code=4403)
+        return
     payload = decode_access_token(token) if token else None
     if not payload:
         await websocket.close(code=4401)

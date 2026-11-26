@@ -5,8 +5,6 @@ from app.schemas.validators import clean_person_name, clean_username
 class GoogleAuthResponse(BaseModel):
     """Respuesta de /auth/google — puede ser un login exitoso o una señal de que falta completar el registro"""
     needs_registration: bool = False
-    access_token: Optional[str] = None
-    token_type: str = "bearer"
     user_id: Optional[int] = None
     role: Optional[str] = None
     name: Optional[str] = None
@@ -79,8 +77,6 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     """Lo que devuelve el servidor al hacer login"""
-    access_token: str
-    token_type: str = "bearer"
     user_id: Optional[int] = None
     role: str
     name: str

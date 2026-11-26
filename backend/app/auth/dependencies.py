@@ -1,5 +1,4 @@
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.db.base import get_db
@@ -8,23 +7,16 @@ from app.auth.session import ACCESS_COOKIE
 from app.models.user import User, UserRole
 from app.models.teacher import TeacherStatus
 
-# Extrae el token del header "Authorization: Bearer <token>"
-security = HTTPBearer()
-# Igual, pero no rechaza la request si no viene token (auto_error=False)
-optional_security = HTTPBearer(auto_error=False)
-
 def get_current_user(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
     db: Session = Depends(get_db)
 ) -> User:
     """
     Dependencia base — verifica que el usuario está logueado.
     Se usa en cualquier endpoint que requiera autenticación.
-    SEC-05: el token puede venir en la cabecera Authorization (clientes API, periodo de transicion)
-    o en la cookie HttpOnly `tpm_access`.
+    SEC-05: el token viaja solo en la cookie HttpOnly `tpm_access` (ya no se acepta Authorization).
     """
-    token = credentials.credentials if credentials else request.cookies.get(ACCESS_COOKIE)
+    token = request.cookies.get(ACCESS_COOKIE)
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -56,7 +48,6 @@ def get_current_user(
 
 def get_current_user_optional(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
     db: Session = Depends(get_db),
 ) -> Optional[User]:
     """
@@ -65,7 +56,7 @@ def get_current_user_optional(
     reportes tanto de usuarios logueados como anónimos (ej. reporte de
     errores de frontend, que puede ocurrir antes de loguearse).
     """
-    token = credentials.credentials if credentials else request.cookies.get(ACCESS_COOKIE)
+    token = request.cookies.get(ACCESS_COOKIE)
     if not token:
         return None
     payload = decode_access_token(token)

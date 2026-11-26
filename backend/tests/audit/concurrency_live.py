@@ -41,7 +41,7 @@ def check(name, expected, observed, ok):
 
 
 def tok(u):
-    return {"Authorization": "Bearer " + create_access_token(u.id, u.role.value)}
+    return {"Cookie": "tpm_access=" + create_access_token(u.id, u.role.value)}
 
 
 def mk_user(db, role, name):

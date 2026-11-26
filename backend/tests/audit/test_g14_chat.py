@@ -318,14 +318,15 @@ def test_connection_manager_paths():
 
 
 # ── WebSocket ────────────────────────────────────────────────────────────────────────────
-def ws_url(user):
-    return f"{CH}/ws?token={tok(user)}"
+def ws_hdr(user):
+    # El token viaja solo en la cookie HttpOnly (SEC-05); header por conexión para poder abrir varios usuarios a la vez.
+    return {"cookie": f"{chat_ep.ACCESS_COOKIE}={tok(user)}"}
 
 
 def test_ws_two_sessions_message_delivery_and_catch_up(client, world, db):
     link(db, world)
     cid = direct(client, world)
-    with client.websocket_connect(ws_url(world["s_user"])) as stu:
+    with client.websocket_connect(f"{CH}/ws", headers=ws_hdr(world["s_user"])) as stu:
         stu.send_json({"type": "ping"})
         assert stu.receive_json() == {"type": "pong"}
         # el profesor está offline: no hay segundo check
@@ -333,7 +334,7 @@ def test_ws_two_sessions_message_delivery_and_catch_up(client, world, db):
         echo = stu.receive_json()
         assert echo["type"] == "message" and echo["client_id"] == "a1"
         # el profesor se conecta: catch-up avisa "entregado" al alumno
-        with client.websocket_connect(ws_url(world["t_user"])) as tea:
+        with client.websocket_connect(f"{CH}/ws", headers=ws_hdr(world["t_user"])) as tea:
             assert stu.receive_json() == {"type": "delivered", "id": echo["id"]}
             # ahora ambos online: el mensaje llega al profesor y el alumno recibe el check
             stu.send_json({"type": "send", "conversation_id": cid, "content": "Gracias", "client_id": "a2"})
@@ -352,7 +353,7 @@ def test_ws_two_sessions_message_delivery_and_catch_up(client, world, db):
 def test_ws_protocol_errors(client, world, db):
     cid = direct(client, world)
     other_u, _ = mk_student(db, "alu_ajeno3")
-    with client.websocket_connect(ws_url(world["s_user"])) as ws:
+    with client.websocket_connect(f"{CH}/ws", headers=ws_hdr(world["s_user"])) as ws:
         ws.send_text("no es json")
         ws.send_text("[1, 2]")
         ws.send_json({"type": "desconocido"})
@@ -375,15 +376,16 @@ def test_ws_rejects_bad_connections(client, world, db):
         return e.value.code
 
     assert closes(f"{CH}/ws") == 4401  # sin token ni cookie
-    assert closes(f"{CH}/ws?token=basura") == 4401
-    assert closes(ws_url(world["admin"])) == 4403  # rol sin chat
+    assert closes(f"{CH}/ws", headers={"cookie": f"{chat_ep.ACCESS_COOKIE}=basura"}) == 4401
+    assert closes(f"{CH}/ws?token={tok(world['s_user'])}") == 4401  # ?token= ya no se acepta
+    assert closes(f"{CH}/ws", headers=ws_hdr(world["admin"])) == 4403  # rol sin chat
     world["s_user"].is_active = False
     db.commit()
-    assert closes(ws_url(world["s_user"])) == 4401
+    assert closes(f"{CH}/ws", headers=ws_hdr(world["s_user"])) == 4401
     world["s_user"].is_active = True
     db.commit()
     set_chat(db, enabled=False)
-    assert closes(ws_url(world["s_user"])) == 4403
+    assert closes(f"{CH}/ws", headers=ws_hdr(world["s_user"])) == 4403
     set_chat(db)
     # cookie con un origen que no es el del frontend
     client.cookies.set(chat_ep.ACCESS_COOKIE, tok(world["s_user"]))
@@ -398,7 +400,7 @@ def test_ws_rejects_bad_connections(client, world, db):
 
 def test_ws_rechecks_account_while_open(client, world, db, monkeypatch):
     monkeypatch.setattr(chat_ep, "WS_ACTIVE_RECHECK_SECONDS", -1)
-    with client.websocket_connect(ws_url(world["s_user"])) as ws:
+    with client.websocket_connect(f"{CH}/ws", headers=ws_hdr(world["s_user"])) as ws:
         ws.send_json({"type": "ping"})
         assert ws.receive_json() == {"type": "pong"}
         world["s_user"].is_active = False
